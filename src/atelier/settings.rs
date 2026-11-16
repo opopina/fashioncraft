@@ -48,6 +48,8 @@ pub(super) struct Preferences {
     pub(super) seam_links: bool,
     /// Whether the wireframe mesh overlay starts enabled.
     pub(super) wireframe: bool,
+    /// What the 2D pattern board draws besides the pieces.
+    pub(super) pattern_display: super::board_display::PatternDisplay,
     /// Physical time step in seconds for the fixed-step worker.
     pub(super) dt: f64,
     /// VBD iterations per physical step.
@@ -63,6 +65,7 @@ impl Default for Preferences {
             snap_mm: DEFAULT_SNAP_MM,
             seam_links: true,
             wireframe: false,
+            pattern_display: Default::default(),
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
         }
@@ -219,6 +222,12 @@ mod tests {
             snap_mm: 2.5,
             seam_links: false,
             wireframe: true,
+            pattern_display: super::super::board_display::PatternDisplay {
+                names: false,
+                lengths: true,
+                grid: false,
+                silhouette: false,
+            },
             dt: 1.0 / 120.0,
             iterations: 24,
             ..Default::default()

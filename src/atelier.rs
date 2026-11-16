@@ -16,6 +16,8 @@ mod authoring_smoke;
 mod authoring_ui;
 #[path = "atelier/board.rs"]
 mod board;
+#[path = "atelier/board_display.rs"]
+mod board_display;
 #[path = "atelier/chrome.rs"]
 mod chrome;
 #[path = "atelier/command_palette.rs"]

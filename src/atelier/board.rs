@@ -637,12 +637,56 @@ fn enter_freehand_draft(authoring: &mut super::authoring_ui::AuthoringUi) {
 fn board_pointer_angle(pos: egui::Pos2, rect: egui::Rect) -> f64 {
     ((pos.y - rect.center().y) as f64).atan2((pos.x - rect.center().x) as f64)
 }
+/// Rest length beside every outline segment, pushed outward from the piece so the
+/// text never sits on the cutting line. A segment shorter on screen than its label is
+/// left unlabelled until the board is zoomed in, so neighbouring labels never pile up.
+/// Presentation only.
+fn paint_segment_lengths(
+    painter: &egui::Painter,
+    point: &impl Fn(DVec2) -> egui::Pos2,
+    polygon: &PolygonPattern,
+    pixels_per_metre: f32,
+) {
+    let color = Color32::from_rgb(0x3E, 0x55, 0x6E);
+    let font = egui::FontId::proportional(11.);
+    for label in super::board_display::segment_labels(polygon) {
+        let galley = painter.layout_no_wrap(
+            super::board_display::length_text(label.length_m),
+            font.clone(),
+            color,
+        );
+        if !super::board_display::label_fits(label.length_m, pixels_per_metre, galley.size().x) {
+            continue;
+        }
+        let at = point(label.at);
+        let toward = point(label.at + label.outward * 0.01) - at;
+        let dir = if toward.length_sq() > 0. {
+            toward.normalized()
+        } else {
+            Vec2::ZERO
+        };
+        let anchor = if dir.x.abs() >= dir.y.abs() {
+            if dir.x >= 0. {
+                egui::Align2::LEFT_CENTER
+            } else {
+                egui::Align2::RIGHT_CENTER
+            }
+        } else if dir.y >= 0. {
+            egui::Align2::CENTER_TOP
+        } else {
+            egui::Align2::CENTER_BOTTOM
+        };
+        let size = galley.size();
+        painter.galley(anchor.anchor_size(at + dir * 6., size).min, galley, color);
+    }
+}
 /// Millimetre dimension annotation for a selected piece. Presentation only: the
 /// labels follow the pattern size and never feed back into the rest contour.
 fn paint_panel_dimensions(
     painter: &egui::Painter,
     point: &impl Fn(DVec2) -> egui::Pos2,
     panel: &Panel,
+    gap: f32,
 ) {
     let (w, h) = (panel.pattern.width, panel.pattern.height);
     let color = Color32::from_rgb(0x15, 0x65, 0xC0);
@@ -651,7 +695,7 @@ fn paint_panel_dimensions(
     // Width, below the bottom edge.
     let a = point(DVec2::new(0., h));
     let b = point(DVec2::new(w, h));
-    let y = a.y.max(b.y) + 14.;
+    let y = a.y.max(b.y) + gap;
     painter.line_segment(
         [egui::pos2(a.x, y), egui::pos2(b.x, y)],
         Stroke::new(1., color),
@@ -672,7 +716,7 @@ fn paint_panel_dimensions(
     // Height, beside the right edge.
     let a = point(DVec2::new(w, 0.));
     let b = point(DVec2::new(w, h));
-    let x = a.x.max(b.x) + 14.;
+    let x = a.x.max(b.x) + gap;
     painter.line_segment(
         [egui::pos2(x, a.y), egui::pos2(x, b.y)],
         Stroke::new(1., color),
@@ -878,6 +922,39 @@ impl Atelier {
             .filter(|(id, _)| id == &p.id)
             .map(|(_, p)| *p)
             .unwrap_or_else(|| authoring::layout(&self.project.template, i))
+    }
+    /// Front view of the avatar behind the pieces, in the board frame of the first piece that
+    /// faces the front, so a front piece overlays the body where it hangs in 3D. Opaque fill:
+    /// front and back faces overlap without darkening. Presentation only.
+    fn paint_silhouette(&self, painter: &egui::Painter, rect: egui::Rect) {
+        let surface = &self.scene.collider.surface;
+        if surface.vertices.is_empty() || u32::try_from(surface.vertices.len()).is_err() {
+            return;
+        }
+        let panels = &self.project.template.panels;
+        let reference = panels
+            .iter()
+            .position(|p| super::board_display::is_front_aligned(&p.placement));
+        let (origin, angle) = reference.map_or((DVec2::ZERO, 0.), |i| {
+            (self.board_origin(i), self.board_angle(i))
+        });
+        let uv =
+            super::board_display::silhouette_uv(surface, reference.map(|i| &panels[i].placement));
+        let board = &self.authoring.board;
+        let color = Color32::from_rgb(0xE4, 0xE2, 0xDD);
+        let mut mesh = egui::Mesh::default();
+        mesh.vertices.reserve(uv.len());
+        for p in uv {
+            mesh.colored_vertex(
+                board.screen(rect, origin + authoring::rotate_2d(p, angle)),
+                color,
+            );
+        }
+        mesh.indices.reserve(surface.triangles.len() * 3);
+        for triangle in &surface.triangles {
+            mesh.indices.extend(triangle.map(|v| v as u32));
+        }
+        painter.add(egui::Shape::mesh(mesh));
     }
     fn board_polygon(&self, i: usize) -> Option<&PolygonPattern> {
         let p = &self.project.template.panels[i];
@@ -1213,6 +1290,14 @@ impl Atelier {
             ui.strong("PATTERN DISPLAY");
             let snap_label = format!("Snap to {} mm", self.authoring.board.snap_grid_mm());
             ui.checkbox(&mut self.authoring.board.snap, snap_label);
+            let display = &mut self.prefs.pattern_display;
+            ui.checkbox(&mut display.names, "Piece names");
+            ui.checkbox(&mut display.lengths, "Segment lengths")
+                .on_hover_text("Rest length of every outline segment, in millimetres");
+            ui.checkbox(&mut display.grid, "Grid");
+            ui.checkbox(&mut display.silhouette, "Avatar silhouette").on_hover_text(
+                "Front view of the avatar behind the pieces, lined up with the first piece that faces the front",
+            );
             super::view_controls::board_bar(ui, &mut self.authoring.board);
         });
         ui.horizontal(|ui| {
@@ -2488,26 +2573,32 @@ impl Atelier {
         // studio backdrop, so the two do not share a background colour.
         painter.rect_filled(rect, 0., Color32::from_rgb(0xFA, 0xFA, 0xFB));
         let board = &self.authoring.board;
+        let display = self.prefs.pattern_display;
         let spacing = if board.scale < 140. { 0.25 } else { 0.05 };
         let lo = board.world(rect, rect.min);
         let hi = board.world(rect, rect.max);
-        for k in (lo.x / spacing).floor() as i32..=(hi.x / spacing).ceil() as i32 {
-            painter.line_segment(
-                [
-                    board.screen(rect, DVec2::new(k as f64 * spacing, lo.y)),
-                    board.screen(rect, DVec2::new(k as f64 * spacing, hi.y)),
-                ],
-                Stroke::new(0.5, Color32::from_gray(0xDC)),
-            );
+        if display.grid {
+            for k in (lo.x / spacing).floor() as i32..=(hi.x / spacing).ceil() as i32 {
+                painter.line_segment(
+                    [
+                        board.screen(rect, DVec2::new(k as f64 * spacing, lo.y)),
+                        board.screen(rect, DVec2::new(k as f64 * spacing, hi.y)),
+                    ],
+                    Stroke::new(0.5, Color32::from_gray(0xDC)),
+                );
+            }
+            for k in (lo.y / spacing).floor() as i32..=(hi.y / spacing).ceil() as i32 {
+                painter.line_segment(
+                    [
+                        board.screen(rect, DVec2::new(lo.x, k as f64 * spacing)),
+                        board.screen(rect, DVec2::new(hi.x, k as f64 * spacing)),
+                    ],
+                    Stroke::new(0.5, Color32::from_gray(0xDC)),
+                );
+            }
         }
-        for k in (lo.y / spacing).floor() as i32..=(hi.y / spacing).ceil() as i32 {
-            painter.line_segment(
-                [
-                    board.screen(rect, DVec2::new(lo.x, k as f64 * spacing)),
-                    board.screen(rect, DVec2::new(hi.x, k as f64 * spacing)),
-                ],
-                Stroke::new(0.5, Color32::from_gray(0xDC)),
-            );
+        if display.silhouette {
+            self.paint_silhouette(&painter, rect);
         }
         if !self.authoring.replace {
             for (i, panel) in self.project.template.panels.iter().enumerate() {
@@ -2684,6 +2775,9 @@ impl Atelier {
                         }
                     }
                 }
+                if display.lengths {
+                    paint_segment_lengths(&painter, &point, poly, board.scale);
+                }
                 if selected && self.authoring.tool == Tool::Edit {
                     for line in &poly.lines {
                         if self.authoring.edge.as_ref().is_some_and(|e| {
@@ -2778,21 +2872,26 @@ impl Atelier {
                         }
                     }
                 }
-                painter.text(
-                    point(DVec2::new(panel.pattern.width * 0.5, -0.035)),
-                    egui::Align2::CENTER_BOTTOM,
-                    &panel.name,
-                    egui::FontId::proportional(13.),
-                    // Dark labels: the board is a white sheet now, so the old
-                    // white-on-dark piece name would disappear.
-                    if selected {
-                        Color32::from_rgb(21, 101, 192)
-                    } else {
-                        Color32::from_rgb(0x33, 0x33, 0x33)
-                    },
-                );
+                if display.names {
+                    // Lift the name clear of the top segment's length label.
+                    let lift = if display.lengths { -14. } else { 0. };
+                    painter.text(
+                        point(DVec2::new(panel.pattern.width * 0.5, -0.035)) + Vec2::new(0., lift),
+                        egui::Align2::CENTER_BOTTOM,
+                        &panel.name,
+                        egui::FontId::proportional(13.),
+                        // Dark labels: the board is a white sheet now, so the old
+                        // white-on-dark piece name would disappear.
+                        if selected {
+                            Color32::from_rgb(21, 101, 192)
+                        } else {
+                            Color32::from_rgb(0x33, 0x33, 0x33)
+                        },
+                    );
+                }
                 if selected {
-                    paint_panel_dimensions(&painter, &point, panel);
+                    let gap = if display.lengths { 30. } else { 14. };
+                    paint_panel_dimensions(&painter, &point, panel, gap);
                 }
             }
         }
@@ -2904,14 +3003,16 @@ impl Atelier {
         if let (Some(last), Some(pos)) = (self.authoring.draft.last(), response.hover_pos()) {
             painter.line_segment([point(*last), pos], Stroke::new(1., Color32::GRAY));
         }
-        painter.text(
-            rect.left_bottom() + Vec2::new(12., -12.),
-            egui::Align2::LEFT_BOTTOM,
-            format!("Grid {:.0} mm · {:.0} px/m", spacing * 1000., board.scale),
-            egui::FontId::proportional(12.),
-            // Dark enough to read on the white board.
-            Color32::from_gray(0x55),
-        );
+        if display.grid {
+            painter.text(
+                rect.left_bottom() + Vec2::new(12., -12.),
+                egui::Align2::LEFT_BOTTOM,
+                format!("Grid {:.0} mm · {:.0} px/m", spacing * 1000., board.scale),
+                egui::FontId::proportional(12.),
+                // Dark enough to read on the white board.
+                Color32::from_gray(0x55),
+            );
+        }
         let targets = [
             ("point0", DVec2::new(0.15, 0.15)),
             ("point1", DVec2::new(0.45, 0.15)),

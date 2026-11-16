@@ -22,6 +22,9 @@ impl Atelier {
         let matrix = self.camera.matrix(rect.width() / rect.height());
         let project = |p| project_matrix(matrix, rect, p);
         for panel in &self.scene.garment.panels {
+            if !self.panel_shown_3d(&panel.id) {
+                continue;
+            }
             for (name, ids) in &panel.boundaries {
                 for segment in ids.windows(2) {
                     let a = self.scene.state.x[segment[0]];
@@ -52,17 +55,30 @@ impl Atelier {
             };
             let (origin, dir) = self.camera.ray(screen, rect);
             let distance = world.distance(origin);
-            let avatar_blocked = self
-                .scene
-                .collider
-                .occludes_ray(origin, dir, distance - 0.0001);
+            let avatar_blocked = self.avatar_shown()
+                && self
+                    .scene
+                    .collider
+                    .occludes_ray(origin, dir, distance - 0.0001);
             if avatar_blocked {
                 continue;
             }
-            let cloth_blocked = self.scene.garment.mesh.triangles.iter().any(|t| {
-                picking::ray_triangle(origin, dir, t.vertices.map(|i| self.scene.state.x[i]))
-                    .is_some_and(|(d, _)| d < distance - 0.0001)
-            });
+            let cloth_blocked =
+                self.scene
+                    .garment
+                    .mesh
+                    .triangles
+                    .iter()
+                    .enumerate()
+                    .any(|(face, t)| {
+                        self.cloth_face_shown(face)
+                            && picking::ray_triangle(
+                                origin,
+                                dir,
+                                t.vertices.map(|i| self.scene.state.x[i]),
+                            )
+                            .is_some_and(|(d, _)| d < distance - 0.0001)
+                    });
             if cloth_blocked {
                 continue;
             }
@@ -85,6 +101,9 @@ impl Atelier {
             let mut best = f64::INFINITY;
             let mut selected = None;
             for panel in &self.scene.garment.panels {
+                if !self.panel_shown_3d(&panel.id) {
+                    continue;
+                }
                 for tri in &self.scene.garment.mesh.triangles[panel.triangles.clone()] {
                     if let Some((d, _)) = picking::ray_triangle(
                         origin,
@@ -97,7 +116,10 @@ impl Atelier {
                     }
                 }
             }
-            if selected.is_some() && !self.scene.collider.occludes_ray(origin, dir, best - 0.0001) {
+            if selected.is_some()
+                && !(self.avatar_shown()
+                    && self.scene.collider.occludes_ray(origin, dir, best - 0.0001))
+            {
                 self.cancel_preview();
                 if let Some(id) = selected {
                     self.select_panel(id, response.ctx.input(|i| i.modifiers.shift));
@@ -112,6 +134,9 @@ impl Atelier {
         let project = |p| project_matrix(matrix, rect, p);
         let show = matches!(self.authoring.tool, Tool::Edit | Tool::Sew);
         for panel in &self.scene.garment.panels {
+            if !self.panel_shown_3d(&panel.id) {
+                continue;
+            }
             for (name, ids) in &panel.boundaries {
                 let edge = BoundaryRef {
                     reversed: false,

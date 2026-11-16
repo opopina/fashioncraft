@@ -36,6 +36,8 @@ mod drafting_ui;
 mod edges_3d;
 #[path = "atelier/fabrics_ui.rs"]
 mod fabrics_ui;
+#[path = "atelier/garment_display.rs"]
+mod garment_display;
 #[path = "atelier/gizmo.rs"]
 mod gizmo;
 #[path = "atelier/icons.rs"]
@@ -595,7 +597,11 @@ impl Atelier {
             let (origin, dir) = self.camera.ray(pos, rect);
             let mut best = f64::INFINITY;
             let mut picked = None;
-            for t in &self.scene.garment.mesh.triangles {
+            for (face, t) in self.scene.garment.mesh.triangles.iter().enumerate() {
+                // Hidden or isolated-away cloth cannot be grabbed.
+                if !self.cloth_face_shown(face) {
+                    continue;
+                }
                 if let Some((d, w)) =
                     picking::ray_triangle(origin, dir, t.vertices.map(|i| self.scene.state.x[i]))
                     && d < best
@@ -604,7 +610,10 @@ impl Atelier {
                     picked = Some((t.vertices, w));
                 }
             }
-            if picked.is_some() && self.scene.collider.occludes_ray(origin, dir, best - 1e-5) {
+            if picked.is_some()
+                && self.avatar_shown()
+                && self.scene.collider.occludes_ray(origin, dir, best - 1e-5)
+            {
                 picked = None;
             }
             if let Some((vertices, weights)) = picked {
@@ -790,6 +799,9 @@ impl eframe::App for Atelier {
             && !ctx.egui_wants_keyboard_input()
         {
             self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
+        }
+        if !self.authoring.radial.blocked && !self.quick.blocked {
+            self.garment_display_shortcuts(&ctx);
         }
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {

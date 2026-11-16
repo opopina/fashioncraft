@@ -23,14 +23,91 @@ pub struct DrawModel<'a> {
     pub avatar: Option<&'a SurfaceMesh>,
     pub collider: Option<&'a dyn Collider>,
     pub seams: &'a [CompiledSeam],
+    pub display: DisplayOptions<'a>,
 }
+
+/// Viewport display choices that never change the scene: which cloth triangles are shown,
+/// per-triangle colours, the avatar colour and the strain-map range.
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayOptions<'a> {
+    /// Per-triangle visibility (hidden garment, isolated selection); `None` shows them all.
+    pub visible_faces: Option<&'a [bool]>,
+    /// Per-triangle base colour replacing the fabric colour (random piece colours, state
+    /// tints); fit maps and issue marks still take precedence.
+    pub face_colors: Option<&'a [Option<[f32; 3]>]>,
+    /// Avatar body colour, linear RGB.
+    pub avatar_color: [f32; 3],
+    /// Strain that reaches the strain map's last colour, as a fraction (0.2 = 20 %).
+    pub strain_max: f64,
+    /// Blend smoothly between the eight colours instead of showing discrete bands.
+    pub strain_gradient: bool,
+}
+
+/// Default avatar grey, linear RGB.
+pub const AVATAR_COLOR: [f32; 3] = [0.46, 0.47, 0.49];
+/// Default strain-map maximum: 20 % (stretched to 120 % of the rest length).
+pub const STRAIN_MAX: f64 = 0.2;
+
+impl Default for DisplayOptions<'_> {
+    fn default() -> Self {
+        Self {
+            visible_faces: None,
+            face_colors: None,
+            avatar_color: AVATAR_COLOR,
+            strain_max: STRAIN_MAX,
+            strain_gradient: true,
+        }
+    }
+}
+
+/// Fit-map colour of a strain value: one of the eight bands, or a blend between neighbouring
+/// colours along the 0..`max` range. Past `max` stays the last colour.
+pub fn strain_color(strain: f64, max: f64, gradient: bool) -> [f32; 3] {
+    if !gradient {
+        return STRAIN_BANDS[strain_band(strain, max)];
+    }
+    if !strain.is_finite() || !max.is_finite() || max <= 0. {
+        return STRAIN_BANDS[0];
+    }
+    let last = STRAIN_BANDS.len() - 1;
+    let t = (strain / max).clamp(0., 1.) * last as f64;
+    let i = (t.floor() as usize).min(last - 1);
+    let f = (t - i as f64) as f32;
+    let [a, b] = [STRAIN_BANDS[i], STRAIN_BANDS[i + 1]];
+    [0, 1, 2].map(|k| a[k] + (b[k] - a[k]) * f)
+}
+
+/// The strain map's eight colours, from no strain (blue) to the maximum and beyond (red), in
+/// linear RGB. As bands they make a value readable against the legend.
+pub const STRAIN_BANDS: [[f32; 3]; 8] = [
+    [0.05, 0.17, 0.62],
+    [0.03, 0.33, 0.75],
+    [0.02, 0.52, 0.55],
+    [0.10, 0.60, 0.18],
+    [0.45, 0.68, 0.06],
+    [0.90, 0.68, 0.04],
+    [0.92, 0.33, 0.03],
+    [0.80, 0.05, 0.04],
+];
+
+/// Band of a strain value (|stretch − 1|, a fraction) for a map saturating at `max`: eight
+/// equal steps from 0 to `max`; anything at or past `max` is the last band.
+pub fn strain_band(strain: f64, max: f64) -> usize {
+    if !strain.is_finite() || !max.is_finite() || max <= 0. {
+        return 0;
+    }
+    ((strain / max * STRAIN_BANDS.len() as f64).floor().max(0.) as usize)
+        .min(STRAIN_BANDS.len() - 1)
+}
+
 const VERTEX_FLOATS: usize = 15;
 
 fn cloth_surface(
     appearance: Option<&crate::garment::appearance::FabricAppearance>,
     marked: bool,
     contact: bool,
-    strain: Option<f64>,
+    fit_map: Option<[f32; 3]>,
+    base: Option<[f32; 3]>,
 ) -> ([f32; 3], f32) {
     if marked {
         return ([1.0, 0.23, 0.10], -1.);
@@ -38,12 +115,11 @@ fn cloth_surface(
     if contact {
         return ([1.0, 0.2, 0.25], -1.);
     }
-    if let Some(strain) = strain {
-        let v = (strain / 0.1).clamp(0., 1.) as f32;
-        return (
-            [0.15 + 0.8 * v, 0.75 * (1.0 - v) + 0.15, 0.95 * (1.0 - v)],
-            -1.,
-        );
+    if let Some(color) = fit_map {
+        return (color, -1.);
+    }
+    if let Some(color) = base {
+        return (color, -1.);
     }
     appearance.map_or(([0.91, 0.92, 0.94], -1.), |a| {
         (a.linear_color(), a.roughness as f32)
@@ -439,7 +515,7 @@ pub struct Viewport {
     view_uniform: wgpu::Buffer,
     view_bind: wgpu::BindGroup,
     avatar_buffer: Option<wgpu::Buffer>,
-    avatar_key: (usize, usize),
+    avatar_key: (usize, usize, [u32; 3]),
     avatar_count: u32,
 }
 impl Viewport {
@@ -588,7 +664,7 @@ impl Viewport {
             view_uniform,
             view_bind,
             avatar_buffer: None,
-            avatar_key: (0, 0),
+            avatar_key: (0, 0, [0; 3]),
             avatar_count: 0,
         }
     }
@@ -617,6 +693,7 @@ impl Viewport {
                 avatar: None,
                 collider: p.sphere.as_ref().map(|s| s as &dyn Collider),
                 seams: &[],
+                display: DisplayOptions::default(),
             },
             wire,
             heat,
@@ -642,6 +719,7 @@ impl Viewport {
             avatar,
             collider,
             seams,
+            display,
         } = model;
         let device = &self.render_state.device;
         let max = device.limits().max_texture_dimension_2d.min(4096);
@@ -744,6 +822,12 @@ impl Viewport {
             }
         };
         for (face, t) in mesh.triangles.iter().enumerate() {
+            if display
+                .visible_faces
+                .is_some_and(|shown| !shown.get(face).copied().unwrap_or(true))
+            {
+                continue;
+            }
             let material = &materials[t.material];
             let strain = if heat {
                 energy::stretches(&state.x, t, material)
@@ -766,7 +850,10 @@ impl Viewport {
                 appearance,
                 marked_faces.is_some_and(|faces| faces.contains(&face)),
                 contact,
-                heat.then_some(strain),
+                heat.then(|| strain_color(strain, display.strain_max, display.strain_gradient)),
+                display
+                    .face_colors
+                    .and_then(|colors| colors.get(face).copied().flatten()),
             );
             triangle(
                 t.vertices.map(|i| state.x[i].as_vec3()),
@@ -824,6 +911,7 @@ impl Viewport {
             let key = (
                 avatar.vertices.as_ptr() as usize,
                 avatar.triangles.as_ptr() as usize,
+                display.avatar_color.map(f32::to_bits),
             );
             if key != self.avatar_key {
                 use wgpu::util::DeviceExt;
@@ -844,7 +932,8 @@ impl Viewport {
                     for (i, v) in p.into_iter().enumerate() {
                         body.extend_from_slice(&v.extend(1.).to_array());
                         body.extend_from_slice(&normals[t[i]].to_array());
-                        body.extend_from_slice(&[0.46, 0.47, 0.49, 0., 0., 0., 0., -1.]);
+                        body.extend_from_slice(&display.avatar_color);
+                        body.extend_from_slice(&[0., 0., 0., 0., -1.]);
                     }
                 }
                 self.avatar_count = (body.len() / VERTEX_FLOATS) as u32;
@@ -859,7 +948,7 @@ impl Viewport {
             }
         } else {
             self.avatar_count = 0;
-            self.avatar_key = (0, 0);
+            self.avatar_key = (0, 0, [0; 3]);
             self.avatar_buffer = None;
         }
         let bytes = bytemuck::cast_slice(&data);
@@ -1377,21 +1466,69 @@ mod tests {
             roughness: 0.3,
         };
         assert_eq!(
-            cloth_surface(None, false, false, None),
+            cloth_surface(None, false, false, None, None),
             ([0.91, 0.92, 0.94], -1.)
         );
         assert_eq!(
-            cloth_surface(Some(&optics), false, false, None),
+            cloth_surface(Some(&optics), false, false, None, None),
             ([1., 0., 0.], 0.3)
         );
         assert_eq!(
-            cloth_surface(Some(&optics), true, true, Some(0.1)),
+            cloth_surface(Some(&optics), true, true, Some(STRAIN_BANDS[7]), None),
             ([1., 0.23, 0.10], -1.)
         );
         assert_eq!(
-            cloth_surface(Some(&optics), false, true, Some(0.1)),
+            cloth_surface(Some(&optics), false, true, Some(STRAIN_BANDS[7]), None),
             ([1., 0.2, 0.25], -1.)
         );
-        assert_eq!(cloth_surface(Some(&optics), false, false, Some(0.1)).1, -1.);
+        assert_eq!(
+            cloth_surface(Some(&optics), false, false, Some(STRAIN_BANDS[7]), None).1,
+            -1.
+        );
+    }
+    #[test]
+    fn piece_colours_replace_the_fabric_but_not_the_fit_map() {
+        let optics = crate::garment::appearance::FabricAppearance {
+            color_srgb: [255, 0, 0],
+            roughness: 0.3,
+        };
+        let tint = Some([0.2, 0.4, 0.9]);
+        assert_eq!(
+            cloth_surface(Some(&optics), false, false, None, tint),
+            ([0.2, 0.4, 0.9], -1.)
+        );
+        assert_eq!(
+            cloth_surface(Some(&optics), false, false, Some(STRAIN_BANDS[0]), tint).0,
+            STRAIN_BANDS[0]
+        );
+    }
+    #[test]
+    fn strain_bands_split_the_range_in_eight_equal_steps() {
+        assert_eq!(strain_band(0.0, 0.1), 0);
+        assert_eq!(strain_band(0.0124, 0.1), 0);
+        assert_eq!(strain_band(0.0126, 0.1), 1);
+        assert_eq!(strain_band(0.05, 0.1), 4);
+        assert_eq!(strain_band(0.0999, 0.1), 7);
+        assert_eq!(
+            strain_band(0.5, 0.1),
+            7,
+            "past the maximum stays in the last band"
+        );
+        assert_eq!(strain_band(0.05, 0.2), 2, "a wider range lowers the band");
+        assert_eq!(strain_band(f64::NAN, 0.1), 0);
+        assert_eq!(strain_band(0.05, 0.0), 0);
+    }
+    #[test]
+    fn strain_gradient_runs_through_the_eight_colours() {
+        let close = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6);
+        assert!(close(strain_color(0.0, 0.2, true), STRAIN_BANDS[0]));
+        assert!(close(strain_color(0.2, 0.2, true), STRAIN_BANDS[7]));
+        assert!(close(strain_color(0.9, 0.2, true), STRAIN_BANDS[7]));
+        // Each colour sits at k/7 of the range; halfway between two is their mean.
+        let mid = strain_color(0.2 * 2.5 / 7., 0.2, true);
+        let mean = [0, 1, 2].map(|k| (STRAIN_BANDS[2][k] + STRAIN_BANDS[3][k]) * 0.5);
+        assert!(close(mid, mean), "{mid:?} vs {mean:?}");
+        assert_eq!(strain_color(0.05, 0.2, false), STRAIN_BANDS[2]);
+        assert_eq!(strain_color(f64::NAN, 0.2, true), STRAIN_BANDS[0]);
     }
 }

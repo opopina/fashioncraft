@@ -53,6 +53,17 @@ impl Atelier {
         let matrix = self.camera.matrix(rect.width() / rect.height());
         let point = |attachment: &[(usize, f64); 2]| -> Option<egui::Pos2> {
             if in_3d {
+                // No link to a piece that is hidden or isolated away in 3D.
+                let hidden = self
+                    .scene
+                    .garment
+                    .panels
+                    .iter()
+                    .find(|p| p.vertices.contains(&attachment[0].0))
+                    .is_some_and(|p| !self.panel_shown_3d(&p.id));
+                if hidden {
+                    return None;
+                }
                 let p: DVec3 = attachment
                     .iter()
                     .map(|(v, w)| self.scene.state.x[*v] * *w)

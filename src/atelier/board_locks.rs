@@ -74,7 +74,8 @@ impl Atelier {
         self.status = match action {
             LockAction::LockSelected | LockAction::LockAll => {
                 format!(
-                    "{count} pieces locked in 2D · Unlock all pieces to edit them on the board again"
+                    "{} locked in 2D · Unlock all pieces to edit them on the board again",
+                    super::garment_display::pieces(count)
                 )
             }
             LockAction::UnlockAll => "All pieces unlocked in 2D".into(),

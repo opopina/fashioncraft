@@ -57,6 +57,14 @@ pub struct BoardBackground {
     pub width_m: f64,
     /// 0 is invisible, 1 is opaque.
     pub opacity: f64,
+    /// Rotation on the board around the image centre, in degrees, in the same sense as a
+    /// piece's board rotation.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rotation_degrees: f64,
+}
+
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 impl BoardBackground {
@@ -64,8 +72,8 @@ impl BoardBackground {
     pub const WIDTH_RANGE_M: std::ops::RangeInclusive<f64> = 0.01..=20.0;
 
     pub fn validate(&self) -> Result<(), String> {
-        if !self.origin_m.iter().all(|v| v.is_finite()) {
-            return Err("Background image position must be finite".into());
+        if !self.origin_m.iter().all(|v| v.is_finite()) || !self.rotation_degrees.is_finite() {
+            return Err("Background image position and rotation must be finite".into());
         }
         if !self.width_m.is_finite() || !Self::WIDTH_RANGE_M.contains(&self.width_m) {
             return Err("Background image width must be between 10 mm and 20 m".into());

@@ -36,6 +36,7 @@ pub(super) enum Tool {
 pub(super) struct AuthoringUi {
     pub dart: Option<DartDraft>,
     pub arrangement: super::arrangement_ui::ArrangementUi,
+    pub view3d: super::garment_display::View3d,
     pub construction: ConstructionDraft,
     pub sewing: super::sewing_ui::SewingDraft,
     pub sewing_audit: super::sewing_ui::SewingAuditUi,

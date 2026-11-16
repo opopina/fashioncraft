@@ -155,8 +155,8 @@ impl Atelier {
             ui.checkbox(&mut self.clean_view, "Clean view · hide all annotations")
                 .on_hover_text("Show only the shaded garment and avatar. Keeps your overlay settings for later.");
             ui.checkbox(&mut self.wire, "Wireframe");
-            ui.checkbox(&mut self.heat, "Strain map");
             ui.checkbox(&mut self.seam_links, "Seam links");
+            self.garment_display_controls(ui);
         });
         egui::Popup::menu(&header.camera.unwrap()).show(|ui| {
             ui.set_max_width(330.);
@@ -402,6 +402,10 @@ impl Atelier {
         let size = rect.size() * ctx.pixels_per_point();
         let optics =
             marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
+        let (visible_faces, face_colors) = self.display_buffers();
+        let display = self.prefs.garment_display;
+        // Seam lines would float in the air when their pieces are hidden or isolated away.
+        let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
         let texture = self.viewport.draw_scene(
             [size.x as u32, size.y as u32],
             &self.camera,
@@ -416,12 +420,19 @@ impl Atelier {
                 materials: &self.scene.garment.materials,
                 optics: Some(&optics),
                 sphere: None,
-                avatar: Some(&self.scene.collider.surface),
+                avatar: display.avatar.then_some(&self.scene.collider.surface),
                 collider: None,
-                seams: if self.seams && !self.clean_view {
+                seams: if self.seams && !self.clean_view && seams_shown {
                     &self.scene.garment.seams
                 } else {
                     &[]
+                },
+                display: marvelous_cloth::render::DisplayOptions {
+                    visible_faces: visible_faces.as_deref(),
+                    face_colors: face_colors.as_deref(),
+                    avatar_color: super::garment_display::srgb_to_linear(display.avatar_color),
+                    strain_max: display.strain_max_percent / 100.,
+                    strain_gradient: display.strain_gradient,
                 },
             },
             self.wire && !self.clean_view,
@@ -434,6 +445,9 @@ impl Atelier {
             egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
             Color32::WHITE,
         );
+        if self.heat && !self.clean_view {
+            self.paint_strain_legend(&ui.painter().with_clip_rect(rect), rect);
+        }
         if !self.clean_view {
             self.issue_brush(ui, &response, rect);
             self.paint_edges_3d(ui, rect);

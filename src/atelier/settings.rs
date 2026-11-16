@@ -50,6 +50,8 @@ pub(super) struct Preferences {
     pub(super) wireframe: bool,
     /// What the 2D pattern board draws besides the pieces.
     pub(super) pattern_display: super::board_display::PatternDisplay,
+    /// What the 3D view draws: avatar, garment, colours and the strain-map range.
+    pub(super) garment_display: super::garment_display::GarmentDisplay,
     /// Physical time step in seconds for the fixed-step worker.
     pub(super) dt: f64,
     /// VBD iterations per physical step.
@@ -66,6 +68,7 @@ impl Default for Preferences {
             seam_links: true,
             wireframe: false,
             pattern_display: Default::default(),
+            garment_display: Default::default(),
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
         }
@@ -78,6 +81,7 @@ impl Preferences {
     fn sanitize(&mut self) {
         self.workspace.sanitize();
         self.viewport.sanitize();
+        self.garment_display.sanitize();
         self.snap_mm = finite_or(self.snap_mm, DEFAULT_SNAP_MM).clamp(SNAP_MM_MIN, SNAP_MM_MAX);
         self.dt = finite_or(self.dt, DEFAULT_DT).clamp(DT_MIN, DT_MAX);
         self.iterations = self.iterations.clamp(ITERATIONS_MIN, ITERATIONS_MAX);

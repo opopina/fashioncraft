@@ -533,6 +533,9 @@ impl Atelier {
         let ranges: Vec<_> = stored.chain(draft).collect();
         let mut updated = false;
         for (r, color, handle, selected) in ranges {
+            if in_3d && !self.panel_shown_3d(&r.panel) {
+                continue;
+            }
             let Some(curve) = self.display_boundary(&r, false) else {
                 continue;
             };

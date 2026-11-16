@@ -45,18 +45,23 @@ impl BoardMedia {
     }
 }
 
-/// Corners of the background on the board (top-left, top-right, bottom-right, bottom-left),
-/// in metres with v down. The height follows the image's aspect ratio.
+/// Corners of the background on the board (top-left, top-right, bottom-right, bottom-left of
+/// the image), in metres with v down. The height follows the image's aspect ratio; the
+/// rotation turns the image around its centre like a piece's board rotation.
 pub(super) fn background_corners(background: &BoardBackground, size: [usize; 2]) -> [DVec2; 4] {
     let [x, y] = background.origin_m;
     let w = background.width_m;
     let h = w * size[1] as f64 / size[0].max(1) as f64;
+    let centre = DVec2::new(x + w * 0.5, y + h * 0.5);
     [
         DVec2::new(x, y),
         DVec2::new(x + w, y),
         DVec2::new(x + w, y + h),
         DVec2::new(x, y + h),
     ]
+    .map(|corner| {
+        centre + marvelous_cloth::authoring::rotate_2d(corner - centre, background.rotation_degrees)
+    })
 }
 
 /// A new background: one metre wide, half transparent, its top-left corner at `at`.
@@ -66,6 +71,7 @@ pub(super) fn new_background(path: PathBuf, at: DVec2) -> BoardBackground {
         origin_m: [at.x, at.y],
         width_m: DEFAULT_WIDTH_M,
         opacity: 0.5,
+        rotation_degrees: 0.,
     }
 }
 
@@ -188,6 +194,7 @@ impl Atelier {
             let mut x_mm = background.origin_m[0] * 1000.;
             let mut y_mm = background.origin_m[1] * 1000.;
             let mut opacity = background.opacity * 100.;
+            let mut rotation = background.rotation_degrees;
             egui::Grid::new("board-background").num_columns(2).show(ui, |ui| {
                 ui.label("Width");
                 changed |= ui
@@ -221,6 +228,18 @@ impl Atelier {
                     )
                     .changed();
                 ui.end_row();
+                ui.label("Rotation");
+                changed |= ui
+                    .add(
+                        egui::DragValue::new(&mut rotation)
+                            .range(-180.0..=180.0)
+                            .speed(0.5)
+                            .fixed_decimals(1)
+                            .suffix("°"),
+                    )
+                    .on_hover_text("Turn the image around its centre to square a skewed scan")
+                    .changed();
+                ui.end_row();
                 ui.label("Opacity");
                 changed |= ui
                     .add(egui::Slider::new(&mut opacity, 0.0..=100.0).suffix(" %"))
@@ -231,6 +250,7 @@ impl Atelier {
                 background.width_m = (width_mm / 1000.).clamp(0.01, 20.);
                 background.origin_m = [x_mm / 1000., y_mm / 1000.];
                 background.opacity = (opacity / 100.).clamp(0., 1.);
+                background.rotation_degrees = rotation.clamp(-180., 180.);
             }
             let mut remove = false;
             ui.horizontal(|ui| {
@@ -364,11 +384,35 @@ mod tests {
     fn background_corners_follow_width_and_aspect() {
         let background = new_background(PathBuf::from("scan.png"), DVec2::new(0.1, -0.2));
         let corners = background_corners(&background, [2000, 1000]);
-        assert_eq!(corners[0], DVec2::new(0.1, -0.2));
-        assert_eq!(corners[1], DVec2::new(1.1, -0.2));
-        assert_eq!(corners[2], DVec2::new(1.1, 0.3));
-        assert_eq!(corners[3], DVec2::new(0.1, 0.3));
+        let expected = [(0.1, -0.2), (1.1, -0.2), (1.1, 0.3), (0.1, 0.3)];
+        for (corner, (x, y)) in corners.iter().zip(expected) {
+            assert!(corner.distance(DVec2::new(x, y)) < 1e-12, "{corner:?}");
+        }
         assert!(background.validate().is_ok());
+    }
+
+    #[test]
+    fn rotation_turns_the_image_around_its_centre() {
+        let mut background = new_background(PathBuf::from("scan.png"), DVec2::ZERO);
+        background.rotation_degrees = 90.;
+        // A 1 × 0.5 m image centred on (0.5, 0.25), turned a quarter.
+        let corners = background_corners(&background, [2000, 1000]);
+        let centre = corners.iter().fold(DVec2::ZERO, |s, c| s + *c) / 4.;
+        assert!(centre.distance(DVec2::new(0.5, 0.25)) < 1e-12);
+        assert!(
+            (corners[0].distance(corners[1]) - 1.0).abs() < 1e-12,
+            "width kept"
+        );
+        assert!(
+            (corners[1].distance(corners[2]) - 0.5).abs() < 1e-12,
+            "height kept"
+        );
+        assert!(
+            (corners[1] - corners[0]).x.abs() < 1e-12,
+            "the top edge now runs along v"
+        );
+        background.rotation_degrees = f64::NAN;
+        assert!(background.validate().is_err());
     }
 
     #[test]

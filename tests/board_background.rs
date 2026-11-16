@@ -21,6 +21,7 @@ fn background(path: PathBuf) -> BoardBackground {
         origin_m: [0.1, -0.2],
         width_m: 0.8,
         opacity: 0.4,
+        rotation_degrees: 12.5,
     }
 }
 
@@ -56,6 +57,7 @@ fn the_background_travels_with_the_project() {
     assert_eq!(restored.origin_m, [0.1, -0.2]);
     assert_eq!(restored.width_m, 0.8);
     assert_eq!(restored.opacity, 0.4);
+    assert_eq!(restored.rotation_degrees, 12.5);
 
     // Saving again reuses the same content-addressed asset.
     loaded.save(&file).unwrap();

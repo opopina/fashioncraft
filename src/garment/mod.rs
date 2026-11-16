@@ -1,6 +1,7 @@
 //! Editable garment templates compile into a fixed, CPU-only physical model.
 //! No mesh indices are persisted in the authoring format.
 pub mod appearance;
+pub mod arrangement;
 pub mod curves;
 pub mod diagnostics;
 pub mod domain;

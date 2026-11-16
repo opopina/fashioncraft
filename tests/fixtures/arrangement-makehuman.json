@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "frame": { "avatar_id": "makehuman-mannequin", "revision": 1 },
+  "anchors": [
+    {
+      "id": "torso-front", "label": "Torso front",
+      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
+      "outward": { "kind": "fixed", "vector": [0, 0, 1] },
+      "right": { "kind": "fixed", "vector": [1, 0, 0] },
+      "up": { "kind": "fixed", "vector": [0, 1, 0] },
+      "clearance_m": 0.25
+    },
+    {
+      "id": "torso-back", "label": "Torso back (unmirrored, like the bundled presets)",
+      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
+      "outward": { "kind": "fixed", "vector": [0, 0, -1] },
+      "right": { "kind": "fixed", "vector": [1, 0, 0] },
+      "up": { "kind": "fixed", "vector": [0, 1, 0] },
+      "clearance_m": 0.2
+    },
+    {
+      "id": "torso-left", "label": "Torso left side",
+      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
+      "outward": { "kind": "fixed", "vector": [1, 0, 0] },
+      "right": { "kind": "fixed", "vector": [0, 0, -1] },
+      "up": { "kind": "fixed", "vector": [0, 1, 0] },
+      "clearance_m": 0.25
+    },
+    {
+      "id": "torso-right", "label": "Torso right side",
+      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
+      "outward": { "kind": "fixed", "vector": [-1, 0, 0] },
+      "right": { "kind": "fixed", "vector": [0, 0, 1] },
+      "up": { "kind": "fixed", "vector": [0, 1, 0] },
+      "clearance_m": 0.25
+    },
+    {
+      "id": "upper-arm-left-front", "label": "Left upper arm, front",
+      "origin": [{ "landmark": "joint-l-shoulder", "weight": 0.5 }, { "landmark": "joint-l-elbow", "weight": 0.5 }],
+      "outward": { "kind": "perpendicular", "from": "joint-l-shoulder", "to": "joint-l-elbow", "toward": [0, 0, 1] },
+      "right": { "kind": "perpendicular", "from": "joint-l-shoulder", "to": "joint-l-elbow", "toward": [1, 0, 0] },
+      "up": { "kind": "along", "from": "joint-l-elbow", "to": "joint-l-shoulder" },
+      "clearance_m": 0.08
+    }
+  ]
+}

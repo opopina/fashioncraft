@@ -132,9 +132,11 @@ struct Timers {
     read: wgpu::Buffer,
 }
 
-/// Vertical field of view of the perspective projection, shared with the
-/// orthographic framing so switching projection does not resize the scene.
-const FOV_Y: f32 = 45.0 * std::f32::consts::PI / 180.;
+/// Default vertical field of view of the perspective projection, in degrees. The
+/// orthographic framing uses the same value so switching projection keeps the size.
+pub const DEFAULT_FOV_DEGREES: f32 = 45.;
+/// Vertical field of view a camera accepts, in degrees.
+pub const FOV_RANGE_DEGREES: std::ops::RangeInclusive<f32> = 10.0..=120.0;
 const NEAR: f32 = 0.01;
 const FAR: f32 = 100.;
 const MIN_DISTANCE: f32 = 0.15;
@@ -155,12 +157,18 @@ pub enum PresetView {
     Right,
     Top,
     Bottom,
+    /// Halfway between Front and Left.
+    ThreeQuarterLeft,
+    /// Halfway between Front and Right.
+    ThreeQuarterRight,
 }
 impl PresetView {
     /// Every preset, in the order the view bar shows them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::Isometric,
         Self::Front,
+        Self::ThreeQuarterLeft,
+        Self::ThreeQuarterRight,
         Self::Back,
         Self::Left,
         Self::Right,
@@ -177,6 +185,8 @@ impl PresetView {
             Self::Right => "Right",
             Self::Top => "Top",
             Self::Bottom => "Bottom",
+            Self::ThreeQuarterLeft => "3/4 left",
+            Self::ThreeQuarterRight => "3/4 right",
         }
     }
     /// Unit direction from the target towards the eye.
@@ -189,6 +199,8 @@ impl PresetView {
             Self::Right => Vec3::X,
             Self::Top => Vec3::Y,
             Self::Bottom => Vec3::NEG_Y,
+            Self::ThreeQuarterLeft => Vec3::new(-1., 0., 1.).normalize(),
+            Self::ThreeQuarterRight => Vec3::new(1., 0., 1.).normalize(),
         }
     }
     /// Yaw and pitch that produce [`Self::direction`], exact at the poles.
@@ -205,6 +217,7 @@ pub struct CameraPose {
     distance: f32,
     target: Vec3,
     orthographic: bool,
+    fov_degrees: f32,
 }
 /// Orbit camera for the 3D viewport.
 ///
@@ -222,6 +235,9 @@ pub struct Camera {
     pub target: Vec3,
     /// Orthographic projection matched to the perspective framing at the target.
     pub orthographic: bool,
+    /// Vertical field of view in degrees; sizes the orthographic view as well.
+    /// Values outside [`FOV_RANGE_DEGREES`] are clamped when used.
+    pub fov_degrees: f32,
     /// Pose remembered by the view bar's Restore button.
     pub saved: Option<CameraPose>,
     /// Bounding sphere the next viewport interaction pass should frame. The
@@ -237,6 +253,7 @@ impl Default for Camera {
             distance: 2.5,
             target: Vec3::new(0.0, 0.4, 0.0),
             orthographic: false,
+            fov_degrees: DEFAULT_FOV_DEGREES,
             saved: None,
             pending_frame: None,
         }
@@ -255,8 +272,19 @@ impl Camera {
         }
     }
     /// Half-height of the view volume per unit of camera distance.
-    fn half_tan() -> f32 {
-        (FOV_Y * 0.5).tan()
+    fn half_tan(&self) -> f32 {
+        (self.fov_radians() * 0.5).tan()
+    }
+    /// The field of view actually used, clamped to [`FOV_RANGE_DEGREES`], in radians.
+    pub fn fov_radians(&self) -> f32 {
+        let degrees = if self.fov_degrees.is_finite() {
+            self.fov_degrees
+        } else {
+            DEFAULT_FOV_DEGREES
+        };
+        degrees
+            .clamp(*FOV_RANGE_DEGREES.start(), *FOV_RANGE_DEGREES.end())
+            .to_radians()
     }
     fn pose(&self) -> CameraPose {
         CameraPose {
@@ -265,6 +293,7 @@ impl Camera {
             distance: self.distance,
             target: self.target,
             orthographic: self.orthographic,
+            fov_degrees: self.fov_degrees,
         }
     }
     fn set_pose(&mut self, pose: CameraPose) {
@@ -273,6 +302,7 @@ impl Camera {
         self.distance = pose.distance;
         self.target = pose.target;
         self.orthographic = pose.orthographic;
+        self.fov_degrees = pose.fov_degrees;
     }
     /// Unit vector from the target towards the eye.
     pub fn direction(&self) -> Vec3 {
@@ -304,7 +334,7 @@ impl Camera {
         let projection = if self.orthographic {
             // Match the perspective framing at the target plane so switching
             // projection keeps the same apparent size.
-            let half = self.distance * Self::half_tan();
+            let half = self.distance * self.half_tan();
             glam::camera::rh::proj::directx::orthographic(
                 -half * aspect,
                 half * aspect,
@@ -314,7 +344,7 @@ impl Camera {
                 FAR,
             )
         } else {
-            glam::camera::rh::proj::directx::perspective(45.0_f32.to_radians(), aspect, NEAR, FAR)
+            glam::camera::rh::proj::directx::perspective(self.fov_radians(), aspect, NEAR, FAR)
         };
         projection * view
     }
@@ -340,7 +370,7 @@ impl Camera {
     /// Pan so the scene follows the pointer: the world point under the pointer
     /// moves with it, at the target plane's exact scale.
     pub fn pan_by(&mut self, delta: egui::Vec2, rect: egui::Rect) {
-        let world_per_pixel = 2. * self.distance * Self::half_tan() / rect.height().max(1.);
+        let world_per_pixel = 2. * self.distance * self.half_tan() / rect.height().max(1.);
         self.target += (self.right() * -delta.x + self.up() * delta.y) * world_per_pixel;
     }
     /// Multiply the camera distance, clamped to the working range.
@@ -410,7 +440,7 @@ impl Camera {
         self.save_pose();
         self.target = center;
         let aspect = (rect.width() / rect.height().max(1.)).max(1e-3);
-        let half_v = FOV_Y * 0.5;
+        let half_v = self.fov_radians() * 0.5;
         let half_h = (half_v.tan() * aspect).atan();
         let half = half_v.min(half_h);
         self.distance = (radius.max(1e-3) * 1.2 / half.sin()).clamp(MIN_DISTANCE, MAX_DISTANCE);
@@ -1345,10 +1375,87 @@ mod tests {
     }
 
     #[test]
+    fn field_of_view_scales_both_projections_and_is_clamped() {
+        let rect = viewport(1000., 1000.);
+        let offset = |camera: &Camera| {
+            let p = camera.target + camera.up() * 0.1;
+            (camera.project(p, rect).unwrap().y - rect.center().y).abs()
+        };
+        let mut camera = Camera::default();
+        let wide = offset(&camera);
+        camera.fov_degrees = 22.5;
+        let narrow = offset(&camera);
+        // Halving the angle roughly doubles the on-screen size (tan(22.5°/2) vs tan(45°/2)).
+        let expected = (45f32.to_radians() * 0.5).tan() / (22.5f32.to_radians() * 0.5).tan();
+        close(narrow / wide, expected, 0.01, "perspective zoom");
+        camera.orthographic = true;
+        let ortho_narrow = offset(&camera);
+        close(
+            ortho_narrow,
+            narrow,
+            0.5,
+            "orthographic follows the same field of view",
+        );
+        camera.fov_degrees = 500.;
+        close(
+            camera.fov_radians().to_degrees(),
+            120.,
+            1e-4,
+            "clamped high",
+        );
+        camera.fov_degrees = f32::NAN;
+        close(
+            camera.fov_radians().to_degrees(),
+            DEFAULT_FOV_DEGREES,
+            1e-4,
+            "NaN falls back",
+        );
+    }
+
+    #[test]
+    fn three_quarter_views_sit_between_front_and_the_sides() {
+        let front = PresetView::Front.direction();
+        for (view, side) in [
+            (PresetView::ThreeQuarterLeft, PresetView::Left),
+            (PresetView::ThreeQuarterRight, PresetView::Right),
+        ] {
+            let d = view.direction();
+            close(d.length(), 1., 1e-6, "unit direction");
+            close(
+                d.angle_between(front),
+                45f32.to_radians(),
+                1e-5,
+                "45° from the front",
+            );
+            close(
+                d.angle_between(side.direction()),
+                45f32.to_radians(),
+                1e-5,
+                "45° from the side",
+            );
+        }
+        assert_eq!(PresetView::ALL.len(), 9);
+    }
+
+    #[test]
+    fn restore_brings_back_the_field_of_view() {
+        let mut camera = Camera::default();
+        camera.save_pose();
+        camera.fov_degrees = 70.;
+        assert!(camera.restore_pose());
+        close(
+            camera.fov_degrees,
+            DEFAULT_FOV_DEGREES,
+            1e-6,
+            "restored field of view",
+        );
+    }
+
+    #[test]
     fn orthographic_matches_the_perspective_scale_at_the_focal_plane() {
         let rect = viewport(1024., 768.);
         let mut camera = Camera::default();
-        let focal_half_height = camera.distance * (FOV_Y * 0.5).tan();
+        let focal_half_height = camera.distance * (camera.fov_radians() * 0.5).tan();
         let top = camera.target + camera.up() * focal_half_height;
         let perspective_top = camera.project(top, rect).unwrap();
         close(perspective_top.y, rect.top(), 0.01, "perspective framing");

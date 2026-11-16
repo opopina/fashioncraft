@@ -22,6 +22,8 @@ mod board_display;
 mod board_locks;
 #[path = "atelier/board_media.rs"]
 mod board_media;
+#[path = "atelier/camera_views.rs"]
+mod camera_views;
 #[path = "atelier/chrome.rs"]
 mod chrome;
 #[path = "atelier/command_palette.rs"]
@@ -191,6 +193,7 @@ pub fn run(
                 ..Default::default()
             };
             authoring.board.snap_mm = prefs.snap_mm;
+            let camera_fov_degrees = prefs.camera_fov_degrees;
             let (tx, receive) = worker::start(render.device.clone(), render.queue.clone())?;
             let m = project
                 .template
@@ -224,7 +227,10 @@ pub fn run(
                 palette: Default::default(),
                 profiles: Default::default(),
                 tools_visible: true,
-                camera: camera(),
+                camera: Camera {
+                    fov_degrees: camera_fov_degrees,
+                    ..camera()
+                },
                 send: tx,
                 receive,
                 generation: 0,
@@ -458,6 +464,7 @@ impl Atelier {
             Id::UnlockInternalLines => {
                 self.apply_lock_action(board_locks::LockAction::UnlockInternalLines)?
             }
+            Id::InvertSelection => self.invert_selection(),
         }
         Ok(())
     }
@@ -802,6 +809,7 @@ impl eframe::App for Atelier {
         }
         if !self.authoring.radial.blocked && !self.quick.blocked {
             self.garment_display_shortcuts(&ctx);
+            self.camera_shortcuts(&ctx);
         }
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {

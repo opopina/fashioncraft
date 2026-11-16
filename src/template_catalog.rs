@@ -203,6 +203,7 @@ impl Selection {
             state: None,
             mesh_signature: None,
             board_background: current.board_background.clone(),
+            saved_views: current.saved_views.clone(),
         };
         let scene = project.compile()?;
         Ok(Prepared { project, scene })

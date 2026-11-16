@@ -23,7 +23,7 @@ fn ready() -> CapabilityContext {
 fn every_command_has_a_unique_stable_key_and_a_real_descriptor() {
     let mut keys = std::collections::BTreeSet::new();
     let mut ids = std::collections::HashSet::new();
-    assert_eq!(REGISTRY.len(), 30);
+    assert_eq!(REGISTRY.len(), 31);
     for desc in REGISTRY {
         assert!(!desc.label.trim().is_empty());
         assert!(desc.key.contains('.'), "{:?}", desc.id);
@@ -42,7 +42,13 @@ fn shortcuts_are_only_for_wired_keys() {
         .iter()
         .filter_map(|c| c.shortcut.map(|k| (c.id, k)))
         .collect();
-    assert_eq!(bindings, vec![(CommandId::ToggleSimulation, "Space")]);
+    assert_eq!(
+        bindings,
+        vec![
+            (CommandId::ToggleSimulation, "Space"),
+            (CommandId::InvertSelection, "Shift+Cmd+I")
+        ]
+    );
 }
 
 #[test]

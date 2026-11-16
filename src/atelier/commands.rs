@@ -37,6 +37,7 @@ pub enum CommandId {
     UnlockAllPieces,
     LockInternalLines,
     UnlockInternalLines,
+    InvertSelection,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -365,6 +366,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        InvertSelection,
+        "selection.invert",
+        "Invert piece selection",
+        Pattern,
+        Some("Shift+Cmd+I"),
+        NotUndoable,
         NativeWorkspace
     ),
 ];

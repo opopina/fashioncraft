@@ -46,6 +46,7 @@ fn aliases(id: CommandId) -> &'static str {
         UnlockAllPieces => "unlock all pieces patterns 2d",
         LockInternalLines => "lock internal lines shapes 2d",
         UnlockInternalLines => "unlock internal lines shapes 2d",
+        InvertSelection => "invert reverse other pieces selection",
     }
 }
 

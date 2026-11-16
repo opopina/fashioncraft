@@ -52,6 +52,8 @@ pub(super) struct Preferences {
     pub(super) pattern_display: super::board_display::PatternDisplay,
     /// What the 3D view draws: avatar, garment, colours and the strain-map range.
     pub(super) garment_display: super::garment_display::GarmentDisplay,
+    /// Vertical field of view of the 3D camera, in degrees.
+    pub(super) camera_fov_degrees: f32,
     /// Physical time step in seconds for the fixed-step worker.
     pub(super) dt: f64,
     /// VBD iterations per physical step.
@@ -69,6 +71,7 @@ impl Default for Preferences {
             wireframe: false,
             pattern_display: Default::default(),
             garment_display: Default::default(),
+            camera_fov_degrees: marvelous_cloth::render::DEFAULT_FOV_DEGREES,
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
         }
@@ -82,6 +85,12 @@ impl Preferences {
         self.workspace.sanitize();
         self.viewport.sanitize();
         self.garment_display.sanitize();
+        let fov = marvelous_cloth::render::FOV_RANGE_DEGREES;
+        self.camera_fov_degrees = if self.camera_fov_degrees.is_finite() {
+            self.camera_fov_degrees.clamp(*fov.start(), *fov.end())
+        } else {
+            marvelous_cloth::render::DEFAULT_FOV_DEGREES
+        };
         self.snap_mm = finite_or(self.snap_mm, DEFAULT_SNAP_MM).clamp(SNAP_MM_MIN, SNAP_MM_MAX);
         self.dt = finite_or(self.dt, DEFAULT_DT).clamp(DT_MIN, DT_MAX);
         self.iterations = self.iterations.clamp(ITERATIONS_MIN, ITERATIONS_MAX);

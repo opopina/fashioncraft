@@ -161,6 +161,7 @@ impl Atelier {
         egui::Popup::menu(&header.camera.unwrap()).show(|ui| {
             ui.set_max_width(330.);
             self.show_view_bar(ui);
+            self.camera_controls(ui);
         });
     }
 

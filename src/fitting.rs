@@ -41,6 +41,79 @@ pub struct FittingProject {
     /// Reference image under the 2D board, for tracing. Absent in older documents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_background: Option<BoardBackground>,
+    /// Named 3D camera views saved with the project. Absent in older documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub saved_views: Vec<SavedView>,
+}
+
+/// A named 3D camera view stored with the project: an orbit around `target_m`.
+/// Presentation only, like the board background.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SavedView {
+    pub name: String,
+    /// Orbit angle around the vertical axis; 0 looks at the front (+z side).
+    pub yaw_degrees: f64,
+    /// Elevation, from −90 (from below) to 90 (from above).
+    pub pitch_degrees: f64,
+    /// Distance from the target to the eye, in metres.
+    pub distance_m: f64,
+    /// Orbit centre, in metres.
+    pub target_m: [f64; 3],
+    pub orthographic: bool,
+    /// Vertical field of view, in degrees.
+    pub fov_degrees: f64,
+}
+
+impl SavedView {
+    /// At most this many views per project.
+    pub const MAX_VIEWS: usize = 64;
+    /// Longest view name, in characters.
+    pub const MAX_NAME_CHARS: usize = 64;
+
+    pub fn validate(&self) -> Result<(), String> {
+        let name = self.name.trim();
+        if name.is_empty() || name.chars().count() > Self::MAX_NAME_CHARS {
+            return Err("A saved view needs a name of 1 to 64 characters".into());
+        }
+        let numbers = [
+            self.yaw_degrees,
+            self.pitch_degrees,
+            self.distance_m,
+            self.fov_degrees,
+        ];
+        if !numbers.iter().chain(&self.target_m).all(|v| v.is_finite()) {
+            return Err(format!("Saved view “{name}” has a non-finite value"));
+        }
+        if !(-90.0..=90.0).contains(&self.pitch_degrees) {
+            return Err(format!("Saved view “{name}”: pitch must be within ±90°"));
+        }
+        if !(0.01..=1000.0).contains(&self.distance_m) {
+            return Err(format!(
+                "Saved view “{name}”: distance must be 0.01 to 1000 m"
+            ));
+        }
+        if !(10.0..=120.0).contains(&self.fov_degrees) {
+            return Err(format!(
+                "Saved view “{name}”: field of view must be 10° to 120°"
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn validate_views(views: &[SavedView]) -> Result<(), String> {
+    if views.len() > SavedView::MAX_VIEWS {
+        return Err(format!("At most {} saved views", SavedView::MAX_VIEWS));
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for view in views {
+        view.validate()?;
+        if !names.insert(view.name.trim().to_lowercase()) {
+            return Err(format!("Two saved views are called “{}”", view.name.trim()));
+        }
+    }
+    Ok(())
 }
 
 /// Reference image drawn under the 2D board, for tracing a scanned or photographed pattern.
@@ -158,12 +231,14 @@ impl FittingProject {
             state: None,
             mesh_signature: None,
             board_background: None,
+            saved_views: Vec::new(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
         let mut project: Self =
             serde_json::from_str(&fs::read_to_string(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        validate_views(&project.saved_views)?;
         let directory = path.parent().unwrap_or(Path::new("."));
         if project.avatar_path.is_relative() {
             project.avatar_path = directory.join(&project.avatar_path);
@@ -286,6 +361,7 @@ impl FittingProject {
                 return Err("Invalid fitting state; existing document was preserved".into());
             }
         }
+        validate_views(&copy.saved_views)?;
         copy.avatar_path = crate::document::portable_avatar(&self.avatar_path, path)?;
         if let Some(background) = copy.board_background.as_mut() {
             background.validate()?;

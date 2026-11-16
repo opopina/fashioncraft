@@ -41,6 +41,11 @@ fn aliases(id: CommandId) -> &'static str {
         ToolGrab => "pull drag cloth",
         ToolMeasure => "ruler tape distance",
         ToolInspect => "debug report paint faces",
+        LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
+        LockAllPieces => "lock all pieces patterns 2d",
+        UnlockAllPieces => "unlock all pieces patterns 2d",
+        LockInternalLines => "lock internal lines shapes 2d",
+        UnlockInternalLines => "unlock internal lines shapes 2d",
     }
 }
 

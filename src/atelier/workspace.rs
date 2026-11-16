@@ -100,10 +100,15 @@ impl Atelier {
                     .max_height(115.)
                     .show(ui, |ui| {
                         for panel in &self.project.template.panels {
+                            let name = if self.project.template.locked_panels.contains(&panel.id) {
+                                format!("{} · locked in 2D", panel.name)
+                            } else {
+                                panel.name.clone()
+                            };
                             if ui
                                 .selectable_label(
                                     self.authoring.selected.as_ref() == Some(&panel.id),
-                                    &panel.name,
+                                    name,
                                 )
                                 .on_hover_text(format!("{} · select in both views", panel.id))
                                 .clicked()

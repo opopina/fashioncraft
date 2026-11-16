@@ -821,6 +821,10 @@ impl Atelier {
                 Default::default()
             };
             for (index, panel) in self.project.template.panels.iter().enumerate() {
+                // Locked pieces stay out of board boxes and lassos.
+                if self.board_locked(&panel.id) {
+                    continue;
+                }
                 let Some(poly) = &panel.polygon else {
                     continue;
                 };
@@ -864,6 +868,9 @@ impl Atelier {
                 BTreeSet::new()
             };
             for (i, panel) in self.project.template.panels.iter().enumerate() {
+                if self.board_locked(&panel.id) {
+                    continue;
+                }
                 let project = |uv| {
                     self.authoring.board.screen(
                         canvas,

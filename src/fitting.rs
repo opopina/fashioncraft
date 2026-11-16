@@ -38,6 +38,43 @@ pub struct FittingProject {
     /// Detect stale vertex caches after remeshing or editing the template.
     #[serde(default)]
     pub mesh_signature: Option<String>,
+    /// Reference image under the 2D board, for tracing. Absent in older documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_background: Option<BoardBackground>,
+}
+
+/// Reference image drawn under the 2D board, for tracing a scanned or photographed pattern.
+/// Presentation only: never part of the garment, the mesh, the masses or the simulation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardBackground {
+    /// Image file. Relative paths resolve against the project JSON directory; saving copies
+    /// the image into the project's `.assets` folder.
+    pub path: PathBuf,
+    /// Board position of the image's top-left corner, in metres (v grows downward).
+    pub origin_m: [f64; 2],
+    /// Real width the image spans on the board, in metres; the height follows its aspect.
+    pub width_m: f64,
+    /// 0 is invisible, 1 is opaque.
+    pub opacity: f64,
+}
+
+impl BoardBackground {
+    /// Board widths from 1 cm to 20 m; anything else is a typo or a corrupt file.
+    pub const WIDTH_RANGE_M: std::ops::RangeInclusive<f64> = 0.01..=20.0;
+
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.origin_m.iter().all(|v| v.is_finite()) {
+            return Err("Background image position must be finite".into());
+        }
+        if !self.width_m.is_finite() || !Self::WIDTH_RANGE_M.contains(&self.width_m) {
+            return Err("Background image width must be between 10 mm and 20 m".into());
+        }
+        if !(0.0..=1.0).contains(&self.opacity) {
+            return Err("Background image opacity must be between 0 and 1".into());
+        }
+        Ok(())
+    }
 }
 pub struct FittingScene {
     pub garment: Arc<CompiledGarment>,
@@ -112,17 +149,22 @@ impl FittingProject {
             simulation: None,
             state: None,
             mesh_signature: None,
+            board_background: None,
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
         let mut project: Self =
             serde_json::from_str(&fs::read_to_string(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        let directory = path.parent().unwrap_or(Path::new("."));
         if project.avatar_path.is_relative() {
-            project.avatar_path = path
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join(&project.avatar_path);
+            project.avatar_path = directory.join(&project.avatar_path);
+        }
+        if let Some(background) = project.board_background.as_mut() {
+            background.validate()?;
+            if background.path.is_relative() {
+                background.path = directory.join(&background.path);
+            }
         }
         Ok(project)
     }
@@ -237,6 +279,10 @@ impl FittingProject {
             }
         }
         copy.avatar_path = crate::document::portable_avatar(&self.avatar_path, path)?;
+        if let Some(background) = copy.board_background.as_mut() {
+            background.validate()?;
+            background.path = crate::document::portable_image(&background.path, path)?;
+        }
         let bytes = serde_json::to_vec_pretty(&copy).map_err(|e| e.to_string())?;
         crate::document::atomic_write(path, &bytes)
     }
@@ -256,6 +302,8 @@ fn mesh_signature(template: &GarmentTemplate, g: &CompiledGarment) -> Result<Str
     physical_template.fabric_appearance.clear();
     physical_template.graphics.clear();
     physical_template.trims.clear();
+    physical_template.locked_panels.clear();
+    physical_template.internal_lines_locked = false;
     for panel in &mut physical_template.panels {
         panel.layout_2d = None;
         panel.layout_rotation_degrees = 0.;

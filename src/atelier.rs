@@ -18,6 +18,10 @@ mod authoring_ui;
 mod board;
 #[path = "atelier/board_display.rs"]
 mod board_display;
+#[path = "atelier/board_locks.rs"]
+mod board_locks;
+#[path = "atelier/board_media.rs"]
+mod board_media;
 #[path = "atelier/chrome.rs"]
 mod chrome;
 #[path = "atelier/command_palette.rs"]
@@ -440,6 +444,17 @@ impl Atelier {
                 let (tool, rotate) =
                     command_palette::tool_for_command(id).ok_or("Unknown authoring tool")?;
                 self.set_authoring_tool(tool, rotate);
+            }
+            Id::LockSelectedPieces => {
+                self.apply_lock_action(board_locks::LockAction::LockSelected)?
+            }
+            Id::LockAllPieces => self.apply_lock_action(board_locks::LockAction::LockAll)?,
+            Id::UnlockAllPieces => self.apply_lock_action(board_locks::LockAction::UnlockAll)?,
+            Id::LockInternalLines => {
+                self.apply_lock_action(board_locks::LockAction::LockInternalLines)?
+            }
+            Id::UnlockInternalLines => {
+                self.apply_lock_action(board_locks::LockAction::UnlockInternalLines)?
             }
         }
         Ok(())

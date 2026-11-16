@@ -202,6 +202,8 @@ pub(super) struct Board {
     pub layout: Option<(String, DVec2)>,
     pub rotation: Option<(String, f64)>,
     pub group_layout: Vec<(String, DVec2)>,
+    /// Background texture, board capture and the canvas rect of the last frame.
+    pub media: super::board_media::BoardMedia,
 }
 impl Default for Board {
     fn default() -> Self {
@@ -224,6 +226,7 @@ impl Default for Board {
             layout: None,
             rotation: None,
             group_layout: Vec::new(),
+            media: Default::default(),
         }
     }
 }
@@ -1028,8 +1031,13 @@ impl Atelier {
         let mut edge = None;
         let mut body = None;
         let mut best = 9.;
+        let lines_locked = self.project.template.internal_lines_locked;
         for i in (0..self.project.template.panels.len()).rev() {
             let p = &self.project.template.panels[i];
+            // Locked pieces are invisible to board picking, outline and lines alike.
+            if self.board_locked(&p.id) {
+                continue;
+            }
             let origin = self.board_origin(i);
             let angle = self.board_angle(i);
             let point = |uv| {
@@ -1049,7 +1057,9 @@ impl Atelier {
             let Some(poly) = self.board_polygon(i) else {
                 continue;
             };
-            if self.authoring.tool == Tool::Edit && self.authoring.selected.as_ref() == Some(&p.id)
+            if self.authoring.tool == Tool::Edit
+                && self.authoring.selected.as_ref() == Some(&p.id)
+                && !lines_locked
             {
                 for (l, line) in poly.lines.iter().enumerate() {
                     if self
@@ -1141,6 +1151,9 @@ impl Atelier {
             }
             if let Ok(paths) = poly.paths() {
                 for (name, points) in paths.into_iter().skip(poly.edges.len()) {
+                    if lines_locked && poly.lines.iter().any(|line| line.id == name) {
+                        continue;
+                    }
                     for pair in points.windows(2) {
                         let d = segment_distance(pos, point(pair[0]), point(pair[1]));
                         if d < best {
@@ -1298,6 +1311,9 @@ impl Atelier {
             ui.checkbox(&mut display.silhouette, "Avatar silhouette").on_hover_text(
                 "Front view of the avatar behind the pieces, lined up with the first piece that faces the front",
             );
+            self.lock_controls(ui);
+            self.media_controls(ui);
+            ui.separator();
             super::view_controls::board_bar(ui, &mut self.authoring.board);
         });
         ui.horizontal(|ui| {
@@ -1394,6 +1410,8 @@ impl Atelier {
             ui.id().with("pattern-canvas"),
             egui::Sense::click_and_drag(),
         );
+        self.authoring.board.media.last_rect = Some(rect);
+        self.drive_board_capture(ui.ctx());
         if !self.authoring.board.fitted {
             self.fit_board(rect);
         }
@@ -1946,6 +1964,9 @@ impl Atelier {
         let mut best = SNAP_EDGE_PX;
         let mut hit = None;
         for (i, panel) in self.project.template.panels.iter().enumerate() {
+            if self.board_locked(&panel.id) {
+                continue;
+            }
             let Some(poly) = self.board_polygon(i) else {
                 continue;
             };
@@ -2572,6 +2593,12 @@ impl Atelier {
         // The pattern board is a white drafting sheet; the 3D window has its own
         // studio backdrop, so the two do not share a background colour.
         painter.rect_filled(rect, 0., Color32::from_rgb(0xFA, 0xFA, 0xFB));
+        // Back to front: silhouette, then the tracing image (its opacity lets the body show
+        // through instead of the opaque silhouette hiding the lines to trace), grid, pieces.
+        if self.prefs.pattern_display.silhouette {
+            self.paint_silhouette(&painter, rect);
+        }
+        self.paint_background(&painter, rect, ui.ctx());
         let board = &self.authoring.board;
         let display = self.prefs.pattern_display;
         let spacing = if board.scale < 140. { 0.25 } else { 0.05 };
@@ -2597,9 +2624,6 @@ impl Atelier {
                 );
             }
         }
-        if display.silhouette {
-            self.paint_silhouette(&painter, rect);
-        }
         if !self.authoring.replace {
             for (i, panel) in self.project.template.panels.iter().enumerate() {
                 let origin = self.board_origin(i);
@@ -2620,10 +2644,14 @@ impl Atelier {
                 // Transform each material vertex once; indices are shared by its triangles.
                 mesh.vertices.reserve(range.vertices.len());
                 mesh.indices.reserve(range.triangles.len() * 3);
+                let locked = self.board_locked(&panel.id);
                 for &uv in &self.scene.garment.mesh.uv[range.vertices.clone()] {
                     mesh.colored_vertex(
                         point(uv),
-                        if self.panel_selected(&panel.id) {
+                        if locked {
+                            // Locked pieces fade into the sheet: visible, not pickable.
+                            Color32::from_rgb(0xF3, 0xF4, 0xF6)
+                        } else if self.panel_selected(&panel.id) {
                             // Light blue for the active piece, light grey for the
                             // rest: the board is white, so the fill carries the
                             // selection instead of a bright outline on dark.
@@ -2662,7 +2690,8 @@ impl Atelier {
                     format!("body_{}", panel.id),
                     point(DVec2::new(panel.pattern.width, panel.pattern.height) * 0.5),
                 ));
-                if selected && self.authoring.tool == Tool::Edit {
+                // A locked piece offers no handle: board picking ignores it.
+                if selected && self.authoring.tool == Tool::Edit && !locked {
                     let handle = point(self.rotation_handle(i));
                     // Amber rather than gold: the board is white now, and gold on
                     // white does not carry enough contrast for a handle or label.
@@ -2706,7 +2735,10 @@ impl Atelier {
                         .seams
                         .iter()
                         .find(|s| s.references().any(|r| same_edge(&edge, r)));
-                    let color = if end.is_some() {
+                    let is_line = k >= poly.edges.len() && poly.lines.iter().any(|l| &l.id == name);
+                    let color = if locked {
+                        Color32::from_gray(0xB8)
+                    } else if end.is_some() {
                         Color32::from_rgb(248, 117, 188)
                     } else if active || hover {
                         Color32::GOLD
@@ -2714,6 +2746,12 @@ impl Atelier {
                         super::seam_links::seam_color(&seam.id)
                     } else {
                         Color32::from_rgb(79, 155, 195)
+                    };
+                    // Locked internal lines turn translucent, as they stop taking clicks.
+                    let color = if is_line && self.project.template.internal_lines_locked {
+                        color.gamma_multiply(0.4)
+                    } else {
+                        color
                     };
                     {
                         painter.add(egui::Shape::line(
@@ -2799,7 +2837,7 @@ impl Atelier {
                         }
                     }
                 }
-                if self.authoring.tool == Tool::Edit {
+                if self.authoring.tool == Tool::Edit && !locked {
                     // Every point is visible and grabbable in Edit; the selected
                     // piece's points are emphasised and its selection ringed.
                     for (k, uv) in poly.points.iter().enumerate() {
@@ -2878,7 +2916,11 @@ impl Atelier {
                     painter.text(
                         point(DVec2::new(panel.pattern.width * 0.5, -0.035)) + Vec2::new(0., lift),
                         egui::Align2::CENTER_BOTTOM,
-                        &panel.name,
+                        if locked {
+                            format!("{} · locked", panel.name)
+                        } else {
+                            panel.name.clone()
+                        },
                         egui::FontId::proportional(13.),
                         // Dark labels: the board is a white sheet now, so the old
                         // white-on-dark piece name would disappear.
@@ -3028,7 +3070,10 @@ impl Atelier {
         }
         // Drawn last so the snap indicator, the live measurements and the insert
         // marker sit above the geometry.
-        self.paint_drafting(&painter, rect, response);
+        // A board capture shows the drawing, not where the pointer happens to hover.
+        if !self.authoring.board.media.capturing() {
+            self.paint_drafting(&painter, rect, response);
+        }
         self.paint_sewing_ranges(ui, rect, false);
     }
     /// Drafting overlay: where the next click will land and why, the live

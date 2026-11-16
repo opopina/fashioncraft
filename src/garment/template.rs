@@ -220,6 +220,14 @@ pub struct GarmentTemplate {
     /// Cylindrical arrangement wraps by panel id; absent in older documents.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub panel_wraps: BTreeMap<String, PanelWrap>,
+    /// Panels locked on the 2D board: they cannot be picked or box-selected there. A selection
+    /// aid only, like the 2D lock of other pattern tools: nothing physical depends on it and
+    /// the 3D view, the inspector and scripts can still edit a locked panel.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub locked_panels: BTreeSet<String>,
+    /// Internal lines locked on the 2D board, so clicks and boxes reach only the pieces.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub internal_lines_locked: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -287,6 +295,13 @@ impl GarmentTemplate {
         .map_err(|e| e.to_string())
     }
     pub fn compile(&self) -> Result<CompiledGarment, String> {
+        if let Some(id) = self
+            .locked_panels
+            .iter()
+            .find(|id| !self.panels.iter().any(|p| &p.id == *id))
+        {
+            return Err(format!("Locked panel {id} is not in the template"));
+        }
         for (id, wrap) in &self.panel_wraps {
             if !self.panels.iter().any(|p| &p.id == id) {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
@@ -602,6 +617,8 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             panel_wraps: Default::default(),
+            locked_panels: Default::default(),
+            internal_lines_locked: false,
             fabric_appearance: Default::default(),
             graphics: vec![],
             trims: vec![],

@@ -1342,6 +1342,14 @@ impl Atelier {
             return;
         };
         ui.label(&panel.name);
+        let mut locked = self.board_locked(&panel.id);
+        if ui
+            .checkbox(&mut locked, "Locked in 2D")
+            .on_hover_text("A locked piece cannot be picked or box-selected on the 2D board; the 3D view still reaches it")
+            .changed()
+        {
+            self.set_piece_locked(&panel.id, locked);
+        }
         self.arrangement_properties(ui, &panel);
         self.pin_properties(ui, &panel);
         if let Some(fabric) = self

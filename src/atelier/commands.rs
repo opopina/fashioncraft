@@ -32,6 +32,11 @@ pub enum CommandId {
     ToolGrab,
     ToolMeasure,
     ToolInspect,
+    LockSelectedPieces,
+    LockAllPieces,
+    UnlockAllPieces,
+    LockInternalLines,
+    UnlockInternalLines,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +46,8 @@ pub enum CommandContext {
     Workspace,
     Example,
     Tool,
+    /// Edits the pattern document; needs one loaded.
+    Pattern,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -315,6 +322,51 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NotUndoable,
         NativeWorkspace
     ),
+    entry!(
+        LockSelectedPieces,
+        "pattern.lock_selected",
+        "Lock selected pieces in 2D",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        LockAllPieces,
+        "pattern.lock_all",
+        "Lock all pieces in 2D",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        UnlockAllPieces,
+        "pattern.unlock_all",
+        "Unlock all pieces in 2D",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        LockInternalLines,
+        "pattern.lock_internal_lines",
+        "Lock all internal lines in 2D",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        UnlockInternalLines,
+        "pattern.unlock_internal_lines",
+        "Unlock all internal lines in 2D",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
 ];
 
 impl CommandId {
@@ -352,7 +404,7 @@ impl UnavailableReason {
     pub fn message(self) -> &'static str {
         match self {
             Self::NoDocument => "No garment document is loaded",
-            Self::NoSelectedPanel => "Select a panel before arranging it",
+            Self::NoSelectedPanel => "Select a panel first",
             Self::WorkerUnavailable => "The simulation worker is unavailable",
             Self::FilesystemUnavailable => "Local export storage is unavailable",
             Self::SimulationRunning => "Pause simulation before stepping",
@@ -366,7 +418,7 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
     if !ctx.document_loaded
         && matches!(
             descriptor.context,
-            CommandContext::Simulation | CommandContext::File
+            CommandContext::Simulation | CommandContext::File | CommandContext::Pattern
         )
     {
         return Err(UnavailableReason::NoDocument);
@@ -380,7 +432,11 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
         }
         _ => {}
     }
-    if matches!(id, CommandId::ToolMove | CommandId::ToolRotate) && !ctx.selected_panel {
+    if matches!(
+        id,
+        CommandId::ToolMove | CommandId::ToolRotate | CommandId::LockSelectedPieces
+    ) && !ctx.selected_panel
+    {
         return Err(UnavailableReason::NoSelectedPanel);
     }
     if id == CommandId::StepSimulation {

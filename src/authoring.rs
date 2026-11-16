@@ -257,6 +257,12 @@ pub enum Command {
         fabric: String,
         appearance: Option<crate::garment::appearance::FabricAppearance>,
     },
+    /// Replace the 2D board locks: which panels cannot be picked there and whether internal
+    /// lines are locked. A selection aid with no physical effect; one undo step.
+    SetBoardLocks {
+        panels: std::collections::BTreeSet<String>,
+        internal_lines: bool,
+    },
     /// Create or replace a nonphysical placement, addressed by its stable ID.
     SetGraphic {
         placement: crate::garment::graphics::GraphicPlacement,
@@ -705,6 +711,9 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.fabric_appearance.clear();
         t.graphics.clear();
         t.trims.clear();
+        // Board locks only filter 2D picking.
+        t.locked_panels.clear();
+        t.internal_lines_locked = false;
         for p in &mut t.panels {
             p.layout_2d = None;
             p.layout_rotation_degrees = 0.;
@@ -740,6 +749,8 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         && a.graphics == b.graphics
         && a.trims == b.trims
         && markings(a) == markings(b)
+        && a.locked_panels == b.locked_panels
+        && a.internal_lines_locked == b.internal_lines_locked
     {
         return false;
     }
@@ -748,6 +759,8 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         t.fabric_appearance.clear();
         t.graphics.clear();
         t.trims.clear();
+        t.locked_panels.clear();
+        t.internal_lines_locked = false;
         for p in &mut t.panels {
             if let Some(polygon) = p.polygon.as_mut() {
                 polygon.seam_allowances.clear();
@@ -1471,6 +1484,25 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 width,
                 ratio,
             )?)
+        }
+        Command::SetBoardLocks {
+            panels,
+            internal_lines,
+        } => {
+            if let Some(id) = panels
+                .iter()
+                .find(|id| !template.panels.iter().any(|p| &p.id == *id))
+            {
+                return Err(format!("Cannot lock {id}: panel not found"));
+            }
+            if panels == template.locked_panels && internal_lines == template.internal_lines_locked
+            {
+                return Err("The 2D locks are already set that way".into());
+            }
+            template.locked_panels = panels;
+            template.internal_lines_locked = internal_lines;
+            // A locked piece cannot stay selected on the board.
+            selected = None;
         }
         Command::FabricAppearance { fabric, appearance } => {
             if !template.fabrics.iter().any(|f| f.id == fabric) {
@@ -2616,6 +2648,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
     template
         .panel_wraps
         .retain(|id, _| template.panels.iter().any(|p| &p.id == id));
+    template
+        .locked_panels
+        .retain(|id| template.panels.iter().any(|p| &p.id == id));
     let garment = template.compile()?;
     Ok(Edit {
         reset_simulation: !same_physics(source, &template),

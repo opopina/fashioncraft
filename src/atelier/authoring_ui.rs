@@ -35,6 +35,7 @@ pub(super) enum Tool {
 #[derive(Default)]
 pub(super) struct AuthoringUi {
     pub dart: Option<DartDraft>,
+    pub arrangement: super::arrangement_ui::ArrangementUi,
     pub construction: ConstructionDraft,
     pub sewing: super::sewing_ui::SewingDraft,
     pub sewing_audit: super::sewing_ui::SewingAuditUi,
@@ -1341,6 +1342,7 @@ impl Atelier {
             return;
         };
         ui.label(&panel.name);
+        self.arrangement_properties(ui, &panel);
         self.pin_properties(ui, &panel);
         if let Some(fabric) = self
             .project

@@ -247,3 +247,65 @@ pub fn placement_for(
     placement.translation = target - placement.transform(local_ref);
     Ok(placement)
 }
+
+/// Anchors and landmarks shipped next to an avatar OBJ (`arrangement.json` + `measurements.json`).
+/// The landmark file may be the prepared MakeHuman map (`{"landmarks": {id: [x, y, z]}}`).
+#[derive(Clone, Debug)]
+pub struct Sidecar {
+    pub set: ArrangementSet,
+    pub landmarks: Vec<Landmark>,
+}
+
+impl Sidecar {
+    /// Evaluate one anchor in the sidecar's own frame.
+    pub fn frame(&self, id: &str) -> Result<AnchorFrame, String> {
+        self.set.evaluate(&self.set.frame, &self.landmarks, id)
+    }
+}
+
+/// Load the sidecar for an avatar; `Ok(None)` when the avatar ships no anchors.
+pub fn load_sidecar(avatar_path: &std::path::Path) -> Result<Option<Sidecar>, String> {
+    let dir = avatar_path.parent().unwrap_or(std::path::Path::new("."));
+    let anchors = dir.join("arrangement.json");
+    if !anchors.exists() {
+        return Ok(None);
+    }
+    let set = ArrangementSet::from_json(
+        &std::fs::read_to_string(&anchors).map_err(|e| format!("{}: {e}", anchors.display()))?,
+    )?;
+    let measurements = dir.join("measurements.json");
+    let text = std::fs::read_to_string(&measurements)
+        .map_err(|e| format!("{}: {e}", measurements.display()))?;
+    #[derive(Deserialize)]
+    struct Prepared {
+        landmarks: BTreeMap<String, [f64; 3]>,
+    }
+    let prepared: Prepared =
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", measurements.display()))?;
+    let landmarks: Vec<Landmark> = prepared
+        .landmarks
+        .into_iter()
+        .map(|(id, v)| Landmark {
+            id,
+            position_m: DVec3::from_array(v),
+        })
+        .collect();
+    set.validate(&set.frame.clone(), &landmarks)?;
+    Ok(Some(Sidecar { set, landmarks }))
+}
+
+/// Rest outline of a panel in material coordinates: its polygon, or its rectangle.
+pub fn rest_outline(panel: &crate::garment::template::Panel) -> Vec<DVec2> {
+    match &panel.polygon {
+        Some(p) => p.points.clone(),
+        None => {
+            let (w, h) = (panel.pattern.width, panel.pattern.height);
+            vec![
+                DVec2::ZERO,
+                DVec2::new(w, 0.0),
+                DVec2::new(w, h),
+                DVec2::new(0.0, h),
+            ]
+        }
+    }
+}

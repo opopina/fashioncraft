@@ -35,7 +35,7 @@ fn landmarks() -> Vec<Landmark> {
 }
 
 fn set() -> ArrangementSet {
-    ArrangementSet::from_json(include_str!("fixtures/arrangement-makehuman.json")).unwrap()
+    ArrangementSet::from_json(include_str!("../assets/makehuman/arrangement.json")).unwrap()
 }
 
 fn landmark(id: &str) -> DVec3 {

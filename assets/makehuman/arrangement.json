@@ -1,46 +1,1995 @@
 {
-  "version": 1,
-  "frame": { "avatar_id": "makehuman-mannequin", "revision": 1 },
-  "anchors": [
+ "version": 1,
+ "frame": {
+  "avatar_id": "makehuman-mannequin",
+  "revision": 1
+ },
+ "anchors": [
+  {
+   "id": "torso-upper-front",
+   "label": "Upper torso \u00b7 front",
+   "origin": [
     {
-      "id": "torso-front", "label": "Torso front",
-      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
-      "outward": { "kind": "fixed", "vector": [0, 0, 1] },
-      "right": { "kind": "fixed", "vector": [1, 0, 0] },
-      "up": { "kind": "fixed", "vector": [0, 1, 0] },
-      "clearance_m": 0.25
-    },
-    {
-      "id": "torso-back", "label": "Torso back (unmirrored, like the bundled presets)",
-      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
-      "outward": { "kind": "fixed", "vector": [0, 0, -1] },
-      "right": { "kind": "fixed", "vector": [1, 0, 0] },
-      "up": { "kind": "fixed", "vector": [0, 1, 0] },
-      "clearance_m": 0.2
-    },
-    {
-      "id": "torso-left", "label": "Torso left side",
-      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
-      "outward": { "kind": "fixed", "vector": [1, 0, 0] },
-      "right": { "kind": "fixed", "vector": [0, 0, -1] },
-      "up": { "kind": "fixed", "vector": [0, 1, 0] },
-      "clearance_m": 0.25
-    },
-    {
-      "id": "torso-right", "label": "Torso right side",
-      "origin": [{ "landmark": "joint-spine-1", "weight": 0.5 }, { "landmark": "joint-spine-2", "weight": 0.5 }],
-      "outward": { "kind": "fixed", "vector": [-1, 0, 0] },
-      "right": { "kind": "fixed", "vector": [0, 0, 1] },
-      "up": { "kind": "fixed", "vector": [0, 1, 0] },
-      "clearance_m": 0.25
-    },
-    {
-      "id": "upper-arm-left-front", "label": "Left upper arm, front",
-      "origin": [{ "landmark": "joint-l-shoulder", "weight": 0.5 }, { "landmark": "joint-l-elbow", "weight": 0.5 }],
-      "outward": { "kind": "perpendicular", "from": "joint-l-shoulder", "to": "joint-l-elbow", "toward": [0, 0, 1] },
-      "right": { "kind": "perpendicular", "from": "joint-l-shoulder", "to": "joint-l-elbow", "toward": [1, 0, 0] },
-      "up": { "kind": "along", "from": "joint-l-elbow", "to": "joint-l-shoulder" },
-      "clearance_m": 0.08
+     "landmark": "joint-spine-1",
+     "weight": 1.0
     }
-  ]
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-front-left",
+   "label": "Upper torso \u00b7 front left",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-left",
+   "label": "Upper torso \u00b7 left side",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-back-left",
+   "label": "Upper torso \u00b7 back left",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-back",
+   "label": "Upper torso \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-back-right",
+   "label": "Upper torso \u00b7 back right",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-right",
+   "label": "Upper torso \u00b7 right side",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     -0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-upper-front-right",
+   "label": "Upper torso \u00b7 front right",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-front",
+   "label": "Mid torso \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-front-left",
+   "label": "Mid torso \u00b7 front left",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-left",
+   "label": "Mid torso \u00b7 left side",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-back-left",
+   "label": "Mid torso \u00b7 back left",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-back",
+   "label": "Mid torso \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-back-right",
+   "label": "Mid torso \u00b7 back right",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-right",
+   "label": "Mid torso \u00b7 right side",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     -0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-middle-front-right",
+   "label": "Mid torso \u00b7 front right",
+   "origin": [
+    {
+     "landmark": "joint-spine-1",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-spine-2",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-front",
+   "label": "Lower torso \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-front-left",
+   "label": "Lower torso \u00b7 front left",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-left",
+   "label": "Lower torso \u00b7 left side",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-back-left",
+   "label": "Lower torso \u00b7 back left",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-back",
+   "label": "Lower torso \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-back-right",
+   "label": "Lower torso \u00b7 back right",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     -0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-right",
+   "label": "Lower torso \u00b7 right side",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -1.0,
+     0.0,
+     -0.0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     -0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "torso-lower-front-right",
+   "label": "Lower torso \u00b7 front right",
+   "origin": [
+    {
+     "landmark": "joint-pelvis",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     -0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0.707107,
+     0.0,
+     0.707107
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.05,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-left-front",
+   "label": "Upper arm left \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-l-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-shoulder",
+    "to": "joint-l-elbow",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-shoulder",
+    "to": "joint-l-elbow",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-elbow",
+    "to": "joint-l-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-left-back",
+   "label": "Upper arm left \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-l-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-shoulder",
+    "to": "joint-l-elbow",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-shoulder",
+    "to": "joint-l-elbow",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-elbow",
+    "to": "joint-l-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-left-outer",
+   "label": "Upper arm left \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-l-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-shoulder",
+    "to": "joint-l-elbow",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-elbow",
+    "to": "joint-l-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-left-front",
+   "label": "Forearm left \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-elbow",
+    "to": "joint-l-hand",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-elbow",
+    "to": "joint-l-hand",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-hand",
+    "to": "joint-l-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-left-back",
+   "label": "Forearm left \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-elbow",
+    "to": "joint-l-hand",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-elbow",
+    "to": "joint-l-hand",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-hand",
+    "to": "joint-l-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-left-outer",
+   "label": "Forearm left \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-l-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-elbow",
+    "to": "joint-l-hand",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-hand",
+    "to": "joint-l-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-left-front",
+   "label": "Thigh left \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-l-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-upper-leg",
+    "to": "joint-l-knee",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-upper-leg",
+    "to": "joint-l-knee",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-knee",
+    "to": "joint-l-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-left-back",
+   "label": "Thigh left \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-l-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-upper-leg",
+    "to": "joint-l-knee",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-upper-leg",
+    "to": "joint-l-knee",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-knee",
+    "to": "joint-l-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-left-outer",
+   "label": "Thigh left \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-l-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-upper-leg",
+    "to": "joint-l-knee",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-knee",
+    "to": "joint-l-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-left-front",
+   "label": "Shin left \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-knee",
+    "to": "joint-l-ankle",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-knee",
+    "to": "joint-l-ankle",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-ankle",
+    "to": "joint-l-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-left-back",
+   "label": "Shin left \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-knee",
+    "to": "joint-l-ankle",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-l-knee",
+    "to": "joint-l-ankle",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-ankle",
+    "to": "joint-l-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-left-outer",
+   "label": "Shin left \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-l-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-l-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-l-knee",
+    "to": "joint-l-ankle",
+    "toward": [
+     1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     -1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-l-ankle",
+    "to": "joint-l-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-right-front",
+   "label": "Upper arm right \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-r-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-shoulder",
+    "to": "joint-r-elbow",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-shoulder",
+    "to": "joint-r-elbow",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-elbow",
+    "to": "joint-r-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-right-back",
+   "label": "Upper arm right \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-r-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-shoulder",
+    "to": "joint-r-elbow",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-shoulder",
+    "to": "joint-r-elbow",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-elbow",
+    "to": "joint-r-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "upper-arm-right-outer",
+   "label": "Upper arm right \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-r-shoulder",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-shoulder",
+    "to": "joint-r-elbow",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-elbow",
+    "to": "joint-r-shoulder"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-right-front",
+   "label": "Forearm right \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-elbow",
+    "to": "joint-r-hand",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-elbow",
+    "to": "joint-r-hand",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-hand",
+    "to": "joint-r-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-right-back",
+   "label": "Forearm right \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-elbow",
+    "to": "joint-r-hand",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-elbow",
+    "to": "joint-r-hand",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-hand",
+    "to": "joint-r-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "forearm-right-outer",
+   "label": "Forearm right \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-r-elbow",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-hand",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-elbow",
+    "to": "joint-r-hand",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-hand",
+    "to": "joint-r-elbow"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-right-front",
+   "label": "Thigh right \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-r-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-upper-leg",
+    "to": "joint-r-knee",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-upper-leg",
+    "to": "joint-r-knee",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-knee",
+    "to": "joint-r-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-right-back",
+   "label": "Thigh right \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-r-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-upper-leg",
+    "to": "joint-r-knee",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-upper-leg",
+    "to": "joint-r-knee",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-knee",
+    "to": "joint-r-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "thigh-right-outer",
+   "label": "Thigh right \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-r-upper-leg",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-upper-leg",
+    "to": "joint-r-knee",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-knee",
+    "to": "joint-r-upper-leg"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-right-front",
+   "label": "Shin right \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-knee",
+    "to": "joint-r-ankle",
+    "toward": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-knee",
+    "to": "joint-r-ankle",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-ankle",
+    "to": "joint-r-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-right-back",
+   "label": "Shin right \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-knee",
+    "to": "joint-r-ankle",
+    "toward": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "perpendicular",
+    "from": "joint-r-knee",
+    "to": "joint-r-ankle",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-ankle",
+    "to": "joint-r-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "shin-right-outer",
+   "label": "Shin right \u00b7 outer",
+   "origin": [
+    {
+     "landmark": "joint-r-knee",
+     "weight": 0.5
+    },
+    {
+     "landmark": "joint-r-ankle",
+     "weight": 0.5
+    }
+   ],
+   "outward": {
+    "kind": "perpendicular",
+    "from": "joint-r-knee",
+    "to": "joint-r-ankle",
+    "toward": [
+     -1.0,
+     0,
+     0
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     1.0
+    ]
+   },
+   "up": {
+    "kind": "along",
+    "from": "joint-r-ankle",
+    "to": "joint-r-knee"
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "neck-front",
+   "label": "Neck \u00b7 front",
+   "origin": [
+    {
+     "landmark": "joint-neck",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     1
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  },
+  {
+   "id": "neck-back",
+   "label": "Neck \u00b7 back",
+   "origin": [
+    {
+     "landmark": "joint-neck",
+     "weight": 1.0
+    }
+   ],
+   "outward": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     0,
+     -1
+    ]
+   },
+   "right": {
+    "kind": "fixed",
+    "vector": [
+     1,
+     0,
+     0
+    ]
+   },
+   "up": {
+    "kind": "fixed",
+    "vector": [
+     0,
+     1,
+     0
+    ]
+   },
+   "clearance_m": 0.03,
+   "wrap": true,
+   "max_wrap_degrees": 80.0
+  }
+ ]
 }

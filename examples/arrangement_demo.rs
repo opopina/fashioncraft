@@ -45,8 +45,8 @@ fn main() -> Result<(), String> {
     for (name, front_clearance) in [("anclas-torso", 0.25), ("anclas-dentro-del-cuerpo", 0.02)] {
         let mut project = FittingProject::basic(GarmentKind::Tshirt, 2, avatar_path.clone());
         for (panel, anchor, c) in [
-            ("front", "torso-front", front_clearance),
-            ("back", "torso-back", 0.2),
+            ("front", "torso-middle-front", front_clearance),
+            ("back", "torso-middle-back", 0.2),
         ] {
             let f = set.evaluate(&frame, &landmarks, anchor)?;
             let p = project

@@ -110,6 +110,12 @@ pub enum Command {
         panel: String,
         placement: Placement,
     },
+    /// Body arrangement: rigid placement plus an optional cylindrical wrap (EXO-AV-002).
+    Arrange {
+        panel: String,
+        placement: Placement,
+        wrap: Option<crate::garment::template::PanelWrap>,
+    },
     /// One world-space rigid transform about a shared pivot; material UVs stay fixed.
     PlaceGroup {
         panels: Vec<String>,
@@ -1202,7 +1208,8 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         Command::Duplicate { panel }
         | Command::LinkedMirror { panel, .. }
         | Command::Mirror { panel, .. }
-        | Command::Place { panel, .. } => held(panel),
+        | Command::Place { panel, .. }
+        | Command::Arrange { panel, .. } => held(panel),
         Command::PlaceGroup { panels, .. } => panels.iter().any(|p| held(p)),
         Command::Primitive { replace: true, .. } | Command::Polygon { replace: true, .. } => {
             !source.pin_targets.is_empty() || !source.frozen_panels.is_empty()
@@ -1636,6 +1643,30 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 .find(|p| p.id == panel)
                 .ok_or("Panel not found")?
                 .placement = placement;
+            selected = Some(panel);
+        }
+        Command::Arrange {
+            panel,
+            placement,
+            wrap,
+        } => {
+            if let Some(w) = &wrap {
+                w.validate()?;
+            }
+            template
+                .panels
+                .iter_mut()
+                .find(|p| p.id == panel)
+                .ok_or("Panel not found")?
+                .placement = placement;
+            match wrap {
+                Some(w) => {
+                    template.panel_wraps.insert(panel.clone(), w);
+                }
+                None => {
+                    template.panel_wraps.remove(&panel);
+                }
+            }
             selected = Some(panel);
         }
         Command::PlaceGroup {
@@ -2582,6 +2613,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
     template
         .frozen_panels
         .retain(|target| template.panels.iter().any(|p| p.id == target.panel));
+    template
+        .panel_wraps
+        .retain(|id, _| template.panels.iter().any(|p| &p.id == id));
     let garment = template.compile()?;
     Ok(Edit {
         reset_simulation: !same_physics(source, &template),

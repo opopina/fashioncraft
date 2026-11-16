@@ -50,7 +50,22 @@ pub struct ArrangementAnchor {
     pub outward: Direction,
     pub right: Direction,
     pub up: Direction,
+    /// Distance from the skin along `outward` (from the origin when no avatar surface is given).
     pub clearance_m: f64,
+    /// Wrap the panel around the anchor axis (`up` through the origin), like a curved arrangement.
+    #[serde(default = "default_wrap")]
+    pub wrap: bool,
+    /// Largest wrap angle either side of the panel centre; beyond it the panel continues flat.
+    #[serde(default = "default_max_wrap")]
+    pub max_wrap_degrees: f64,
+}
+
+fn default_wrap() -> bool {
+    true
+}
+
+fn default_max_wrap() -> f64 {
+    80.0
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -192,20 +207,24 @@ fn evaluate_anchor(
             a.clearance_m
         ));
     }
-    let outward = direction(&a.outward, m, "outward")?;
-    let right = direction(&a.right, m, "right")?;
-    // Gram–Schmidt: keep `right`, make `up` orthogonal to it.
-    let up_raw = direction(&a.up, m, "up")?;
-    let up = unit(
-        up_raw - right * up_raw.dot(right),
-        "up (after removing its right component)",
+    // `up` (e.g. a bone) stays exact; `outward` is made perpendicular to it; `right` becomes the exact
+    // perpendicular to both, keeping the side the author chose (mirrored or unmirrored panels).
+    let up = direction(&a.up, m, "up")?;
+    let outward_raw = direction(&a.outward, m, "outward")?;
+    let outward = unit(
+        outward_raw - up * outward_raw.dot(up),
+        "outward (after removing its up component)",
     )?;
-    let normal = right.cross(up);
-    if normal.dot(outward).abs() < MAX_FACING_DEGREES.to_radians().cos() {
+    let right_raw = direction(&a.right, m, "right")?;
+    let side = up.cross(outward);
+    let along = right_raw.dot(side);
+    if along.abs() < MAX_FACING_DEGREES.to_radians().sin() {
         return Err(format!(
-            "panel plane (right × up) must face outward within {MAX_FACING_DEGREES}°"
+            "right must point across the panel (within {:.0}° of up × outward), so the panel plane faces outward",
+            90.0 - MAX_FACING_DEGREES
         ));
     }
+    let right = side * along.signum();
     Ok(AnchorFrame {
         origin,
         outward,
@@ -308,4 +327,247 @@ pub fn rest_outline(panel: &crate::garment::template::Panel) -> Vec<DVec2> {
             ]
         }
     }
+}
+
+/// First hit of the ray `origin + dir·t` (t > 0) with the avatar surface (Möller–Trumbore), in metres.
+pub fn surface_distance(
+    surface: &crate::avatar::SurfaceMesh,
+    origin: DVec3,
+    dir: DVec3,
+) -> Option<f64> {
+    let mut best = f64::INFINITY;
+    for t in &surface.triangles {
+        let (a, b, c) = (
+            surface.vertices[t[0]],
+            surface.vertices[t[1]],
+            surface.vertices[t[2]],
+        );
+        let (e1, e2) = (b - a, c - a);
+        let h = dir.cross(e2);
+        let det = e1.dot(h);
+        if det.abs() < 1e-14 {
+            continue;
+        }
+        let f = 1.0 / det;
+        let s = origin - a;
+        let u = f * s.dot(h);
+        if !(0.0..=1.0).contains(&u) {
+            continue;
+        }
+        let q = s.cross(e1);
+        let v = f * dir.dot(q);
+        if v < 0.0 || u + v > 1.0 {
+            continue;
+        }
+        let d = f * e2.dot(q);
+        if d > 1e-6 && d < best {
+            best = d;
+        }
+    }
+    best.is_finite().then_some(best)
+}
+
+/// Result of arranging one panel on an anchor.
+#[derive(Clone, Debug)]
+pub struct Arrangement {
+    pub placement: Placement,
+    pub wrap: Option<crate::garment::template::PanelWrap>,
+    /// Distance from the anchor axis to the panel centre (wrap radius when wrapped), metres.
+    pub radius_m: f64,
+    /// Skin distance straight ahead of the anchor, when an avatar surface was available.
+    pub skin_m: Option<f64>,
+}
+
+/// Arrange a panel on an anchor: the panel centre sits `clearance_m` outside the skin (measured by
+/// casting rays from the anchor axis), and with `max_wrap_degrees` the panel wraps around the axis on a
+/// cylinder whose radius clears the body across the panel's width and height.
+pub fn arrange(
+    rest_points: &[DVec2],
+    anchor: &AnchorFrame,
+    clearance_m: f64,
+    max_wrap_degrees: Option<f64>,
+    surface: Option<&crate::avatar::SurfaceMesh>,
+) -> Result<Arrangement, String> {
+    if rest_points.is_empty() || rest_points.iter().any(|p| !p.is_finite()) {
+        return Err("panel has no finite rest points".into());
+    }
+    if !clearance_m.is_finite() || clearance_m < 0.0 {
+        return Err(format!(
+            "clearance must be finite and non-negative, got {clearance_m}"
+        ));
+    }
+    let (lo, hi) = rest_points
+        .iter()
+        .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), p| {
+            (lo.min(*p), hi.max(*p))
+        });
+    let centre = (lo + hi) / 2.0;
+    let (half_width, height) = ((hi.x - lo.x) / 2.0, hi.y - lo.y);
+    let heights: Vec<f64> = (0..5).map(|k| (k as f64 / 4.0 - 0.5) * height).collect();
+    let ray = |angle: f64, h: f64| {
+        let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
+        surface.and_then(|s| surface_distance(s, anchor.origin + anchor.up * h, dir))
+    };
+    let skin_ahead = heights
+        .iter()
+        .filter_map(|h| ray(0.0, *h))
+        .fold(None, |m: Option<f64>, d| Some(m.map_or(d, |m| m.max(d))));
+    let mut radius = skin_ahead.unwrap_or(0.0) + clearance_m;
+    let wrap = match max_wrap_degrees {
+        Some(max) if surface.is_some() && radius > 0.01 => {
+            let max = max.clamp(1.0, 180.0).to_radians();
+            for _ in 0..4 {
+                let span = (half_width / radius).min(max);
+                for k in 0..=12 {
+                    let angle = -span + 2.0 * span * k as f64 / 12.0;
+                    for h in &heights {
+                        if let Some(d) = ray(angle, *h) {
+                            radius = radius.max(d + clearance_m);
+                        }
+                    }
+                }
+            }
+            // positive radius curves toward local −z; local z maps to right × up
+            let toward_body = if anchor.right.cross(anchor.up).dot(anchor.outward) > 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            Some(crate::garment::template::PanelWrap {
+                axis_x_m: centre.x,
+                radius_m: toward_body * radius,
+                max_angle_degrees: max.to_degrees(),
+            })
+        }
+        _ => None,
+    };
+    let mut wrap = wrap;
+    let mut placement = placement_for(rest_points, anchor, radius)?;
+    // Check samples across the whole panel against the body: wrap less (then move out) until clear.
+    if let Some(surface) = surface {
+        let samples = panel_samples(rest_points, 9);
+        let clear = |placement: &Placement, wrap: Option<crate::garment::template::PanelWrap>| {
+            samples.iter().all(|uv| {
+                let local = DVec3::new(uv.x, -uv.y, 0.0);
+                let local = wrap.map_or(local, |w| w.bend(local));
+                let p = placement.transform(local);
+                !inside(surface, p) && distance_to_surface(surface, p) >= 0.5 * clearance_m
+            })
+        };
+        let mut tries = 0;
+        while !clear(&placement, wrap) && tries < 12 {
+            tries += 1;
+            match &mut wrap {
+                Some(w) if w.max_angle_degrees > 20.0 + 1e-9 => w.max_angle_degrees -= 20.0,
+                Some(_) => wrap = None,
+                None => {
+                    radius += 0.02;
+                    placement = placement_for(rest_points, anchor, radius)?;
+                }
+            }
+        }
+        if !clear(&placement, wrap) {
+            return Err("no clear arrangement found for this panel on this anchor; try another anchor or a larger clearance".into());
+        }
+    }
+    Ok(Arrangement {
+        placement,
+        wrap,
+        radius_m: radius,
+        skin_m: skin_ahead,
+    })
+}
+
+/// Sample points of a panel in material coordinates: outline vertices plus a grid inside it.
+fn panel_samples(outline: &[DVec2], n: usize) -> Vec<DVec2> {
+    let (lo, hi) = outline
+        .iter()
+        .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), p| {
+            (lo.min(*p), hi.max(*p))
+        });
+    let mut out = outline.to_vec();
+    for i in 0..n {
+        for j in 0..n {
+            let p = lo
+                + (hi - lo) * DVec2::new((i as f64 + 0.5) / n as f64, (j as f64 + 0.5) / n as f64);
+            if crate::garment::arrangement::point_in_outline(outline, p) {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+pub(crate) fn point_in_outline(pts: &[DVec2], p: DVec2) -> bool {
+    let mut inside = false;
+    let mut j = pts.len().wrapping_sub(1);
+    for i in 0..pts.len() {
+        let (a, b) = (pts[i], pts[j]);
+        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Parity test along a fixed oblique ray; valid for closed avatar surfaces.
+fn inside(surface: &crate::avatar::SurfaceMesh, p: DVec3) -> bool {
+    let dir = DVec3::new(0.2311, 0.4423, 0.8668).normalize();
+    let mut hits = 0;
+    let mut origin = p;
+    while let Some(t) = surface_distance(surface, origin, dir) {
+        hits += 1;
+        origin += dir * (t + 1e-7);
+        if hits > 64 {
+            break;
+        }
+    }
+    hits % 2 == 1
+}
+
+fn distance_to_surface(surface: &crate::avatar::SurfaceMesh, p: DVec3) -> f64 {
+    let mut best = f64::INFINITY;
+    for t in &surface.triangles {
+        let (a, b, c) = (
+            surface.vertices[t[0]],
+            surface.vertices[t[1]],
+            surface.vertices[t[2]],
+        );
+        best = best.min(point_triangle_distance(p, a, b, c));
+    }
+    best
+}
+
+/// Ericson, Real-Time Collision Detection §5.1.5.
+fn point_triangle_distance(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> f64 {
+    let (ab, ac, ap) = (b - a, c - a, p - a);
+    let (d1, d2) = (ab.dot(ap), ac.dot(ap));
+    if d1 <= 0.0 && d2 <= 0.0 {
+        return ap.length();
+    }
+    let bp = p - b;
+    let (d3, d4) = (ab.dot(bp), ac.dot(bp));
+    if d3 >= 0.0 && d4 <= d3 {
+        return bp.length();
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+        return (p - (a + ab * (d1 / (d1 - d3)))).length();
+    }
+    let cp = p - c;
+    let (d5, d6) = (ab.dot(cp), ac.dot(cp));
+    if d6 >= 0.0 && d5 <= d6 {
+        return cp.length();
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+        return (p - (a + ac * (d2 / (d2 - d6)))).length();
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 {
+        return (p - (b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6))))).length();
+    }
+    let denom = 1.0 / (va + vb + vc);
+    (p - (a + ab * (vb * denom) + ac * (vc * denom))).length()
 }

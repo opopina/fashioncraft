@@ -149,6 +149,48 @@ impl Panel {
     }
 }
 
+/// Optional cylindrical wrap of a panel's flat arrangement, applied in the panel's local frame
+/// before its `Placement` (EXO-AV-002). Only initial positions change: rest geometry, material
+/// coordinates and grain are untouched. The panel bends around an axis parallel to local `y`
+/// through local `x = axis_x_m`; a positive radius curves toward local −z, a negative one toward +z.
+/// Beyond `max_angle_degrees` from the axis the panel continues along the tangent.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PanelWrap {
+    pub axis_x_m: f64,
+    pub radius_m: f64,
+    pub max_angle_degrees: f64,
+}
+
+impl PanelWrap {
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.axis_x_m.is_finite() || !self.radius_m.is_finite() || self.radius_m.abs() < 0.01 {
+            return Err("Panel wrap needs a finite radius of at least 10 mm".into());
+        }
+        if !(self.max_angle_degrees > 0.0 && self.max_angle_degrees <= 180.0) {
+            return Err("Panel wrap angle must be in (0°, 180°]".into());
+        }
+        Ok(())
+    }
+
+    /// Bend a local point `(u, −v, 0)` around the wrap axis.
+    pub fn bend(&self, p: DVec3) -> DVec3 {
+        let r = self.radius_m.abs();
+        let s = self.radius_m.signum();
+        let dx = p.x - self.axis_x_m;
+        let max = self.max_angle_degrees.to_radians();
+        let theta = dx / r;
+        let (t, rest) = if theta.abs() <= max {
+            (theta, 0.0)
+        } else {
+            (max * theta.signum(), (theta.abs() - max) * r)
+        };
+        let on_arc = DVec3::new(self.axis_x_m + r * t.sin(), p.y, -s * r * (1.0 - t.cos()));
+        let tangent = DVec3::new(t.cos(), 0.0, -s * t.sin()) * dx.signum();
+        on_arc + tangent * rest + DVec3::Z * p.z
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GarmentTemplate {
@@ -175,6 +217,9 @@ pub struct GarmentTemplate {
     pub pin_targets: Vec<super::pins::MaterialPinTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_panels: Vec<super::pins::FrozenPanel>,
+    /// Cylindrical arrangement wraps by panel id; absent in older documents.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub panel_wraps: BTreeMap<String, PanelWrap>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -242,6 +287,12 @@ impl GarmentTemplate {
         .map_err(|e| e.to_string())
     }
     pub fn compile(&self) -> Result<CompiledGarment, String> {
+        for (id, wrap) in &self.panel_wraps {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Panel wrap refers to unknown panel {id}"));
+            }
+            wrap.validate()?;
+        }
         if self.format != "marvelous-cloth-template" || !(1..=2).contains(&self.version) {
             return Err("Unsupported garment template format/version".into());
         }
@@ -387,7 +438,14 @@ impl GarmentTemplate {
             let x: Vec<_> = mesh
                 .uv
                 .iter()
-                .map(|p| panel.placement.transform(DVec3::new(p.x, -p.y, 0.0)))
+                .map(|p| {
+                    let local = DVec3::new(p.x, -p.y, 0.0);
+                    let local = self
+                        .panel_wraps
+                        .get(&panel.id)
+                        .map_or(local, |w| w.bend(local));
+                    panel.placement.transform(local)
+                })
                 .collect();
             if x.iter().any(|p| !p.is_finite()) {
                 return Err("Placement overflow".into());
@@ -543,6 +601,7 @@ impl GarmentTemplate {
             mirror_links: vec![],
             pin_targets: vec![],
             frozen_panels: vec![],
+            panel_wraps: Default::default(),
             fabric_appearance: Default::default(),
             graphics: vec![],
             trims: vec![],

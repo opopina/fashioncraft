@@ -44,6 +44,62 @@ pub struct FittingProject {
     /// Named 3D camera views saved with the project. Absent in older documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub saved_views: Vec<SavedView>,
+    /// Ruler origin and guidelines of the 2D board. Absent in older documents.
+    #[serde(default, skip_serializing_if = "BoardGuides::is_empty")]
+    pub board_guides: BoardGuides,
+}
+
+/// Direction of a 2D board guideline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuideAxis {
+    /// A line of constant v, dragged from the top ruler.
+    Horizontal,
+    /// A line of constant u, dragged from the left ruler.
+    Vertical,
+}
+
+/// One guideline on the 2D board: an infinite line pattern points snap to.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GuideLine {
+    pub axis: GuideAxis,
+    /// Board coordinate of the line (v for horizontal, u for vertical), in metres.
+    pub position_m: f64,
+    /// A locked guideline cannot be dragged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+}
+
+/// Rulers and guidelines of the 2D board. Presentation only, like the board background.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BoardGuides {
+    /// Where the rulers read zero, on the board, in metres.
+    pub origin_m: [f64; 2],
+    pub lines: Vec<GuideLine>,
+}
+
+impl BoardGuides {
+    /// At most this many guidelines per project.
+    pub const MAX_LINES: usize = 256;
+
+    pub fn is_empty(&self) -> bool {
+        self.origin_m == [0., 0.] && self.lines.is_empty()
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.origin_m.iter().all(|v| v.is_finite()) {
+            return Err("The ruler origin must be finite".into());
+        }
+        if self.lines.len() > Self::MAX_LINES {
+            return Err(format!("At most {} guidelines", Self::MAX_LINES));
+        }
+        if self.lines.iter().any(|l| !l.position_m.is_finite()) {
+            return Err("Guideline positions must be finite".into());
+        }
+        Ok(())
+    }
 }
 
 /// A named 3D camera view stored with the project: an orbit around `target_m`.
@@ -232,6 +288,7 @@ impl FittingProject {
             mesh_signature: None,
             board_background: None,
             saved_views: Vec::new(),
+            board_guides: BoardGuides::default(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -239,6 +296,7 @@ impl FittingProject {
             serde_json::from_str(&fs::read_to_string(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         validate_views(&project.saved_views)?;
+        project.board_guides.validate()?;
         let directory = path.parent().unwrap_or(Path::new("."));
         if project.avatar_path.is_relative() {
             project.avatar_path = directory.join(&project.avatar_path);
@@ -362,6 +420,7 @@ impl FittingProject {
             }
         }
         validate_views(&copy.saved_views)?;
+        copy.board_guides.validate()?;
         copy.avatar_path = crate::document::portable_avatar(&self.avatar_path, path)?;
         if let Some(background) = copy.board_background.as_mut() {
             background.validate()?;

@@ -18,6 +18,8 @@ mod authoring_ui;
 mod board;
 #[path = "atelier/board_display.rs"]
 mod board_display;
+#[path = "atelier/board_guides.rs"]
+mod board_guides;
 #[path = "atelier/board_locks.rs"]
 mod board_locks;
 #[path = "atelier/board_media.rs"]

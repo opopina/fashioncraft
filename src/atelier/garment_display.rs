@@ -88,10 +88,15 @@ pub(super) fn srgb_to_linear(c: [u8; 3]) -> [f32; 3] {
 
 /// "1 piece", "3 pieces".
 pub(super) fn pieces(count: usize) -> String {
+    counted(count, "piece", "pieces")
+}
+
+/// "1 guide", "3 guides": a count with the right noun form.
+pub(super) fn counted(count: usize, one: &str, many: &str) -> String {
     if count == 1 {
-        "1 piece".into()
+        format!("1 {one}")
     } else {
-        format!("{count} pieces")
+        format!("{count} {many}")
     }
 }
 

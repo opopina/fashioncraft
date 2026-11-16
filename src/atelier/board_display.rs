@@ -21,6 +21,12 @@ pub(super) struct PatternDisplay {
     pub(super) grid: bool,
     /// The avatar seen from the front, behind the pieces.
     pub(super) silhouette: bool,
+    /// Rulers along the top and left edges of the board.
+    pub(super) rulers: bool,
+    /// Guidelines (drawn and snapped to).
+    pub(super) guides: bool,
+    /// Unit the rulers and guide readouts use.
+    pub(super) ruler_unit: super::board_guides::RulerUnit,
 }
 
 impl Default for PatternDisplay {
@@ -30,6 +36,9 @@ impl Default for PatternDisplay {
             lengths: false,
             grid: true,
             silhouette: true,
+            rulers: false,
+            guides: true,
+            ruler_unit: Default::default(),
         }
     }
 }

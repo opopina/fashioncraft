@@ -27,8 +27,8 @@ pub(super) const ROTATE_STEP_DEGREES: f64 = 15.;
 /// Screen-pixel capture radii for snapping. The radius is a property of the
 /// pointing device, so keeping it in pixels makes the magnet feel identical at
 /// every zoom; the captured coordinate itself is material and exact.
-const SNAP_POINT_PX: f32 = 10.;
-const SNAP_EDGE_PX: f32 = 8.;
+pub(super) const SNAP_POINT_PX: f32 = 10.;
+pub(super) const SNAP_EDGE_PX: f32 = 8.;
 /// Arrow-key nudge steps, in millimetres. Shift selects the coarse step.
 pub(super) const NUDGE_MM: f64 = 1.;
 pub(super) const NUDGE_COARSE_MM: f64 = 10.;
@@ -52,6 +52,8 @@ pub(super) enum SnapKind {
     Angle,
     /// The drafting grid.
     Grid,
+    /// A 2D guideline, or the crossing of two.
+    Guide,
 }
 
 /// A resolved snap: where a click will land, and why.
@@ -86,6 +88,7 @@ impl Snap {
             SnapKind::OnEdge => format!("On edge · {:.1} mm", self.along_m * 1000.),
             SnapKind::Angle => format!("Angle {:.1}°", self.angle_degrees),
             SnapKind::Grid => format!("Grid {:.1} mm", grid_mm),
+            SnapKind::Guide => "Guide".into(),
         }
     }
 }
@@ -96,6 +99,8 @@ pub(super) struct SnapGeometry {
     pub points: Vec<DVec2>,
     /// Straight segments as `[start, end]`.
     pub segments: Vec<[DVec2; 2]>,
+    /// Guidelines: the axis and the board coordinate of each line.
+    pub guides: Vec<(marvelous_cloth::fitting::GuideAxis, f64)>,
 }
 
 /// The boundary under the pointer, where a new point would be inserted.
@@ -204,6 +209,8 @@ pub(super) struct Board {
     pub group_layout: Vec<(String, DVec2)>,
     /// Background texture, board capture and the canvas rect of the last frame.
     pub media: super::board_media::BoardMedia,
+    /// Guide drag, selected guide and the offset form.
+    pub guides_ui: super::board_guides::GuidesUi,
 }
 impl Default for Board {
     fn default() -> Self {
@@ -227,6 +234,7 @@ impl Default for Board {
             rotation: None,
             group_layout: Vec::new(),
             media: Default::default(),
+            guides_ui: Default::default(),
         }
     }
 }
@@ -524,6 +532,9 @@ impl Board {
         if let Some(snap) = on_edge {
             return snap;
         }
+        if let Some(point) = self.guide_snap(rect, pointer, raw, &geometry.guides) {
+            return Snap::new(point, SnapKind::Guide);
+        }
         if angle_lock && let Some(reference) = reference {
             let v = raw - reference;
             if v.length_squared() > 1e-12 {
@@ -546,6 +557,43 @@ impl Board {
             return Snap::new(raw, SnapKind::Free);
         }
         Snap::new(self.snapped(raw), SnapKind::Grid)
+    }
+    /// The nearest guideline within reach of the pointer, or the crossing of a horizontal and a
+    /// vertical one when both are. Distances are measured on screen, so this works at any zoom
+    /// and board rotation.
+    fn guide_snap(
+        &self,
+        rect: egui::Rect,
+        pointer: egui::Pos2,
+        raw: DVec2,
+        guides: &[(marvelous_cloth::fitting::GuideAxis, f64)],
+    ) -> Option<DVec2> {
+        use marvelous_cloth::fitting::GuideAxis;
+        let mut horizontal: Option<(f32, f64)> = None;
+        let mut vertical: Option<(f32, f64)> = None;
+        for (axis, position) in guides {
+            let on_line = match axis {
+                GuideAxis::Horizontal => DVec2::new(raw.x, *position),
+                GuideAxis::Vertical => DVec2::new(*position, raw.y),
+            };
+            let distance = self.screen(rect, on_line).distance(pointer);
+            if distance > SNAP_EDGE_PX {
+                continue;
+            }
+            let slot = match axis {
+                GuideAxis::Horizontal => &mut horizontal,
+                GuideAxis::Vertical => &mut vertical,
+            };
+            if slot.is_none_or(|(best, _)| distance < best) {
+                *slot = Some((distance, *position));
+            }
+        }
+        match (horizontal, vertical) {
+            (Some((_, v)), Some((_, u))) => Some(DVec2::new(u, v)),
+            (Some((_, v)), None) => Some(DVec2::new(raw.x, v)),
+            (None, Some((_, u))) => Some(DVec2::new(u, raw.y)),
+            (None, None) => None,
+        }
     }
 }
 enum Drag {
@@ -599,7 +647,7 @@ enum Drag {
     DraftPoint(usize),
 }
 #[derive(Clone)]
-enum Part {
+pub(super) enum Part {
     Body,
     Anchor(usize),
     Edge(usize),
@@ -609,9 +657,9 @@ enum Part {
     Handle(usize, usize),
     Rotation,
 }
-struct Hit {
-    index: usize,
-    part: Part,
+pub(super) struct Hit {
+    pub(super) index: usize,
+    pub(super) part: Part,
 }
 fn inside(p: DVec2, poly: &[DVec2]) -> bool {
     let mut yes = false;
@@ -974,11 +1022,20 @@ impl Atelier {
     /// panel, with the points being dragged excluded so a drag cannot snap to
     /// itself. Panel points are local rest coordinates, so they are mapped
     /// through the panel's presentational board transform first.
-    fn snap_geometry_for(&self, dragging: Option<(&str, &[usize])>) -> SnapGeometry {
+    pub(super) fn snap_geometry_for(&self, dragging: Option<(&str, &[usize])>) -> SnapGeometry {
         let mut geometry = SnapGeometry::default();
         geometry.points.extend(self.authoring.draft.iter().copied());
         for pair in self.authoring.draft.windows(2) {
             geometry.segments.push([pair[0], pair[1]]);
+        }
+        if self.prefs.pattern_display.guides {
+            geometry.guides.extend(
+                self.project
+                    .board_guides
+                    .lines
+                    .iter()
+                    .map(|line| (line.axis, line.position_m)),
+            );
         }
         if self.authoring.replace {
             return geometry;
@@ -1027,7 +1084,7 @@ impl Atelier {
         }
         self.authoring.board.fit_corners(rect, &corners);
     }
-    fn board_hit(&self, rect: egui::Rect, pos: egui::Pos2) -> Option<Hit> {
+    pub(super) fn board_hit(&self, rect: egui::Rect, pos: egui::Pos2) -> Option<Hit> {
         let mut edge = None;
         let mut body = None;
         let mut best = 9.;
@@ -1312,6 +1369,7 @@ impl Atelier {
                 "Front view of the avatar behind the pieces, lined up with the first piece that faces the front",
             );
             self.lock_controls(ui);
+            self.guide_display_controls(ui);
             self.media_controls(ui);
             ui.separator();
             super::view_controls::board_bar(ui, &mut self.authoring.board);
@@ -1398,6 +1456,7 @@ impl Atelier {
         }
         self.selection_controls(ui);
         self.sewing_strip(ui);
+        self.guide_toolbar(ui);
         ui.separator();
         let (rect, _) = ui.allocate_exact_size(
             ui.available_size().max(Vec2::splat(1.)),
@@ -1471,6 +1530,11 @@ impl Atelier {
                     .board
                     .zoom_at(rect, pos, (f64::from(zoom) * 0.002).exp());
             }
+        }
+        if self.guide_interaction(ui, rect, &response) {
+            self.authoring.board.hover_snap = None;
+            self.paint_board(ui, rect, &response);
+            return;
         }
         // Resolve the snap and the insert target once per frame, so the
         // indicator, the click and the drag all agree on the same point.
@@ -3047,7 +3111,16 @@ impl Atelier {
         }
         if display.grid {
             painter.text(
-                rect.left_bottom() + Vec2::new(12., -12.),
+                // Clear of the left ruler when it is shown.
+                rect.left_bottom()
+                    + Vec2::new(
+                        if self.prefs.pattern_display.rulers {
+                            30.
+                        } else {
+                            12.
+                        },
+                        -12.,
+                    ),
                 egui::Align2::LEFT_BOTTOM,
                 format!("Grid {:.0} mm · {:.0} px/m", spacing * 1000., board.scale),
                 egui::FontId::proportional(12.),
@@ -3070,6 +3143,7 @@ impl Atelier {
         }
         // Drawn last so the snap indicator, the live measurements and the insert
         // marker sit above the geometry.
+        self.paint_guides_and_rulers(&painter, rect);
         // A board capture shows the drawing, not where the pointer happens to hover.
         if !self.authoring.board.media.capturing() {
             self.paint_drafting(&painter, rect, response);
@@ -3321,6 +3395,7 @@ impl Atelier {
                 SnapKind::Angle => Color32::from_rgb(0x8E, 0x24, 0xAA),
                 SnapKind::Grid => Color32::from_rgb(0x55, 0x55, 0x55),
                 SnapKind::Free => Color32::from_rgb(0x99, 0x33, 0x33),
+                SnapKind::Guide => super::board_guides::GUIDE_COLOR,
             };
             let stroke = Stroke::new(2., color);
             match snap.kind {
@@ -3353,7 +3428,7 @@ impl Atelier {
                     painter
                         .line_segment([at + Vec2::new(-7., 7.), at + Vec2::new(7., -7.)], stroke);
                 }
-                SnapKind::Grid | SnapKind::Free => {
+                SnapKind::Grid | SnapKind::Free | SnapKind::Guide => {
                     painter.line_segment([at + Vec2::new(-6., 0.), at + Vec2::new(6., 0.)], stroke);
                     painter.line_segment([at + Vec2::new(0., -6.), at + Vec2::new(0., 6.)], stroke);
                 }
@@ -3695,7 +3770,41 @@ mod tests {
         SnapGeometry {
             points: points.to_vec(),
             segments: segments.to_vec(),
+            guides: vec![],
         }
+    }
+
+    #[test]
+    fn guides_snap_after_real_geometry_and_their_crossings_win() {
+        use marvelous_cloth::fitting::GuideAxis;
+        let rect = canvas(800., 600.);
+        let board = Board::default();
+        let mut geometry = geometry(&[], &[]);
+        geometry.guides = vec![(GuideAxis::Horizontal, 0.2), (GuideAxis::Vertical, 0.1)];
+        // Near the horizontal guide only: the point slides onto it.
+        let near_line = board.screen(rect, DVec2::new(0.3, 0.2)) + Vec2::new(0., 4.);
+        let snap = board.resolve_snap(rect, near_line, &geometry, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Guide);
+        close(snap.point.y, 0.2, 1e-12, "on the guide");
+        // Near both: the crossing.
+        let near_cross = board.screen(rect, DVec2::new(0.1, 0.2)) + Vec2::new(3., -3.);
+        let snap = board.resolve_snap(rect, near_cross, &geometry, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Guide);
+        close(
+            (snap.point - DVec2::new(0.1, 0.2)).length(),
+            0.,
+            1e-12,
+            "crossing",
+        );
+        // A real point still outranks a guide.
+        let mut with_point = geometry;
+        with_point.points.push(DVec2::new(0.1, 0.2));
+        let snap = board.resolve_snap(rect, near_cross, &with_point, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Point);
+        // Far from everything the grid takes over again.
+        let far = board.screen(rect, DVec2::new(0.35, 0.35));
+        let snap = board.resolve_snap(rect, far, &with_point, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Grid);
     }
 
     #[test]

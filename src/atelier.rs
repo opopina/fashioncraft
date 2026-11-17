@@ -22,6 +22,8 @@ mod board_display;
 mod board_guides;
 #[path = "atelier/board_locks.rs"]
 mod board_locks;
+#[path = "atelier/board_measure.rs"]
+mod board_measure;
 #[path = "atelier/board_media.rs"]
 mod board_media;
 #[path = "atelier/camera_views.rs"]

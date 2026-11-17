@@ -29,6 +29,62 @@ pub(super) const ROTATE_STEP_DEGREES: f64 = 15.;
 /// every zoom; the captured coordinate itself is material and exact.
 pub(super) const SNAP_POINT_PX: f32 = 10.;
 pub(super) const SNAP_EDGE_PX: f32 = 8.;
+/// Smart guides are drawn in magenta, apart from guidelines and selection.
+pub(super) const SMART_GUIDE_COLOR: Color32 = Color32::from_rgb(0xD0, 0x2E, 0x8C);
+/// Smart-guide reach: how far, in screen points, a coordinate is pulled into line.
+pub(super) const ALIGN_PX: f32 = 6.;
+
+/// Smart guide for one point: the nearest candidate x and/or y within `reach` of the pointer
+/// (measured on screen with `distance_px`), lining the point up with those candidates.
+pub(super) fn align_snap(
+    raw: DVec2,
+    candidates: &[DVec2],
+    distance_px: impl Fn(DVec2) -> f32,
+    reach: f32,
+) -> Option<Snap> {
+    let nearest = |project: &dyn Fn(DVec2) -> DVec2| {
+        candidates
+            .iter()
+            .map(|c| (distance_px(project(*c)), *c))
+            .filter(|(d, _)| *d <= reach)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, c)| c)
+    };
+    let by_x = nearest(&|c| DVec2::new(c.x, raw.y));
+    let by_y = nearest(&|c| DVec2::new(raw.x, c.y));
+    if by_x.is_none() && by_y.is_none() {
+        return None;
+    }
+    let point = DVec2::new(by_x.map_or(raw.x, |c| c.x), by_y.map_or(raw.y, |c| c.y));
+    let mut snap = Snap::new(point, SnapKind::Align);
+    snap.align_from = [by_x, by_y];
+    Some(snap)
+}
+
+/// Smart guide for a dragged group of points: the x and y corrections (each only when some
+/// moving point comes within `reach` of a target's coordinate) and the alignment segments to
+/// draw, from each aligned target to the moving point it lines up with.
+pub(super) fn smart_offset(
+    moving: &[DVec2],
+    targets: &[DVec2],
+    reach: f64,
+) -> (DVec2, Vec<[DVec2; 2]>) {
+    let best = |axis: usize| {
+        moving
+            .iter()
+            .flat_map(|m| targets.iter().map(move |t| (t[axis] - m[axis], *m, *t)))
+            .filter(|(d, _, _)| d.abs() <= reach)
+            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
+    };
+    let (bx, by) = (best(0), best(1));
+    let shift = DVec2::new(bx.map_or(0., |b| b.0), by.map_or(0., |b| b.0));
+    let lines = [bx, by]
+        .into_iter()
+        .flatten()
+        .map(|(_, m, t)| [t, m + shift])
+        .collect();
+    (shift, lines)
+}
 /// Arrow-key nudge steps, in millimetres. Shift selects the coarse step.
 pub(super) const NUDGE_MM: f64 = 1.;
 pub(super) const NUDGE_COARSE_MM: f64 = 10.;
@@ -54,6 +110,8 @@ pub(super) enum SnapKind {
     Grid,
     /// A 2D guideline, or the crossing of two.
     Guide,
+    /// Lined up horizontally and/or vertically with another point (smart guide).
+    Align,
 }
 
 /// A resolved snap: where a click will land, and why.
@@ -67,6 +125,8 @@ pub(super) struct Snap {
     pub angle_degrees: f64,
     /// True when the suspend modifier is held.
     pub suspended: bool,
+    /// For [`SnapKind::Align`]: the points whose x and y the snap lines up with.
+    pub align_from: [Option<DVec2>; 2],
 }
 impl Snap {
     fn new(point: DVec2, kind: SnapKind) -> Self {
@@ -76,6 +136,7 @@ impl Snap {
             along_m: 0.,
             angle_degrees: 0.,
             suspended: false,
+            align_from: [None, None],
         }
     }
     /// The label shown beside the cursor, before the click.
@@ -89,6 +150,7 @@ impl Snap {
             SnapKind::Angle => format!("Angle {:.1}°", self.angle_degrees),
             SnapKind::Grid => format!("Grid {:.1} mm", grid_mm),
             SnapKind::Guide => "Guide".into(),
+            SnapKind::Align => "Aligned".into(),
         }
     }
 }
@@ -183,6 +245,10 @@ pub(super) struct Board {
     pub scale: f32,
     pub fitted: bool,
     pub snap: bool,
+    /// Smart guides: line points and dragged pieces up with the points around them.
+    pub smart_guides: bool,
+    /// Alignment lines to draw while a piece drag is lined up by a smart guide.
+    pub smart_lines: Vec<[DVec2; 2]>,
     /// Magnet step in millimetres. The settings preference drives this value;
     /// [`Board::snap_grid_mm`] clamps it, so a hand-edited value cannot poison
     /// the material coordinates.
@@ -220,6 +286,8 @@ impl Default for Board {
             scale: 300.,
             fitted: false,
             snap: true,
+            smart_guides: true,
+            smart_lines: Vec::new(),
             snap_mm: DEFAULT_SNAP_MM,
             view_rotation: 0.,
             selection: Vec::new(),
@@ -484,6 +552,7 @@ impl Board {
                 along_m: 0.,
                 angle_degrees: 0.,
                 suspended: true,
+                align_from: [None, None],
             };
         }
         let mut best = SNAP_POINT_PX;
@@ -526,6 +595,7 @@ impl Board {
                     along_m: t as f64 * a.distance(*b),
                     angle_degrees: 0.,
                     suspended: false,
+                    align_from: [None, None],
                 });
             }
         }
@@ -547,8 +617,19 @@ impl Board {
                     along_m: 0.,
                     angle_degrees: angle.to_degrees(),
                     suspended: false,
+                    align_from: [None, None],
                 };
             }
+        }
+        if self.smart_guides
+            && let Some(snap) = align_snap(
+                raw,
+                &geometry.points,
+                |p| self.screen(rect, p).distance(pointer),
+                ALIGN_PX,
+            )
+        {
+            return snap;
         }
         // Lowest priority: the drafting grid, using the historical arithmetic so
         // the default 10 mm magnet behaves exactly as before this change. The
@@ -1007,7 +1088,7 @@ impl Atelier {
         }
         painter.add(egui::Shape::mesh(mesh));
     }
-    fn board_polygon(&self, i: usize) -> Option<&PolygonPattern> {
+    pub(super) fn board_polygon(&self, i: usize) -> Option<&PolygonPattern> {
         let p = &self.project.template.panels[i];
         self.authoring
             .board
@@ -1022,6 +1103,33 @@ impl Atelier {
     /// panel, with the points being dragged excluded so a drag cannot snap to
     /// itself. Panel points are local rest coordinates, so they are mapped
     /// through the panel's presentational board transform first.
+    /// Contour points of the pieces being laid out (moved by `delta` from their stored layout)
+    /// and of every other piece, in board coordinates, for the layout smart guide.
+    fn layout_points(&self, moving: &[String], delta: DVec2) -> (Vec<DVec2>, Vec<DVec2>) {
+        let (mut dragged, mut others) = (Vec::new(), Vec::new());
+        for (i, panel) in self.project.template.panels.iter().enumerate() {
+            let Some(poly) = self.board_polygon(i) else {
+                continue;
+            };
+            let angle = self.board_angle(i);
+            if moving.contains(&panel.id) {
+                let origin = authoring::layout(&self.project.template, i) + delta;
+                dragged.extend(
+                    poly.points
+                        .iter()
+                        .map(|uv| origin + authoring::rotate_2d(*uv, angle)),
+                );
+            } else {
+                let origin = self.board_origin(i);
+                others.extend(
+                    poly.points
+                        .iter()
+                        .map(|uv| origin + authoring::rotate_2d(*uv, angle)),
+                );
+            }
+        }
+        (dragged, others)
+    }
     pub(super) fn snap_geometry_for(&self, dragging: Option<(&str, &[usize])>) -> SnapGeometry {
         let mut geometry = SnapGeometry::default();
         geometry.points.extend(self.authoring.draft.iter().copied());
@@ -1360,11 +1468,16 @@ impl Atelier {
             ui.strong("PATTERN DISPLAY");
             let snap_label = format!("Snap to {} mm", self.authoring.board.snap_grid_mm());
             ui.checkbox(&mut self.authoring.board.snap, snap_label);
+            ui.checkbox(&mut self.authoring.board.smart_guides, "Smart guides")
+                .on_hover_text("Line dragged points and pieces up with the points around them · Ctrl: off while held");
             let display = &mut self.prefs.pattern_display;
             ui.checkbox(&mut display.names, "Piece names");
             ui.checkbox(&mut display.lengths, "Segment lengths")
                 .on_hover_text("Rest length of every outline segment, in millimetres");
             ui.checkbox(&mut display.grid, "Grid");
+            ui.checkbox(&mut display.measurements, "2D measurements").on_hover_text(
+                "Distances to the outline from the cursor while drawing an internal line, and from the selected internal line",
+            );
             ui.checkbox(&mut display.silhouette, "Avatar silhouette").on_hover_text(
                 "Front view of the avatar behind the pieces, lined up with the first piece that faces the front",
             );
@@ -2279,7 +2392,16 @@ impl Atelier {
                     pointer,
                     panels,
                 }) => {
-                    let delta = p - *pointer;
+                    let mut delta = p - *pointer;
+                    self.authoring.board.smart_lines.clear();
+                    if self.authoring.board.smart_guides && !suspended {
+                        let (moving, targets) = self.layout_points(panels, delta);
+                        let reach =
+                            f64::from(ALIGN_PX) / f64::from(self.authoring.board.scale.max(1.));
+                        let (shift, lines) = smart_offset(&moving, &targets, reach);
+                        delta += shift;
+                        self.authoring.board.smart_lines = lines;
+                    }
                     self.authoring.board.group_layout = self
                         .project
                         .template
@@ -2397,6 +2519,7 @@ impl Atelier {
                     }
                 }
                 Some(Drag::Layout { start, panels, .. }) => {
+                    self.authoring.board.smart_lines.clear();
                     if let Some((_, origin)) = self.authoring.board.layout.take() {
                         self.authoring.board.group_layout.clear();
                         self.edit(Command::LayoutGroup {
@@ -3143,6 +3266,20 @@ impl Atelier {
         }
         // Drawn last so the snap indicator, the live measurements and the insert
         // marker sit above the geometry.
+        if display.measurements {
+            self.paint_measurements_2d(&painter, rect, response.hover_pos());
+        }
+        for [a, b] in &self.authoring.board.smart_lines {
+            painter.extend(egui::Shape::dashed_line(
+                &[
+                    self.authoring.board.screen(rect, *a),
+                    self.authoring.board.screen(rect, *b),
+                ],
+                Stroke::new(1., SMART_GUIDE_COLOR),
+                4.,
+                3.,
+            ));
+        }
         self.paint_guides_and_rulers(&painter, rect);
         // A board capture shows the drawing, not where the pointer happens to hover.
         if !self.authoring.board.media.capturing() {
@@ -3396,6 +3533,7 @@ impl Atelier {
                 SnapKind::Grid => Color32::from_rgb(0x55, 0x55, 0x55),
                 SnapKind::Free => Color32::from_rgb(0x99, 0x33, 0x33),
                 SnapKind::Guide => super::board_guides::GUIDE_COLOR,
+                SnapKind::Align => SMART_GUIDE_COLOR,
             };
             let stroke = Stroke::new(2., color);
             match snap.kind {
@@ -3427,6 +3565,18 @@ impl Atelier {
                         .line_segment([at + Vec2::new(-7., -7.), at + Vec2::new(7., 7.)], stroke);
                     painter
                         .line_segment([at + Vec2::new(-7., 7.), at + Vec2::new(7., -7.)], stroke);
+                }
+                SnapKind::Align => {
+                    for from in snap.align_from.into_iter().flatten() {
+                        painter.extend(egui::Shape::dashed_line(
+                            &[board.screen(rect, from), at],
+                            Stroke::new(1., SMART_GUIDE_COLOR),
+                            4.,
+                            3.,
+                        ));
+                    }
+                    painter.line_segment([at + Vec2::new(-6., 0.), at + Vec2::new(6., 0.)], stroke);
+                    painter.line_segment([at + Vec2::new(0., -6.), at + Vec2::new(0., 6.)], stroke);
                 }
                 SnapKind::Grid | SnapKind::Free | SnapKind::Guide => {
                     painter.line_segment([at + Vec2::new(-6., 0.), at + Vec2::new(6., 0.)], stroke);
@@ -3772,6 +3922,69 @@ mod tests {
             segments: segments.to_vec(),
             guides: vec![],
         }
+    }
+
+    #[test]
+    fn smart_guides_line_up_points_and_dragged_groups() {
+        let rect = canvas(800., 600.);
+        let board = Board::default();
+        let others = [DVec2::new(0.1, 0.3), DVec2::new(0.5, 0.05)];
+        // A point dragged near x = 0.1 and y = 0.05 lines up with both candidates.
+        let near = board.screen(rect, DVec2::new(0.103, 0.052));
+        let raw = board.world(rect, near);
+        let snap = align_snap(
+            raw,
+            &others,
+            |p| board.screen(rect, p).distance(near),
+            ALIGN_PX,
+        )
+        .unwrap();
+        assert_eq!(snap.kind, SnapKind::Align);
+        close(snap.point.x, 0.1, 1e-12, "x from the first point");
+        close(snap.point.y, 0.05, 1e-12, "y from the second point");
+        assert_eq!(snap.align_from, [Some(others[0]), Some(others[1])]);
+        // Far from every coordinate: no smart guide.
+        let far = board.screen(rect, DVec2::new(0.3, 0.2));
+        let raw = board.world(rect, far);
+        assert!(
+            align_snap(
+                raw,
+                &others,
+                |p| board.screen(rect, p).distance(far),
+                ALIGN_PX
+            )
+            .is_none()
+        );
+        // Through the resolver: real geometry first, then the smart guide before the grid.
+        let geometry = SnapGeometry {
+            points: others.to_vec(),
+            ..Default::default()
+        };
+        assert_eq!(
+            board
+                .resolve_snap(rect, near, &geometry, None, false, false)
+                .kind,
+            SnapKind::Align
+        );
+        let off = Board {
+            smart_guides: false,
+            ..Default::default()
+        };
+        assert_eq!(
+            off.resolve_snap(rect, near, &geometry, None, false, false)
+                .kind,
+            SnapKind::Grid
+        );
+        // A dragged group: the smallest correction per axis, with its alignment segments.
+        let moving = [DVec2::new(0.198, 0.0), DVec2::new(0.3, 0.404)];
+        let targets = [DVec2::new(0.2, 0.9), DVec2::new(0.7, 0.4)];
+        let (shift, lines) = smart_offset(&moving, &targets, 0.005);
+        close(shift.x, 0.002, 1e-12, "x shift");
+        close(shift.y, -0.004, 1e-12, "y shift");
+        assert_eq!(lines.len(), 2);
+        let (none, no_lines) = smart_offset(&moving, &[DVec2::new(5., 5.)], 0.005);
+        assert_eq!(none, DVec2::ZERO);
+        assert!(no_lines.is_empty());
     }
 
     #[test]

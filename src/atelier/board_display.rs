@@ -27,6 +27,9 @@ pub(super) struct PatternDisplay {
     pub(super) guides: bool,
     /// Unit the rulers and guide readouts use.
     pub(super) ruler_unit: super::board_guides::RulerUnit,
+    /// Distances to the piece outline from the cursor (internal-line tool) and from the
+    /// selected internal line.
+    pub(super) measurements: bool,
 }
 
 impl Default for PatternDisplay {
@@ -39,6 +42,7 @@ impl Default for PatternDisplay {
             rulers: false,
             guides: true,
             ruler_unit: Default::default(),
+            measurements: true,
         }
     }
 }

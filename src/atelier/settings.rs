@@ -243,6 +243,7 @@ mod tests {
                 rulers: true,
                 guides: false,
                 ruler_unit: super::super::board_guides::RulerUnit::Inch,
+                measurements: false,
             },
             dt: 1.0 / 120.0,
             iterations: 24,

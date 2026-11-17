@@ -86,7 +86,7 @@ pub(super) struct Selection {
     pub clipboard: Option<PatternClipboard>,
     pub paste_count: u32,
     pub placement_marquee: Option<PlacementMarquee>,
-    visibility_cache: ClothVisibilityCache,
+    pub(super) visibility_cache: ClothVisibilityCache,
 }
 
 pub(super) struct PlacementMarquee {
@@ -305,7 +305,7 @@ fn visibility_bounds(
 
 /// The exact topology and position snapshots prevent using stale visibility boxes.
 #[derive(Default)]
-struct ClothVisibilityCache {
+pub(super) struct ClothVisibilityCache {
     tree: Option<ClothVisibility>,
     topology: Vec<[usize; 3]>,
     positions: Vec<glam::DVec3>,
@@ -353,7 +353,7 @@ impl ClothVisibilityCache {
 /// Start with the exact exhaustive query. Build only after the accumulated
 /// work is comparable to eight full scans, on a subsequent valid query. This
 /// avoids building for cheap early occluders and adapts to mixed visibility.
-struct ClothVisibilityQueries<'a> {
+pub(super) struct ClothVisibilityQueries<'a> {
     positions: &'a [glam::DVec3],
     triangles: &'a [marvelous_cloth::model::Triangle],
     eligible: bool,
@@ -362,7 +362,7 @@ struct ClothVisibilityQueries<'a> {
     cache: &'a mut ClothVisibilityCache,
 }
 impl<'a> ClothVisibilityQueries<'a> {
-    fn new(
+    pub(super) fn new(
         positions: &'a [glam::DVec3],
         triangles: &'a [marvelous_cloth::model::Triangle],
         point_count: usize,
@@ -377,7 +377,12 @@ impl<'a> ClothVisibilityQueries<'a> {
             cache,
         }
     }
-    fn occludes(&mut self, origin: glam::DVec3, direction: glam::DVec3, limit: f64) -> bool {
+    pub(super) fn occludes(
+        &mut self,
+        origin: glam::DVec3,
+        direction: glam::DVec3,
+        limit: f64,
+    ) -> bool {
         if limit <= 0. {
             return false;
         }

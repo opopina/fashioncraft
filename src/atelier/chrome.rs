@@ -349,6 +349,9 @@ impl Atelier {
         }
         self.sewing_strip(ui);
         if self.authoring.tool == Tool::Grab {
+            self.pin_tool_bar(ui);
+        }
+        if self.authoring.tool == Tool::Grab && !self.authoring.pin_tool.enabled {
             ui.horizontal_wrapped(|ui| {
                 ui.strong("Grab");
                 ui.add(egui::Slider::new(&mut self.grab_radius_px, 0.0..=150.0).text("Radius (px)"))
@@ -378,7 +381,11 @@ impl Atelier {
                 self.authoring.radial.open(&ctx, at);
             }
             if self.authoring.tool == Tool::Grab {
-                self.pick_and_drag(&response, rect);
+                if self.authoring.pin_tool.enabled {
+                    self.pin_interaction(&response, rect);
+                } else {
+                    self.pick_and_drag(&response, rect);
+                }
             }
             self.place_interaction(&response, rect);
             self.edge_interaction(&response, rect);
@@ -479,7 +486,9 @@ impl Atelier {
             }
             self.paint_gizmo(ui, rect);
             self.paint_selected_points_3d(ui, rect);
+            self.paint_pins_3d(ui, rect);
             if self.authoring.tool == Tool::Grab
+                && !self.authoring.pin_tool.enabled
                 && let Some(p) = response.hover_pos()
             {
                 ui.painter().with_clip_rect(rect).circle_stroke(

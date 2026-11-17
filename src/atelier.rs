@@ -58,6 +58,8 @@ mod layout;
 mod measure;
 #[path = "atelier/perf.rs"]
 mod perf;
+#[path = "atelier/pin_tool.rs"]
+mod pin_tool;
 #[path = "atelier/pins_ui.rs"]
 mod pins_ui;
 #[path = "atelier/quick_actions.rs"]

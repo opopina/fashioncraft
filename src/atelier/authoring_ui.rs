@@ -66,6 +66,7 @@ pub(super) struct AuthoringUi {
     pub drafting: super::drafting_ui::DraftingUi,
     pub shapes: super::shapes_ui::ShapesUi,
     pub segments: super::segments_ui::SegmentsUi,
+    pub pin_tool: super::pin_tool::PinTool,
     /// Contour point selected for numeric entry: (panel id, point index).
     pub anchor: Option<(String, usize)>,
     /// Panel the numeric size draft belongs to; `None` reloads from geometry.

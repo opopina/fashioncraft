@@ -3250,6 +3250,18 @@ impl Atelier {
                         },
                     );
                 }
+                // Authored pins on this piece, where they hold the cloth in material terms.
+                for pin in self
+                    .project
+                    .template
+                    .pin_targets
+                    .iter()
+                    .filter(|pin| pin.panel == panel.id)
+                {
+                    let at = point(pin.uv);
+                    painter.circle_filled(at, 2.5, Color32::from_rgb(255, 214, 64));
+                    painter.circle_stroke(at, 2.5, Stroke::new(1., Color32::from_rgb(90, 60, 0)));
+                }
                 if selected {
                     let gap = if display.lengths { 30. } else { 14. };
                     paint_panel_dimensions(&painter, &point, panel, gap);

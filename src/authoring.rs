@@ -258,6 +258,35 @@ pub enum Command {
         fabric: String,
         appearance: Option<crate::garment::appearance::FabricAppearance>,
     },
+    /// Add closed internal rectangles or ellipses to a panel: `count` copies whose centres are
+    /// `interval_m` apart along `angle_degrees` (0° up, 90° right), starting at `center`
+    /// (material coordinates). One undo step.
+    InternalShape {
+        panel: String,
+        kind: crate::garment::shapes2d::InternalShapeKind,
+        center: DVec2,
+        size: DVec2,
+        count: u32,
+        interval_m: f64,
+        angle_degrees: f64,
+    },
+    /// Cut a closed internal shape out of its panel as a hole.
+    ConvertToHole {
+        panel: String,
+        line: String,
+    },
+    /// Fill a hole back in, leaving a closed internal shape along its rim.
+    ConvertToInternalShape {
+        panel: String,
+        hole: usize,
+    },
+    /// Create a spiral strip pattern with its bounds' corner at `origin` on the board.
+    Spiral {
+        spiral: crate::garment::shapes2d::Spiral,
+        origin: DVec2,
+        meshing: MeshingSettings,
+        fabric: String,
+    },
     /// Rotate and scale contour points of several panels about a board pivot. Bézier handles
     /// attached to the moved points follow the same transform. One undo step.
     TransformPointGroups {
@@ -1499,6 +1528,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 id,
                 points,
                 tangents,
+                closed: false,
             });
             selected = Some(panel);
         }
@@ -1537,6 +1567,94 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 width,
                 ratio,
             )?)
+        }
+        Command::InternalShape {
+            panel,
+            kind,
+            center,
+            size,
+            count,
+            interval_m,
+            angle_degrees,
+        } => {
+            if !(1..=50).contains(&count) {
+                return Err("Create between 1 and 50 shapes at a time".into());
+            }
+            if !interval_m.is_finite() || !angle_degrees.is_finite() {
+                return Err("The interval and angle must be finite".into());
+            }
+            let index = panel_index(&template, &panel)?;
+            let poly = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Internal shapes require a drafted panel")?;
+            for at in crate::garment::shapes2d::replicate(center, count, interval_m, angle_degrees)
+            {
+                let id = unused_id("shape", poly.paths()?.into_iter().map(|(name, _)| name));
+                poly.lines.push(crate::garment::shapes2d::internal_shape(
+                    id, kind, at, size,
+                )?);
+            }
+            selected = Some(panel);
+        }
+        Command::ConvertToHole { panel, line } => {
+            if template.seams.iter().any(|s| {
+                s.references()
+                    .any(|r| r.panel == panel && r.edge.as_ref() == Some(&line))
+            }) {
+                return Err("Remove the seam on this shape before cutting it out".into());
+            }
+            let index = panel_index(&template, &panel)?;
+            let poly = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Holes require a drafted panel")?;
+            let at = poly
+                .lines
+                .iter()
+                .position(|l| l.id == line)
+                .ok_or("Internal shape not found")?;
+            let hole = crate::garment::shapes2d::shape_to_hole(&poly.lines[at])?;
+            poly.lines.remove(at);
+            poly.holes.push(hole);
+            selected = Some(panel);
+        }
+        Command::ConvertToInternalShape { panel, hole } => {
+            let index = panel_index(&template, &panel)?;
+            let edges = template.panels[index]
+                .polygon
+                .as_ref()
+                .and_then(|poly| poly.holes.get(hole))
+                .ok_or("Hole not found")?
+                .edges
+                .clone();
+            if template.seams.iter().any(|s| {
+                s.references()
+                    .any(|r| r.panel == panel && r.edge.as_ref().is_some_and(|e| edges.contains(e)))
+            }) {
+                return Err("Remove the seams on this hole before filling it".into());
+            }
+            let poly = template.panels[index].polygon.as_mut().unwrap();
+            let rim = poly.holes.remove(hole);
+            let id = unused_id("shape", poly.paths()?.into_iter().map(|(name, _)| name));
+            poly.lines
+                .push(crate::garment::shapes2d::hole_to_shape(id, &rim)?);
+            selected = Some(panel);
+        }
+        Command::Spiral {
+            spiral,
+            origin,
+            meshing,
+            fabric,
+        } => {
+            let polygon = spiral.polygon(meshing)?;
+            selected = Some(geometry::add_polygon(
+                &mut template,
+                polygon,
+                origin,
+                fabric,
+                false,
+            )?);
         }
         Command::TransformPointGroups {
             groups,

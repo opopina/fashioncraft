@@ -19,9 +19,18 @@ pub struct InternalLine {
     pub points: Vec<DVec2>,
     /// Symmetric pen tangents at each anchor, in material metres.
     pub tangents: Vec<DVec2>,
+    /// A closed internal shape (rectangle, ellipse): the last anchor joins back to the first.
+    /// Absent in older documents, which only have open lines.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub closed: bool,
 }
 impl InternalLine {
+    /// Flattened path. A closed shape returns its loop with the first point repeated at the
+    /// end, so consecutive pairs cover every segment including the closing one.
     pub fn samples(&self) -> Result<Vec<DVec2>, String> {
+        if self.closed && self.points.len() < 3 {
+            return Err("A closed internal shape needs at least 3 points".into());
+        }
         if !(2..=64).contains(&self.points.len())
             || self.tangents.len() != self.points.len()
             || self
@@ -35,13 +44,16 @@ impl InternalLine {
             );
         }
         let mut out = vec![self.points[0]];
-        for i in 0..self.points.len() - 1 {
+        let n = self.points.len();
+        let spans = if self.closed { n } else { n - 1 };
+        for i in 0..spans {
+            let j = (i + 1) % n;
             let samples = curves::flatten(
                 [
                     self.points[i],
                     self.points[i] + self.tangents[i],
-                    self.points[i + 1] - self.tangents[i + 1],
-                    self.points[i + 1],
+                    self.points[j] - self.tangents[j],
+                    self.points[j],
                 ],
                 curves::FLATNESS_M,
             )?;
@@ -174,7 +186,12 @@ pub fn validate(poly: &PolygonPattern, outer: &[DVec2]) -> Result<(), String> {
         if budget > 8192 {
             return Err("Outline and internal-line sampling budget exceeded".into());
         }
-        simple(&points, false)?;
+        if line.closed {
+            // The loop repeats its first point; check it as a closed outline.
+            simple(&points[..points.len() - 1], true)?;
+        } else {
+            simple(&points, false)?;
+        }
         if points
             .iter()
             .any(|p| !inside(*p, outer) || poly.holes.iter().any(|h| inside(*p, &h.points)))

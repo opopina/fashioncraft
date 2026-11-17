@@ -74,6 +74,8 @@ mod selection;
 mod settings;
 #[path = "atelier/sewing_ui.rs"]
 mod sewing_ui;
+#[path = "atelier/shapes_ui.rs"]
+mod shapes_ui;
 #[path = "atelier/stage_settings.rs"]
 mod stage_settings;
 #[cfg(test)]

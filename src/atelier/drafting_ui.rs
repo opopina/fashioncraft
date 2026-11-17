@@ -85,6 +85,7 @@ impl Atelier {
                     ui.close();
                 }
             }
+            self.spiral_menu(ui);
         });
     }
     pub(super) fn drafting_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
@@ -122,6 +123,7 @@ impl Atelier {
             ui.separator();
             self.boolean_properties(ui, panel);
         });
+        self.internal_shape_properties(ui, panel);
     }
     pub(super) fn linked_mirror_properties(&mut self, ui: &mut egui::Ui, panel: &str) {
         let link = self
@@ -290,6 +292,20 @@ impl Atelier {
             "{:.1} mm · sew in 2D / 3D · draggable points and tangents",
             length * 1000.
         ));
+        if line.closed
+            && ui
+                .button("Cut out as hole")
+                .on_hover_text("Remove the cloth inside this closed shape")
+                .clicked()
+            && self.edit(Command::ConvertToHole {
+                panel: edge.panel.clone(),
+                line: name.clone(),
+            })
+        {
+            self.authoring.edge = None;
+            self.status = "Hole cut · fill it back in from the piece inspector".into();
+            return;
+        }
         if ui.small_button("Smooth tangents").clicked() {
             let mut poly = self
                 .project

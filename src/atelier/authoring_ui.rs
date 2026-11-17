@@ -64,6 +64,7 @@ pub(super) struct AuthoringUi {
     pub rotate: bool,
     pub drag: Option<super::gizmo::Drag>,
     pub drafting: super::drafting_ui::DraftingUi,
+    pub shapes: super::shapes_ui::ShapesUi,
     /// Contour point selected for numeric entry: (panel id, point index).
     pub anchor: Option<(String, usize)>,
     /// Panel the numeric size draft belongs to; `None` reloads from geometry.
@@ -1386,11 +1387,13 @@ impl Atelier {
                 range.triangles.len()
             ));
         }
+        let (lo, hi) = super::board::outline_bounds(&panel);
         ui.small(format!(
-            "{:.0} × {:.0} mm",
-            panel.pattern.width * 1000.,
-            panel.pattern.height * 1000.
-        ));
+            "{:.1} × {:.1} mm",
+            (hi.x - lo.x) * 1000.,
+            (hi.y - lo.y) * 1000.
+        ))
+        .on_hover_text("Size of the drawn outline");
         // Numeric entry stays in a draft until Apply, so one click is exactly one
         // document edit and one history entry. Millimetres convert by division:
         // 400 mm / 1000 is the exact f64 0.4, unlike a 0.001 multiplication.

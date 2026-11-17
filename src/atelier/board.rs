@@ -812,6 +812,24 @@ fn paint_segment_lengths(
         painter.galley(anchor.anchor_size(at + dir * 6., size).min, galley, color);
     }
 }
+/// Material-space extent of a piece's drawn outline. The pattern box can be larger: it also
+/// holds the Bézier handles, which may stick out past the curve.
+pub(super) fn outline_bounds(panel: &Panel) -> (DVec2, DVec2) {
+    panel
+        .polygon
+        .as_ref()
+        .and_then(|poly| {
+            let outline = (0..poly.points.len())
+                .map(|k| poly.edge_points(k))
+                .collect::<Result<Vec<_>, _>>()
+                .ok()?;
+            marvelous_cloth::authoring::arrange2d::bounds(&outline.concat())
+        })
+        .unwrap_or((
+            DVec2::ZERO,
+            DVec2::new(panel.pattern.width, panel.pattern.height),
+        ))
+}
 /// Millimetre dimension annotation for a selected piece. Presentation only: the
 /// labels follow the pattern size and never feed back into the rest contour.
 fn paint_panel_dimensions(
@@ -820,13 +838,14 @@ fn paint_panel_dimensions(
     panel: &Panel,
     gap: f32,
 ) {
-    let (w, h) = (panel.pattern.width, panel.pattern.height);
+    let (lo, hi) = outline_bounds(panel);
+    let (w, h) = (hi.x - lo.x, hi.y - lo.y);
     let color = Color32::from_rgb(0x15, 0x65, 0xC0);
     let font = egui::FontId::proportional(12.);
     let tick = 4.;
     // Width, below the bottom edge.
-    let a = point(DVec2::new(0., h));
-    let b = point(DVec2::new(w, h));
+    let a = point(DVec2::new(lo.x, hi.y));
+    let b = point(hi);
     let y = a.y.max(b.y) + gap;
     painter.line_segment(
         [egui::pos2(a.x, y), egui::pos2(b.x, y)],
@@ -846,8 +865,8 @@ fn paint_panel_dimensions(
         color,
     );
     // Height, beside the right edge.
-    let a = point(DVec2::new(w, 0.));
-    let b = point(DVec2::new(w, h));
+    let a = point(DVec2::new(hi.x, lo.y));
+    let b = point(hi);
     let x = a.x.max(b.x) + gap;
     painter.line_segment(
         [egui::pos2(x, a.y), egui::pos2(x, b.y)],

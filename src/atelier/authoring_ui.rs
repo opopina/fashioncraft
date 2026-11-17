@@ -940,6 +940,31 @@ impl Atelier {
             Err(e) => self.status = e,
         }
     }
+    /// Put pieces back on their flat 3D arrangement, at rest, keeping every other piece's
+    /// drape. A state change only: the document and its history are untouched.
+    pub(super) fn reset_panels_3d(&mut self, ids: &[String]) {
+        let garment = self.scene.garment.clone();
+        let mut count = 0;
+        for range in garment.panels.iter().filter(|p| ids.contains(&p.id)) {
+            for i in range.vertices.clone() {
+                self.scene.state.x[i] = garment.initial_state.x[i];
+                self.scene.state.v[i] = garment.initial_state.v[i];
+            }
+            count += 1;
+        }
+        if count == 0 {
+            self.status = "Select the pieces to reset".into();
+            return;
+        }
+        self.issue.invalidate();
+        self.generation += 1;
+        self.metrics = None;
+        self.grab = None;
+        self.status = format!(
+            "{} back on the arrangement · the rest keeps its drape",
+            super::garment_display::counted(count, "piece", "pieces")
+        );
+    }
     pub(super) fn cancel_preview(&mut self) {
         self.editor_transition().cancel_preview();
     }
@@ -1546,6 +1571,16 @@ impl Atelier {
                 });
             }
         });
+        if ui
+            .button("Reset 3D arrangement")
+            .on_hover_text(
+                "Lay the selected pieces flat on their arrangement again; the rest keeps its drape",
+            )
+            .clicked()
+        {
+            let ids = self.selected_panels();
+            self.reset_panels_3d(&ids);
+        }
         if self.authoring.tool != Tool::Place {
             ui.small("Move 3D (G) / Rotate 3D (R) in the toolbar.");
             return;
@@ -1723,9 +1758,30 @@ impl EditorTransition<'_> {
         *self.simulation_error = None;
         *self.dirty = true;
         self.authoring.sewing = Default::default();
+        // Edited pieces keep their 3D shape when it is safe to start from it.
+        let mut drape: Option<bool> = None;
         if edit.reset_simulation {
             self.issue.invalidate();
-            self.scene.state = edit.state_after(&self.scene.garment, &self.scene.state);
+            let flat = edit.state_after(&self.scene.garment, &self.scene.state);
+            let kept = edit.state_keeping_drape(&self.scene.garment, &self.scene.state);
+            self.scene.state = if kept.x == flat.x {
+                flat
+            } else {
+                match marvelous_cloth::avatar::diagnostics::check_vbd_initialization(
+                    std::sync::Arc::new(edit.garment.clone()),
+                    &self.scene.collider.surface,
+                    &kept,
+                ) {
+                    Ok(()) => {
+                        drape = Some(true);
+                        kept
+                    }
+                    Err(_) => {
+                        drape = Some(false);
+                        flat
+                    }
+                }
+            };
         }
         let point_order_unchanged = |id: &str| {
             let old = self
@@ -1827,10 +1883,13 @@ impl EditorTransition<'_> {
             self.authoring.board.select_point(id.clone(), index, false);
             self.authoring.anchor = Some((id, index));
         }
-        *self.status = if edit.reset_simulation {
-            "Edit applied · unchanged panels retained · ready to simulate"
-        } else {
-            "2D layout changed · 3D state preserved"
+        *self.status = match (edit.reset_simulation, drape) {
+            (true, Some(true)) => "Edit applied · edited pieces keep their 3D shape · ready to simulate",
+            (true, Some(false)) => {
+                "Edit applied · the edited piece starts flat again: keeping its 3D shape would start inside the avatar or itself"
+            }
+            (true, None) => "Edit applied · unchanged panels retained · ready to simulate",
+            (false, _) => "2D layout changed · 3D state preserved",
         }
         .into();
     }

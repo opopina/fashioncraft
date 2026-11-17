@@ -38,6 +38,7 @@ pub enum CommandId {
     LockInternalLines,
     UnlockInternalLines,
     InvertSelection,
+    ResetSelectedPieces3d,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -374,6 +375,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         "Invert piece selection",
         Pattern,
         Some("Shift+Cmd+I"),
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ResetSelectedPieces3d,
+        "simulation.reset_selected",
+        "Reset 3D arrangement of selected pieces",
+        Simulation,
+        None,
         NotUndoable,
         NativeWorkspace
     ),

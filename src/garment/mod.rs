@@ -23,6 +23,7 @@ pub mod shapes;
 pub mod shapes2d;
 pub mod svg_import;
 pub mod template;
+pub mod transfer;
 pub mod trims;
 
 pub use template::{CompiledGarment, GarmentTemplate};

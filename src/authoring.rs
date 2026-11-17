@@ -448,6 +448,57 @@ impl Edit {
     /// are unchanged. Match by panel ID and local indices, never global offsets.
     /// New/remeshed/moved panels start from their new arrangement. Solver/contact
     /// caches must still be rebuilt, even when all positions are preserved.
+    /// Like [`Edit::state_after`], but a panel whose mesh changed (a 2D edit, a remesh) keeps
+    /// its draped shape instead of going back to the flat arrangement: each new vertex takes
+    /// the drape of the same spot on the old mesh, with zero velocity. Panels that were still
+    /// flat, and panels that only moved, behave as in `state_after`.
+    pub fn state_keeping_drape(&self, previous: &CompiledGarment, state: &State) -> State {
+        let mut next = self.state_after(previous, state);
+        if state.x.len() != previous.mesh.uv.len() || state.v.len() != state.x.len() {
+            return next;
+        }
+        for new in &self.garment.panels {
+            let Some(old) = previous.panels.iter().find(|p| p.id == new.id) else {
+                continue;
+            };
+            let (a, b) = (old.vertices.clone(), new.vertices.clone());
+            let local =
+                |garment: &CompiledGarment, range: &std::ops::Range<usize>, start: usize| {
+                    garment.mesh.triangles[range.clone()]
+                        .iter()
+                        .map(|t| t.vertices.map(|i| i - start))
+                        .collect::<Vec<_>>()
+                };
+            let old_triangles = local(previous, &old.triangles, a.start);
+            if previous.mesh.uv[a.clone()] == self.garment.mesh.uv[b.clone()]
+                && old_triangles == local(&self.garment, &new.triangles, b.start)
+            {
+                // Same mesh: copied, or deliberately re-placed (Place, Arrange).
+                continue;
+            }
+            let draped = state.x[a.clone()]
+                .iter()
+                .zip(&previous.arrangement_positions[a.clone()])
+                .any(|(x, rest)| x.distance(*rest) > 1e-9);
+            if !draped {
+                continue;
+            }
+            let moved = crate::garment::transfer::transfer_positions(
+                &previous.arrangement_positions[a.clone()],
+                &old_triangles,
+                &state.x[a],
+                &self.garment.arrangement_positions[b.clone()],
+            );
+            next.x[b.clone()].copy_from_slice(&moved);
+            for i in b {
+                next.v[i] = DVec3::ZERO;
+                if let Some(target) = self.garment.mesh.pins[i] {
+                    next.x[i] = target;
+                }
+            }
+        }
+        next
+    }
     pub fn state_after(&self, previous: &CompiledGarment, state: &State) -> State {
         let mut next = self.garment.initial_state.clone();
         next.time = state.time;

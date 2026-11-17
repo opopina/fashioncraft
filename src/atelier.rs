@@ -475,6 +475,10 @@ impl Atelier {
                 self.apply_lock_action(board_locks::LockAction::UnlockInternalLines)?
             }
             Id::InvertSelection => self.invert_selection(),
+            Id::ResetSelectedPieces3d => {
+                let ids = self.selected_panels();
+                self.reset_panels_3d(&ids);
+            }
         }
         Ok(())
     }

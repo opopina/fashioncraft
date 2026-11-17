@@ -2112,6 +2112,22 @@ impl Atelier {
                         Part::Edge(k) if self.authoring.tool == Tool::Edit => {
                             self.begin_segment_drag(hit.index, k, start, rect, ctx)
                         }
+                        Part::Path(ref name)
+                            if self.authoring.tool == Tool::Edit
+                                && polygon
+                                    .as_ref()
+                                    .is_some_and(|p| p.lines.iter().any(|l| &l.id == name)) =>
+                        {
+                            // Dragging an internal line moves it whole, with its group.
+                            polygon.map(|polygon| Drag::Shape {
+                                panel: id,
+                                polygon,
+                                part: hit.part,
+                                origin: self.board_origin(hit.index),
+                                pointer: p,
+                                angle: self.board_angle(hit.index),
+                            })
+                        }
                         Part::Handle(_, _) | Part::LineAnchor(_, _) | Part::LineHandle(_, _) => {
                             polygon.map(|polygon| Drag::Shape {
                                 panel: id,
@@ -2525,6 +2541,21 @@ impl Atelier {
                     angle,
                 }) => {
                     let mut poly = polygon.clone();
+                    if let Part::Path(name) = part {
+                        let delta = authoring::rotate_2d(p - *pointer, -*angle);
+                        let group = poly
+                            .lines
+                            .iter()
+                            .find(|l| &l.id == name)
+                            .and_then(|l| l.group.clone());
+                        for line in &mut poly.lines {
+                            if &line.id == name || (group.is_some() && line.group == group) {
+                                for q in &mut line.points {
+                                    *q += delta;
+                                }
+                            }
+                        }
+                    }
                     match *part {
                         Part::Anchor(k) => {
                             let delta = authoring::rotate_2d(p - *pointer, -*angle);
@@ -2698,8 +2729,11 @@ impl Atelier {
                     _ => None,
                 };
                 if let Some(name) = edge {
-                    if matches!(hit.part, Part::Edge(_)) && self.authoring.segments.pick.is_some() {
-                        self.finish_segment_pick(id, name);
+                    let contour = matches!(hit.part, Part::Edge(_));
+                    if self.authoring.segments.pick.is_some()
+                        && self.finish_segment_pick(id.clone(), name.clone(), contour)
+                    {
+                        // Used by the waiting segment action.
                     } else {
                         let reference = BoundaryRef {
                             reversed: false,
@@ -3005,11 +3039,27 @@ impl Atelier {
                         .iter()
                         .find(|s| s.references().any(|r| same_edge(&edge, r)));
                     let is_line = k >= poly.edges.len() && poly.lines.iter().any(|l| &l.id == name);
+                    // The other lines of the selected line's group light up with it.
+                    let group_of = |id: &str| {
+                        poly.lines
+                            .iter()
+                            .find(|l| l.id == id)
+                            .and_then(|l| l.group.as_ref())
+                    };
+                    let grouped = is_line
+                        && self.authoring.edge.as_ref().is_some_and(|e| {
+                            e.panel == panel.id
+                                && e.edge.as_deref().is_some_and(|sel| {
+                                    sel != name
+                                        && group_of(sel).is_some()
+                                        && group_of(sel) == group_of(name)
+                                })
+                        });
                     let color = if locked {
                         Color32::from_gray(0xB8)
                     } else if end.is_some() {
                         Color32::from_rgb(248, 117, 188)
-                    } else if active || hover {
+                    } else if active || hover || grouped {
                         Color32::GOLD
                     } else if let Some(seam) = sewn {
                         super::seam_links::seam_color(&seam.id)

@@ -325,6 +325,7 @@ impl Atelier {
             }
             return;
         }
+        self.line_group_controls(ui, &edge.panel, &name);
         if !line.closed {
             self.internal_line_offsets(ui, &edge.panel, &name);
         }

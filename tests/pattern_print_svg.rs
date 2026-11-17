@@ -57,6 +57,7 @@ fn polygon_curves_holes_and_internal_lines_are_exported_in_material_mm() {
         points: vec![DVec2::new(0.2, 0.05), DVec2::new(0.2, 0.35)],
         tangents: vec![DVec2::ZERO; 2],
         closed: false,
+        group: None,
     });
     template.panels[0].polygon = Some(polygon);
     let svg = export::print_pattern_svg(&template).expect("polygon physical SVG");

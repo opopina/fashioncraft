@@ -66,6 +66,7 @@ pub fn internal_shape(
         points,
         tangents,
         closed: true,
+        group: None,
     })
 }
 
@@ -131,6 +132,7 @@ pub(crate) fn shape_from_ring(id: String, ring: &[DVec2]) -> Result<InternalLine
         points,
         tangents,
         closed: true,
+        group: None,
     })
 }
 
@@ -216,6 +218,7 @@ pub fn outline_to_shape(id: String, outline: &PolygonPattern) -> Result<Internal
             points: outline.points.clone(),
             tangents: (0..n).map(|k| handles(k).1).collect(),
             closed: true,
+            group: None,
         });
     }
     let mut ring = Vec::new();

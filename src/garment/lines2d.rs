@@ -340,6 +340,7 @@ pub fn line_from_polyline(id: String, points: &[DVec2]) -> Result<InternalLine, 
         points,
         tangents,
         closed: false,
+        group: None,
     })
 }
 

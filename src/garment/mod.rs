@@ -2,6 +2,7 @@
 //! No mesh indices are persisted in the authoring format.
 pub mod appearance;
 pub mod arrangement;
+pub mod curvefit;
 pub mod curves;
 pub mod diagnostics;
 pub mod domain;

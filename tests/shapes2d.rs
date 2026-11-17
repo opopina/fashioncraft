@@ -333,6 +333,7 @@ fn closed_flag_is_omitted_for_open_lines() {
         points: vec![DVec2::ZERO, DVec2::X],
         tangents: vec![DVec2::ZERO; 2],
         closed: false,
+        group: None,
     };
     let text = serde_json::to_string(&open).unwrap();
     assert!(!text.contains("closed"));

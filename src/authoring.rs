@@ -383,6 +383,24 @@ pub enum Command {
         overlap_m: f64,
         straight_degrees: Option<f64>,
     },
+    /// Put internal lines of one panel in one group, joining any groups they already belong
+    /// to. Grouped lines are selected and moved together on the board.
+    GroupLines {
+        panel: String,
+        lines: Vec<String>,
+    },
+    /// Dissolve the group of internal line `line`.
+    UngroupLines {
+        panel: String,
+        line: String,
+    },
+    /// Reduce the curve points of drafted outlines and internal lines, keeping `ratio` (0–1) of
+    /// the smooth points that carry curves. Corners, and points on boundaries used by seams,
+    /// targets, allowances or notches, stay. Merged spans are refitted to the old curve.
+    OptimizeCurvePoints {
+        panels: Vec<String>,
+        ratio: f64,
+    },
     /// Replace the 2D board locks: which panels cannot be picked there and whether internal
     /// lines are locked. A selection aid with no physical effect; one undo step.
     SetBoardLocks {
@@ -1199,6 +1217,44 @@ fn parameter_at_arclength(cubic: [DVec2; 4], at_m: f64) -> Result<f64, String> {
 }
 
 /// Whether a seam references one named boundary of a panel.
+/// Boundaries of panel `index` whose points must stay: used by seams, or carrying a target
+/// length, a seam allowance or notches.
+fn protected_boundaries(template: &GarmentTemplate, index: usize) -> Vec<String> {
+    let panel = &template.panels[index];
+    panel
+        .polygon
+        .as_ref()
+        .map(|p| {
+            p.edges
+                .iter()
+                .filter(|e| {
+                    seam_uses(template, &panel.id, e)
+                        || p.target_lengths.contains_key(*e)
+                        || p.seam_allowances.contains_key(*e)
+                        || p.notches.contains_key(*e)
+                })
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The smallest share of a panel's curve points that keeps its outline within `tolerance_m`
+/// of the current one: the starting value for [`Command::OptimizeCurvePoints`].
+pub fn suggested_curve_ratio(
+    template: &GarmentTemplate,
+    panel: &str,
+    tolerance_m: f64,
+) -> Result<f64, String> {
+    let index = panel_index(template, panel)?;
+    let kept = protected_boundaries(template, index);
+    let polygon = template.panels[index]
+        .polygon
+        .as_ref()
+        .ok_or("This panel has no editable contour")?;
+    crate::garment::curvefit::suggest_ratio(polygon, |e| kept.iter().any(|k| k == e), tolerance_m)
+}
+
 fn seam_uses(template: &GarmentTemplate, panel: &str, edge: &str) -> bool {
     template.seams.iter().any(|seam| {
         seam.references()
@@ -1593,6 +1649,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 points,
                 tangents,
                 closed: false,
+                group: None,
             });
             selected = Some(panel);
         }
@@ -2093,6 +2150,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 points: vec![a, b],
                 tangents: vec![DVec2::ZERO; 2],
                 closed: false,
+                group: None,
             });
             selected = Some(panel);
         }
@@ -2150,6 +2208,106 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             }
             if changed == 0 {
                 return Err("No points to remove".into());
+            }
+            selected = panels.first().cloned();
+        }
+        Command::GroupLines { panel, lines } => {
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Internal lines require a drafted panel")?;
+            if lines.len() < 2 {
+                return Err("Pick at least two internal lines to group".into());
+            }
+            if let Some(missing) = lines
+                .iter()
+                .find(|id| !polygon.lines.iter().any(|l| &l.id == *id))
+            {
+                return Err(format!("Internal line {missing} not found"));
+            }
+            let joined: Vec<String> = polygon
+                .lines
+                .iter()
+                .filter(|l| lines.contains(&l.id))
+                .filter_map(|l| l.group.clone())
+                .collect();
+            let name = joined.first().cloned().unwrap_or_else(|| {
+                unused_id(
+                    "group",
+                    polygon.lines.iter().filter_map(|l| l.group.clone()),
+                )
+            });
+            for line in &mut polygon.lines {
+                if lines.contains(&line.id)
+                    || line.group.as_ref().is_some_and(|g| joined.contains(g))
+                {
+                    line.group = Some(name.clone());
+                }
+            }
+            selected = Some(panel);
+        }
+        Command::UngroupLines { panel, line } => {
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Internal lines require a drafted panel")?;
+            let group = polygon
+                .lines
+                .iter()
+                .find(|l| l.id == line)
+                .ok_or("Internal line not found")?
+                .group
+                .clone()
+                .ok_or("This line is not in a group")?;
+            for l in &mut polygon.lines {
+                if l.group.as_ref() == Some(&group) {
+                    l.group = None;
+                }
+            }
+            selected = Some(panel);
+        }
+        Command::OptimizeCurvePoints { panels, ratio } => {
+            if !(0.0..=1.0).contains(&ratio) {
+                return Err("The ratio must be between 0 and 100 %".into());
+            }
+            let mut changed = 0;
+            for id in &panels {
+                let index = panel_index(&template, id)?;
+                let kept = protected_boundaries(&template, index);
+                let sewn_lines: Vec<String> = template.panels[index]
+                    .polygon
+                    .as_ref()
+                    .map(|p| {
+                        p.lines
+                            .iter()
+                            .filter(|l| seam_uses(&template, id, &l.id))
+                            .map(|l| l.id.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let p = &mut template.panels[index];
+                let Some(polygon) = p.polygon.as_mut() else {
+                    continue;
+                };
+                let before = polygon.points.len()
+                    + polygon.lines.iter().map(|l| l.points.len()).sum::<usize>();
+                crate::garment::curvefit::optimize_outline(polygon, ratio, |e| {
+                    kept.iter().any(|k| k == e)
+                })?;
+                for line in &mut polygon.lines {
+                    if !sewn_lines.contains(&line.id) {
+                        crate::garment::curvefit::optimize_line(line, ratio)?;
+                    }
+                }
+                let after = polygon.points.len()
+                    + polygon.lines.iter().map(|l| l.points.len()).sum::<usize>();
+                changed += before - after;
+                normalize(p);
+            }
+            if changed == 0 {
+                return Err("No curve points to optimize".into());
             }
             selected = panels.first().cloned();
         }

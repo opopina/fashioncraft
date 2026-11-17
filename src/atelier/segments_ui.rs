@@ -18,6 +18,8 @@ pub(super) enum PickAction {
     MatchLength,
     /// Bring the clicked segment's piece up against the first segment.
     MatchUp,
+    /// Group the clicked internal line with the first one.
+    GroupLine,
 }
 
 /// A segment action waiting for its second segment.
@@ -53,6 +55,9 @@ pub(super) struct SegmentsUi {
     overlap_mm: f64,
     straight: bool,
     straight_degrees: f64,
+    /// Share of curve points kept by "Optimize", in percent, and the piece it was suggested for.
+    curve_percent: f64,
+    curve_for: Option<String>,
 }
 
 impl Default for SegmentsUi {
@@ -77,7 +82,20 @@ impl Default for SegmentsUi {
             overlap_mm: 0.1,
             straight: false,
             straight_degrees: 2.,
+            curve_percent: 50.,
+            curve_for: None,
         }
+    }
+}
+
+/// How far an optimized outline may move by default, like an automatic suggestion.
+const CURVE_TOLERANCE_M: f64 = 0.0005;
+
+fn pick_prompt(action: PickAction) -> &'static str {
+    match action {
+        PickAction::MatchLength => "Click the segment to match lengths with · Esc cancels",
+        PickAction::MatchUp => "Click a segment of the piece to bring here · Esc cancels",
+        PickAction::GroupLine => "Click the internal line to group with · Esc cancels",
     }
 }
 
@@ -312,25 +330,45 @@ impl Atelier {
                 }
             });
         if let Some(pick) = &self.authoring.segments.pick {
-            self.status = match pick.action {
-                PickAction::MatchLength => "Click the segment to match lengths with · Esc cancels",
-                PickAction::MatchUp => "Click a segment of the piece to bring here · Esc cancels",
-            }
-            .into();
+            self.status = pick_prompt(pick.action).into();
         }
         if let Some(command) = command {
             self.edit(command);
         }
     }
 
-    /// Finish a waiting segment action with the clicked contour segment. Returns true when
-    /// the click was used.
-    pub(super) fn finish_segment_pick(&mut self, panel: String, edge: String) -> bool {
-        let Some(pick) = self.authoring.segments.pick.take() else {
+    /// Finish a waiting segment action with the clicked contour segment (`contour`) or
+    /// internal line. Returns true when the click was used.
+    pub(super) fn finish_segment_pick(
+        &mut self,
+        panel: String,
+        edge: String,
+        contour: bool,
+    ) -> bool {
+        let Some(action) = self.authoring.segments.pick.as_ref().map(|p| p.action) else {
             return false;
         };
+        if contour != (action != PickAction::GroupLine) {
+            self.status = match action {
+                PickAction::GroupLine => "Click another internal line of this piece · Esc cancels",
+                _ => "Click a segment of a piece outline · Esc cancels",
+            }
+            .into();
+            return true;
+        }
+        let pick = self.authoring.segments.pick.take().unwrap();
         let state = &self.authoring.segments;
         let command = match pick.action {
+            PickAction::GroupLine => {
+                if panel != pick.panel {
+                    self.status = "Only lines of the same piece can be grouped".into();
+                    return true;
+                }
+                Command::GroupLines {
+                    panel,
+                    lines: vec![pick.edge, edge],
+                }
+            }
             PickAction::MatchUp => Command::MatchUp {
                 reference: (pick.panel, pick.edge),
                 moved: (panel, edge),
@@ -372,9 +410,71 @@ impl Atelier {
             self.status = match pick.action {
                 PickAction::MatchLength => "Lengths matched".into(),
                 PickAction::MatchUp => "Piece matched up".into(),
+                PickAction::GroupLine => "Lines grouped · they move together".into(),
             };
         }
         true
+    }
+
+    /// Group membership of the selected internal line, and the group actions.
+    pub(super) fn line_group_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let Some(polygon) = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.as_ref())
+        else {
+            return;
+        };
+        let group = polygon
+            .lines
+            .iter()
+            .find(|l| l.id == line)
+            .and_then(|l| l.group.clone());
+        let members = group.as_ref().map_or(0, |g| {
+            polygon
+                .lines
+                .iter()
+                .filter(|l| l.group.as_ref() == Some(g))
+                .count()
+        });
+        let mut command = None;
+        ui.horizontal(|ui| {
+            match &group {
+                Some(name) => {
+                    ui.small(format!("Group {name} · {members} lines"));
+                    if ui.small_button("Ungroup").clicked() {
+                        command = Some(Command::UngroupLines {
+                            panel: panel.into(),
+                            line: line.into(),
+                        });
+                    }
+                }
+                None => {
+                    ui.small("Not grouped");
+                }
+            }
+            if ui
+                .small_button("Group with…")
+                .on_hover_text(
+                    "Click another internal line of this piece; grouped lines move together",
+                )
+                .clicked()
+            {
+                self.authoring.segments.pick = Some(SegmentPick {
+                    action: PickAction::GroupLine,
+                    panel: panel.into(),
+                    edge: line.into(),
+                });
+                self.status = pick_prompt(PickAction::GroupLine).into();
+            }
+        });
+        ui.small("Drag a line on the board to move it with its group.");
+        if let Some(command) = command {
+            self.edit(command);
+        }
     }
 
     /// Where a closed internal shape's copy goes: next to its piece, on the right.
@@ -475,9 +575,46 @@ impl Atelier {
                     }
                 });
                 ui.small("Sewn boundaries and those with targets, allowances or notches keep their points.");
+                ui.separator();
+                if state.curve_for.as_deref() != Some(panel.id.as_str()) {
+                    state.curve_for = Some(panel.id.clone());
+                    // Like a fresh dialog: start from the smallest share that keeps the shape.
+                    state.curve_percent = authoring::suggested_curve_ratio(
+                        &self.project.template,
+                        &panel.id,
+                        CURVE_TOLERANCE_M,
+                    )
+                    .map_or(50., |r| (r * 100.).round());
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Curve points");
+                    ui.add(
+                        egui::Slider::new(&mut state.curve_percent, 0.0..=100.0)
+                            .suffix(" %")
+                            .fixed_decimals(0),
+                    )
+                    .on_hover_text(
+                        "Share of the curve points kept; the start value keeps this piece within 0.5 mm",
+                    );
+                });
+                let optimize = |panels: Vec<String>| Command::OptimizeCurvePoints {
+                    panels,
+                    ratio: state.curve_percent / 100.,
+                };
+                ui.horizontal(|ui| {
+                    if ui.button("Optimize this piece").clicked() {
+                        command = Some(optimize(vec![panel.id.clone()]));
+                    }
+                    if ui.button("All pieces").clicked() {
+                        command = Some(optimize(all.clone()));
+                    }
+                });
             });
         if let Some(command) = command {
-            let cleaning = matches!(command, Command::CleanUpPoints { .. });
+            let cleaning = matches!(
+                command,
+                Command::CleanUpPoints { .. } | Command::OptimizeCurvePoints { .. }
+            );
             let before = self.point_count();
             if self.edit(command) && cleaning {
                 let removed = before.saturating_sub(self.point_count());

@@ -23,6 +23,9 @@ pub struct InternalLine {
     /// Absent in older documents, which only have open lines.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub closed: bool,
+    /// Lines sharing a group name are selected and moved together. Absent when ungrouped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 impl InternalLine {
     /// Flattened path. A closed shape returns its loop with the first point repeated at the
@@ -180,6 +183,9 @@ pub fn validate(poly: &PolygonPattern, outer: &[DVec2]) -> Result<(), String> {
     for line in &poly.lines {
         if !name_ok(&line.id) || !names.insert(&line.id) {
             return Err("Duplicate or invalid internal-line name".into());
+        }
+        if line.group.as_deref().is_some_and(|g| !name_ok(g)) {
+            return Err("Invalid internal-line group name".into());
         }
         let points = line.samples()?;
         budget += points.len();

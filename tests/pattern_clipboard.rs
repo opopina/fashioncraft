@@ -247,6 +247,7 @@ fn clipboard_round_trip_preserves_domain_and_target_metadata() {
         points: vec![DVec2::new(0.1, 0.2), DVec2::new(0.2, 0.2)],
         tangents: vec![DVec2::new(0.02, 0.01); 2],
         closed: false,
+        group: None,
     });
     poly.target_lengths.insert(poly.edges[0].clone(), 0.23);
     let id = p.id.clone();

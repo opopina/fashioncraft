@@ -75,3 +75,76 @@ pub fn transfer_positions(
         })
         .collect()
 }
+
+/// Closest point to `q` on triangle `[a, b, c]`.
+fn closest_on_triangle(q: DVec3, [a, b, c]: [DVec3; 3]) -> DVec3 {
+    let (e1, e2) = (b - a, c - a);
+    let d = q - a;
+    let (g11, g12, g22) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
+    let det = g11 * g22 - g12 * g12;
+    if det > 1e-30 {
+        let (r1, r2) = (d.dot(e1), d.dot(e2));
+        let s = (r1 * g22 - r2 * g12) / det;
+        let u = (g11 * r2 - g12 * r1) / det;
+        if s >= 0. && u >= 0. && s + u <= 1. {
+            return a + e1 * s + e2 * u;
+        }
+    }
+    let segment = |p: DVec3, r: DVec3| {
+        let along = r - p;
+        let k = ((q - p).dot(along) / along.length_squared().max(1e-30)).clamp(0., 1.);
+        p + along * k
+    };
+    [segment(a, b), segment(b, c), segment(c, a)]
+        .into_iter()
+        .min_by(|x, y| x.distance_squared(q).total_cmp(&y.distance_squared(q)))
+        .unwrap()
+}
+
+/// Lay a piece on another piece's draped surface: each of `moved` goes onto the plane of the
+/// nearest face of the `target` surface (positions `target_x`, triangles `target_triangles`
+/// indexing them) and then `offset` along that face's normal, outwards (away from the vertical axis
+/// through `axis`) when `over`, inwards otherwise. For facings, linings, cuffs and collars
+/// that are sewn to the target and should start on it, not through it.
+pub fn superimpose_positions(
+    moved: &[DVec3],
+    target_x: &[DVec3],
+    target_triangles: &[[usize; 3]],
+    axis: DVec3,
+    over: bool,
+    offset: f64,
+) -> Vec<DVec3> {
+    if target_triangles.is_empty() {
+        return moved.to_vec();
+    }
+    moved
+        .iter()
+        .map(|&q| {
+            let mut best = (f64::INFINITY, q, DVec3::ZERO);
+            for t in target_triangles {
+                let corners = t.map(|i| target_x[i]);
+                let p = closest_on_triangle(q, corners);
+                let d = p.distance_squared(q);
+                if d < best.0 {
+                    let normal = (corners[1] - corners[0])
+                        .cross(corners[2] - corners[0])
+                        .normalize_or_zero();
+                    best = (d, p, normal);
+                }
+            }
+            let (_, closest, mut normal) = best;
+            // Onto the plane of the nearest face rather than its closest point: points past
+            // the target's edge keep their spacing instead of piling up on that edge.
+            let p = q - normal * (q - closest).dot(normal);
+            let mut away = p - axis;
+            away.y = 0.;
+            if normal.dot(away) < 0. {
+                normal = -normal;
+            }
+            if !over {
+                normal = -normal;
+            }
+            p + normal * offset
+        })
+        .collect()
+}

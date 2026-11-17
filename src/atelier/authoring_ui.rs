@@ -1383,6 +1383,7 @@ impl Atelier {
         }
         self.arrangement_properties(ui, &panel);
         self.pin_properties(ui, &panel);
+        self.activation_properties(ui, &panel);
         if let Some(fabric) = self
             .project
             .template

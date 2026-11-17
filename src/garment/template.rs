@@ -217,6 +217,9 @@ pub struct GarmentTemplate {
     pub pin_targets: Vec<super::pins::MaterialPinTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_panels: Vec<super::pins::FrozenPanel>,
+    /// Panels taken out of the simulation: held in place, and no contact with any cloth.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
     /// Cylindrical arrangement wraps by panel id; absent in older documents.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub panel_wraps: BTreeMap<String, PanelWrap>,
@@ -254,6 +257,8 @@ pub struct CompiledGarment {
     pub legacy_pins: Vec<Option<DVec3>>,
     /// Membership remains explicit when an authored target coincides with a legacy pin.
     pub authored_holds: Vec<bool>,
+    /// Vertices of deactivated panels: the solver leaves them out of every contact.
+    pub inert: Vec<bool>,
     /// One orientation-bound material per panel, derived from shared fabric properties.
     pub materials: Vec<Material>,
     pub vertex_material: Vec<usize>,
@@ -308,12 +313,31 @@ impl GarmentTemplate {
             }
             wrap.validate()?;
         }
+        let mut deactivated = BTreeSet::new();
+        for d in &self.deactivated_panels {
+            if !self.panels.iter().any(|p| p.id == d.panel) {
+                return Err(format!(
+                    "Deactivated panel {} is not in the template",
+                    d.panel
+                ));
+            }
+            if !deactivated.insert(d.panel.as_str()) {
+                return Err(format!("Panel {} is deactivated twice", d.panel));
+            }
+            if self.frozen_panels.iter().any(|f| f.panel == d.panel) {
+                return Err(format!(
+                    "Panel {} cannot be both frozen and deactivated",
+                    d.panel
+                ));
+            }
+        }
         if self.format != "marvelous-cloth-template" || !(1..=2).contains(&self.version) {
             return Err("Unsupported garment template format/version".into());
         }
         if self.version == 1
             && (!self.pin_targets.is_empty()
                 || !self.frozen_panels.is_empty()
+                || !self.deactivated_panels.is_empty()
                 || self
                     .panels
                     .iter()
@@ -378,6 +402,7 @@ impl GarmentTemplate {
             arrangement_positions: vec![],
             legacy_pins: vec![],
             authored_holds: vec![],
+            inert: vec![],
             mesh: Mesh {
                 uv: vec![],
                 triangles: vec![],
@@ -537,9 +562,19 @@ impl GarmentTemplate {
                 reverse ^ reference.reversed,
             )
         };
+        let unsewn: BTreeSet<&str> = self
+            .deactivated_panels
+            .iter()
+            .filter(|d| d.sewing)
+            .map(|d| d.panel.as_str())
+            .collect();
         for (i, spec) in self.seams.iter().enumerate() {
             if spec.a_tail.len() >= 128 || spec.b_tail.len() >= 128 {
                 return Err("Sewing side needs 1..128 segments".into());
+            }
+            // Seams of a panel deactivated with its sewing stay in the document only.
+            if spec.references().any(|r| unsewn.contains(r.panel.as_str())) {
+                continue;
             }
             // Reject overlapping seam ownership, including sewing an interval to itself.
             let refs: Vec<_> = spec.references().collect();
@@ -603,6 +638,14 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        out.inert = vec![false; out.mesh.uv.len()];
+        let holds: Vec<_> = self.deactivated_panels.iter().map(|d| d.hold()).collect();
+        for (i, target) in super::pins::resolve_frozen(&out, &holds)? {
+            out.authored_holds[i] = true;
+            out.inert[i] = true;
+            out.mesh.pins[i] = Some(target);
+            out.initial_state.x[i] = target;
+        }
         Ok(out)
     }
 
@@ -616,6 +659,7 @@ impl GarmentTemplate {
             mirror_links: vec![],
             pin_targets: vec![],
             frozen_panels: vec![],
+            deactivated_panels: vec![],
             panel_wraps: Default::default(),
             locked_panels: Default::default(),
             internal_lines_locked: false,

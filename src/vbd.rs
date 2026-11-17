@@ -223,6 +223,7 @@ impl VbdSolver {
             }
         }
         let mut world = OgcWorld::new(&x, faces, n, excluded)?;
+        world.set_inert(garment.inert.clone())?;
         world.validate_start(&x)?;
         world.directional_bounds = true;
         let mut triangles = vec![vec![]; n];

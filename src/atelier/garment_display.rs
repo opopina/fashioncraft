@@ -12,6 +12,8 @@ pub(super) const STRAIN_MAX_PERCENT: std::ops::RangeInclusive<f64> = 1.0..=200.0
 pub(super) type FaceColors = Vec<Option<[f32; 3]>>;
 /// Frozen pieces are tinted icy blue (linear RGB).
 const FROZEN_TINT: [f32; 3] = [0.42, 0.66, 0.92];
+/// Deactivated pieces look washed out, as they no longer take part in the simulation.
+const DEACTIVATED_TINT: [f32; 3] = [0.62, 0.62, 0.62];
 
 /// What the 3D view draws. Stored in the preferences file.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -256,15 +258,29 @@ impl Atelier {
         } else {
             BTreeSet::new()
         };
-        (
-            self.display_mask(),
-            face_colors(
-                &self.scene.garment.panels,
-                self.scene.garment.mesh.triangles.len(),
-                display.piece_colors,
-                Some(&frozen),
-            ),
-        )
+        let mut colors = face_colors(
+            &self.scene.garment.panels,
+            self.scene.garment.mesh.triangles.len(),
+            display.piece_colors,
+            Some(&frozen),
+        );
+        let deactivated: BTreeSet<&str> = self
+            .project
+            .template
+            .deactivated_panels
+            .iter()
+            .map(|d| d.panel.as_str())
+            .collect();
+        if display.state_colors && !deactivated.is_empty() {
+            let colors =
+                colors.get_or_insert_with(|| vec![None; self.scene.garment.mesh.triangles.len()]);
+            for panel in &self.scene.garment.panels {
+                if deactivated.contains(panel.id.as_str()) {
+                    colors[panel.triangles.clone()].fill(Some(DEACTIVATED_TINT));
+                }
+            }
+        }
+        (self.display_mask(), colors)
     }
 
     /// Start or stop isolating the current selection (Shift+I).
@@ -355,7 +371,10 @@ impl Atelier {
         ui.checkbox(&mut display.garment, "Garment · Shift+C");
         ui.checkbox(&mut display.piece_colors, "Random piece colours")
             .on_hover_text("One distinct colour per piece instead of the fabric colour");
-        ui.checkbox(&mut display.state_colors, "Tint frozen pieces");
+        ui.checkbox(
+            &mut display.state_colors,
+            "Tint frozen and deactivated pieces",
+        );
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.heat, "Strain map · Alt+7");
             ui.add(

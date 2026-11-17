@@ -161,6 +161,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         mirror_links: vec![],
         pin_targets: vec![],
         frozen_panels: vec![],
+        deactivated_panels: vec![],
         panel_wraps: Default::default(),
         locked_panels: Default::default(),
         internal_lines_locked: false,

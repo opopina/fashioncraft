@@ -27,6 +27,30 @@ pub struct FrozenPanel {
     pub targets: Vec<MaterialPinTarget>,
 }
 
+/// A deactivated panel: held where it was captured, like a frozen one, but the solver treats
+/// it as absent for contact, so other cloth passes through it. With `sewing`, its seams are
+/// left out of the simulation too.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeactivatedPanel {
+    pub panel: String,
+    pub topology: String,
+    pub targets: Vec<MaterialPinTarget>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sewing: bool,
+}
+
+impl DeactivatedPanel {
+    /// The same hold as a frozen panel, for target resolution.
+    pub fn hold(&self) -> FrozenPanel {
+        FrozenPanel {
+            panel: self.panel.clone(),
+            topology: self.topology.clone(),
+            targets: self.targets.clone(),
+        }
+    }
+}
+
 pub fn topology_fingerprint(garment: &CompiledGarment, panel: &str) -> Result<String, String> {
     let p = garment
         .panels

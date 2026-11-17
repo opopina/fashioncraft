@@ -211,6 +211,8 @@ pub struct OgcWorld {
     moving_faces: Vec<usize>,
     candidates: Option<Candidates>,
     excluded_neighbors: Vec<Vec<usize>>,
+    /// Vertices that take part in no contact at all (deactivated cloth). Empty: none.
+    inert: Vec<bool>,
 }
 impl OgcWorld {
     pub fn new(
@@ -305,10 +307,32 @@ impl OgcWorld {
             excluded,
             moving_faces,
             candidates: None,
+            inert: vec![],
         })
     }
+    /// Leave the given vertices out of every contact, as if they were not there. Call before
+    /// `validate_start`. Shorter masks are padded with `false`.
+    pub fn set_inert(&mut self, mut inert: Vec<bool>) -> Result<(), String> {
+        let n = self.topology.neighbors.len();
+        if inert.len() > n {
+            return Err("OGC inert mask is longer than the vertex count".into());
+        }
+        inert.resize(n, false);
+        self.inert = if inert.iter().any(|i| *i) {
+            inert
+        } else {
+            vec![]
+        };
+        Ok(())
+    }
+    fn is_inert(&self, v: usize) -> bool {
+        self.inert.get(v).copied().unwrap_or(false)
+    }
     fn adjacent(&self, a: usize, b: usize) -> bool {
-        a == b || self.excluded_neighbors[a].binary_search(&b).is_ok()
+        a == b
+            || self.is_inert(a)
+            || self.is_inert(b)
+            || self.excluded_neighbors[a].binary_search(&b).is_ok()
     }
     /// Topological eligibility for read-only contact research, including this
     /// world's exact seam exclusions. No distance/cone test or force selection.
@@ -399,6 +423,7 @@ impl OgcWorld {
                 |j| {
                     let q = self.topology.triangles[j];
                     if j <= i
+                        || t.iter().chain(&q).any(|v| self.is_inert(*v))
                         || (t.iter().all(|v| *v >= self.moving)
                             && q.iter().all(|v| *v >= self.moving))
                         || t.iter().any(|a| {

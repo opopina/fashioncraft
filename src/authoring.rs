@@ -587,6 +587,13 @@ pub fn prepare_pin_group_edit(
     {
         return Err("Release the frozen panel before editing individual pins".into());
     }
+    if source
+        .deactivated_panels
+        .iter()
+        .any(|p| selections.contains_key(&p.panel))
+    {
+        return Err("Activate the piece before editing its pins".into());
+    }
     validate_pin_source(source, compiled, state)?;
     if compiled
         .mesh
@@ -767,6 +774,67 @@ pub fn prepare_freeze_group_edit(
         template
             .frozen_panels
             .retain(|frozen| !ids.contains(&frozen.panel));
+    }
+    let garment = template.compile()?;
+    let edit = Edit {
+        reset_simulation: !same_physics(source, &template),
+        template,
+        garment,
+        selected: panels.first().cloned(),
+        new_point: None,
+    };
+    let next = edit.state_after(compiled, state);
+    Ok((edit, next))
+}
+
+/// Deactivate panels (they stay where they are now and no cloth collides with them; with
+/// `sewing` their seams are left out as well) or activate them again, where they are. One
+/// edit for the whole group; frozen panels must be released first.
+pub fn prepare_deactivate_edit(
+    source: &GarmentTemplate,
+    compiled: &CompiledGarment,
+    state: &State,
+    panels: &[String],
+    deactivate: bool,
+    sewing: bool,
+) -> Result<(Edit, State), String> {
+    use crate::garment::pins::{DeactivatedPanel, MaterialPinTarget, topology_fingerprint};
+    let ids: std::collections::BTreeSet<_> = panels.iter().collect();
+    if ids.is_empty() || ids.len() > 128 || ids.len() != panels.len() {
+        return Err("Select 1..128 distinct pieces".into());
+    }
+    validate_pin_source(source, compiled, state)?;
+    let mut template = source.clone();
+    if deactivate {
+        for panel in &ids {
+            if source.frozen_panels.iter().any(|f| &f.panel == *panel) {
+                return Err("Unfreeze the piece before deactivating it".into());
+            }
+            template.deactivated_panels.retain(|d| &d.panel != *panel);
+            let captured = capture_panel_targets(compiled, state, panel, None)?;
+            template.deactivated_panels.push(DeactivatedPanel {
+                panel: (*panel).clone(),
+                topology: topology_fingerprint(compiled, panel)?,
+                targets: captured
+                    .into_iter()
+                    .map(|(uv, world)| MaterialPinTarget {
+                        panel: (*panel).clone(),
+                        uv,
+                        world,
+                    })
+                    .collect(),
+                sewing,
+            });
+        }
+        template.version = 2;
+    } else {
+        let before = template.deactivated_panels.len();
+        template
+            .deactivated_panels
+            .retain(|d| !ids.contains(&d.panel));
+        if template.deactivated_panels.len() == before {
+            return Err("Those pieces are active already".into());
+        }
     }
     let garment = template.compile()?;
     let edit = Edit {

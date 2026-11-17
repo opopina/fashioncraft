@@ -351,6 +351,38 @@ pub enum Command {
         target: String,
         center: DVec2,
     },
+    /// Internal lines set off from a boundary or open internal line (`path`): `count` copies
+    /// `distance_m` apart into the piece (`reverse`: the other side), cut at the outline and,
+    /// with `extend`, prolonged up to it. Without `path`, closed internal shapes inset from
+    /// the whole outline.
+    OffsetAsLines {
+        panel: String,
+        path: Option<String>,
+        count: u32,
+        distance_m: f64,
+        reverse: bool,
+        extend: bool,
+    },
+    /// A straight internal line leaving `path` at arclength `at_m` from its start, turned
+    /// `angle_degrees` towards the material (90° is perpendicular), `length_m` long or up to
+    /// the outline when `None`.
+    PerpendicularLine {
+        panel: String,
+        path: String,
+        at_m: f64,
+        angle_degrees: f64,
+        length_m: Option<f64>,
+        reverse: bool,
+    },
+    /// Remove contour points that start a boundary shorter than `overlap_m`, and internal line
+    /// anchors closer than that, on the given panels; with `straight_degrees`, also contour
+    /// points between two straight boundaries turning less than that. Boundaries used by
+    /// seams, targets, allowances or notches keep their points.
+    CleanUpPoints {
+        panels: Vec<String>,
+        overlap_m: f64,
+        straight_degrees: Option<f64>,
+    },
     /// Replace the 2D board locks: which panels cannot be picked there and whether internal
     /// lines are locked. A selection aid with no physical effect; one undo step.
     SetBoardLocks {
@@ -1995,6 +2027,131 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 .lines
                 .push(line);
             selected = Some(target);
+        }
+        Command::OffsetAsLines {
+            panel,
+            path,
+            count,
+            distance_m,
+            reverse,
+            extend,
+        } => {
+            use crate::garment::lines2d;
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Internal lines require a drafted panel")?;
+            let mut lines = vec![];
+            let mut names: Vec<String> = polygon.paths()?.into_iter().map(|(n, _)| n).collect();
+            let mut fresh = |prefix: &str| {
+                let id = unused_id(prefix, names.clone().into_iter());
+                names.push(id.clone());
+                id
+            };
+            match &path {
+                Some(name) => {
+                    for points in
+                        lines2d::offset_lines(polygon, name, count, distance_m, reverse, extend)?
+                    {
+                        lines.push(lines2d::line_from_polyline(fresh("offset"), &points)?);
+                    }
+                }
+                None => {
+                    for ring in lines2d::offset_outline(polygon, count, distance_m)? {
+                        lines.push(lines2d::shape_from_ring(fresh("offset"), &ring)?);
+                    }
+                }
+            }
+            polygon.lines.extend(lines);
+            selected = Some(panel);
+        }
+        Command::PerpendicularLine {
+            panel,
+            path,
+            at_m,
+            angle_degrees,
+            length_m,
+            reverse,
+        } => {
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Internal lines require a drafted panel")?;
+            let [a, b] = crate::garment::lines2d::perpendicular_line(
+                polygon,
+                &path,
+                at_m,
+                angle_degrees,
+                length_m,
+                reverse,
+            )?;
+            let id = unused_id("line", polygon.paths()?.into_iter().map(|(n, _)| n));
+            polygon.lines.push(crate::garment::domain::InternalLine {
+                id,
+                points: vec![a, b],
+                tangents: vec![DVec2::ZERO; 2],
+                closed: false,
+            });
+            selected = Some(panel);
+        }
+        Command::CleanUpPoints {
+            panels,
+            overlap_m,
+            straight_degrees,
+        } => {
+            use crate::garment::lines2d;
+            if !overlap_m.is_finite() || !(0.0..=0.01).contains(&overlap_m) {
+                return Err("The overlap distance must be between 0 and 10 mm".into());
+            }
+            if straight_degrees.is_some_and(|d| !(0.0..=10.0).contains(&d)) {
+                return Err("The straightness limit must be between 0° and 10°".into());
+            }
+            let mut changed = 0;
+            for id in &panels {
+                let index = panel_index(&template, id)?;
+                let sewn: Vec<String> = template.panels[index]
+                    .polygon
+                    .as_ref()
+                    .map(|p| {
+                        p.edges
+                            .iter()
+                            .filter(|e| seam_uses(&template, id, e))
+                            .cloned()
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let p = &mut template.panels[index];
+                let Some(polygon) = p.polygon.as_mut() else {
+                    continue;
+                };
+                let keep = |e: &str| {
+                    sewn.iter().any(|s| s == e)
+                        || polygon.target_lengths.contains_key(e)
+                        || polygon.seam_allowances.contains_key(e)
+                        || polygon.notches.contains_key(e)
+                };
+                let points = lines2d::removable_points(polygon, overlap_m, straight_degrees, keep);
+                for k in &points {
+                    polygon.points.remove(*k);
+                    let edge = polygon.edges.remove(*k);
+                    polygon.curves.remove(&edge);
+                }
+                changed += points.len();
+                for line in &mut polygon.lines {
+                    for k in lines2d::removable_line_points(line, overlap_m) {
+                        line.points.remove(k);
+                        line.tangents.remove(k);
+                        changed += 1;
+                    }
+                }
+                normalize(p);
+            }
+            if changed == 0 {
+                return Err("No points to remove".into());
+            }
+            selected = panels.first().cloned();
         }
         Command::SetBoardLocks {
             panels,

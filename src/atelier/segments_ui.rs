@@ -38,6 +38,21 @@ pub(super) struct SegmentsUi {
     pub pick: Option<SegmentPick>,
     /// Piece whose outline is copied as an internal shape.
     pub clone_source: Option<String>,
+    /// Offset copies of the segment or outline.
+    copies: u32,
+    copy_mm: f64,
+    extend: bool,
+    reverse: bool,
+    /// Line leaving the segment: position from its start (`None`: the middle), angle, and
+    /// length (`None`: up to the outline).
+    branch_for: Option<(String, String)>,
+    branch_at_mm: f64,
+    branch_angle: f64,
+    branch_length_mm: Option<f64>,
+    /// Clean-up: overlap distance and the straightness limit for straight-through points.
+    overlap_mm: f64,
+    straight: bool,
+    straight_degrees: f64,
 }
 
 impl Default for SegmentsUi {
@@ -51,6 +66,17 @@ impl Default for SegmentsUi {
             offset_mm: 10.,
             pick: None,
             clone_source: None,
+            copies: 1,
+            copy_mm: 10.,
+            extend: true,
+            reverse: false,
+            branch_for: None,
+            branch_at_mm: 0.,
+            branch_angle: 90.,
+            branch_length_mm: None,
+            overlap_mm: 0.1,
+            straight: false,
+            straight_degrees: 2.,
         }
     }
 }
@@ -197,6 +223,85 @@ impl Atelier {
                         });
                     }
                 });
+                ui.separator();
+                ui.strong("Internal lines from this segment");
+                ui.horizontal(|ui| {
+                    ui.label("Copies");
+                    ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
+                    ui.label("every");
+                    ui.add(
+                        egui::DragValue::new(&mut state.copy_mm)
+                            .range(1.0..=1000.0)
+                            .fixed_decimals(1)
+                            .suffix(" mm"),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut state.extend, "Extend to outline")
+                        .on_hover_text("Run each copy up to the outline instead of stopping at the segment's ends");
+                    if ui
+                        .button("Offset")
+                        .on_hover_text("Parallel copies of this segment inside the piece")
+                        .clicked()
+                    {
+                        command = Some(Command::OffsetAsLines {
+                            panel: panel.id.clone(),
+                            path: Some(name.clone()),
+                            count: state.copies,
+                            distance_m: state.copy_mm / 1000.,
+                            reverse: false,
+                            extend: state.extend,
+                        });
+                    }
+                });
+                let key = (panel.id.clone(), name.clone());
+                if state.branch_for.as_ref() != Some(&key) {
+                    state.branch_for = Some(key);
+                    state.branch_at_mm = measured * 500.;
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Line at");
+                    ui.add(
+                        egui::DragValue::new(&mut state.branch_at_mm)
+                            .range(0.0..=measured * 1000.)
+                            .fixed_decimals(1)
+                            .suffix(" mm"),
+                    )
+                    .on_hover_text("Distance from the segment's start");
+                    ui.label("angle");
+                    ui.add(
+                        egui::DragValue::new(&mut state.branch_angle)
+                            .range(1.0..=179.0)
+                            .fixed_decimals(1)
+                            .suffix("°"),
+                    )
+                    .on_hover_text("90° is perpendicular; smaller angles lean towards the end");
+                });
+                ui.horizontal(|ui| {
+                    let mut to_outline = state.branch_length_mm.is_none();
+                    ui.checkbox(&mut to_outline, "Up to outline");
+                    if to_outline {
+                        state.branch_length_mm = None;
+                    } else {
+                        let length = state.branch_length_mm.get_or_insert(100.);
+                        ui.add(
+                            egui::DragValue::new(length)
+                                .range(2.0..=10_000.0)
+                                .fixed_decimals(1)
+                                .suffix(" mm"),
+                        );
+                    }
+                    if ui.button("Add line").clicked() {
+                        command = Some(Command::PerpendicularLine {
+                            panel: panel.id.clone(),
+                            path: name.clone(),
+                            at_m: state.branch_at_mm / 1000.,
+                            angle_degrees: state.branch_angle,
+                            length_m: state.branch_length_mm.map(|l| l / 1000.),
+                            reverse: false,
+                        });
+                    }
+                });
                 if state.pick.is_some() {
                     ui.horizontal(|ui| {
                         ui.colored_label(Color32::from_rgb(0x15, 0x65, 0xC0), "Click a segment");
@@ -290,5 +395,141 @@ impl Atelier {
             .fold(f64::INFINITY, f64::min);
         let (_, hi) = arrange2d::board_bounds(template, index).ok()?;
         Some(authoring::layout(template, index) + DVec2::new(hi.x - left + 0.05, 0.))
+    }
+
+    /// "Clean up points" for the active piece or every piece, and inset copies of the outline.
+    pub(super) fn piece_line_tools(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        if panel.polygon.is_none() {
+            return;
+        }
+        let all: Vec<String> = self
+            .project
+            .template
+            .panels
+            .iter()
+            .filter(|p| p.polygon.is_some())
+            .map(|p| p.id.clone())
+            .collect();
+        let mut command = None;
+        egui::CollapsingHeader::new("Outline offsets and clean-up")
+            .id_salt("outline-cleanup")
+            .show(ui, |ui| {
+                let state = &mut self.authoring.segments;
+                ui.horizontal(|ui| {
+                    ui.label("Copies");
+                    ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
+                    ui.label("every");
+                    ui.add(
+                        egui::DragValue::new(&mut state.copy_mm)
+                            .range(1.0..=1000.0)
+                            .fixed_decimals(1)
+                            .suffix(" mm"),
+                    );
+                });
+                if ui
+                    .button("Offset outline inwards")
+                    .on_hover_text("Closed internal shapes following the whole outline")
+                    .clicked()
+                {
+                    command = Some(Command::OffsetAsLines {
+                        panel: panel.id.clone(),
+                        path: None,
+                        count: state.copies,
+                        distance_m: state.copy_mm / 1000.,
+                        reverse: false,
+                        extend: false,
+                    });
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Overlapping within");
+                    ui.add(
+                        egui::DragValue::new(&mut state.overlap_mm)
+                            .range(0.0..=10.0)
+                            .speed(0.01)
+                            .fixed_decimals(2)
+                            .suffix(" mm"),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut state.straight, "Also points on straight lines, under");
+                    ui.add_enabled(
+                        state.straight,
+                        egui::DragValue::new(&mut state.straight_degrees)
+                            .range(0.0..=10.0)
+                            .fixed_decimals(1)
+                            .suffix("°"),
+                    );
+                });
+                let clean = |panels: Vec<String>| Command::CleanUpPoints {
+                    panels,
+                    overlap_m: state.overlap_mm / 1000.,
+                    straight_degrees: state.straight.then_some(state.straight_degrees),
+                };
+                ui.horizontal(|ui| {
+                    if ui.button("Clean up this piece").clicked() {
+                        command = Some(clean(vec![panel.id.clone()]));
+                    }
+                    if ui.button("All pieces").clicked() {
+                        command = Some(clean(all.clone()));
+                    }
+                });
+                ui.small("Sewn boundaries and those with targets, allowances or notches keep their points.");
+            });
+        if let Some(command) = command {
+            let cleaning = matches!(command, Command::CleanUpPoints { .. });
+            let before = self.point_count();
+            if self.edit(command) && cleaning {
+                let removed = before.saturating_sub(self.point_count());
+                self.status = format!(
+                    "Removed {}",
+                    super::garment_display::counted(removed, "point", "points")
+                );
+            }
+        }
+    }
+
+    fn point_count(&self) -> usize {
+        self.project
+            .template
+            .panels
+            .iter()
+            .filter_map(|p| p.polygon.as_ref())
+            .map(|p| p.points.len() + p.lines.iter().map(|l| l.points.len()).sum::<usize>())
+            .sum()
+    }
+
+    /// Offset copies of the selected open internal line, on either side.
+    pub(super) fn internal_line_offsets(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let state = &mut self.authoring.segments;
+        let mut command = None;
+        ui.horizontal(|ui| {
+            ui.label("Copies");
+            ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
+            ui.label("every");
+            ui.add(
+                egui::DragValue::new(&mut state.copy_mm)
+                    .range(1.0..=1000.0)
+                    .fixed_decimals(1)
+                    .suffix(" mm"),
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut state.reverse, "Other side");
+            ui.checkbox(&mut state.extend, "Extend to outline");
+            if ui.button("Offset").clicked() {
+                command = Some(Command::OffsetAsLines {
+                    panel: panel.into(),
+                    path: Some(line.into()),
+                    count: state.copies,
+                    distance_m: state.copy_mm / 1000.,
+                    reverse: state.reverse,
+                    extend: state.extend,
+                });
+            }
+        });
+        if let Some(command) = command {
+            self.edit(command);
+        }
     }
 }

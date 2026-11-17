@@ -109,7 +109,7 @@ pub fn hole_to_shape(id: String, hole: &Hole) -> Result<InternalLine, String> {
 
 /// A closed internal shape through a dense closed polyline: thinned to at most 64 corners,
 /// smooth where the ring turns gently and sharp where it turns hard.
-fn shape_from_ring(id: String, ring: &[DVec2]) -> Result<InternalLine, String> {
+pub(crate) fn shape_from_ring(id: String, ring: &[DVec2]) -> Result<InternalLine, String> {
     let points = thin_closed(ring, 64);
     if points.len() < 3 {
         return Err("The outline is too small to become an internal shape".into());
@@ -227,7 +227,7 @@ pub fn outline_to_shape(id: String, outline: &PolygonPattern) -> Result<Internal
 }
 
 /// Corners turning less than this are treated as samples of a curve.
-const SMOOTH_TURN_DEGREES: f64 = 25.;
+pub(crate) const SMOOTH_TURN_DEGREES: f64 = 25.;
 
 /// Visvalingam–Whyatt thinning of a closed outline to at most `max` points.
 fn thin_closed(points: &[DVec2], max: usize) -> Vec<DVec2> {

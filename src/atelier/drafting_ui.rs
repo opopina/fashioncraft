@@ -124,6 +124,7 @@ impl Atelier {
             self.boolean_properties(ui, panel);
         });
         self.internal_shape_properties(ui, panel);
+        self.piece_line_tools(ui, panel);
     }
     pub(super) fn linked_mirror_properties(&mut self, ui: &mut egui::Ui, panel: &str) {
         let link = self
@@ -323,6 +324,9 @@ impl Atelier {
                 self.status = "Shape cloned as a piece of the same fabric".into();
             }
             return;
+        }
+        if !line.closed {
+            self.internal_line_offsets(ui, &edge.panel, &name);
         }
         if ui.small_button("Smooth tangents").clicked() {
             let mut poly = self

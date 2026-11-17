@@ -27,6 +27,10 @@ pub struct VbdSettings {
     pub damping: f64,
     pub gravity: DVec3,
     pub contact: OgcSettings,
+    /// Height of a physical floor in metres (world y), or none. The floor is a fixed
+    /// obstacle like the avatar: cloth rests on it within the contact shell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor: Option<f64>,
 }
 impl Default for VbdSettings {
     fn default() -> Self {
@@ -36,6 +40,7 @@ impl Default for VbdSettings {
             damping: 1.5,
             gravity: DVec3::new(0.0, -9.81, 0.0),
             contact: Default::default(),
+            floor: None,
         }
     }
 }
@@ -49,6 +54,7 @@ impl VbdSettings {
             || !self.damping.is_finite()
             || self.damping < 0.0
             || !self.gravity.is_finite()
+            || self.floor.is_some_and(|h| !h.is_finite())
         {
             return Err("Invalid VBD settings".into());
         }

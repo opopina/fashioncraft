@@ -79,6 +79,33 @@ impl SurfaceMesh {
         mesh.validate()?;
         Ok(mesh)
     }
+    /// This surface plus a horizontal floor square at `height` (world y, metres), centred
+    /// under it and much larger than it, as one fixed obstacle for the solver.
+    pub fn with_floor(&self, height: f64) -> Self {
+        let (lo, hi) = self.vertices.iter().fold(
+            (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
+            |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+        );
+        let (centre, size) = if self.vertices.is_empty() {
+            (DVec3::ZERO, 0.)
+        } else {
+            ((lo + hi) * 0.5, (hi - lo).max_element())
+        };
+        // Large enough for any garment around the avatar, small enough for f32 contact work.
+        let half = (size * 2.).max(20.);
+        let n = self.vertices.len();
+        let mut out = self.clone();
+        for (dx, dz) in [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)] {
+            out.vertices.push(DVec3::new(
+                centre.x + dx * half,
+                height,
+                centre.z + dz * half,
+            ));
+        }
+        out.triangles.push([n, n + 1, n + 2]);
+        out.triangles.push([n, n + 2, n + 3]);
+        out
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.vertices.is_empty()
             || self.triangles.is_empty()

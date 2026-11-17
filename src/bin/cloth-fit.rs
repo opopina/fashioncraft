@@ -80,9 +80,14 @@ fn run_ogc(
     mut scene: marvelous_cloth::fitting::FittingScene,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use marvelous_cloth::vbd::{VbdSettings, VbdSolver};
+    let floored = project
+        .simulation
+        .as_ref()
+        .and_then(|s| s.floor)
+        .map(|height| scene.collider.surface.with_floor(height));
     let mut solver = VbdSolver::new(
         scene.garment.clone(),
-        Some(&scene.collider.surface),
+        Some(floored.as_ref().unwrap_or(&scene.collider.surface)),
         &scene.state,
     )?;
     let mut settings = project.simulation.clone().unwrap_or(VbdSettings {

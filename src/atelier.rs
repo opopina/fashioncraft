@@ -44,6 +44,8 @@ mod documents_ui;
 mod drafting_ui;
 #[path = "atelier/edges_3d.rs"]
 mod edges_3d;
+#[path = "atelier/environment_ui.rs"]
+mod environment_ui;
 #[path = "atelier/fabrics_ui.rs"]
 mod fabrics_ui;
 #[path = "atelier/garment_display.rs"]

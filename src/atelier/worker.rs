@@ -177,7 +177,7 @@ fn start_inner(
         .stack_size(8 * 1024 * 1024)
         .spawn(move || {
             let gpu = backend.map(|(device, queue)| GpuVbd::new(device, queue));
-            let mut cache: Option<(u64, VbdSolver)> = None;
+            let mut cache: Option<((u64, Option<u64>), VbdSolver)> = None;
             let mut active: Option<Work> = None;
             let mut deadline = Instant::now();
             loop {
@@ -232,14 +232,20 @@ fn start_inner(
                     if w.gpu && gpu.is_none() {
                         return Err("GPU simulation requested without a GPU backend".to_owned());
                     }
-                    if cache.as_ref().is_none_or(|(g, _)| *g != w.generation) {
+                    // The floor is part of the solver's fixed geometry: changing it rebuilds.
+                    let key = (w.generation, w.settings.floor.map(f64::to_bits));
+                    if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+                        let floored;
+                        let surface = match w.settings.floor {
+                            Some(height) => {
+                                floored = w.scene.collider.surface.with_floor(height);
+                                &floored
+                            }
+                            None => &w.scene.collider.surface,
+                        };
                         cache = Some((
-                            w.generation,
-                            VbdSolver::new(
-                                w.scene.garment.clone(),
-                                Some(&w.scene.collider.surface),
-                                &w.scene.state,
-                            )?,
+                            key,
+                            VbdSolver::new(w.scene.garment.clone(), Some(surface), &w.scene.state)?,
                         ));
                         // A sample belongs to the solver generation that made it.
                         clear_final_diagnostics();

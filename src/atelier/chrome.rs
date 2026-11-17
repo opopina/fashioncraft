@@ -246,7 +246,9 @@ impl Atelier {
                     );
                     ui.add(
                         egui::Slider::new(&mut self.settings.damping, 0.0..=10.0).text("Damping"),
-                    );
+                    )
+                    .on_hover_text("Air damping: how much the air slows the cloth down (1/s)");
+                    self.simulation_environment(ui);
                     ui.collapsing("Advanced meshing", |ui| {
                         ui.add(
                             egui::Slider::new(&mut self.anisotropy, 1.0..=4.0).text("Anisotropy"),

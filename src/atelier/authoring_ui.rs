@@ -65,6 +65,7 @@ pub(super) struct AuthoringUi {
     pub drag: Option<super::gizmo::Drag>,
     pub drafting: super::drafting_ui::DraftingUi,
     pub shapes: super::shapes_ui::ShapesUi,
+    pub segments: super::segments_ui::SegmentsUi,
     /// Contour point selected for numeric entry: (panel id, point index).
     pub anchor: Option<(String, usize)>,
     /// Panel the numeric size draft belongs to; `None` reloads from geometry.
@@ -1508,6 +1509,9 @@ impl Atelier {
                 self.target_length_properties(ui, &panel, polygon);
             }
         });
+        if let Some(polygon) = panel.polygon.as_ref() {
+            self.segment_properties(ui, &panel, polygon);
+        }
         if self.authoring.tool == Tool::Edit
             && let Some((_, k)) = self
                 .authoring

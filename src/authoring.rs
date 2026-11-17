@@ -319,6 +319,38 @@ pub enum Command {
         axis: arrange2d::Axis,
         gap_m: f64,
     },
+    /// Change a boundary's length by scaling it about the end that stays: `moving` is the end
+    /// that moves (`Center` moves both ends by the same amount). The curve keeps its shape and
+    /// the handles of the neighbouring boundaries follow the moved points. A stored target
+    /// length on the boundary becomes the new length.
+    SetLength {
+        panel: String,
+        edge: String,
+        length_m: f64,
+        moving: arrange2d::SegmentEnd,
+    },
+    /// Turn and move the `moved` boundary's piece on the board so that boundary lies along the
+    /// `reference` boundary, running the other way round, as two pieces sewn edge to edge.
+    /// Each side is (panel, boundary). Board layout only; the cloth is not touched.
+    MatchUp {
+        reference: (String, String),
+        moved: (String, String),
+        anchor: arrange2d::SegmentEnd,
+    },
+    /// Copy a closed internal shape as a new piece of its panel's fabric. `origin` is where
+    /// the shape's material origin lands on the board.
+    CloneShapeAsPanel {
+        panel: String,
+        line: String,
+        origin: DVec2,
+    },
+    /// Copy a piece's outline as a closed internal shape inside `target`, centred on `center`
+    /// (material coordinates of `target`).
+    ClonePanelAsShape {
+        source: String,
+        target: String,
+        center: DVec2,
+    },
     /// Replace the 2D board locks: which panels cannot be picked there and whether internal
     /// lines are locked. A selection aid with no physical effect; one undo step.
     SetBoardLocks {
@@ -1814,6 +1846,155 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 let origin = layout(&template, index);
                 template.panels[index].layout_2d = Some(origin + offset);
             }
+        }
+        Command::SetLength {
+            panel,
+            edge,
+            length_m,
+            moving,
+        } => {
+            if !length_m.is_finite() || !(0.001..=50.).contains(&length_m) {
+                return Err("The length must be between 1 mm and 50 m".into());
+            }
+            let index = panel_index(&template, &panel)?;
+            let p = &mut template.panels[index];
+            let polygon = p
+                .polygon
+                .as_ref()
+                .ok_or("This panel has no editable contour")?;
+            let k = polygon
+                .edges
+                .iter()
+                .position(|name| name == &edge)
+                .ok_or("Boundary not found")?;
+            let next = (k + 1) % polygon.points.len();
+            for _ in 0..4 {
+                let polygon = p.polygon.as_ref().unwrap();
+                let current = edge_length(polygon, &edge)?;
+                if current <= 0. {
+                    return Err("Boundary has zero length".into());
+                }
+                if (current - length_m).abs() <= length_m * 1e-12 {
+                    break;
+                }
+                let factor = length_m / current;
+                let pivot = arrange2d::scale_pivot(polygon.points[k], polygon.points[next], moving);
+                let own = polygon.curves.get(&edge).copied();
+                let scale = move |q: DVec2| pivot + (q - pivot) * factor;
+                remap_anchors(p, &[k, next], scale)?;
+                // The boundary's own handles scale with it, so its curve keeps its shape.
+                if let Some([first, second]) = own {
+                    p.polygon
+                        .as_mut()
+                        .unwrap()
+                        .curves
+                        .insert(edge.clone(), [scale(first), scale(second)]);
+                }
+            }
+            let polygon = p.polygon.as_mut().unwrap();
+            if polygon.target_lengths.contains_key(&edge) {
+                polygon.target_lengths.insert(edge.clone(), length_m);
+            }
+            normalize(p);
+            selected = Some(panel);
+        }
+        Command::MatchUp {
+            reference,
+            moved,
+            anchor,
+        } => {
+            let r = panel_index(&template, &reference.0)?;
+            let m = panel_index(&template, &moved.0)?;
+            if r == m {
+                return Err("Pick a boundary on another piece".into());
+            }
+            freeze_layouts(&mut template);
+            let ends = |t: &GarmentTemplate, i: usize, edge: &str| -> Result<[DVec2; 2], String> {
+                let polygon = t.panels[i]
+                    .polygon
+                    .as_ref()
+                    .ok_or("Matching up needs drafted pieces")?;
+                let k = polygon
+                    .edges
+                    .iter()
+                    .position(|name| name == edge)
+                    .ok_or("Boundary not found")?;
+                let next = (k + 1) % polygon.points.len();
+                Ok([
+                    arrange2d::board_point(t, i, polygon.points[k]),
+                    arrange2d::board_point(t, i, polygon.points[next]),
+                ])
+            };
+            let a = ends(&template, r, &reference.1)?;
+            let b = ends(&template, m, &moved.1)?;
+            let origin = layout(&template, m);
+            let (degrees, shift) = arrange2d::match_up(a, b, origin, anchor)?;
+            let panel = &mut template.panels[m];
+            panel.layout_rotation_degrees =
+                (panel.layout_rotation_degrees + degrees + 180.).rem_euclid(360.) - 180.;
+            panel.layout_2d = Some(origin + shift);
+            selected = Some(moved.0);
+        }
+        Command::CloneShapeAsPanel {
+            panel,
+            line,
+            origin,
+        } => {
+            let index = panel_index(&template, &panel)?;
+            let source = &template.panels[index];
+            let polygon = source
+                .polygon
+                .as_ref()
+                .ok_or("Internal shapes require a drafted panel")?;
+            let shape = polygon
+                .lines
+                .iter()
+                .find(|l| l.id == line)
+                .ok_or("Internal shape not found")?;
+            let outline =
+                crate::garment::shapes2d::shape_outline_polygon(shape, polygon.meshing_settings())?;
+            let (fabric, rotation) = (source.fabric.clone(), source.layout_rotation_degrees);
+            let id = geometry::add_polygon(&mut template, outline, origin, fabric, false)?;
+            // Keep the source piece's board rotation, turning about `origin`.
+            let clone = template.panels.last_mut().unwrap();
+            let lo = clone.layout_2d.unwrap_or(origin) - origin;
+            clone.layout_rotation_degrees = rotation;
+            clone.layout_2d = Some(origin + rotate_2d(lo, rotation));
+            selected = Some(id);
+        }
+        Command::ClonePanelAsShape {
+            source,
+            target,
+            center,
+        } => {
+            if !center.is_finite() {
+                return Err("Invalid position".into());
+            }
+            let s = panel_index(&template, &source)?;
+            let t = panel_index(&template, &target)?;
+            let outline = template.panels[s]
+                .polygon
+                .as_ref()
+                .ok_or("Only drafted pieces can become internal shapes")?;
+            let polygon = template.panels[t]
+                .polygon
+                .as_ref()
+                .ok_or("Internal shapes require a drafted panel")?;
+            let id = unused_id("shape", polygon.paths()?.into_iter().map(|(name, _)| name));
+            let mut line = crate::garment::shapes2d::outline_to_shape(id, outline)?;
+            let samples = line.samples()?;
+            let (lo, hi) = arrange2d::bounds(&samples).ok_or("Empty outline")?;
+            let shift = center - (lo + hi) * 0.5;
+            for point in &mut line.points {
+                *point += shift;
+            }
+            template.panels[t]
+                .polygon
+                .as_mut()
+                .unwrap()
+                .lines
+                .push(line);
+            selected = Some(target);
         }
         Command::SetBoardLocks {
             panels,

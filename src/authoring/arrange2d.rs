@@ -292,3 +292,94 @@ pub(super) fn validate_scale(scale: DVec2) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// One end of a segment, or its middle. When a segment's length changes it names the end
+/// that moves (`Center` moves both ends by the same amount). When one segment is matched up
+/// against another it names the ends that meet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SegmentEnd {
+    Start,
+    Center,
+    End,
+}
+
+impl SegmentEnd {
+    pub const ALL: [Self; 3] = [Self::Start, Self::Center, Self::End];
+}
+
+/// The point a segment from `a` to `b` is scaled about when its length changes and `moving`
+/// is the end that moves.
+pub fn scale_pivot(a: DVec2, b: DVec2, moving: SegmentEnd) -> DVec2 {
+    match moving {
+        SegmentEnd::Start => b,
+        SegmentEnd::Center => (a + b) * 0.5,
+        SegmentEnd::End => a,
+    }
+}
+
+/// Matching two segment lengths: which of the two changes (0 or 1) and the length it takes,
+/// the longer one's (`to_longer`) or the shorter one's. `None` when they already match.
+pub fn matched_length(lengths: [f64; 2], to_longer: bool) -> Option<(usize, f64)> {
+    if (lengths[0] - lengths[1]).abs() <= 1e-9 {
+        return None;
+    }
+    let longer = usize::from(lengths[1] > lengths[0]);
+    let shorter = 1 - longer;
+    Some(if to_longer {
+        (shorter, lengths[longer])
+    } else {
+        (longer, lengths[shorter])
+    })
+}
+
+/// Rigid board motion that lays the `moved` segment (board start and end) along the
+/// `reference` segment, running the other way round, as two pieces sewn edge to edge. The
+/// moved piece turns about `origin`. `Start` puts the moved segment's start on the
+/// reference's end, `End` its end on the reference's start, `Center` matches the midpoints.
+/// Returns the rotation in degrees and the translation applied after it.
+pub fn match_up(
+    reference: [DVec2; 2],
+    moved: [DVec2; 2],
+    origin: DVec2,
+    anchor: SegmentEnd,
+) -> Result<(f64, DVec2), String> {
+    let r = reference[1] - reference[0];
+    let m = moved[1] - moved[0];
+    if !(r.length() > 1e-9 && m.length() > 1e-9 && origin.is_finite()) {
+        return Err("Both segments need a length".into());
+    }
+    let degrees = m.angle_to(-r).to_degrees();
+    let turn = |p: DVec2| origin + rotate_2d(p - origin, degrees);
+    let (b0, b1) = (turn(moved[0]), turn(moved[1]));
+    let shift = match anchor {
+        SegmentEnd::Start => reference[1] - b0,
+        SegmentEnd::End => reference[0] - b1,
+        SegmentEnd::Center => (reference[0] + reference[1] - b0 - b1) * 0.5,
+    };
+    Ok((degrees, shift))
+}
+
+/// Unit normal of contour segment `k` pointing out of the piece, in its material frame.
+pub fn outward_normal(polygon: &PolygonPattern, k: usize) -> DVec2 {
+    let n = polygon.points.len();
+    let d = polygon.points[(k + 1) % n] - polygon.points[k];
+    let side = if crate::garment::domain::area(&polygon.points) >= 0. {
+        1.
+    } else {
+        -1.
+    };
+    (DVec2::new(d.y, -d.x) * side).normalize_or_zero()
+}
+
+/// A drag held to a straight line: `delta` projected onto whichever line is closest in
+/// direction among the horizontal, the vertical, both diagonals and the extra `axes` (such as
+/// a segment's own direction and its normal).
+pub fn constrain_move(delta: DVec2, axes: &[DVec2]) -> DVec2 {
+    let compass = (0..4).map(|k| DVec2::from_angle(k as f64 * std::f64::consts::FRAC_PI_4));
+    compass
+        .chain(axes.iter().filter_map(|a| a.try_normalize()))
+        .map(|axis| axis * delta.dot(axis))
+        .max_by(|a, b| a.length_squared().total_cmp(&b.length_squared()))
+        .unwrap_or(delta)
+}

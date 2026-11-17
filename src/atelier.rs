@@ -68,6 +68,8 @@ mod radial;
 mod seam_links;
 #[path = "atelier/seams_ui.rs"]
 mod seams_ui;
+#[path = "atelier/segments_ui.rs"]
+mod segments_ui;
 #[path = "atelier/selection.rs"]
 mod selection;
 #[path = "atelier/settings.rs"]

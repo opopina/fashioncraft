@@ -14,6 +14,10 @@ pub(super) struct ArrangeUi {
     scale_percent: [f64; 2],
     uniform: bool,
     gap_mm: f64,
+    /// Height the bar took on the last frame without a board gesture. While a gesture runs
+    /// the bar keeps that height, so a selection made by the press cannot move the board
+    /// under the pointer.
+    height: f32,
 }
 
 impl Default for ArrangeUi {
@@ -23,6 +27,7 @@ impl Default for ArrangeUi {
             scale_percent: [100., 100.],
             uniform: true,
             gap_mm: 50.,
+            height: 0.,
         }
     }
 }
@@ -114,16 +119,30 @@ impl Atelier {
         if self.authoring.tool != Tool::Edit {
             return;
         }
-        let groups = self.selected_point_groups();
-        let count: usize = groups.iter().map(|(_, p)| p.len()).sum();
-        if count > 0 {
-            self.point_arrange_bar(ui, groups, count);
+        if self.authoring.board.dragging() {
+            // Mid-gesture the bar's height must not change, or the board shifts under the
+            // pointer and the dragged points jump. The bar for the new selection appears
+            // once the gesture ends.
+            let height = self.authoring.arrange.height;
+            ui.scope(|ui| ui.allocate_space(egui::vec2(ui.available_width(), height)));
             return;
         }
-        let panels = self.selected_panels();
-        if !panels.is_empty() {
-            self.panel_arrange_bar(ui, panels);
-        }
+        let rect = ui
+            .scope(|ui| {
+                let groups = self.selected_point_groups();
+                let count: usize = groups.iter().map(|(_, p)| p.len()).sum();
+                if count > 0 {
+                    self.point_arrange_bar(ui, groups, count);
+                    return;
+                }
+                let panels = self.selected_panels();
+                if !panels.is_empty() {
+                    self.panel_arrange_bar(ui, panels);
+                }
+            })
+            .response
+            .rect;
+        self.authoring.arrange.height = rect.height();
     }
 
     fn point_arrange_bar(

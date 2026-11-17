@@ -397,6 +397,10 @@ impl Board {
     pub(super) fn point_count(&self) -> usize {
         self.point_selections().values().map(Vec::len).sum()
     }
+    /// Whether a pointer gesture on the board is in progress.
+    pub(super) fn dragging(&self) -> bool {
+        self.drag.is_some()
+    }
     pub(super) fn select_point(&mut self, panel: String, index: usize, add: bool) {
         let mut groups = if add {
             self.point_selections()
@@ -1988,6 +1992,30 @@ impl Atelier {
             groups,
         })
     }
+    /// Drag a contour segment: both of its points move together, like a two-point selection.
+    /// Shift at the press adds the segment to the current point selection.
+    fn begin_segment_drag(
+        &mut self,
+        index: usize,
+        k: usize,
+        start: egui::Pos2,
+        rect: egui::Rect,
+        ctx: &egui::Context,
+    ) -> Option<Drag> {
+        let panel = &self.project.template.panels[index];
+        let count = panel.polygon.as_ref()?.points.len();
+        let id = panel.id.clone();
+        let next = (k + 1) % count;
+        if !ctx.input(|i| i.modifiers.shift) {
+            self.authoring.board.select_point(id.clone(), k, false);
+        } else if !self.authoring.board.point_selected(&id, k) {
+            self.authoring.board.select_point(id.clone(), k, true);
+        }
+        if !self.authoring.board.point_selected(&id, next) {
+            self.authoring.board.select_point(id, next, true);
+        }
+        self.begin_point_drag(index, k, start, rect, ctx)
+    }
     /// Begin a tool drag from a primary press that is not a view rotation.
     ///
     /// Point placement and point grabbing both use [`Board::resolve_snap`], so
@@ -2081,6 +2109,9 @@ impl Atelier {
                             panels: self.selected_panels(),
                         }),
                         Part::Anchor(k) => self.begin_point_drag(hit.index, k, start, rect, ctx),
+                        Part::Edge(k) if self.authoring.tool == Tool::Edit => {
+                            self.begin_segment_drag(hit.index, k, start, rect, ctx)
+                        }
                         Part::Handle(_, _) | Part::LineAnchor(_, _) | Part::LineHandle(_, _) => {
                             polygon.map(|polygon| Drag::Shape {
                                 panel: id,
@@ -2359,10 +2390,28 @@ impl Atelier {
                     );
                     let indices: Vec<usize> = origins.iter().map(|(k, _)| *k).collect();
                     let geometry = self.snap_geometry_for(Some((panel.as_str(), &indices)));
-                    let snapped = self
+                    let mut snapped = self
                         .authoring
                         .board
                         .resolve_snap(rect, cursor, &geometry, None, false, suspended);
+                    if angle_lock {
+                        // Shift: horizontal, vertical, diagonal, or along the segment (and its
+                        // normal) or the neighbouring segments of a single point.
+                        let n = polygon.points.len();
+                        let along = |a: usize, b: usize| {
+                            authoring::rotate_2d(polygon.points[b] - polygon.points[a], angle)
+                        };
+                        let axes: Vec<DVec2> = match origins.as_slice() {
+                            [(k, _)] => vec![along((*k + n - 1) % n, *k), along(*k, (*k + 1) % n)],
+                            [(a, _), (b, _)] if (*a + 1) % n == *b || (*b + 1) % n == *a => {
+                                let d = along(*a, *b);
+                                vec![d, d.perp()]
+                            }
+                            _ => vec![],
+                        };
+                        snapped.point = primary
+                            + authoring::arrange2d::constrain_move(snapped.point - primary, &axes);
+                    }
                     let shift = authoring::rotate_2d(snapped.point - primary, -angle);
                     let mut moved = polygon.clone();
                     let count = moved.points.len();
@@ -2649,15 +2698,19 @@ impl Atelier {
                     _ => None,
                 };
                 if let Some(name) = edge {
-                    let reference = BoundaryRef {
-                        reversed: false,
-                        panel: id,
-                        side: Side::Top,
-                        edge: Some(name),
-                        range: [0., 1.],
-                    };
-                    let t = self.boundary_parameter(&reference, rect, pos, false);
-                    self.pick_sewing_boundary(reference, t, pos);
+                    if matches!(hit.part, Part::Edge(_)) && self.authoring.segments.pick.is_some() {
+                        self.finish_segment_pick(id, name);
+                    } else {
+                        let reference = BoundaryRef {
+                            reversed: false,
+                            panel: id,
+                            side: Side::Top,
+                            edge: Some(name),
+                            range: [0., 1.],
+                        };
+                        let t = self.boundary_parameter(&reference, rect, pos, false);
+                        self.pick_sewing_boundary(reference, t, pos);
+                    }
                 } else {
                     self.cancel_preview();
                     self.authoring.edge = None;
@@ -2686,6 +2739,7 @@ impl Atelier {
         }
         if !response.ctx.egui_wants_keyboard_input() {
             if response.ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.authoring.segments.pick = None;
                 self.authoring.board.clear_preview();
                 self.authoring.draft.clear();
                 self.authoring.tangents.clear();

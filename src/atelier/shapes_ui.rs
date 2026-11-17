@@ -125,6 +125,14 @@ impl Atelier {
         let Some(poly) = panel.polygon.clone() else {
             return;
         };
+        let others: Vec<(String, String)> = self
+            .project
+            .template
+            .panels
+            .iter()
+            .filter(|p| p.id != panel.id && p.polygon.is_some())
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect();
         egui::CollapsingHeader::new("Internal shapes & holes")
             .id_salt("internal-shapes")
             .show(ui, |ui| {
@@ -211,6 +219,44 @@ impl Atelier {
                 };
                 if ui.button("Add internal shape").clicked() && self.edit(command) {
                     self.status = "Internal shape added · select it to cut it out as a hole".into();
+                }
+                if !others.is_empty() {
+                    ui.separator();
+                    let chosen = &mut self.authoring.segments.clone_source;
+                    if !chosen
+                        .as_ref()
+                        .is_some_and(|c| others.iter().any(|(id, _)| id == c))
+                    {
+                        *chosen = Some(others[0].0.clone());
+                    }
+                    let label = others
+                        .iter()
+                        .find(|(id, _)| Some(id) == chosen.as_ref())
+                        .map_or("", |(_, name)| name.as_str());
+                    ui.horizontal(|ui| {
+                        ui.label("Outline of");
+                        egui::ComboBox::from_id_salt("clone-outline-source")
+                            .selected_text(label)
+                            .show_ui(ui, |ui| {
+                                for (id, name) in &others {
+                                    ui.selectable_value(chosen, Some(id.clone()), name);
+                                }
+                            });
+                    });
+                    let source = chosen.clone();
+                    if ui
+                        .button("Add as internal shape")
+                        .on_hover_text("Copy that piece's outline into this one, centred on Centre")
+                        .clicked()
+                        && let Some(source) = source
+                        && self.edit(Command::ClonePanelAsShape {
+                            source,
+                            target: panel.id.clone(),
+                            center: DVec2::from_array(centre) / 1000.,
+                        })
+                    {
+                        self.status = "Outline copied as an internal shape".into();
+                    }
                 }
                 if !poly.holes.is_empty() {
                     ui.separator();

@@ -103,9 +103,16 @@ pub fn shape_to_hole(line: &InternalLine) -> Result<Hole, String> {
 /// that change the outline least), then gently turning corners get smooth Catmull–Rom handles
 /// while sharp ones (a rectangle's) stay sharp.
 pub fn hole_to_shape(id: String, hole: &Hole) -> Result<InternalLine, String> {
-    let points = thin_closed(&hole.points, 64);
+    shape_from_ring(id, &hole.points)
+        .map_err(|_| "The hole is too small to become an internal shape".to_string())
+}
+
+/// A closed internal shape through a dense closed polyline: thinned to at most 64 corners,
+/// smooth where the ring turns gently and sharp where it turns hard.
+fn shape_from_ring(id: String, ring: &[DVec2]) -> Result<InternalLine, String> {
+    let points = thin_closed(ring, 64);
     if points.len() < 3 {
-        return Err("The hole is too small to become an internal shape".into());
+        return Err("The outline is too small to become an internal shape".into());
     }
     let n = points.len();
     let tangents = (0..n)
@@ -125,6 +132,98 @@ pub fn hole_to_shape(id: String, hole: &Hole) -> Result<InternalLine, String> {
         tangents,
         closed: true,
     })
+}
+
+/// Reverse a closed outline in place: each edge then runs the other way, so its two Bézier
+/// handles swap.
+fn reverse_outline(points: &mut Vec<DVec2>, curves: &mut Vec<Option<[DVec2; 2]>>) {
+    let n = points.len();
+    let reversed_points: Vec<DVec2> = (0..n).map(|i| points[(n - i) % n]).collect();
+    let reversed_curves: Vec<Option<[DVec2; 2]>> = (0..n)
+        .map(|i| curves[(2 * n - 1 - i) % n].map(|[a, b]| [b, a]))
+        .collect();
+    *points = reversed_points;
+    *curves = reversed_curves;
+}
+
+/// The piece a closed internal shape encloses, as a drafted outline in the same material
+/// coordinates. Each span keeps its Bézier handles, so the outline is the shape exactly.
+pub fn shape_outline_polygon(
+    line: &InternalLine,
+    meshing: MeshingSettings,
+) -> Result<PolygonPattern, String> {
+    if !line.closed {
+        return Err("Only closed internal shapes can become pieces".into());
+    }
+    let samples = line.samples()?;
+    let n = line.points.len();
+    let mut points = line.points.clone();
+    let mut curves: Vec<Option<[DVec2; 2]>> = (0..n)
+        .map(|i| {
+            let j = (i + 1) % n;
+            let (out, into) = (line.tangents[i], line.tangents[j]);
+            (out != DVec2::ZERO || into != DVec2::ZERO).then(|| [points[i] + out, points[j] - into])
+        })
+        .collect();
+    if domain::area(&samples) < 0. {
+        reverse_outline(&mut points, &mut curves);
+    }
+    let edges: Vec<String> = (0..n).map(|i| format!("edge_{}", i + 1)).collect();
+    let curves = curves
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, c)| c.map(|c| (edges[i].clone(), c)))
+        .collect();
+    Ok(PolygonPattern {
+        points,
+        edges,
+        subdivisions: 0,
+        meshing: Some(meshing),
+        curves,
+        holes: vec![],
+        lines: vec![],
+        target_lengths: Default::default(),
+        seam_allowances: Default::default(),
+        notches: Default::default(),
+    })
+}
+
+/// A closed internal shape that follows a piece outline. It is exact when the outline has at
+/// most 64 corners and each corner's two Bézier handles mirror each other (or are both
+/// absent); otherwise the flattened outline is thinned and smoothed like a filled hole.
+pub fn outline_to_shape(id: String, outline: &PolygonPattern) -> Result<InternalLine, String> {
+    let n = outline.points.len();
+    let handles = |k: usize| {
+        let previous = &outline.edges[(k + n - 1) % n];
+        let incoming = outline
+            .curves
+            .get(previous)
+            .map_or(DVec2::ZERO, |c| outline.points[k] - c[1]);
+        let outgoing = outline
+            .curves
+            .get(&outline.edges[k])
+            .map_or(DVec2::ZERO, |c| c[0] - outline.points[k]);
+        (incoming, outgoing)
+    };
+    if n <= 64
+        && (0..n).all(|k| {
+            let (incoming, outgoing) = handles(k);
+            (incoming - outgoing).length() <= 1e-9
+        })
+    {
+        return Ok(InternalLine {
+            id,
+            points: outline.points.clone(),
+            tangents: (0..n).map(|k| handles(k).1).collect(),
+            closed: true,
+        });
+    }
+    let mut ring = Vec::new();
+    for k in 0..n {
+        let samples = outline.edge_points(k)?;
+        ring.extend_from_slice(&samples[..samples.len() - 1]);
+    }
+    shape_from_ring(id, &ring)
 }
 
 /// Corners turning less than this are treated as samples of a curve.
@@ -298,14 +397,7 @@ impl Spiral {
         let mut points: Vec<DVec2> = outline.iter().map(|(p, _)| *p).collect();
         let mut curves: Vec<Option<[DVec2; 2]>> = outline.iter().map(|(_, c)| *c).collect();
         if domain::area(&points) < 0. {
-            // Reverse the loop: each edge now runs the other way, so its handles swap.
-            let n = points.len();
-            let reversed_points: Vec<DVec2> = (0..n).map(|i| points[(n - i) % n]).collect();
-            let reversed_curves: Vec<Option<[DVec2; 2]>> = (0..n)
-                .map(|i| curves[(2 * n - 1 - i) % n].map(|[a, b]| [b, a]))
-                .collect();
-            points = reversed_points;
-            curves = reversed_curves;
+            reverse_outline(&mut points, &mut curves);
         }
         let lo = points
             .iter()

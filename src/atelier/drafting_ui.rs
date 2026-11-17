@@ -306,6 +306,24 @@ impl Atelier {
             self.status = "Hole cut · fill it back in from the piece inspector".into();
             return;
         }
+        if line.closed
+            && ui
+                .button("Clone as piece")
+                .on_hover_text("A new piece of the same fabric with this outline, next to this one")
+                .clicked()
+            && let Some(origin) = self.clone_origin(&edge.panel, &name)
+        {
+            if self.edit(Command::CloneShapeAsPanel {
+                panel: edge.panel.clone(),
+                line: name.clone(),
+                origin,
+            }) {
+                // Show the new piece rather than the shape it was copied from.
+                self.authoring.edge = None;
+                self.status = "Shape cloned as a piece of the same fabric".into();
+            }
+            return;
+        }
         if ui.small_button("Smooth tangents").clicked() {
             let mut poly = self
                 .project

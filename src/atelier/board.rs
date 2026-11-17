@@ -1465,6 +1465,13 @@ impl Atelier {
         }
         egui::Popup::menu(&header.settings).show(|ui| {
             ui.set_max_width(300.);
+            // Taller than small windows: scroll instead of cutting the menu off.
+            let room = (ui.ctx().content_rect().height() - 120.).max(200.);
+            egui::ScrollArea::vertical()
+                .id_salt("pattern-display-menu")
+                .max_height(room)
+                .min_scrolled_height(room)
+                .show(ui, |ui| {
             ui.strong("PATTERN DISPLAY");
             let snap_label = format!("Snap to {} mm", self.authoring.board.snap_grid_mm());
             ui.checkbox(&mut self.authoring.board.snap, snap_label);
@@ -1486,6 +1493,7 @@ impl Atelier {
             self.media_controls(ui);
             ui.separator();
             super::view_controls::board_bar(ui, &mut self.authoring.board);
+                });
         });
         ui.horizontal(|ui| {
             self.primitive_menu(ui);

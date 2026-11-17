@@ -41,6 +41,70 @@ pub struct DisplayOptions<'a> {
     pub strain_max: f64,
     /// Blend smoothly between the eight colours instead of showing discrete bands.
     pub strain_gradient: bool,
+    /// What the strain map measures.
+    pub strain_mode: StrainMode,
+    /// Technical-flat rendering: plain garment colour and depth-tested outline and silhouette
+    /// lines.
+    pub schematic: Option<Schematic>,
+    /// Contact map reach beyond the fabric's half thickness, in metres: cloth resting on a
+    /// contact shell (a few millimetres off the skin) still counts as touching.
+    pub contact_tolerance_m: f64,
+}
+
+/// What the strain map measures.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StrainMode {
+    /// Deformation |stretch − 1| against one range for every fabric.
+    Global,
+    /// Estimated fibre tension (the fabric's tension modulus × elongation, in its most loaded
+    /// direction) as a fraction of `reference_n_per_m`: 1 means that fabric reached the limit.
+    /// A stiff fabric reaches it with little stretch, a supple one needs much more.
+    Fabric { reference_n_per_m: f64 },
+}
+
+/// Technical-flat ("schematic") rendering options.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Schematic {
+    /// Plain garment colour, linear RGB.
+    pub garment_color: [f32; 3],
+    /// Line colour, linear RGB.
+    pub line_color: [f32; 3],
+    /// Line width on screen, in pixels.
+    pub line_px: f32,
+    /// Lines where the surface turns away from the viewer (outline against the background and
+    /// folds).
+    pub silhouette: bool,
+    /// Free cloth edges: hems, necklines and both sides of every seam.
+    pub outlines: bool,
+}
+
+/// Fit-map value of one triangle and the value at which the map saturates. `stretch` is the
+/// warp and weft stretch from [`energy::stretches`].
+pub fn fit_value(
+    stretch: [f64; 2],
+    material: &Material,
+    mode: StrainMode,
+    global_max: f64,
+) -> (f64, f64) {
+    match mode {
+        StrainMode::Global => (
+            stretch.iter().map(|s| (s - 1.).abs()).fold(0., f64::max),
+            global_max,
+        ),
+        StrainMode::Fabric { reference_n_per_m } => {
+            let [warp, weft] = fibre_tension(stretch, material);
+            (warp.max(weft) / reference_n_per_m.max(1e-9), 1.)
+        }
+    }
+}
+
+/// Estimated tension in N/m along warp and weft: the fabric's tension modulus times the
+/// elongation (zero when the direction is not stretched).
+pub fn fibre_tension(stretch: [f64; 2], material: &Material) -> [f64; 2] {
+    [
+        material.warp * (stretch[0] - 1.).max(0.),
+        material.weft * (stretch[1] - 1.).max(0.),
+    ]
 }
 
 /// Default avatar grey, linear RGB.
@@ -56,6 +120,9 @@ impl Default for DisplayOptions<'_> {
             avatar_color: AVATAR_COLOR,
             strain_max: STRAIN_MAX,
             strain_gradient: true,
+            strain_mode: StrainMode::Global,
+            schematic: None,
+            contact_tolerance_m: 0.,
         }
     }
 }
@@ -75,6 +142,56 @@ pub fn strain_color(strain: f64, max: f64, gradient: bool) -> [f32; 3] {
     let f = (t - i as f64) as f32;
     let [a, b] = [STRAIN_BANDS[i], STRAIN_BANDS[i + 1]];
     [0, 1, 2].map(|k| a[k] + (b[k] - a[k]) * f)
+}
+
+/// Line segments of the technical-flat view, in world space: free cloth edges (an edge used by
+/// one visible triangle) and silhouette edges (shared by a triangle facing the viewer and one
+/// facing away).
+pub fn schematic_lines(
+    mesh: &Mesh,
+    state: &State,
+    visible: Option<&[bool]>,
+    camera: &Camera,
+    schematic: Schematic,
+) -> Vec<[Vec3; 2]> {
+    let eye = camera.eye();
+    let facing = |t: &crate::model::Triangle| {
+        let p = t.vertices.map(|i| state.x[i].as_vec3());
+        let n = (p[1] - p[0]).cross(p[2] - p[0]);
+        let toward = if camera.orthographic {
+            camera.direction()
+        } else {
+            eye - (p[0] + p[1] + p[2]) / 3.
+        };
+        n.dot(toward) >= 0.
+    };
+    let mut edges: std::collections::HashMap<(usize, usize), (usize, bool, bool)> =
+        std::collections::HashMap::new();
+    for (face, t) in mesh.triangles.iter().enumerate() {
+        if visible.is_some_and(|shown| !shown.get(face).copied().unwrap_or(true)) {
+            continue;
+        }
+        let front = facing(t);
+        for k in 0..3 {
+            let (a, b) = (t.vertices[k], t.vertices[(k + 1) % 3]);
+            let key = (a.min(b), a.max(b));
+            let entry = edges.entry(key).or_insert((0, false, false));
+            entry.0 += 1;
+            if front {
+                entry.1 = true;
+            } else {
+                entry.2 = true;
+            }
+        }
+    }
+    edges
+        .into_iter()
+        .filter(|(_, (count, front, back))| {
+            (schematic.outlines && *count == 1)
+                || (schematic.silhouette && *count >= 2 && *front && *back)
+        })
+        .map(|((a, b), _)| [state.x[a].as_vec3(), state.x[b].as_vec3()])
+        .collect()
 }
 
 /// The strain map's eight colours, from no strain (blue) to the maximum and beyond (red), in
@@ -859,19 +976,24 @@ impl Viewport {
                 continue;
             }
             let material = &materials[t.material];
-            let strain = if heat {
-                energy::stretches(&state.x, t, material)
-                    .into_iter()
-                    .map(|s| (s - 1.0).abs())
-                    .fold(0.0, f64::max)
+            let (strain, strain_max) = if heat {
+                fit_value(
+                    energy::stretches(&state.x, t, material),
+                    material,
+                    display.strain_mode,
+                    display.strain_max,
+                )
             } else {
-                0.
+                (0., 1.)
             };
             let contact = contacts
                 && collider.is_some_and(|s| {
-                    t.vertices
-                        .iter()
-                        .any(|i| s.penetration(state.x[*i], material.thickness) > 0.0)
+                    t.vertices.iter().any(|i| {
+                        s.penetration(
+                            state.x[*i],
+                            material.thickness + 2. * display.contact_tolerance_m.max(0.),
+                        ) > 0.0
+                    })
                 });
             let appearance = optics
                 .and_then(|values| values.get(t.material))
@@ -880,10 +1002,11 @@ impl Viewport {
                 appearance,
                 marked_faces.is_some_and(|faces| faces.contains(&face)),
                 contact,
-                heat.then(|| strain_color(strain, display.strain_max, display.strain_gradient)),
-                display
+                heat.then(|| strain_color(strain, strain_max, display.strain_gradient)),
+                // The technical view is one flat colour; otherwise piece colours and tints apply.
+                display.schematic.map(|s| s.garment_color).or(display
                     .face_colors
-                    .and_then(|colors| colors.get(face).copied().flatten()),
+                    .and_then(|colors| colors.get(face).copied().flatten())),
             );
             triangle(
                 t.vertices.map(|i| state.x[i].as_vec3()),
@@ -892,6 +1015,48 @@ impl Viewport {
                 Some(t.vertices.map(|i| smooth[i])),
                 roughness,
             );
+        }
+        if let Some(schematic) = display.schematic {
+            let eye = camera.eye();
+            let world_per_px = |p: Vec3| {
+                let depth = if camera.orthographic {
+                    camera.distance
+                } else {
+                    p.distance(eye)
+                };
+                2. * depth * (camera.fov_radians() * 0.5).tan() / size[1].max(1) as f32
+            };
+            for [a, b] in schematic_lines(mesh, state, display.visible_faces, camera, schematic) {
+                let mid = (a + b) * 0.5;
+                let toward = if camera.orthographic {
+                    camera.direction()
+                } else {
+                    (eye - mid).normalize_or_zero()
+                };
+                // Lift the ribbon a little towards the viewer so it wins the depth test against
+                // the cloth it lies on, and give it a constant on-screen width.
+                let lift = toward * world_per_px(mid) * 2.;
+                let side = (b - a).cross(toward).normalize_or_zero()
+                    * world_per_px(mid)
+                    * schematic.line_px
+                    * 0.5;
+                let (a, b) = (a + lift, b + lift);
+                let n = Some([toward; 3]);
+                triangle(
+                    [a - side, a + side, b + side],
+                    schematic.line_color,
+                    false,
+                    n,
+                    -1.,
+                );
+                triangle(
+                    [a - side, b + side, b - side],
+                    schematic.line_color,
+                    false,
+                    n,
+                    -1.,
+                );
+            }
         }
         for seam in seams {
             for side in [1.0, -1.0] {
@@ -1624,6 +1789,69 @@ mod tests {
         assert_eq!(strain_band(0.05, 0.2), 2, "a wider range lowers the band");
         assert_eq!(strain_band(f64::NAN, 0.1), 0);
         assert_eq!(strain_band(0.05, 0.0), 0);
+    }
+    #[test]
+    fn schematic_lines_trace_free_edges_and_folds() {
+        use crate::model::{Mesh, State, Triangle};
+        use glam::{DMat2, DVec2, DVec3};
+        let triangle = |vertices: [usize; 3]| Triangle {
+            vertices,
+            rest: [DVec2::ZERO; 3],
+            inv_dm: DMat2::IDENTITY,
+            area: 1.,
+            material: 0,
+        };
+        let mesh = |x: Vec<DVec3>| {
+            (
+                Mesh {
+                    uv: vec![DVec2::ZERO; x.len()],
+                    triangles: vec![triangle([0, 1, 2]), triangle([0, 2, 3])],
+                    hinges: vec![],
+                    rest_area: vec![],
+                    masses: vec![],
+                    pins: vec![],
+                },
+                State {
+                    v: vec![DVec3::ZERO; x.len()],
+                    x,
+                    time: 0.,
+                },
+            )
+        };
+        let options = Schematic {
+            garment_color: [1.; 3],
+            line_color: [0.; 3],
+            line_px: 1.5,
+            silhouette: true,
+            outlines: true,
+        };
+        // A flat square facing the default camera: four free edges, no fold.
+        let camera = Camera::new(0., 0., 3., Vec3::ZERO);
+        let flat = vec![
+            DVec3::new(-0.5, -0.5, 0.),
+            DVec3::new(0.5, -0.5, 0.),
+            DVec3::new(0.5, 0.5, 0.),
+            DVec3::new(-0.5, 0.5, 0.),
+        ];
+        let (m, s) = mesh(flat.clone());
+        assert_eq!(schematic_lines(&m, &s, None, &camera, options).len(), 4);
+        // Folded over the diagonal (behind the first half) so the second half faces away: the
+        // diagonal becomes a silhouette line.
+        let mut folded = flat;
+        folded[3] = DVec3::new(0.5, -0.5, -0.2);
+        let (m, s) = mesh(folded);
+        let lines = schematic_lines(&m, &s, None, &camera, options);
+        assert_eq!(lines.len(), 5, "four edges plus the fold");
+        let only_folds = Schematic {
+            outlines: false,
+            ..options
+        };
+        assert_eq!(schematic_lines(&m, &s, None, &camera, only_folds).len(), 1);
+        // Hidden triangles contribute nothing; the remaining one shows three free edges.
+        assert_eq!(
+            schematic_lines(&m, &s, Some(&[true, false]), &camera, options).len(),
+            3
+        );
     }
     #[test]
     fn strain_gradient_runs_through_the_eight_colours() {

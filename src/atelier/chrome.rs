@@ -149,14 +149,22 @@ impl Atelier {
             }
         }
         egui::Popup::menu(&header.settings).show(|ui| {
-            appearance_controls(ui, &mut self.prefs.viewport, self.viewport.supports_msaa4());
-            ui.separator();
-            ui.strong("Overlays");
-            ui.checkbox(&mut self.clean_view, "Clean view · hide all annotations")
-                .on_hover_text("Show only the shaded garment and avatar. Keeps your overlay settings for later.");
-            ui.checkbox(&mut self.wire, "Wireframe");
-            ui.checkbox(&mut self.seam_links, "Seam links");
-            self.garment_display_controls(ui);
+            // The menu grew taller than small windows: scroll instead of cutting it off.
+            let room = (ui.ctx().content_rect().height() - 120.).max(200.);
+            egui::ScrollArea::vertical()
+                .id_salt("viewport-display-menu")
+                .max_height(room)
+                .min_scrolled_height(room)
+                .show(ui, |ui| {
+                    appearance_controls(ui, &mut self.prefs.viewport, self.viewport.supports_msaa4());
+                    ui.separator();
+                    ui.strong("Overlays");
+                    ui.checkbox(&mut self.clean_view, "Clean view · hide all annotations")
+                        .on_hover_text("Show only the shaded garment and avatar. Keeps your overlay settings for later.");
+                    ui.checkbox(&mut self.wire, "Wireframe");
+                    ui.checkbox(&mut self.seam_links, "Seam links");
+                    self.garment_display_controls(ui);
+                });
         });
         egui::Popup::menu(&header.camera.unwrap()).show(|ui| {
             ui.set_max_width(330.);
@@ -422,7 +430,10 @@ impl Atelier {
                 optics: Some(&optics),
                 sphere: None,
                 avatar: display.avatar.then_some(&self.scene.collider.surface),
-                collider: None,
+                // The contact map asks the collider which cloth touches the avatar.
+                collider: (display.contacts && !self.clean_view).then_some(
+                    self.scene.collider.as_ref() as &dyn marvelous_cloth::contact::Collider,
+                ),
                 seams: if self.seams && !self.clean_view && seams_shown {
                     &self.scene.garment.seams
                 } else {
@@ -434,11 +445,16 @@ impl Atelier {
                     avatar_color: super::garment_display::srgb_to_linear(display.avatar_color),
                     strain_max: display.strain_max_percent / 100.,
                     strain_gradient: display.strain_gradient,
+                    strain_mode: self.strain_mode(),
+                    schematic: self.schematic_options(),
+                    // The solver keeps cloth one contact radius off the avatar; 2 mm more covers
+                    // cloth resting just above that shell.
+                    contact_tolerance_m: self.settings.contact.radius + 0.002,
                 },
             },
             self.wire && !self.clean_view,
             self.heat && !self.clean_view,
-            false,
+            display.contacts && !self.clean_view,
         );
         ui.painter().image(
             texture,
@@ -447,13 +463,20 @@ impl Atelier {
             Color32::WHITE,
         );
         if self.heat && !self.clean_view {
-            self.paint_strain_legend(&ui.painter().with_clip_rect(rect), rect);
+            let painter = ui.painter().with_clip_rect(rect);
+            self.paint_strain_legend(&painter, rect);
+            if let Some(pointer) = response.hover_pos() {
+                self.paint_strain_readout(&painter, rect, pointer);
+            }
         }
         if !self.clean_view {
             self.issue_brush(ui, &response, rect);
-            self.paint_edges_3d(ui, rect);
-            self.paint_seam_links(&ui.painter().with_clip_rect(rect), rect, true);
-            self.paint_sewing_ranges(ui, rect, true);
+            // The technical view is a clean sketch: no coloured edge and seam annotations.
+            if !display.schematic {
+                self.paint_edges_3d(ui, rect);
+                self.paint_seam_links(&ui.painter().with_clip_rect(rect), rect, true);
+                self.paint_sewing_ranges(ui, rect, true);
+            }
             self.paint_gizmo(ui, rect);
             self.paint_selected_points_3d(ui, rect);
             if self.authoring.tool == Tool::Grab

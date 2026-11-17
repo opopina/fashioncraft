@@ -31,7 +31,24 @@ pub(super) struct GarmentDisplay {
     pub(super) strain_max_percent: f64,
     /// Blend the strain map's eight colours instead of showing discrete bands.
     pub(super) strain_gradient: bool,
+    /// Strain map against each fabric's limit instead of one global range.
+    pub(super) strain_fabric: bool,
+    /// Reference tension of the fabric mode, in N/m: the tension at which a fabric counts as
+    /// stretched to its wearable limit.
+    pub(super) reference_tension: f64,
+    /// Show where the garment touches the avatar.
+    pub(super) contacts: bool,
+    /// Technical-flat rendering (Alt+0).
+    pub(super) schematic: bool,
+    pub(super) schematic_line_px: f32,
+    pub(super) schematic_line_color: [u8; 3],
+    pub(super) schematic_garment_color: [u8; 3],
+    pub(super) schematic_silhouette: bool,
+    pub(super) schematic_outlines: bool,
 }
+
+/// Reference-tension limits of the fabric strain mode, in N/m.
+pub(super) const REFERENCE_TENSION: std::ops::RangeInclusive<f64> = 1.0..=500.0;
 
 impl Default for GarmentDisplay {
     fn default() -> Self {
@@ -43,6 +60,15 @@ impl Default for GarmentDisplay {
             state_colors: true,
             strain_max_percent: render::STRAIN_MAX * 100.,
             strain_gradient: true,
+            strain_fabric: false,
+            reference_tension: 20.,
+            contacts: false,
+            schematic: false,
+            schematic_line_px: 1.5,
+            schematic_line_color: [0x1E, 0x1E, 0x22],
+            schematic_garment_color: [0xF4, 0xF4, 0xF2],
+            schematic_silhouette: true,
+            schematic_outlines: true,
         }
     }
 }
@@ -55,6 +81,16 @@ impl GarmentDisplay {
         self.strain_max_percent = self
             .strain_max_percent
             .clamp(*STRAIN_MAX_PERCENT.start(), *STRAIN_MAX_PERCENT.end());
+        if !self.reference_tension.is_finite() {
+            self.reference_tension = 20.;
+        }
+        self.reference_tension = self
+            .reference_tension
+            .clamp(*REFERENCE_TENSION.start(), *REFERENCE_TENSION.end());
+        if !self.schematic_line_px.is_finite() {
+            self.schematic_line_px = 1.5;
+        }
+        self.schematic_line_px = self.schematic_line_px.clamp(0.5, 8.);
     }
 }
 
@@ -249,18 +285,43 @@ impl Atelier {
         self.authoring.view3d.isolated = Some(selected);
     }
 
-    /// Shift+A, Shift+C, Shift+I and Alt+7, unless a text field has the keyboard.
+    /// The renderer options these display choices amount to.
+    pub(super) fn strain_mode(&self) -> render::StrainMode {
+        let display = &self.prefs.garment_display;
+        if display.strain_fabric {
+            render::StrainMode::Fabric {
+                reference_n_per_m: display.reference_tension,
+            }
+        } else {
+            render::StrainMode::Global
+        }
+    }
+
+    pub(super) fn schematic_options(&self) -> Option<render::Schematic> {
+        let display = &self.prefs.garment_display;
+        display.schematic.then(|| render::Schematic {
+            garment_color: srgb_to_linear(display.schematic_garment_color),
+            line_color: srgb_to_linear(display.schematic_line_color),
+            line_px: display.schematic_line_px,
+            silhouette: display.schematic_silhouette,
+            outlines: display.schematic_outlines,
+        })
+    }
+
+    /// Shift+A, Shift+C, Shift+I, Alt+7 and Alt+0, unless a text field has the keyboard.
     pub(super) fn garment_display_shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.egui_wants_keyboard_input() {
             return;
         }
-        let (avatar, garment, isolate, strain) = ctx.input(|i| {
+        let (avatar, garment, isolate, strain, schematic) = ctx.input(|i| {
             let shift = i.modifiers.shift && !i.modifiers.command && !i.modifiers.alt;
+            let alt = i.modifiers.alt && !i.modifiers.command;
             (
                 shift && i.key_pressed(egui::Key::A),
                 shift && i.key_pressed(egui::Key::C),
                 shift && i.key_pressed(egui::Key::I),
-                i.modifiers.alt && !i.modifiers.command && i.key_pressed(egui::Key::Num7),
+                alt && i.key_pressed(egui::Key::Num7),
+                alt && i.key_pressed(egui::Key::Num0),
             )
         });
         let display = &mut self.prefs.garment_display;
@@ -272,6 +333,9 @@ impl Atelier {
         }
         if strain {
             self.heat = !self.heat;
+        }
+        if schematic {
+            display.schematic = !display.schematic;
         }
         if isolate {
             self.toggle_isolation();
@@ -308,7 +372,59 @@ impl Atelier {
             ui.add_space(22.);
             ui.selectable_value(&mut display.strain_gradient, true, "Gradient");
             ui.selectable_value(&mut display.strain_gradient, false, "Bands");
+            ui.separator();
+            ui.selectable_value(&mut display.strain_fabric, false, "Global")
+                .on_hover_text("|stretch − 1| against the same range for every fabric");
+            ui.selectable_value(&mut display.strain_fabric, true, "Fabric")
+                .on_hover_text(
+                    "Estimated tension against each fabric's limit: stiff fabrics reach it sooner",
+                );
         });
+        if display.strain_fabric {
+            ui.horizontal(|ui| {
+                ui.add_space(22.);
+                ui.label("Limit tension");
+                ui.add(
+                    egui::DragValue::new(&mut display.reference_tension)
+                        .range(REFERENCE_TENSION)
+                        .speed(0.5)
+                        .fixed_decimals(1)
+                        .suffix(" N/m"),
+                )
+                .on_hover_text(
+                    "Tension at which a fabric counts as stretched to its wearable limit (100 %)",
+                );
+            });
+        }
+        ui.checkbox(&mut display.contacts, "Contact points")
+            .on_hover_text("Cloth touching the avatar, in red");
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut display.schematic, "Technical view · Alt+0")
+                .on_hover_text(
+                    "A flat sketch: plain garment colour with outline and silhouette lines",
+                );
+            if display.schematic {
+                ui.color_edit_button_srgb(&mut display.schematic_garment_color)
+                    .on_hover_text("Garment colour");
+                ui.color_edit_button_srgb(&mut display.schematic_line_color)
+                    .on_hover_text("Line colour");
+            }
+        });
+        if display.schematic {
+            ui.horizontal(|ui| {
+                ui.add_space(22.);
+                ui.add(
+                    egui::DragValue::new(&mut display.schematic_line_px)
+                        .range(0.5..=8.0)
+                        .speed(0.05)
+                        .fixed_decimals(1)
+                        .suffix(" px"),
+                )
+                .on_hover_text("Line width on screen");
+                ui.checkbox(&mut display.schematic_outlines, "Edges");
+                ui.checkbox(&mut display.schematic_silhouette, "Silhouette");
+            });
+        }
         let isolating = self.authoring.view3d.isolated.is_some();
         if ui
             .selectable_label(isolating, "Isolate selection · Shift+I")
@@ -323,7 +439,15 @@ impl Atelier {
     /// or eight bands) with its 0 %, middle and maximum marks.
     pub(super) fn paint_strain_legend(&self, painter: &egui::Painter, rect: egui::Rect) {
         let display = &self.prefs.garment_display;
-        let max = display.strain_max_percent;
+        let (max, title, suffix) = if display.strain_fabric {
+            (
+                100.,
+                "Fabric limit · tension ÷ limit tension",
+                " % of limit",
+            )
+        } else {
+            (display.strain_max_percent, "Strain |stretch − 1|", " %")
+        };
         let bar = egui::vec2(176., 12.);
         let origin = rect.left_bottom() + egui::vec2(12., -12. - bar.y);
         let font = egui::FontId::proportional(10.);
@@ -335,7 +459,7 @@ impl Atelier {
         painter.text(
             origin + egui::vec2(0., -16.),
             egui::Align2::LEFT_BOTTOM,
-            "Strain |stretch − 1|",
+            title,
             egui::FontId::proportional(11.),
             text,
         );
@@ -376,10 +500,84 @@ impl Atelier {
         painter.text(
             origin + egui::vec2(bar.x + 4., bar.y * 0.5),
             egui::Align2::LEFT_CENTER,
-            format!("≥ {max:.0} %"),
+            format!("≥ {max:.0}{suffix}"),
             font,
             text,
         );
+    }
+
+    /// Strain readout for the cloth under the pointer while the strain map is shown: the most
+    /// stretched direction, its stretch and, in fabric mode, the share of the limit.
+    pub(super) fn paint_strain_readout(
+        &self,
+        painter: &egui::Painter,
+        rect: egui::Rect,
+        pointer: egui::Pos2,
+    ) {
+        let (origin, dir) = self.camera.ray(pointer, rect);
+        let garment = &self.scene.garment;
+        let mut best: Option<(f64, usize)> = None;
+        for (face, t) in garment.mesh.triangles.iter().enumerate() {
+            if !self.cloth_face_shown(face) {
+                continue;
+            }
+            if let Some((d, _)) = marvelous_cloth::picking::ray_triangle(
+                origin,
+                dir,
+                t.vertices.map(|i| self.scene.state.x[i]),
+            ) && best.is_none_or(|(b, _)| d < b)
+            {
+                best = Some((d, face));
+            }
+        }
+        let Some((distance, face)) = best else {
+            return;
+        };
+        if self.avatar_shown()
+            && self
+                .scene
+                .collider
+                .occludes_ray(origin, dir, distance - 1e-5)
+        {
+            return;
+        }
+        let t = &garment.mesh.triangles[face];
+        let material = &garment.materials[t.material];
+        let text = strain_readout(
+            marvelous_cloth::energy::stretches(&self.scene.state.x, t, material),
+            material,
+            self.strain_mode(),
+        );
+        let galley = painter.layout_no_wrap(text, egui::FontId::proportional(11.), Color32::WHITE);
+        let at = pointer + egui::vec2(14., 14.);
+        let frame = egui::Rect::from_min_size(at, galley.size()).expand(4.);
+        painter.rect_filled(frame, 3., Color32::from_black_alpha(190));
+        painter.galley(at, galley, Color32::WHITE);
+    }
+}
+
+/// "Weft · stretch 4.2 % · 61 % of limit": the most stretched direction and its values.
+pub(super) fn strain_readout(
+    stretch: [f64; 2],
+    material: &marvelous_cloth::model::Material,
+    mode: render::StrainMode,
+) -> String {
+    let tension = render::fibre_tension(stretch, material);
+    let (name, index) = match mode {
+        render::StrainMode::Fabric { .. } if tension[1] > tension[0] => ("Weft", 1),
+        render::StrainMode::Fabric { .. } => ("Warp", 0),
+        render::StrainMode::Global if (stretch[1] - 1.).abs() > (stretch[0] - 1.).abs() => {
+            ("Weft", 1)
+        }
+        render::StrainMode::Global => ("Warp", 0),
+    };
+    let elongation = (stretch[index] - 1.) * 100.;
+    match mode {
+        render::StrainMode::Fabric { reference_n_per_m } => format!(
+            "{name} · stretch {elongation:+.1} % · {:.0} % of limit",
+            tension[index] / reference_n_per_m.max(1e-9) * 100.
+        ),
+        render::StrainMode::Global => format!("{name} · stretch {elongation:+.1} %"),
     }
 }
 
@@ -439,6 +637,34 @@ mod tests {
             tint_only[5], None,
             "unfrozen pieces keep their fabric colour"
         );
+    }
+
+    #[test]
+    fn readout_names_the_most_stretched_direction() {
+        let material = marvelous_cloth::model::Material {
+            warp: 400.,
+            weft: 100.,
+            ..Default::default()
+        };
+        // Weft stretches more, but warp is four times stiffer: by tension the warp leads.
+        let fabric = render::StrainMode::Fabric {
+            reference_n_per_m: 20.,
+        };
+        assert_eq!(
+            strain_readout([1.04, 1.1], &material, fabric),
+            "Warp · stretch +4.0 % · 80 % of limit"
+        );
+        assert_eq!(
+            strain_readout([1.04, 1.1], &material, render::StrainMode::Global),
+            "Weft · stretch +10.0 %"
+        );
+        let (value, max) = render::fit_value([1.04, 1.1], &material, fabric, 0.2);
+        assert!((value - 0.8).abs() < 1e-9 && max == 1.);
+        let (value, max) =
+            render::fit_value([0.97, 1.0], &material, render::StrainMode::Global, 0.2);
+        assert!((value - 0.03).abs() < 1e-9 && max == 0.2);
+        // Compression is not tension.
+        assert_eq!(render::fibre_tension([0.9, 0.95], &material), [0., 0.]);
     }
 
     #[test]

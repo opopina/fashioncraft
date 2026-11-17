@@ -12,6 +12,7 @@ use crate::{
     model::{Pattern, State},
 };
 use glam::{DQuat, DVec2, DVec3, EulerRot};
+pub mod arrange2d;
 pub mod clipboard;
 pub mod constructions;
 mod geometry;
@@ -256,6 +257,38 @@ pub enum Command {
     FabricAppearance {
         fabric: String,
         appearance: Option<crate::garment::appearance::FabricAppearance>,
+    },
+    /// Rotate and scale contour points of several panels about a board pivot. Bézier handles
+    /// attached to the moved points follow the same transform. One undo step.
+    TransformPointGroups {
+        groups: Vec<(String, Vec<usize>)>,
+        pivot: DVec2,
+        rotation_degrees: f64,
+        scale: DVec2,
+    },
+    /// Line contour points of several panels up along one board axis. `reference` is the
+    /// point the `ToPoint*` modes align to.
+    AlignPointGroups {
+        groups: Vec<(String, Vec<usize>)>,
+        mode: arrange2d::AlignMode,
+        reference: Option<(String, usize)>,
+    },
+    /// Scale a whole drafted panel (contour, holes, internal lines and pins) about its centre.
+    ScalePanel {
+        panel: String,
+        scale: DVec2,
+    },
+    /// Line panels up on the board with a reference panel's edges or centre.
+    AlignPanels {
+        panels: Vec<String>,
+        reference: String,
+        mode: arrange2d::AlignMode,
+    },
+    /// Space panels on the board along one axis with a fixed gap between their bounds.
+    DistributePanels {
+        panels: Vec<String>,
+        axis: arrange2d::Axis,
+        gap_m: f64,
     },
     /// Replace the 2D board locks: which panels cannot be picked there and whether internal
     /// lines are locked. A selection aid with no physical effect; one undo step.
@@ -967,6 +1000,25 @@ fn follow_pins(panel: &mut Panel, moved: &[(usize, DVec2)]) {
 /// Assign new local coordinates to contour anchors. The selection is deduplicated
 /// and validated; absolute coordinates are assigned directly, so no rounding is
 /// introduced for a typed position.
+/// Write every panel's derived board origin into `layout_2d`, so changing one panel's extent
+/// never shifts the implicit layout of the panels after it.
+fn freeze_layouts(template: &mut GarmentTemplate) {
+    let origins: Vec<_> = (0..template.panels.len())
+        .map(|i| layout(template, i))
+        .collect();
+    for (p, origin) in template.panels.iter_mut().zip(origins) {
+        p.layout_2d = Some(origin);
+    }
+}
+
+fn panel_index(template: &GarmentTemplate, id: &str) -> Result<usize, String> {
+    template
+        .panels
+        .iter()
+        .position(|p| p.id == id)
+        .ok_or_else(|| "Panel not found".to_string())
+}
+
 fn remap_anchors(
     panel: &mut Panel,
     indices: &[usize],
@@ -1222,7 +1274,8 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         | Command::LinkedMirror { panel, .. }
         | Command::Mirror { panel, .. }
         | Command::Place { panel, .. }
-        | Command::Arrange { panel, .. } => held(panel),
+        | Command::Arrange { panel, .. }
+        | Command::ScalePanel { panel, .. } => held(panel),
         Command::PlaceGroup { panels, .. } => panels.iter().any(|p| held(p)),
         Command::Primitive { replace: true, .. } | Command::Polygon { replace: true, .. } => {
             !source.pin_targets.is_empty() || !source.frozen_panels.is_empty()
@@ -1484,6 +1537,165 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 width,
                 ratio,
             )?)
+        }
+        Command::TransformPointGroups {
+            groups,
+            pivot,
+            rotation_degrees,
+            scale,
+        } => {
+            if !pivot.is_finite() || !rotation_degrees.is_finite() || groups.is_empty() {
+                return Err("Select points and a finite rotation".into());
+            }
+            arrange2d::validate_scale(scale)?;
+            freeze_layouts(&mut template);
+            let mut seen = std::collections::BTreeSet::new();
+            for (id, points) in groups {
+                if !seen.insert(id.clone()) {
+                    return Err("A panel may occur only once in a point transform".into());
+                }
+                let index = panel_index(&template, &id)?;
+                let (origin, degrees) = (
+                    layout(&template, index),
+                    template.panels[index].layout_rotation_degrees,
+                );
+                let map = |uv: DVec2| {
+                    let board = origin + rotate_2d(uv, degrees);
+                    rotate_2d(
+                        arrange2d::affine(board, pivot, rotation_degrees, scale) - origin,
+                        -degrees,
+                    )
+                };
+                let panel = &mut template.panels[index];
+                arrange2d::transform_anchors(panel, &points, map)?;
+                normalize(panel);
+            }
+        }
+        Command::AlignPointGroups {
+            groups,
+            mode,
+            reference,
+        } => {
+            if groups.is_empty() {
+                return Err("Select points to align".into());
+            }
+            freeze_layouts(&mut template);
+            let reference = match reference {
+                Some((id, k)) => {
+                    let index = panel_index(&template, &id)?;
+                    let uv = *template.panels[index]
+                        .polygon
+                        .as_ref()
+                        .and_then(|poly| poly.points.get(k))
+                        .ok_or("Reference point not found")?;
+                    Some(arrange2d::board_point(&template, index, uv))
+                }
+                None => None,
+            };
+            let mut flat = Vec::new();
+            for (id, points) in &groups {
+                let index = panel_index(&template, id)?;
+                let poly = template.panels[index]
+                    .polygon
+                    .as_ref()
+                    .ok_or("This panel has no editable contour")?;
+                for &k in points {
+                    let uv = *poly.points.get(k).ok_or("Point index out of range")?;
+                    flat.push((index, k, arrange2d::board_point(&template, index, uv)));
+                }
+            }
+            if flat.len() < 2 && reference.is_none() {
+                return Err("Select at least two points to align".into());
+            }
+            let positions: Vec<DVec2> = flat.iter().map(|(_, _, b)| *b).collect();
+            let targets = arrange2d::align_points(&positions, mode, reference)?;
+            // Material deltas first: every board position is read before any panel moves.
+            let moves: Vec<(usize, usize, DVec2)> = flat
+                .iter()
+                .zip(&targets)
+                .map(|((index, k, board), target)| {
+                    (
+                        *index,
+                        *k,
+                        arrange2d::material_point(&template, *index, *target)
+                            - arrange2d::material_point(&template, *index, *board),
+                    )
+                })
+                .collect();
+            let mut touched = std::collections::BTreeSet::new();
+            for (index, k, delta) in moves {
+                remap_anchors(&mut template.panels[index], &[k], |uv| uv + delta)?;
+                touched.insert(index);
+            }
+            for index in touched {
+                normalize(&mut template.panels[index]);
+            }
+        }
+        Command::ScalePanel { panel, scale } => {
+            arrange2d::validate_scale(scale)?;
+            freeze_layouts(&mut template);
+            let index = panel_index(&template, &panel)?;
+            let p = &mut template.panels[index];
+            let pivot = DVec2::new(p.pattern.width, p.pattern.height) * 0.5;
+            arrange2d::scale_panel_material(p, pivot, scale)?;
+            // `normalize` moves the board origin by the new bounds' corner, so the piece stays
+            // centred where it was.
+            normalize(p);
+            selected = Some(panel);
+        }
+        Command::AlignPanels {
+            panels,
+            reference,
+            mode,
+        } => {
+            let reference_index = panel_index(&template, &reference)?;
+            let indices: Vec<usize> = panels
+                .iter()
+                .map(|id| panel_index(&template, id))
+                .collect::<Result<_, _>>()?;
+            if indices.is_empty() {
+                return Err("Select the pieces to align".into());
+            }
+            freeze_layouts(&mut template);
+            let boxes: Vec<_> = indices
+                .iter()
+                .map(|i| arrange2d::board_bounds(&template, *i))
+                .collect::<Result<_, _>>()?;
+            let reference_box = arrange2d::board_bounds(&template, reference_index)?;
+            let offsets = arrange2d::align_box_offsets(&boxes, reference_box, mode)?;
+            for (index, offset) in indices.into_iter().zip(offsets) {
+                let origin = layout(&template, index);
+                template.panels[index].layout_2d = Some(origin + offset);
+            }
+            selected = Some(reference);
+        }
+        Command::DistributePanels {
+            panels,
+            axis,
+            gap_m,
+        } => {
+            if !gap_m.is_finite() || !(-10.0..=10.0).contains(&gap_m) {
+                return Err("The spacing must be finite and within ±10 m".into());
+            }
+            let indices: Vec<usize> = panels
+                .iter()
+                .map(|id| panel_index(&template, id))
+                .collect::<Result<_, _>>()?;
+            if indices.len() < 2 {
+                return Err("Select at least two pieces to distribute".into());
+            }
+            freeze_layouts(&mut template);
+            let boxes: Vec<_> = indices
+                .iter()
+                .map(|i| arrange2d::board_bounds(&template, *i))
+                .collect::<Result<_, _>>()?;
+            for (index, offset) in indices
+                .into_iter()
+                .zip(arrange2d::distribute_offsets(&boxes, axis, gap_m))
+            {
+                let origin = layout(&template, index);
+                template.panels[index].layout_2d = Some(origin + offset);
+            }
         }
         Command::SetBoardLocks {
             panels,

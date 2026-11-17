@@ -38,6 +38,7 @@ pub(super) struct AuthoringUi {
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,
+    pub arrange: super::arrange_ui::ArrangeUi,
     pub construction: ConstructionDraft,
     pub sewing: super::sewing_ui::SewingDraft,
     pub sewing_audit: super::sewing_ui::SewingAuditUi,

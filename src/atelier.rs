@@ -8,6 +8,8 @@ use marvelous_cloth::{
     vbd::{Grab, VbdMetrics, VbdSettings},
 };
 use std::{path::PathBuf, sync::mpsc, time::Duration};
+#[path = "atelier/arrange_ui.rs"]
+mod arrange_ui;
 #[path = "atelier/arrangement_ui.rs"]
 mod arrangement_ui;
 #[path = "atelier/authoring_smoke.rs"]

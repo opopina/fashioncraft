@@ -1576,6 +1576,7 @@ impl Atelier {
             });
         }
         self.selection_controls(ui);
+        self.arrange_toolbar(ui);
         self.sewing_strip(ui);
         self.guide_toolbar(ui);
         ui.separator();

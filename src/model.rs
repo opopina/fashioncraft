@@ -23,6 +23,14 @@ pub struct Material {
     /// scene's collision distance. A contact keeps the mean of its two sides' distances.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collision_distance: Option<f64>,
+    /// Internal (stiffness-proportional) damping time, s: slows stretching and bending motion
+    /// without slowing the piece as a whole. 0 = none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub internal_damping: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.
 }
 impl Default for Material {
     fn default() -> Self {
@@ -38,12 +46,15 @@ impl Default for Material {
             thickness: 0.001,
             grain_degrees: 0.0,
             collision_distance: None,
+            internal_damping: 0.0,
         }
     }
 }
 /// Range of a fabric's collision distance, metres.
 pub const MIN_COLLISION_DISTANCE: f64 = 0.0005;
 pub const MAX_COLLISION_DISTANCE: f64 = 0.02;
+/// Largest internal damping time, s.
+pub const MAX_INTERNAL_DAMPING: f64 = 0.1;
 
 impl Material {
     pub fn validate(&self) -> Result<(), String> {
@@ -64,6 +75,9 @@ impl Material {
             .is_some_and(|d| !(MIN_COLLISION_DISTANCE..=MAX_COLLISION_DISTANCE).contains(&d))
         {
             return Err("Collision distance must be between 0.5 and 20 mm".into());
+        }
+        if !(0.0..=MAX_INTERNAL_DAMPING).contains(&self.internal_damping) {
+            return Err("Internal damping must be between 0 and 100 ms".into());
         }
         if !self.grain_degrees.is_finite()
             || !self.compression_ratio.is_finite()

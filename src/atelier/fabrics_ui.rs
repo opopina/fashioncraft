@@ -148,6 +148,11 @@ impl Atelier {
                     let mut mm = *gap * 1000.;
                     if value(ui, "Collision distance", &mut mm, 0.05, 0.5, 20., " mm") { *gap = mm / 1000.; }
                 }
+                let mut damping_ms = p.internal_damping * 1000.;
+                if value(ui, "Internal damping", &mut damping_ms, 0.1, 0., 100., " ms") {
+                    p.internal_damping = damping_ms / 1000.;
+                }
+                ui.small("Internal damping settles stretching and bending; the piece as a whole still moves freely.");
                 ui.label("Stretch under 5 N on a 5 cm strip");
                 ui.small("The larger the %, the more the fabric stretches. This is not the strain at failure.");
                 for (axis, label) in ["Warp", "Weft"].iter().enumerate() {

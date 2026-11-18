@@ -104,11 +104,13 @@ impl Problem<'_> {
         let mut e = S::c(0.);
         for &i in &block.triangles {
             let t = &g.mesh.triangles[i];
-            e = e + energy::membrane(t.vertices.map(get), t, &g.materials[t.material]);
+            let m = &g.materials[t.material];
+            e = e + energy::membrane(t.vertices.map(get), t, m) * S::c(damped(m, self.settings));
         }
         for &i in &block.hinges {
             let h = &g.mesh.hinges[i];
-            e = e + energy::bending(h.vertices.map(get), h, &g.materials[h.material]);
+            let m = &g.materials[h.material];
+            e = e + energy::bending(h.vertices.map(get), h, m) * S::c(damped(m, self.settings));
         }
         for &i in &block.stitches {
             let s = &self.solver.stitches[i];

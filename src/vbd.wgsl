@@ -1,7 +1,8 @@
 // Independent VBD implementation. Exact energy/gradient; SPD Gauss-Newton
 // local Hessians. OGC candidates and conservative radii are supplied by f64 CPU.
 struct Term { ids:vec4u, info:vec4u, a:vec4f, b:vec4f, c:vec4f }
-struct Config { offset:u32, count:u32, moving:u32, pad:u32 }
+// inverse_dt: f32 bits of 1/dt, for internal damping.
+struct Config { offset:u32, count:u32, moving:u32, inverse_dt:u32 }
 @group(0) @binding(0) var<storage,read_write> positions:array<vec4f>;
 @group(0) @binding(1) var<storage,read> targets:array<vec4f>;
 @group(0) @binding(2) var<storage,read> ranges:array<vec4u>;
@@ -30,6 +31,12 @@ fn barrier(d:f32,r:f32,k:f32)->vec3f {
     if d>=tau{return vec3f(0.5*k*(r-d)*(r-d),k*(d-r),k);}
     let b=k*tau*tau;return vec3f(0.5*b-b*log(d/tau),-b/d,b/(d*d));
 }
+// Internal damping scales a fabric's elastic terms by 1 + k_d/dt (info.z holds k_d bits); the
+// constant part rides on the inertia target, as on the CPU.
+fn damped(r:Result,t:Term)->Result {
+    let s=1+bitcast<f32>(t.info.z)*bitcast<f32>(config.inverse_dt);
+    return Result(r.e*s,r.g*s,r.h*s);
+}
 fn evaluate(t:Term,v:u32,p:vec3f)->Result {
     var x:array<vec3f,4>;var local=4u;
     for(var j=0u;j<4u;j++){x[j]=point(t.ids[j],v,p);if j<t.info.y && t.ids[j]==v{local=j;}}
@@ -46,6 +53,7 @@ fn evaluate(t:Term,v:u32,p:vec3f)->Result {
         r.g=t.a.w*(aw.y*gw+af.y*gf+t.c.y*shear*gs);
         r.h=t.a.w*(max(aw.z,0)*outer(gw,gw)+max(af.z,0)*outer(gf,gf)+t.c.y*outer(gs,gs)
             +I*(max(aw.y,0)*cw*cw+max(af.y,0)*cf*cf+max(2*t.c.y*shear*cw*cf,0)));
+        r=damped(r,t);
     } else if t.info.x==1u {
         let e=x[1]-x[0];let u=x[2]-x[0];let w=x[3]-x[0];
         let na=cross(e,u);let nb=cross(w,e);let la=length(na);let lb=length(nb);
@@ -57,6 +65,7 @@ fn evaluate(t:Term,v:u32,p:vec3f)->Result {
         if local==3u {db=skew(-e);}
         let jac=(I-outer(a,a))*da*(1/la)-(I-outer(b,b))*db*(1/lb);let d=a-b;
         r.e=0.5*t.a.x*dot(d,d);r.g=t.a.x*transpose(jac)*d;r.h=t.a.x*transpose(jac)*jac;
+        r=damped(r,t);
     } else if t.info.x==2u {
         // c.w is the exact weight sum: zero for seams, one for a mouse grab.
         var d=t.c.w*x[0]-t.c.xyz;var first_weight=t.c.w;

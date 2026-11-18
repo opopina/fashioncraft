@@ -30,6 +30,9 @@ pub struct FabricProperties {
     /// scene's collision distance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collision_distance: Option<f64>,
+    /// Internal damping time, s (see `Material::internal_damping`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub internal_damping: f64,
 }
 impl Default for FabricProperties {
     fn default() -> Self {
@@ -49,6 +52,7 @@ impl From<&Material> for FabricProperties {
             density: m.density,
             thickness: m.thickness,
             collision_distance: m.collision_distance,
+            internal_damping: m.internal_damping,
         }
     }
 }
@@ -66,6 +70,7 @@ impl FabricProperties {
             thickness: self.thickness,
             grain_degrees,
             collision_distance: self.collision_distance,
+            internal_damping: self.internal_damping,
         }
     }
 }

@@ -40,6 +40,12 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
 }
+/// The factor on a fabric's elastic energy in a local solve: 1 + k_d/dt with its internal
+/// damping k_d (see `VbdSolver::prepare_damping`).
+pub(crate) fn damped(m: &crate::model::Material, settings: &VbdSettings) -> f64 {
+    1. + m.internal_damping / settings.dt
+}
+
 /// A steady, uniform wind acting on the cloth as pressure drag: each triangle of area A and
 /// unit normal n, moving with velocity v, feels F = ½ ρ C_d A (r·n)|r·n| n with r = wind − v,
 /// shared equally by its three corners. A thin sheet edge-on to the flow feels nothing;
@@ -283,6 +289,9 @@ pub struct VbdSolver {
     pub(crate) friction: Vec<Option<friction::FrictionTerm>>,
     /// Accelerations besides gravity for the current step (wind), per vertex; empty if none.
     pub(crate) external: Vec<DVec3>,
+    /// The constant part of internal damping for the current step, as an acceleration per
+    /// vertex (see `prepare_damping`); empty if no fabric is damped.
+    damping_shift: Vec<DVec3>,
     /// Collision distance of each vertex's fabric, the largest of its triangles'; none where
     /// the scene's applies. Empty when no fabric sets its own.
     collision: Vec<Option<f64>>,
@@ -388,6 +397,7 @@ impl VbdSolver {
                 .collect(),
             friction: vec![],
             external: vec![],
+            damping_shift: vec![],
             collision: vec![],
         };
         let mut collision = vec![None; n];
@@ -441,14 +451,70 @@ impl VbdSolver {
     }
     /// Gravity plus this step's external acceleration of vertex `v`.
     pub(crate) fn acceleration(&self, settings: &VbdSettings, v: usize) -> DVec3 {
-        settings.gravity + self.external.get(v).copied().unwrap_or(DVec3::ZERO)
+        settings.gravity
+            + self.external.get(v).copied().unwrap_or(DVec3::ZERO)
+            + self.damping_shift.get(v).copied().unwrap_or(DVec3::ZERO)
     }
-    /// Set this step's external accelerations from the settings at the given state.
+    /// Set this step's external accelerations (wind) and internal damping from the settings at
+    /// the given state.
     pub(crate) fn prepare_external(&mut self, settings: &VbdSettings, state: &State) {
         self.external = match &settings.wind {
             Some(wind) => wind.accelerations(&self.garment, &state.x, &state.v),
             None => vec![],
         };
+        self.prepare_damping(settings, state);
+    }
+    /// Internal damping adds the force −(k_d/dt)(∇E(x) − ∇E(xᵗ)) on each vertex, with E a
+    /// damped fabric's membrane and bending energy and xᵗ the start of the step: it resists
+    /// stretching and bending motion, and none for a rigid motion, which leaves ∇E unchanged.
+    /// In the local solves that is the elastic energy scaled by 1 + k_d/dt (see `damped`)
+    /// plus the constant (k_d/dt)∇E(xᵗ)·x per vertex, which this folds into the inertia
+    /// target as an acceleration ∇E(xᵗ)·k_d/dt / m.
+    fn prepare_damping(&mut self, settings: &VbdSettings, state: &State) {
+        self.damping_shift.clear();
+        if self
+            .garment
+            .materials
+            .iter()
+            .all(|m| m.internal_damping == 0.)
+        {
+            return;
+        }
+        let shift = (0..state.x.len())
+            .map(|v| {
+                if self.garment.mesh.pins[v].is_some() {
+                    return DVec3::ZERO;
+                }
+                let get = |i: usize| {
+                    if i == v {
+                        std::array::from_fn(|k| Jet::<3>::variable(state.x[v][k], k))
+                    } else {
+                        state.x[i].to_array().map(Jet::c)
+                    }
+                };
+                let mut gradient = Jet::<3>::c(0.);
+                for i in &self.triangles[v] {
+                    let t = &self.garment.mesh.triangles[*i];
+                    let m = &self.garment.materials[t.material];
+                    if m.internal_damping > 0. {
+                        gradient = gradient
+                            + energy::membrane(t.vertices.map(get), t, m)
+                                * Jet::c(m.internal_damping / settings.dt);
+                    }
+                }
+                for i in &self.hinges[v] {
+                    let h = &self.garment.mesh.hinges[*i];
+                    let m = &self.garment.materials[h.material];
+                    if m.internal_damping > 0. {
+                        gradient = gradient
+                            + energy::bending(h.vertices.map(get), h, m)
+                                * Jet::c(m.internal_damping / settings.dt);
+                    }
+                }
+                DVec3::from_array(gradient.g) / self.garment.mesh.masses[v]
+            })
+            .collect();
+        self.damping_shift = shift;
     }
     pub(crate) fn colors(&self, contact: &ContactSet, grab: Option<&Grab>) -> Vec<Vec<usize>> {
         coloring::colors(&self.graph, contact, grab)
@@ -466,13 +532,13 @@ impl VbdSolver {
         let mut value = S::c(0.0);
         for i in &self.triangles[v] {
             let t = &self.garment.mesh.triangles[*i];
-            value = value
-                + energy::membrane(t.vertices.map(get), t, &self.garment.materials[t.material]);
+            let m = &self.garment.materials[t.material];
+            value = value + energy::membrane(t.vertices.map(get), t, m) * S::c(damped(m, settings));
         }
         for i in &self.hinges[v] {
             let h = &self.garment.mesh.hinges[*i];
-            value = value
-                + energy::bending(h.vertices.map(get), h, &self.garment.materials[h.material]);
+            let m = &self.garment.materials[h.material];
+            value = value + energy::bending(h.vertices.map(get), h, m) * S::c(damped(m, settings));
         }
         for i in &self.vertex_stitches[v] {
             let s = &self.stitches[*i];

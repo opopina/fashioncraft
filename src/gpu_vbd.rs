@@ -473,6 +473,7 @@ impl GpuVbd {
                 0.,
             ]
         }));
+        let inverse_dt = ((1. / dt) as f32).to_bits();
         for color in &colors {
             let offset = order.len();
             // A tiny contact may round to zero in f32. All its moving vertices
@@ -485,11 +486,16 @@ impl GpuVbd {
                     .map(|i| *i as u32),
             );
             if order.len() > offset {
-                configs.push([offset as u32, (order.len() - offset) as u32, n as u32, 0]);
+                configs.push([
+                    offset as u32,
+                    (order.len() - offset) as u32,
+                    n as u32,
+                    inverse_dt,
+                ]);
             }
         }
         if configs.is_empty() {
-            configs.push([0, 0, n as u32, 0]);
+            configs.push([0, 0, n as u32, inverse_dt]);
         }
         let alignment = self.device.limits().min_uniform_buffer_offset_alignment as usize;
         config_data.resize(alignment * configs.len(), 0);
@@ -788,6 +794,7 @@ impl Prepared {
             let u = tri.inv_dm.x_axis * c + tri.inv_dm.y_axis * s;
             let v = -tri.inv_dm.x_axis * s + tri.inv_dm.y_axis * c;
             let mut t = Term::new(&tri.vertices, 0);
+            t.info[2] = (m.internal_damping as f32).to_bits();
             t.a = [(-u.x - u.y) as f32, u.x as f32, u.y as f32, tri.area as f32];
             t.b = [(-v.x - v.y) as f32, v.x as f32, v.y as f32, m.warp as f32];
             t.c = [
@@ -804,6 +811,7 @@ impl Prepared {
             let aw = h.across.x * c + h.across.y * s;
             let af = -h.across.x * s + h.across.y * c;
             let mut t = Term::new(&h.vertices, 1);
+            t.info[2] = (m.internal_damping as f32).to_bits();
             t.a[0] = (h.weight * (m.bend_warp * aw * aw + m.bend_weft * af * af)) as f32;
             terms.push(t);
         }

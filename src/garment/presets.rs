@@ -162,6 +162,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         pin_targets: vec![],
         frozen_panels: vec![],
         deactivated_panels: vec![],
+        flipped_panels: Default::default(),
         seam_folds: Default::default(),
         tacks: vec![],
         line_folds: vec![],

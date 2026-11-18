@@ -269,6 +269,53 @@ fn appearance_controls(
                 egui::vec2(4., 4.),
             ),
         ));
+        ui.horizontal(|ui| {
+            let mut back = value.back_color_srgb.is_some();
+            if ui
+                .checkbox(&mut back, "Back color")
+                .on_hover_text("A different colour on the fabric's back face, as on a lining or a two-tone fabric")
+                .changed()
+            {
+                value.back_color_srgb = back.then_some(value.color_srgb);
+            }
+            if let Some(color) = value.back_color_srgb.as_mut() {
+                ui.color_edit_button_srgb(color);
+            }
+        });
+        use marvelous_cloth::garment::appearance::{Weave, WeaveKind};
+        ui.horizontal(|ui| {
+            ui.label("Weave");
+            let label = value.weave.as_ref().map_or("None", |w| w.kind.label());
+            egui::ComboBox::from_id_salt("appearance_weave")
+                .selected_text(label)
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(value.weave.is_none(), "None").clicked() {
+                        value.weave = None;
+                    }
+                    for kind in WeaveKind::ALL {
+                        let on = value.weave.as_ref().is_some_and(|w| w.kind == kind);
+                        if ui.selectable_label(on, kind.label()).clicked() {
+                            let mut w = value.weave.clone().unwrap_or_default();
+                            w.kind = kind;
+                            value.weave = Some(w);
+                        }
+                    }
+                });
+        });
+        if let Some(w) = value.weave.as_mut() {
+            ui.horizontal(|ui| {
+                ui.label("Thread spacing");
+                ui.add(
+                    egui::DragValue::new(&mut w.spacing_mm)
+                        .range(0.05..=20.0)
+                        .speed(0.02)
+                        .fixed_decimals(2)
+                        .suffix(" mm"),
+                );
+            });
+            ui.add(egui::Slider::new(&mut w.contrast, 0.0..=1.0).text("Weave contrast"));
+            let _: &Weave = w;
+        }
     }
     let apply = ui.button("Apply appearance");
     #[cfg(test)]

@@ -407,6 +407,10 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Flip the front face of pieces (a look only). One undo step.
+    FlipNormals {
+        panels: Vec<String>,
+    },
     /// Set the angle at which a seam's pieces meet, or clear it (`fold: None`). One undo step.
     SetSeamFold {
         seam: String,
@@ -1190,6 +1194,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.panel_layers.retain(|id, _| panels.contains(id));
     template.panel_pressure.retain(|id, _| panels.contains(id));
     template.panel_shrink.retain(|id, _| panels.contains(id));
+    template.flipped_panels.retain(|id| panels.contains(id));
     template
         .tacks
         .retain(|t| panels.contains(&t.a.panel) && panels.contains(&t.b.panel));
@@ -1219,8 +1224,9 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.fabric_appearance.clear();
         t.graphics.clear();
         t.trims.clear();
-        // Board locks only filter 2D picking.
+        // Board locks only filter 2D picking; flipping a piece's front only changes its look.
         t.locked_panels.clear();
+        t.flipped_panels.clear();
         t.internal_lines_locked = false;
         for p in &mut t.panels {
             p.layout_2d = None;
@@ -1259,6 +1265,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         && markings(a) == markings(b)
         && a.locked_panels == b.locked_panels
         && a.internal_lines_locked == b.internal_lines_locked
+        && a.flipped_panels == b.flipped_panels
     {
         return false;
     }
@@ -1269,6 +1276,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         t.trims.clear();
         t.locked_panels.clear();
         t.internal_lines_locked = false;
+        t.flipped_panels.clear();
         for p in &mut t.panels {
             if let Some(polygon) = p.polygon.as_mut() {
                 polygon.seam_allowances.clear();
@@ -2693,6 +2701,20 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::FlipNormals { panels } => {
+            if panels.is_empty() {
+                return Err("Select pieces to flip".into());
+            }
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Cannot flip {id}: panel not found"));
+                }
+                if !template.flipped_panels.remove(id) {
+                    template.flipped_panels.insert(id.clone());
+                }
+            }
+            selected = panels.first().cloned();
         }
         Command::SetSeamFold { seam, fold } => {
             if !template.seams.iter().any(|s| s.id == seam) {

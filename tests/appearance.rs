@@ -15,6 +15,7 @@ fn optics_are_validated_and_do_not_change_mechanics_or_legacy_bytes() {
     let optics = FabricAppearance {
         color_srgb: [255, 0, 128],
         roughness: 0.3,
+        ..Default::default()
     };
     let edit = authoring::apply(
         &source,
@@ -113,6 +114,7 @@ fn clipboard_keeps_optical_identity_and_material_split_inherits_it() {
             appearance: Some(FabricAppearance {
                 color_srgb: [220, 30, 60],
                 roughness: 0.4,
+                ..Default::default()
             }),
         },
     )

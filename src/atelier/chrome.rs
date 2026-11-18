@@ -425,6 +425,7 @@ impl Atelier {
         let optics =
             marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
         let (visible_faces, face_colors) = self.display_buffers();
+        let flipped_faces = self.flipped_faces();
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
@@ -455,6 +456,7 @@ impl Atelier {
                 display: marvelous_cloth::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),
+                    flipped_faces: flipped_faces.as_deref(),
                     avatar_color: super::garment_display::srgb_to_linear(display.avatar_color),
                     strain_max: display.strain_max_percent / 100.,
                     strain_gradient: display.strain_gradient,

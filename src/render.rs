@@ -35,6 +35,9 @@ pub struct DisplayOptions<'a> {
     /// Per-triangle base colour replacing the fabric colour (random piece colours, state
     /// tints); fit maps and issue marks still take precedence.
     pub face_colors: Option<&'a [Option<[f32; 3]>]>,
+    /// Per-triangle flipped front face (the piece's normal is flipped): its front and back
+    /// colours swap sides.
+    pub flipped_faces: Option<&'a [bool]>,
     /// Avatar body colour, linear RGB.
     pub avatar_color: [f32; 3],
     /// Strain that reaches the strain map's last colour, as a fraction (0.2 = 20 %).
@@ -117,6 +120,7 @@ impl Default for DisplayOptions<'_> {
         Self {
             visible_faces: None,
             face_colors: None,
+            flipped_faces: None,
             avatar_color: AVATAR_COLOR,
             strain_max: STRAIN_MAX,
             strain_gradient: true,
@@ -217,7 +221,19 @@ pub fn strain_band(strain: f64, max: f64) -> usize {
         .min(STRAIN_BANDS.len() - 1)
 }
 
-const VERTEX_FLOATS: usize = 15;
+/// Position (4), normal (3), colour (3) and wire flag (1), barycentric (3), roughness (1), back
+/// colour (3), material coordinates along warp and weft in metres (2), weave kind, thread
+/// spacing and contrast (3).
+const VERTEX_FLOATS: usize = 23;
+
+/// What a cloth triangle shows besides its colour: the back colour, the material coordinates
+/// of its corners (warp, weft) and the weave parameters.
+#[derive(Clone, Copy)]
+struct Surface {
+    back: [f32; 3],
+    uv: [[f32; 2]; 3],
+    weave: [f32; 3],
+}
 
 fn cloth_surface(
     appearance: Option<&crate::garment::appearance::FabricAppearance>,
@@ -241,6 +257,32 @@ fn cloth_surface(
     appearance.map_or(([0.91, 0.92, 0.94], -1.), |a| {
         (a.linear_color(), a.roughness as f32)
     })
+}
+
+/// The front colour and the rest of a cloth face's look: its back colour (the two swap on a
+/// flipped piece), its corners' material coordinates turned into warp and weft, and the
+/// fabric's weave.
+fn face_surface(
+    appearance: &crate::garment::appearance::FabricAppearance,
+    grain_degrees: f64,
+    uv: [glam::DVec2; 3],
+    flipped: bool,
+) -> ([f32; 3], Surface) {
+    let (front, back) = (appearance.linear_color(), appearance.linear_back_color());
+    let (sin, cos) = grain_degrees.to_radians().sin_cos();
+    (
+        if flipped { back } else { front },
+        Surface {
+            back: if flipped { front } else { back },
+            uv: uv.map(|p| {
+                [
+                    (p.x * cos + p.y * sin) as f32,
+                    (-p.x * sin + p.y * cos) as f32,
+                ]
+            }),
+            weave: appearance.weave_parameters(),
+        },
+    )
 }
 
 struct Timers {
@@ -697,7 +739,7 @@ impl Viewport {
             label: Some("cloth-lit-wireframe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("cloth.wgsl").into()),
         });
-        let attrs = wgpu::vertex_attr_array![0=>Float32x4,1=>Float32x3,2=>Float32x4,3=>Float32x3,4=>Float32];
+        let attrs = wgpu::vertex_attr_array![0=>Float32x4,1=>Float32x3,2=>Float32x4,3=>Float32x3,4=>Float32,5=>Float32x3,6=>Float32x2,7=>Float32x3];
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("cloth-viewport"),
             layout: None,
@@ -948,7 +990,8 @@ impl Viewport {
                             color: [f32; 3],
                             wire: bool,
                             normals: Option<[Vec3; 3]>,
-                            roughness: f32| {
+                            roughness: f32,
+                            surface: Option<Surface>| {
             let normal = (points[1] - points[0])
                 .cross(points[2] - points[0])
                 .normalize_or_zero();
@@ -966,6 +1009,14 @@ impl Viewport {
                     if i == 2 { 1.0 } else { 0.0 },
                 ]);
                 data.push(roughness);
+                let surface = surface.unwrap_or(Surface {
+                    back: color,
+                    uv: [[0.; 2]; 3],
+                    weave: [0.; 3],
+                });
+                data.extend_from_slice(&surface.back);
+                data.extend_from_slice(&surface.uv[i]);
+                data.extend_from_slice(&surface.weave);
             }
         };
         for (face, t) in mesh.triangles.iter().enumerate() {
@@ -1008,12 +1059,25 @@ impl Viewport {
                     .face_colors
                     .and_then(|colors| colors.get(face).copied().flatten())),
             );
+            // A fabric's own look (not a diagnostic colour): its back face, flipped pieces
+            // swapping the two, and its weave along the grain.
+            let surface = (roughness >= 0.).then(|| {
+                face_surface(
+                    appearance.expect("custom optics have an appearance"),
+                    material.grain_degrees,
+                    t.vertices.map(|i| mesh.uv[i]),
+                    display
+                        .flipped_faces
+                        .is_some_and(|f| f.get(face).copied().unwrap_or(false)),
+                )
+            });
             triangle(
                 t.vertices.map(|i| state.x[i].as_vec3()),
-                color,
+                surface.map_or(color, |(front, _)| front),
                 wire,
                 Some(t.vertices.map(|i| smooth[i])),
                 roughness,
+                surface.map(|(_, s)| s),
             );
         }
         if let Some(schematic) = display.schematic {
@@ -1048,6 +1112,7 @@ impl Viewport {
                     false,
                     n,
                     -1.,
+                    None,
                 );
                 triangle(
                     [a - side, b + side, b - side],
@@ -1055,6 +1120,7 @@ impl Viewport {
                     false,
                     n,
                     -1.,
+                    None,
                 );
             }
         }
@@ -1075,8 +1141,22 @@ impl Viewport {
                 for pair in points.windows(2) {
                     let [a, b] = [pair[0], pair[1]];
                     let d = (b - a).cross(Vec3::Z).normalize_or_zero() * 0.0013;
-                    triangle([a - d, a + d, b + d], [1.0, 0.72, 0.22], false, None, -1.);
-                    triangle([a - d, b + d, b - d], [1.0, 0.72, 0.22], false, None, -1.);
+                    triangle(
+                        [a - d, a + d, b + d],
+                        [1.0, 0.72, 0.22],
+                        false,
+                        None,
+                        -1.,
+                        None,
+                    );
+                    triangle(
+                        [a - d, b + d, b - d],
+                        [1.0, 0.72, 0.22],
+                        false,
+                        None,
+                        -1.,
+                        None,
+                    );
                 }
             }
         }
@@ -1096,8 +1176,8 @@ impl Viewport {
                         point(i, j + 1),
                         point(i + 1, j + 1),
                     ];
-                    triangle([a, c, b], [0.38, 0.4, 0.46], false, None, -1.);
-                    triangle([b, c, d], [0.38, 0.4, 0.46], false, None, -1.);
+                    triangle([a, c, b], [0.38, 0.4, 0.46], false, None, -1., None);
+                    triangle([b, c, d], [0.38, 0.4, 0.46], false, None, -1., None);
                 }
             }
         }
@@ -1129,6 +1209,8 @@ impl Viewport {
                         body.extend_from_slice(&normals[t[i]].to_array());
                         body.extend_from_slice(&display.avatar_color);
                         body.extend_from_slice(&[0., 0., 0., 0., -1.]);
+                        body.extend_from_slice(&display.avatar_color);
+                        body.extend_from_slice(&[0.; 5]);
                     }
                 }
                 self.avatar_count = (body.len() / VERTEX_FLOATS) as u32;
@@ -1736,6 +1818,7 @@ mod tests {
         let optics = crate::garment::appearance::FabricAppearance {
             color_srgb: [255, 0, 0],
             roughness: 0.3,
+            ..Default::default()
         };
         assert_eq!(
             cloth_surface(None, false, false, None, None),
@@ -1763,6 +1846,7 @@ mod tests {
         let optics = crate::garment::appearance::FabricAppearance {
             color_srgb: [255, 0, 0],
             roughness: 0.3,
+            ..Default::default()
         };
         let tint = Some([0.2, 0.4, 0.9]);
         assert_eq!(
@@ -1865,5 +1949,60 @@ mod tests {
         assert!(close(mid, mean), "{mid:?} vs {mean:?}");
         assert_eq!(strain_color(0.05, 0.2, false), STRAIN_BANDS[2]);
         assert_eq!(strain_color(f64::NAN, 0.2, true), STRAIN_BANDS[0]);
+    }
+}
+
+#[cfg(test)]
+mod face_tests {
+    use super::*;
+    use crate::garment::appearance::{FabricAppearance, Weave, WeaveKind};
+
+    #[test]
+    fn faces_show_front_and_back_colours_and_flipping_swaps_them() {
+        let a = FabricAppearance {
+            color_srgb: [200, 30, 30],
+            back_color_srgb: Some([30, 30, 200]),
+            ..Default::default()
+        };
+        let uv = [glam::DVec2::ZERO, glam::DVec2::X, glam::DVec2::Y];
+        let (front, s) = face_surface(&a, 0., uv, false);
+        assert!(
+            front[0] > front[2] && s.back[2] > s.back[0],
+            "red front, blue back"
+        );
+        let (front, s) = face_surface(&a, 0., uv, true);
+        assert!(
+            front[2] > front[0] && s.back[0] > s.back[2],
+            "flipped: blue front, red back"
+        );
+        // Without a back colour both faces are the front colour.
+        let plain = FabricAppearance::default();
+        let (front, s) = face_surface(&plain, 0., uv, true);
+        assert_eq!(front, s.back);
+    }
+
+    #[test]
+    fn the_weave_follows_the_grain() {
+        let a = FabricAppearance {
+            weave: Some(Weave {
+                kind: WeaveKind::Twill,
+                spacing_mm: 2.,
+                contrast: 0.5,
+            }),
+            ..Default::default()
+        };
+        let uv = [
+            glam::DVec2::ZERO,
+            glam::DVec2::new(0.01, 0.),
+            glam::DVec2::Y,
+        ];
+        let (_, s) = face_surface(&a, 90., uv, false);
+        assert_eq!(s.weave, [2., 0.002, 0.5]);
+        // A quarter-turned grain: the material x direction runs across the warp.
+        assert!(
+            s.uv[1][0].abs() < 1e-9 && (s.uv[1][1] + 0.01).abs() < 1e-7,
+            "{:?}",
+            s.uv
+        );
     }
 }

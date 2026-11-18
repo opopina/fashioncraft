@@ -231,6 +231,10 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Pieces whose front face is the other side (flipped normal): only the look changes, the
+    /// back colour shows where the front did.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub flipped_panels: BTreeSet<String>,
     /// Fold angle and strength of seams, by seam id: the two pieces meet at that angle.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_folds: BTreeMap<String, SeamFold>,
@@ -631,6 +635,11 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for id in &self.flipped_panels {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Flipped panel {id} is not in the template"));
+            }
         }
         for (id, fold) in &self.seam_folds {
             if !self.seams.iter().any(|s| &s.id == id) {
@@ -1290,6 +1299,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            flipped_panels: Default::default(),
             seam_folds: Default::default(),
             tacks: vec![],
             line_folds: vec![],

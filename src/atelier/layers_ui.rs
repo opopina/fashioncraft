@@ -45,6 +45,23 @@ impl Atelier {
                 reset = true;
             }
         });
+        let flipped = self.project.template.flipped_panels.contains(panel);
+        let mut flip = false;
+        ui.horizontal(|ui| {
+            ui.label("Normal");
+            flip = ui
+                .selectable_label(flipped, if flipped { "Flipped" } else { "Flip" })
+                .on_hover_text(
+                    "Swap the piece's front and back faces: the fabric's back colour shows on \
+                     the side that showed its front. Only the look changes",
+                )
+                .clicked();
+        });
+        if flip {
+            self.edit(Command::FlipNormals {
+                panels: vec![panel.to_string()],
+            });
+        }
         self.pressure_property(ui, panel);
         if let Some(layer) = wanted {
             self.edit(Command::SetLayer {
@@ -113,6 +130,24 @@ impl Atelier {
         if let Some(command) = command {
             self.edit(command);
         }
+    }
+}
+
+impl Atelier {
+    /// Per-triangle flipped front faces for the renderer; `None` when no piece is flipped.
+    pub(super) fn flipped_faces(&self) -> Option<Vec<bool>> {
+        let flipped = &self.project.template.flipped_panels;
+        if flipped.is_empty() {
+            return None;
+        }
+        let g = &self.scene.garment;
+        let mut faces = vec![false; g.mesh.triangles.len()];
+        for r in &g.panels {
+            if flipped.contains(&r.id) {
+                faces[r.triangles.clone()].fill(true);
+            }
+        }
+        Some(faces)
     }
 }
 

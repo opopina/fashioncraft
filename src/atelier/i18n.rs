@@ -1557,6 +1557,9 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Dibuja alrededor de la tela para fijar cada punto visible dentro · Cmd+arrastrar quita los alfileres de dentro"
         }
         "No visible cloth inside the lasso" => "No hay tela visible dentro del lazo",
+        "selected · Shift-click: toggle · Shift-drag: add\nHold L + drag: lasso · Ctrl/Cmd: subtract · Alt: through\nMoved pieces keep their drape" => {
+            "seleccionadas · Mayús+clic: alternar · Mayús+arrastrar: añadir\nMantén L + arrastrar: lazo · Ctrl/Cmd: restar · Alt: a través\nLas piezas movidas conservan su drapeado"
+        }
         _ => return None,
     })
 }

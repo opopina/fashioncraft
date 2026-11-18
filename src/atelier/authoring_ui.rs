@@ -83,6 +83,8 @@ pub(super) struct AuthoringUi {
     pub ease: bool,
     pub preview: Option<Placement>,
     pub preview_state: Option<marvelous_cloth::model::State>,
+    /// The edit being installed moves pieces in 3D: draped ones carry their drape along.
+    pub carry_drape: bool,
     pub error: Option<String>,
     pub fabric_draft: Option<super::fabrics_ui::FabricDraft>,
     pub rotate: bool,
@@ -1004,32 +1006,72 @@ impl Atelier {
         self.editor_transition().cancel_preview();
     }
     pub(super) fn preview_placement(&mut self, placement: Placement) {
-        let Some(id) = self.authoring.selected.as_ref() else {
+        let Some(id) = self.authoring.selected.clone() else {
             return;
         };
-        let Some(range) = self.scene.garment.panels.iter().find(|p| &p.id == id) else {
+        if !self.scene.garment.panels.iter().any(|p| p.id == id) {
             return;
-        };
+        }
         if self.authoring.preview.is_none() {
             self.authoring.preview_state = Some(self.scene.state.clone());
             self.generation += 1;
         }
         self.playing = false;
-        for i in range.vertices.clone() {
-            let uv = self.scene.garment.mesh.uv[i];
-            self.scene.state.x[i] = placement.transform(DVec3::new(uv.x, -uv.y, 0.));
-            self.scene.state.v[i] = DVec3::ZERO;
-        }
+        self.show_panel_at(&id, &placement);
         self.authoring.preview = Some(placement);
+    }
+    /// Show a piece at `placement` while it is being moved: its drape as it was when the move
+    /// began, carried along rigidly, or laid flat when it holds pins (those stay put).
+    pub(super) fn show_panel_at(&mut self, id: &str, placement: &Placement) {
+        let Some(range) = self
+            .scene
+            .garment
+            .panels
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.vertices.clone())
+        else {
+            return;
+        };
+        let from = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.placement.clone());
+        let holds = self.scene.garment.authored_holds[range.clone()]
+            .iter()
+            .any(|h| *h);
+        match (from, &self.authoring.preview_state) {
+            (Some(from), Some(start)) if !holds && start.x.len() == self.scene.state.x.len() => {
+                let (q, t) = from.motion_to(placement);
+                for i in range {
+                    self.scene.state.x[i] = q * start.x[i] + t;
+                    self.scene.state.v[i] = DVec3::ZERO;
+                }
+            }
+            _ => {
+                for i in range {
+                    let uv = self.scene.garment.mesh.uv[i];
+                    self.scene.state.x[i] = placement.transform(DVec3::new(uv.x, -uv.y, 0.));
+                    self.scene.state.v[i] = DVec3::ZERO;
+                }
+            }
+        }
     }
     pub(super) fn commit_placement(&mut self) -> bool {
         if let (Some(panel), Some(placement)) = (
             self.authoring.selected.clone(),
             self.authoring.preview.clone(),
-        ) && !self.edit(Command::Place { panel, placement })
-        {
-            self.cancel_preview();
-            return false;
+        ) {
+            self.authoring.carry_drape = true;
+            let done = self.edit(Command::Place { panel, placement });
+            self.authoring.carry_drape = false;
+            if !done {
+                self.cancel_preview();
+                return false;
+            }
         }
         true
     }
@@ -1259,7 +1301,7 @@ impl Atelier {
             self.status = if tool == Tool::Inspect {
                 "Simulation paused · paint problem faces, then Export report"
             } else if tool == Tool::Place {
-                "Selected panel laid flat · other panels retained"
+                "Move mode · simulation paused · moved pieces keep their drape"
             } else {
                 "Edit mode · simulation paused"
             }
@@ -1857,7 +1899,18 @@ impl EditorTransition<'_> {
         if edit.reset_simulation {
             self.issue.invalidate();
             let flat = edit.state_after(&self.scene.garment, &self.scene.state);
-            let kept = edit.state_keeping_drape(&self.scene.garment, &self.scene.state);
+            let kept = match (self.authoring.carry_drape, &self.authoring.preview_state) {
+                // A move in 3D: from the drape as it was before the move's preview.
+                (true, Some(before)) if before.x.len() == self.scene.state.x.len() => {
+                    edit.state_moving_drape(&self.project.template, &self.scene.garment, before)
+                }
+                (true, _) => edit.state_moving_drape(
+                    &self.project.template,
+                    &self.scene.garment,
+                    &self.scene.state,
+                ),
+                (false, _) => edit.state_keeping_drape(&self.scene.garment, &self.scene.state),
+            };
             self.scene.state = if kept.x == flat.x {
                 flat
             } else {
@@ -3162,6 +3215,82 @@ mod transition_tests {
         );
         assert_eq!(c.commands.len(), 3);
     }
+    #[test]
+    fn a_move_in_3d_installs_the_drape_carried_along() {
+        let dir = tempfile::tempdir().unwrap();
+        let avatar = dir.path().join("avatar.obj");
+        std::fs::write(&avatar, "v 10 0 -10\nv 11 0 -10\nv 10 1 -10\nf 1 2 3\n").unwrap();
+        for carry in [true, false] {
+            let mut project = FittingProject::basic(GarmentKind::Tshirt, 0, avatar.clone());
+            let mut scene = project.compile().unwrap();
+            // A stand-in drape: every point lifted off the arrangement by its own amount.
+            for (k, x) in scene.state.x.iter_mut().enumerate() {
+                x.z += 0.004 * ((k as f64) * 0.37).sin();
+            }
+            let draped = scene.state.clone();
+            let panel = project.template.panels[0].id.clone();
+            let from = project.template.panels[0].placement.clone();
+            let mut to = from.clone();
+            to.translation += DVec3::new(0., 0.02, 0.06);
+            // As during the gizmo's preview: the drape saved, the piece shown elsewhere.
+            let mut authoring = AuthoringUi {
+                preview_state: Some(draped.clone()),
+                carry_drape: carry,
+                ..Default::default()
+            };
+            let mut issue = super::super::issue_ui::IssueUi::default();
+            let (mut dirty, mut generation, mut playing, mut pending) = (false, 1, false, false);
+            let (mut metrics, mut grab, mut plane, mut error) = (None, None, None, None);
+            let mut status = String::new();
+            let mut state = EditorTransition {
+                authoring: &mut authoring,
+                project: &mut project,
+                scene: &mut scene,
+                issue: &mut issue,
+                dirty: &mut dirty,
+                generation: &mut generation,
+                playing: &mut playing,
+                pending: &mut pending,
+                metrics: &mut metrics,
+                grab: &mut grab,
+                drag_plane: &mut plane,
+                simulation_error: &mut error,
+                status: &mut status,
+                dt: 1. / 60.,
+            };
+            let range = state.scene.garment.panels[0].vertices.clone();
+            for i in range.clone() {
+                state.scene.state.x[i] += DVec3::X;
+            }
+            let edit = authoring::apply(
+                &state.project.template,
+                Command::Place {
+                    panel: panel.clone(),
+                    placement: to.clone(),
+                },
+            )
+            .unwrap();
+            let flat = edit.garment.initial_state.x.clone();
+            state.install(edit);
+            let (q, shift) = from.motion_to(&to);
+            for i in range {
+                let x = state.scene.state.x[i];
+                if carry {
+                    assert!((x - (q * draped.x[i] + shift)).length() < 1e-12);
+                } else {
+                    assert_eq!(x, flat[i]);
+                }
+            }
+            if carry {
+                assert!(
+                    state.status.contains("keep their 3D shape"),
+                    "{}",
+                    state.status
+                );
+            }
+        }
+    }
+
     #[test]
     fn marking_only_edits_keep_playback_generation_and_the_retained_drape() {
         let dir = tempfile::tempdir().unwrap();

@@ -639,6 +639,64 @@ pub struct Edit {
 }
 
 impl Edit {
+    /// Like [`Edit::state_keeping_drape`], and a draped panel that only moved in 3D (the same
+    /// mesh, its placement turned and shifted, its arrangement following that motion exactly)
+    /// is carried along with its drape instead of being laid out again: every point takes the
+    /// same rigid motion and starts at rest. Panels holding authored pins are laid out as
+    /// before, since their pins stay where they are. `before` is the template the edit was
+    /// made from.
+    pub fn state_moving_drape(
+        &self,
+        before: &GarmentTemplate,
+        previous: &CompiledGarment,
+        state: &State,
+    ) -> State {
+        let mut next = self.state_keeping_drape(previous, state);
+        if state.x.len() != previous.mesh.uv.len() || state.v.len() != state.x.len() {
+            return next;
+        }
+        for new in &self.garment.panels {
+            let Some(old) = previous.panels.iter().find(|p| p.id == new.id) else {
+                continue;
+            };
+            let (a, b) = (old.vertices.clone(), new.vertices.clone());
+            let placement = |t: &GarmentTemplate| {
+                t.panels
+                    .iter()
+                    .find(|p| p.id == new.id)
+                    .map(|p| p.placement.clone())
+            };
+            let (Some(from), Some(to)) = (placement(before), placement(&self.template)) else {
+                continue;
+            };
+            if a.len() != b.len()
+                || previous.mesh.uv[a.clone()] != self.garment.mesh.uv[b.clone()]
+                || (from.translation == to.translation
+                    && from.rotation_degrees == to.rotation_degrees)
+                || self.garment.authored_holds[b.clone()].iter().any(|h| *h)
+                || previous.authored_holds[a.clone()].iter().any(|h| *h)
+            {
+                continue;
+            }
+            let (q, t) = from.motion_to(&to);
+            let follows = previous.arrangement_positions[a.clone()]
+                .iter()
+                .zip(&self.garment.arrangement_positions[b.clone()])
+                .all(|(old, new)| (q * *old + t).distance(*new) < 1e-7);
+            let draped = state.x[a.clone()]
+                .iter()
+                .zip(&previous.arrangement_positions[a.clone()])
+                .any(|(x, rest)| x.distance(*rest) > 1e-9);
+            if !follows || !draped {
+                continue;
+            }
+            for (old_i, new_i) in a.zip(b) {
+                next.x[new_i] = q * state.x[old_i] + t;
+                next.v[new_i] = DVec3::ZERO;
+            }
+        }
+        next
+    }
     /// Keep the drape of panels whose compiled rest geometry and arrangement
     /// are unchanged. Match by panel ID and local indices, never global offsets.
     /// New/remeshed/moved panels start from their new arrangement. Solver/contact

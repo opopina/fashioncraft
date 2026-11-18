@@ -175,3 +175,55 @@ fn untouched_panels_are_copied_and_pins_hold() {
         assert_eq!(next.x[new.vertices.clone()], state.x[old.vertices.clone()]);
     }
 }
+
+#[test]
+fn a_piece_moved_in_3d_carries_its_drape() {
+    let t = rectangle();
+    let g = t.compile().unwrap();
+    let (state, _) = draped(&g);
+    let id = t.panels[0].id.clone();
+    let mut placement = t.panels[0].placement.clone();
+    placement.translation += DVec3::new(0.1, -0.05, 0.2);
+    placement.rotation_degrees += DVec3::new(10., 35., -5.);
+    let moved = authoring::apply(
+        &t,
+        Command::Place {
+            panel: id.clone(),
+            placement: placement.clone(),
+        },
+    )
+    .unwrap();
+    let next = moved.state_moving_drape(&t, &g, &state);
+    let (q, shift) = t.panels[0].placement.motion_to(&placement);
+    let range = moved.garment.panels[0].vertices.clone();
+    for i in range.clone() {
+        assert!((next.x[i] - (q * state.x[i] + shift)).length() < 1e-12);
+        assert_eq!(next.v[i], DVec3::ZERO);
+    }
+    // The shape is the drape's: distances between points are kept, not the flat layout's.
+    let d = |s: &State, a: usize, b: usize| s.x[a].distance(s.x[b]);
+    let (a, b) = (range.start, range.end - 1);
+    assert!((d(&next, a, b) - d(&state, a, b)).abs() < 1e-12);
+    assert!((d(&next, a, b) - d(&moved.garment.initial_state, a, b)).abs() > 1e-4);
+
+    // Never simulated: the new arrangement, as before.
+    assert_eq!(
+        moved.state_moving_drape(&t, &g, &g.initial_state).x,
+        moved.state_after(&g, &g.initial_state).x
+    );
+    // An edit that is not a move behaves as keeping the drape does.
+    let reshaped = authoring::apply(
+        &t,
+        Command::SetLength {
+            panel: id,
+            edge: top_edge(&t),
+            length_m: 0.46,
+            moving: SegmentEnd::End,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        reshaped.state_moving_drape(&t, &g, &state).x,
+        reshaped.state_keeping_drape(&g, &state).x
+    );
+}

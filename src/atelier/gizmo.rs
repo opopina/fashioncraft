@@ -247,20 +247,7 @@ impl Atelier {
                         Ok(placements) => {
                             self.preview_placement(p);
                             for (id, placement) in placements {
-                                if let Some(panel) = self
-                                    .scene
-                                    .garment
-                                    .panels
-                                    .iter()
-                                    .find(|panel| panel.id == id)
-                                {
-                                    for i in panel.vertices.clone() {
-                                        let uv = self.scene.garment.mesh.uv[i];
-                                        self.scene.state.x[i] =
-                                            placement.transform(DVec3::new(uv.x, -uv.y, 0.));
-                                        self.scene.state.v[i] = DVec3::ZERO;
-                                    }
-                                }
+                                self.show_panel_at(&id, &placement);
                             }
                             if let Some(drag) = self.authoring.drag.as_mut() {
                                 drag.group_translation = translation;
@@ -290,9 +277,11 @@ impl Atelier {
                     rotation: drag.group_rotation,
                 });
             if let Some(command) = group {
+                self.authoring.carry_drape = true;
                 if self.authoring.preview.is_some() && !self.edit(command) {
                     self.cancel_preview();
                 }
+                self.authoring.carry_drape = false;
             } else {
                 self.commit_placement();
             }
@@ -390,7 +379,7 @@ impl Atelier {
         ui.painter().with_clip_rect(rect).text(
             rect.left_bottom() + Vec2::new(12., -12.),
             egui::Align2::LEFT_BOTTOM,
-            format!("{count} selected · Shift-click: toggle · Shift-drag: add\nHold L + drag: lasso · Ctrl/Cmd: subtract · Alt: through\nMoving resets selected drape"),
+            format!("{count} {}", super::i18n::tr(self.prefs.language, "selected · Shift-click: toggle · Shift-drag: add\nHold L + drag: lasso · Ctrl/Cmd: subtract · Alt: through\nMoved pieces keep their drape")),
             egui::FontId::proportional(12.), Color32::LIGHT_GRAY,
         );
         let Some((_, _, center, radius)) = self.gizmo_basis() else {

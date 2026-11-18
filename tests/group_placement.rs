@@ -165,3 +165,37 @@ fn invalid_group_is_atomic_and_unselected_drape_is_preserved() {
     let moved = old.panels[0].vertices.clone();
     assert_eq!(next.x[moved.clone()], e.garment.initial_state.x[moved]);
 }
+
+#[test]
+fn a_draped_group_moved_in_3d_keeps_its_shape() {
+    let t = template();
+    let old = t.compile().unwrap();
+    let mut state = old.initial_state.clone();
+    // A stand-in drape: every point lifted by its own amount.
+    for (k, p) in state.x.iter_mut().enumerate() {
+        p.z += 0.02 * ((k as f64) * 0.37).sin();
+    }
+    let ids: Vec<String> = t.panels.iter().map(|p| p.id.clone()).collect();
+    let rotation = DQuat::from_rotation_y(0.4);
+    let e = authoring::apply(&t, command(ids.clone(), rotation)).unwrap();
+    let next = e.state_moving_drape(&t, &old, &state);
+    for (k, id) in ids.iter().enumerate() {
+        let (q, shift) = t.panels[k]
+            .placement
+            .motion_to(&e.template.panels[k].placement);
+        let range = e
+            .garment
+            .panels
+            .iter()
+            .find(|p| &p.id == id)
+            .unwrap()
+            .vertices
+            .clone();
+        for i in range {
+            assert!(
+                (next.x[i] - (q * state.x[i] + shift)).length() < 1e-9,
+                "{id}"
+            );
+        }
+    }
+}

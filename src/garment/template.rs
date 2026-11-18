@@ -99,8 +99,18 @@ impl Default for Placement {
 }
 impl Placement {
     pub fn transform(&self, p: DVec3) -> DVec3 {
+        self.rotation() * p + self.translation
+    }
+    /// The placement's rotation.
+    pub fn rotation(&self) -> DQuat {
         let r = self.rotation_degrees * (std::f64::consts::PI / 180.0);
-        DQuat::from_euler(EulerRot::XYZ, r.x, r.y, r.z) * p + self.translation
+        DQuat::from_euler(EulerRot::XYZ, r.x, r.y, r.z)
+    }
+    /// The rigid motion `(q, t)` taking what this placement puts in the world to where `to`
+    /// puts it: a world point `x` goes to `q * x + t`.
+    pub fn motion_to(&self, to: &Placement) -> (DQuat, DVec3) {
+        let q = to.rotation() * self.rotation().inverse();
+        (q, to.translation - q * self.translation)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -121,7 +121,7 @@ impl Atelier {
     }
 
     /// Whether the take still fits the cloth on show.
-    fn current_take(&self) -> Option<&Take> {
+    pub(super) fn current_take(&self) -> Option<&Take> {
         self.authoring
             .animation
             .take
@@ -220,7 +220,7 @@ impl Atelier {
     }
 
     /// Move the timeline to `time`; the pose window, when open, edits the pose found there.
-    fn seek_animation(&mut self, time: f64) {
+    pub(super) fn seek_animation(&mut self, time: f64) {
         let a = &mut self.authoring.animation;
         a.time = time.max(0.);
         if self.authoring.pose.open
@@ -423,6 +423,10 @@ impl Atelier {
             .map_or(0., AvatarAnimation::duration);
         let take = self.current_take().map_or(0., Take::duration);
         keys.max(take)
+    }
+
+    pub(super) fn stop_animation_preview(&mut self) {
+        self.authoring.animation.previewing = false;
     }
 
     pub(super) fn toggle_animation_preview(&mut self) -> Result<(), String> {

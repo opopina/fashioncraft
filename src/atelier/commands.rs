@@ -101,6 +101,10 @@ pub enum CommandId {
     PlayAnimation,
     RecordAnimation,
     DeleteAnimation,
+    ExportPointCache,
+    ExportObjSequence,
+    CaptureView3d,
+    CaptureVideo,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1002,6 +1006,42 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         DeleteAnimation,
         "animation.delete",
         "Delete the animation",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportPointCache,
+        "animation.export_pc2",
+        "Export the take as a point cache…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportObjSequence,
+        "animation.export_obj_sequence",
+        "Export the take as an OBJ sequence…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        CaptureView3d,
+        "capture.view3d",
+        "Save the 3D view as PNG…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        CaptureVideo,
+        "animation.video",
+        "Capture the take as a video…",
         Simulation,
         None,
         NotUndoable,

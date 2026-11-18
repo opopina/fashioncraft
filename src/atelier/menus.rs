@@ -83,12 +83,18 @@ const FILE: &[Item] = &[
             Todo("glTF / GLB…"),
             Todo("Alembic…"),
             Todo("USD…"),
-            Todo("Point cache…"),
-            Todo("OBJ sequence…"),
+            Run("Point cache…", C::ExportPointCache),
+            Run("OBJ sequence…", C::ExportObjSequence),
         ],
     ),
     S,
-    Sub("Snapshot", &[Todo("2D patterns at 1:1…"), Todo("3D view…")]),
+    Sub(
+        "Snapshot",
+        &[
+            Todo("2D patterns at 1:1…"),
+            Run("3D view…", C::CaptureView3d),
+        ],
+    ),
     S,
     Run("Recover snapshot…", C::RecoverSnapshot),
     Run("Garment templates…", C::OpenTemplates),
@@ -300,7 +306,7 @@ const ANIMATION: &[Item] = &[
     Run("Record", C::RecordAnimation),
     Run("Delete animation", C::DeleteAnimation),
     S,
-    Todo("Video capture…"),
+    Run("Video capture…", C::CaptureVideo),
 ];
 
 const RENDER: &[Item] = &[
@@ -633,7 +639,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 94, "{done} of {all}");
+        assert!(done >= 98, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

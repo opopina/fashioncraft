@@ -276,3 +276,62 @@ fn recording_raises_the_arm_into_a_cloth_and_carries_it_up() {
     let frames = recorder.take().frames.len();
     assert!((4..11).contains(&frames), "{frames} frames");
 }
+
+#[test]
+fn takes_and_the_moving_avatar_are_written_as_obj_sequences() {
+    let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    let scene = project.compile().unwrap();
+    let x = &scene.state.x;
+    let frame = |dy: f32| -> Vec<[f32; 3]> {
+        x.iter()
+            .map(|p| [p.x as f32, p.y as f32 + dy, p.z as f32])
+            .collect()
+    };
+    let take = Take {
+        fps: 10.,
+        frames: vec![frame(0.), frame(0.1)],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        take.write_obj_sequence(&scene.garment, dir.path(), "cloth")
+            .unwrap(),
+        2
+    );
+    let second = std::fs::read_to_string(dir.path().join("cloth_0001.obj")).unwrap();
+    let vertices: Vec<f64> = second
+        .lines()
+        .filter_map(|l| l.strip_prefix("v "))
+        .map(|l| l.split_whitespace().nth(1).unwrap().parse().unwrap())
+        .collect();
+    assert_eq!(vertices.len(), x.len());
+    assert!((vertices[0] - (x[0].y + 0.1)).abs() < 1e-6);
+    assert!(second.lines().any(|l| l.starts_with("vt ")));
+    // A take from another mesh is refused.
+    let mut other = take.clone();
+    other.frames[0].pop();
+    other.frames[1].pop();
+    assert!(
+        other
+            .write_obj_sequence(&scene.garment, dir.path(), "x")
+            .is_err()
+    );
+
+    // The avatar along a motion, one file per frame, moving between them.
+    let animation = motion("Raise arms", &Pose::default()).unwrap();
+    let n = marvelous_cloth::avatar_animation::write_body_sequence(
+        &project,
+        &animation,
+        3,
+        dir.path(),
+        "avatar",
+    )
+    .unwrap();
+    assert_eq!(n, 3);
+    let body =
+        |k: usize| std::fs::read_to_string(dir.path().join(format!("avatar_{k:04}.obj"))).unwrap();
+    let rest = SurfaceMesh::load_obj(&mannequin()).unwrap();
+    let first = SurfaceMesh::parse_obj(&body(0)).unwrap();
+    assert_eq!(first.vertices.len(), rest.vertices.len());
+    assert_eq!(first.triangles, rest.triangles);
+    assert_ne!(body(0), body(2));
+}

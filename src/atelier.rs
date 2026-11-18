@@ -10,6 +10,8 @@ use marvelous_cloth::{
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 #[path = "atelier/activation_ui.rs"]
 mod activation_ui;
+#[path = "atelier/animation_export.rs"]
+mod animation_export;
 #[path = "atelier/animation_ui.rs"]
 mod animation_ui;
 #[path = "atelier/arrange_ui.rs"]
@@ -567,6 +569,10 @@ impl Atelier {
                 }
             }
             Id::DeleteAnimation => self.delete_animation()?,
+            Id::ExportPointCache => self.export_point_cache()?,
+            Id::ExportObjSequence => self.export_obj_sequence()?,
+            Id::CaptureView3d => self.capture_view3d()?,
+            Id::CaptureVideo => self.capture_video()?,
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());
@@ -1217,6 +1223,7 @@ impl eframe::App for Atelier {
                     }
                 }
             });
+        self.drive_media3d(&ctx);
         self.prefs_dirty |= self.prefs != previous_preferences;
         if self.prefs_dirty && !ctx.input(|i| i.pointer.any_down()) {
             if let Err(error) = settings::save(&self.output.join(settings::FILE_NAME), &self.prefs)

@@ -346,6 +346,81 @@ impl Take {
     }
 }
 
+impl Take {
+    /// Write each frame of the cloth as `<stem>_0000.obj`, `<stem>_0001.obj`… in `dir`, with
+    /// the garment's pattern UVs. Returns how many files were written.
+    pub fn write_obj_sequence(
+        &self,
+        garment: &CompiledGarment,
+        dir: &Path,
+        stem: &str,
+    ) -> Result<usize, String> {
+        if self.frames.is_empty() {
+            return Err("The take holds no frames".into());
+        }
+        if self.frames[0].len() != garment.mesh.uv.len() {
+            return Err("The take was recorded on another mesh".into());
+        }
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        for k in 0..self.frames.len() {
+            let x = self.positions(k);
+            let state = State {
+                v: vec![DVec3::ZERO; x.len()],
+                x,
+                time: k as f64 / self.fps,
+            };
+            std::fs::write(
+                dir.join(format!("{stem}_{k:04}.obj")),
+                crate::garment::export::obj(garment, &state),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(self.frames.len())
+    }
+}
+
+/// `surface` as OBJ text: positions in metres and triangles.
+pub fn surface_obj(surface: &SurfaceMesh) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::from("# avatar and scene objects; metres\n");
+    for p in &surface.vertices {
+        writeln!(out, "v {:.9} {:.9} {:.9}", p.x, p.y, p.z).unwrap();
+    }
+    for [a, b, c] in &surface.triangles {
+        writeln!(out, "f {} {} {}", a + 1, b + 1, c + 1).unwrap();
+    }
+    out
+}
+
+/// Write the avatar (with the scene objects) at each of `frames` frames of `animation` as
+/// `<stem>_0000.obj`… in `dir`. Returns how many files were written.
+pub fn write_body_sequence(
+    project: &FittingProject,
+    animation: &AvatarAnimation,
+    frames: usize,
+    dir: &Path,
+    stem: &str,
+) -> Result<usize, String> {
+    animation.validate()?;
+    let avatar = match &project.avatar_pose {
+        Some(p) => p.clone(),
+        None => crate::fitting::AvatarPose::from_sidecar(&project.avatar_path)?,
+    };
+    let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
+    let rig = avatar.rig(&rest)?;
+    let props = crate::fitting::scene_objects_mesh(&project.scene_objects)?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    for k in 0..frames {
+        let mut body = rig.posed(&rest, &animation.pose_at(k as f64 / animation.fps));
+        if let Some(props) = &props {
+            body = body.merged(props);
+        }
+        std::fs::write(dir.join(format!("{stem}_{k:04}.obj")), surface_obj(&body))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(frames)
+}
+
 /// Moving into the animation's first pose before recording starts.
 struct LeadIn {
     from: Pose,

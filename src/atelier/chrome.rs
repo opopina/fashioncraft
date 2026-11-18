@@ -449,6 +449,8 @@ impl Atelier {
         } else {
             vec![]
         };
+        let fabric_images = self.fabric_images(&ctx, &optics);
+        let fabric_images: Vec<_> = fabric_images.iter().map(Option::as_deref).collect();
         let graphics: Vec<marvelous_cloth::render::GraphicDraw> = graphic_draws
             .iter()
             .map(|(image, triangles)| marvelous_cloth::render::GraphicDraw { image, triangles })
@@ -482,6 +484,7 @@ impl Atelier {
                 },
                 trims: &trims,
                 graphics: &graphics,
+                fabric_images: &fabric_images,
                 display: marvelous_cloth::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),

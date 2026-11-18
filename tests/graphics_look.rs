@@ -2,7 +2,7 @@
 //! little off the side they are printed on, and their image files kept with the project.
 use glam::{DVec2, DVec3};
 use marvelous_cloth::{
-    fitting::{FittingProject, GraphicAsset},
+    fitting::{FittingProject, ImageAsset},
     garment::{
         CompiledGarment, GarmentTemplate,
         graphics::{GRAPHIC_LIFT_M, GraphicPlacement, GraphicSide, clip_to_image},
@@ -147,12 +147,12 @@ fn graphic_images_are_copied_with_the_project_and_unused_ones_dropped() {
     let mut project = project();
     let panel = project.template.panels[0].id.clone();
     project.template.graphics = vec![placement(&panel, GraphicSide::Front)];
-    project.graphic_assets = vec![
-        GraphicAsset {
+    project.image_assets = vec![
+        ImageAsset {
             id: "image_1".into(),
             path: image.clone(),
         },
-        GraphicAsset {
+        ImageAsset {
             id: "image_2".into(),
             path: stray,
         },
@@ -164,8 +164,8 @@ fn graphic_images_are_copied_with_the_project_and_unused_ones_dropped() {
     assert!(!text.contains("image_2"));
     assert!(text.contains("garment.json.assets"));
     let loaded = FittingProject::load(&file).unwrap();
-    assert_eq!(loaded.graphic_assets.len(), 1);
-    let asset = &loaded.graphic_assets[0];
+    assert_eq!(loaded.image_assets.len(), 1);
+    let asset = &loaded.image_assets[0];
     assert_eq!(asset.id, "image_1");
     assert!(asset.path.starts_with(file.parent().unwrap()));
     assert_eq!(
@@ -175,19 +175,51 @@ fn graphic_images_are_copied_with_the_project_and_unused_ones_dropped() {
 }
 
 #[test]
-fn duplicate_graphic_asset_ids_are_refused() {
+fn duplicate_image_asset_ids_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let mut project = project();
-    project.graphic_assets = vec![
-        GraphicAsset {
+    project.image_assets = vec![
+        ImageAsset {
             id: "image_1".into(),
             path: dir.path().join("a.png"),
         },
-        GraphicAsset {
+        ImageAsset {
             id: "image_1".into(),
             path: dir.path().join("b.png"),
         },
     ];
     let error = project.save(&dir.path().join("p.json")).unwrap_err();
-    assert!(error.contains("Duplicate graphic asset"), "{error}");
+    assert!(error.contains("Duplicate image asset"), "{error}");
+}
+
+#[test]
+fn images_used_by_fabric_textures_are_kept_with_the_project() {
+    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
+    let dir = tempfile::tempdir().unwrap();
+    let image = dir.path().join("plaid.png");
+    std::fs::write(&image, b"pixels").unwrap();
+    let mut project = project();
+    let fabric = project.template.fabrics[0].id.clone();
+    project.template.fabric_appearance.insert(
+        fabric,
+        FabricAppearance {
+            texture: Some(FabricTexture {
+                asset_id: "image_1".into(),
+                width_mm: 30.,
+                height_mm: 30.,
+                rotation_degrees: 0.,
+                relief_mm: 0.,
+            }),
+            ..Default::default()
+        },
+    );
+    project.image_assets = vec![ImageAsset {
+        id: "image_1".into(),
+        path: image,
+    }];
+    let file = dir.path().join("p.json");
+    project.save(&file).unwrap();
+    let loaded = FittingProject::load(&file).unwrap();
+    assert_eq!(loaded.image_assets.len(), 1);
+    assert!(loaded.image_assets[0].path.exists());
 }

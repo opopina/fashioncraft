@@ -1,6 +1,6 @@
 //! Graphics (prints and logos) placed on a piece: material-space placement math, clipping
 //! to the image rectangle and the 3D triangles a renderer draws. Image files live in the
-//! fitting project (see `fitting::GraphicAsset`); this module never loads pixels.
+//! fitting project (see `fitting::ImageAsset`); this module never loads pixels.
 use glam::{DVec2, DVec3};
 use serde::{Deserialize, Serialize};
 

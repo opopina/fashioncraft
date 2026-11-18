@@ -15,6 +15,46 @@ pub struct FabricAppearance {
     /// Procedural weave drawn on the surface, along the fabric's grain.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weave: Option<Weave>,
+    /// An image repeated over both faces along the grain, tinted by their colours.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub texture: Option<FabricTexture>,
+}
+
+/// An image tiled over a fabric. Its pixels live in the project's image assets.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FabricTexture {
+    pub asset_id: String,
+    /// Real width of one repeat of the image along the warp, mm.
+    pub width_mm: f64,
+    /// Real height of one repeat of the image along the weft, mm.
+    pub height_mm: f64,
+    /// Turn of the image from the grain, degrees.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rotation_degrees: f64,
+    /// Relief drawn from the image's brightness: how far its brightest parts stand above
+    /// its darkest, mm. Zero is flat.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub relief_mm: f64,
+}
+
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
+/// Largest relief a fabric texture may draw, mm.
+pub const MAX_TEXTURE_RELIEF_MM: f64 = 5.;
+
+impl FabricTexture {
+    /// Image coordinates of a point given in warp and weft metres: one repeat spans [0,1].
+    pub fn image_uv(&self, warp_weft: glam::DVec2) -> glam::DVec2 {
+        let (sin, cos) = self.rotation_degrees.to_radians().sin_cos();
+        let p = glam::DVec2::new(
+            warp_weft.x * cos + warp_weft.y * sin,
+            -warp_weft.x * sin + warp_weft.y * cos,
+        );
+        p / glam::DVec2::new(self.width_mm, self.height_mm) * 1000.
+    }
 }
 
 /// A woven or knitted surface drawn procedurally: thread relief and shading, no texture file.
@@ -74,6 +114,7 @@ impl Default for FabricAppearance {
             roughness: 0.8,
             back_color_srgb: None,
             weave: None,
+            texture: None,
         }
     }
 }
@@ -88,6 +129,26 @@ impl FabricAppearance {
             return Err(
                 "A weave needs a thread spacing of 0.05 to 20 mm and a contrast of 0 to 1".into(),
             );
+        }
+        if let Some(t) = &self.texture {
+            let id_ok = !t.asset_id.is_empty()
+                && t.asset_id.len() <= 80
+                && t.asset_id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+            if !id_ok {
+                return Err("A fabric texture needs an image asset ID".into());
+            }
+            if !(1.0..=5000.0).contains(&t.width_mm) || !(1.0..=5000.0).contains(&t.height_mm) {
+                return Err("A fabric texture repeat must be 1 to 5000 mm on each side".into());
+            }
+            if !t.rotation_degrees.is_finite()
+                || !(0.0..=MAX_TEXTURE_RELIEF_MM).contains(&t.relief_mm)
+            {
+                return Err(format!(
+                    "A fabric texture needs a finite angle and a relief of 0 to {MAX_TEXTURE_RELIEF_MM} mm"
+                ));
+            }
         }
         Ok(())
     }

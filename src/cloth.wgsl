@@ -6,6 +6,9 @@ struct View {
     ambient: vec4f, // ambient gain, padding
 };
 @group(0) @binding(0) var<uniform> view: View;
+// Fabric textures, one per layer; a vertex's map.z picks its layer (-1 for none).
+@group(1) @binding(0) var fabric_maps: texture_2d_array<f32>;
+@group(1) @binding(1) var fabric_sampler: sampler;
 struct VertexOut {
     @builtin(position) position: vec4<f32>,
     @location(0) normal: vec3<f32>,
@@ -16,13 +19,17 @@ struct VertexOut {
     @location(5) back: vec3f,
     @location(6) uv: vec2f,
     @location(7) weave: vec3f,
+    // Texture coordinates (one repeat spans [0,1]), layer, relief height in metres.
+    @location(8) map: vec4f,
 };
 
 @vertex
 fn vs_main(@location(0) clip: vec4<f32>, @location(1) normal: vec3<f32>,
            @location(2) color: vec4<f32>, @location(3) bary: vec3<f32>, @location(4) roughness: f32,
-           @location(5) back: vec3f, @location(6) uv: vec2f, @location(7) weave: vec3f) -> VertexOut {
+           @location(5) back: vec3f, @location(6) uv: vec2f, @location(7) weave: vec3f,
+           @location(8) map: vec4f) -> VertexOut {
     var out: VertexOut;
+    out.map = map;
     out.back = back;
     out.uv = uv;
     out.weave = weave;
@@ -90,6 +97,15 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
     // The fabric's front is the side its pattern shows on the 2D board, which faces away from
     // the faces' winding normal: a placed garment shows it outside.
     var base = select(in.color.rgb, in.back, front);
+    // The fabric texture and two neighbouring texels for its relief, sampled in uniform
+    // control flow; faces without a texture ignore them.
+    let layer = i32(max(in.map.z, 0.0));
+    let texel = 1.0 / vec2f(textureDimensions(fabric_maps));
+    let image = textureSample(fabric_maps, fabric_sampler, in.map.xy, layer).rgb;
+    let image_u = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(texel.x, 0.0), layer).rgb;
+    let image_v = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(0.0, texel.y), layer).rgb;
+    let dmap_dx = dpdx(in.map.xy);
+    let dmap_dy = dpdy(in.map.xy);
     if in.weave.x > 0.5 {
         let w = weave_height(threads, in.weave.x);
         // Threads finer than about a pixel fade to their mean, instead of shimmering.
@@ -102,6 +118,20 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
         let b = p2 * dc_dx.y + p1 * dc_dy.y;
         let scale = inverseSqrt(max(max(dot(t, t), dot(b, b)), 1e-20));
         n = normalize(n - 0.35 * in.weave.z * fade * (w.y * t + w.z * b) * scale);
+    }
+    if in.map.z > -0.5 {
+        base = base * image;
+        // Brightness as height: tilt the normal against its gradient along the surface.
+        let luma = vec3f(0.2126, 0.7152, 0.0722);
+        let slope = vec2f(dot(image_u - image, luma), dot(image_v - image, luma)) / texel;
+        let r1 = cross(dp_dy, n);
+        let r2 = cross(n, dp_dx);
+        let det = dot(dp_dx, r1);
+        if abs(det) > 1e-24 {
+            let grad_u = (r1 * dmap_dx.x + r2 * dmap_dy.x) / det;
+            let grad_v = (r1 * dmap_dx.y + r2 * dmap_dy.y) / det;
+            n = normalize(n - in.map.w * (slope.x * grad_u + slope.y * grad_v));
+        }
     }
     let lighting = 0.35 * view.ambient.x + 0.65 * view.light.w * abs(dot(n, normalize(view.light.xyz)));
     if in.roughness < 0.0 {

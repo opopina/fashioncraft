@@ -23,9 +23,11 @@ impl Atelier {
             .fabrics
             .iter()
             .find(|f| f.id == panel.fabric)
+            .cloned()
         else {
             return;
         };
+        let fabric = &fabric;
         if self
             .authoring
             .fabric_draft
@@ -53,11 +55,31 @@ impl Atelier {
             });
         }
         let mut appearance_targets = Vec::new();
+        let mut texture = TextureRequest {
+            name: self
+                .authoring
+                .fabric_draft
+                .as_ref()
+                .and_then(|d| d.appearance.as_ref()?.texture.as_ref())
+                .and_then(|t| {
+                    self.project
+                        .image_assets
+                        .iter()
+                        .find(|a| a.id == t.asset_id)
+                })
+                .and_then(|a| a.path.file_stem())
+                .map(|s| s.to_string_lossy().into_owned()),
+            pick: false,
+        };
         let appearance_action = appearance_controls(
             ui,
             &mut self.authoring.fabric_draft.as_mut().unwrap().appearance,
             &mut appearance_targets,
+            &mut texture,
         );
+        if texture.pick {
+            self.pick_fabric_texture();
+        }
         for (name, rect) in appearance_targets {
             if let Some(smoke) = &mut self.authoring_smoke {
                 smoke.target_rect(ui, name, rect);
@@ -194,6 +216,44 @@ impl Atelier {
         }
     }
 }
+impl Atelier {
+    /// Stage a PNG as the drafted fabric's texture; its height follows the image's aspect.
+    fn pick_fabric_texture(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG image", &["png"])
+            .pick_file()
+        else {
+            return;
+        };
+        let (w, h) = match image::image_dimensions(&path) {
+            Ok(size) => size,
+            Err(e) => {
+                self.status = format!("Cannot open {}: {e}", path.display());
+                return;
+            }
+        };
+        let asset_id = self.asset_for(path);
+        let Some(appearance) = self
+            .authoring
+            .fabric_draft
+            .as_mut()
+            .and_then(|d| d.appearance.as_mut())
+        else {
+            return;
+        };
+        let width_mm = appearance.texture.as_ref().map_or(100., |t| t.width_mm);
+        let previous = appearance.texture.take();
+        appearance.texture = Some(marvelous_cloth::garment::appearance::FabricTexture {
+            asset_id,
+            width_mm,
+            height_mm: (width_mm * f64::from(h) / f64::from(w.max(1))).clamp(1., 5000.),
+            rotation_degrees: previous.as_ref().map_or(0., |t| t.rotation_degrees),
+            relief_mm: previous.as_ref().map_or(0., |t| t.relief_mm),
+        });
+        self.status = "Texture staged · Apply appearance to show it".into();
+    }
+}
+
 fn value(
     ui: &mut egui::Ui,
     label: &str,
@@ -216,10 +276,18 @@ fn value(
     .inner
 }
 
+/// The fabric texture's image name for the controls, and whether a new image was asked for.
+#[derive(Default)]
+struct TextureRequest {
+    name: Option<String>,
+    pick: bool,
+}
+
 fn appearance_controls(
     ui: &mut egui::Ui,
     draft: &mut Option<marvelous_cloth::garment::appearance::FabricAppearance>,
     targets: &mut Vec<(&'static str, egui::Rect)>,
+    texture: &mut TextureRequest,
 ) -> Option<Option<marvelous_cloth::garment::appearance::FabricAppearance>> {
     ui.strong("Fabric appearance");
     ui.small("Shared by panels using this fabric. Does not change its mechanics.");
@@ -316,6 +384,63 @@ fn appearance_controls(
             ui.add(egui::Slider::new(&mut w.contrast, 0.0..=1.0).text("Weave contrast"));
             let _: &Weave = w;
         }
+        ui.horizontal(|ui| {
+            ui.label("Texture");
+            if value.texture.is_some() {
+                ui.label(texture.name.as_deref().unwrap_or("image"));
+            }
+            let pick = if value.texture.is_some() {
+                "Replace…"
+            } else {
+                "Image…"
+            };
+            texture.pick = ui
+                .button(pick)
+                .on_hover_text("Repeat a PNG image over the fabric along its grain")
+                .clicked();
+            if value.texture.is_some() && ui.small_button("Remove").clicked() {
+                value.texture = None;
+            }
+        });
+        if let Some(t) = value.texture.as_mut() {
+            ui.horizontal(|ui| {
+                ui.label("Repeat");
+                ui.add(
+                    egui::DragValue::new(&mut t.width_mm)
+                        .range(1.0..=5000.)
+                        .speed(1.)
+                        .fixed_decimals(1)
+                        .prefix("W ")
+                        .suffix(" mm"),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut t.height_mm)
+                        .range(1.0..=5000.)
+                        .speed(1.)
+                        .fixed_decimals(1)
+                        .prefix("H ")
+                        .suffix(" mm"),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("Angle");
+                ui.add(
+                    egui::DragValue::new(&mut t.rotation_degrees)
+                        .range(-360.0..=360.)
+                        .speed(0.5)
+                        .suffix("°"),
+                );
+            });
+            ui.add(
+                egui::Slider::new(
+                    &mut t.relief_mm,
+                    0.0..=marvelous_cloth::garment::appearance::MAX_TEXTURE_RELIEF_MM,
+                )
+                .text("Relief (mm)"),
+            )
+            .on_hover_text("Bright parts of the image stand out by this much; 0 is flat");
+            ui.small("The colours tint the image: white shows it as it is.");
+        }
     }
     let apply = ui.button("Apply appearance");
     #[cfg(test)]
@@ -338,7 +463,9 @@ mod appearance_tests {
             Option<marvelous_cloth::garment::appearance::FabricAppearance>,
             Vec<Option<marvelous_cloth::garment::appearance::FabricAppearance>>,
         )| {
-            if let Some(value) = appearance_controls(ui, &mut state.0, &mut Vec::new()) {
+            if let Some(value) =
+                appearance_controls(ui, &mut state.0, &mut Vec::new(), &mut Default::default())
+            {
                 state.1.push(value);
             }
         };
@@ -368,7 +495,9 @@ mod appearance_tests {
             Option<marvelous_cloth::garment::appearance::FabricAppearance>,
             Vec<Option<marvelous_cloth::garment::appearance::FabricAppearance>>,
         )| {
-            if let Some(value) = appearance_controls(ui, &mut state.0, &mut Vec::new()) {
+            if let Some(value) =
+                appearance_controls(ui, &mut state.0, &mut Vec::new(), &mut Default::default())
+            {
                 state.1.push(value);
             }
         };

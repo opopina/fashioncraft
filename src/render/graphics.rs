@@ -36,7 +36,7 @@ pub(super) struct GraphicLayer {
 }
 
 /// Mip chain of straight-alpha RGBA8 pixels, halving with a 2×2 box filter.
-fn mip_chain(image: &GraphicImage) -> Vec<([u32; 2], Vec<u8>)> {
+pub(super) fn mip_chain(image: &GraphicImage) -> Vec<([u32; 2], Vec<u8>)> {
     let mut levels = vec![(image.size, image.rgba.clone())];
     while let Some(([w, h], pixels)) = levels.last()
         && (*w > 1 || *h > 1)

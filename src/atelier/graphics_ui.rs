@@ -6,7 +6,7 @@ use super::*;
 use glam::DVec2;
 use marvelous_cloth::{
     authoring::Command,
-    fitting::GraphicAsset,
+    fitting::ImageAsset,
     garment::graphics::{GraphicPlacement, GraphicSide, GraphicTriangle, clip_to_image},
     render::GraphicImage,
 };
@@ -140,7 +140,7 @@ impl Atelier {
     ) -> Option<&Result<LoadedGraphic, String>> {
         let path = self
             .project
-            .graphic_assets
+            .image_assets
             .iter()
             .find(|a| a.id == asset)?
             .path
@@ -207,6 +207,24 @@ impl Atelier {
         draws
     }
 
+    /// The image of each material's fabric texture, by material index.
+    pub(super) fn fabric_images(
+        &mut self,
+        ctx: &egui::Context,
+        optics: &[Option<marvelous_cloth::garment::appearance::FabricAppearance>],
+    ) -> Vec<Option<Arc<GraphicImage>>> {
+        optics
+            .iter()
+            .map(|appearance| {
+                let asset = &appearance.as_ref()?.texture.as_ref()?.asset_id;
+                match self.graphic(ctx, asset)? {
+                    Ok(loaded) => Some(loaded.image.clone()),
+                    Err(_) => None,
+                }
+            })
+            .collect()
+    }
+
     fn new_graphic_id(&self) -> String {
         let used = |id: &str| self.project.template.graphics.iter().any(|g| g.id == id);
         (1..)
@@ -216,16 +234,16 @@ impl Atelier {
     }
 
     /// The asset of `path`, adding it to the project's table when it is new.
-    fn asset_for(&mut self, path: PathBuf) -> String {
-        if let Some(asset) = self.project.graphic_assets.iter().find(|a| a.path == path) {
+    pub(super) fn asset_for(&mut self, path: PathBuf) -> String {
+        if let Some(asset) = self.project.image_assets.iter().find(|a| a.path == path) {
             return asset.id.clone();
         }
-        let used = |id: &str| self.project.graphic_assets.iter().any(|a| a.id == id);
+        let used = |id: &str| self.project.image_assets.iter().any(|a| a.id == id);
         let id = (1..)
             .map(|k| format!("image_{k}"))
             .find(|id| !used(id))
             .unwrap();
-        self.project.graphic_assets.push(GraphicAsset {
+        self.project.image_assets.push(ImageAsset {
             id: id.clone(),
             path,
         });
@@ -279,7 +297,7 @@ impl Atelier {
             .collect();
         let names: HashMap<String, String> = self
             .project
-            .graphic_assets
+            .image_assets
             .iter()
             .map(|a| {
                 let name = a

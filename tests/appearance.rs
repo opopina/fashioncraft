@@ -161,3 +161,48 @@ fn clipboard_keeps_optical_identity_and_material_split_inherits_it() {
     let text: serde_json::Value = serde_json::from_str(&clip.to_text().unwrap()).unwrap();
     assert!(text["template"]["fabric_appearance"].get(split).is_none());
 }
+
+#[test]
+fn fabric_textures_are_validated_and_turn_with_their_angle() {
+    use glam::DVec2;
+    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
+    let texture = FabricTexture {
+        asset_id: "image_1".into(),
+        width_mm: 40.,
+        height_mm: 20.,
+        rotation_degrees: 90.,
+        relief_mm: 1.,
+    };
+    let mut a = FabricAppearance {
+        texture: Some(texture.clone()),
+        ..Default::default()
+    };
+    a.validate().unwrap();
+    // Turned a quarter: the warp runs along the image's negative height.
+    let uv = texture.image_uv(DVec2::new(0.04, 0.));
+    assert!(uv.x.abs() < 1e-12 && (uv.y + 2.).abs() < 1e-12, "{uv:?}");
+    for broken in [
+        FabricTexture {
+            width_mm: 0.,
+            ..texture.clone()
+        },
+        FabricTexture {
+            relief_mm: 6.,
+            ..texture.clone()
+        },
+        FabricTexture {
+            asset_id: "../escape".into(),
+            ..texture.clone()
+        },
+        FabricTexture {
+            rotation_degrees: f64::NAN,
+            ..texture.clone()
+        },
+    ] {
+        a.texture = Some(broken);
+        assert!(a.validate().is_err());
+    }
+    // A fabric without a texture writes no texture key, as before.
+    let text = serde_json::to_string(&FabricAppearance::default()).unwrap();
+    assert!(!text.contains("texture"));
+}

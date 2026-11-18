@@ -23,7 +23,7 @@ fn ready() -> CapabilityContext {
 fn every_command_has_a_unique_stable_key_and_a_real_descriptor() {
     let mut keys = std::collections::BTreeSet::new();
     let mut ids = std::collections::HashSet::new();
-    assert_eq!(REGISTRY.len(), 33);
+    assert_eq!(REGISTRY.len(), 59);
     for desc in REGISTRY {
         assert!(!desc.label.trim().is_empty());
         assert!(desc.key.contains('.'), "{:?}", desc.id);
@@ -46,7 +46,26 @@ fn shortcuts_are_only_for_wired_keys() {
         bindings,
         vec![
             (CommandId::ToggleSimulation, "Space"),
-            (CommandId::InvertSelection, "Shift+Cmd+I")
+            (CommandId::InvertSelection, "Shift+Cmd+I"),
+            (CommandId::OpenProject, "Cmd+O"),
+            (CommandId::SaveProject, "Cmd+S"),
+            (CommandId::SaveProjectAs, "Shift+Cmd+S"),
+            (CommandId::Undo, "Cmd+Z"),
+            (CommandId::Redo, "Shift+Cmd+Z"),
+            (CommandId::ViewFront, "2"),
+            (CommandId::ViewBack, "8"),
+            (CommandId::ViewAvatarRight, "4"),
+            (CommandId::ViewAvatarLeft, "6"),
+            (CommandId::ViewTop, "5"),
+            (CommandId::ViewBottom, "0"),
+            (CommandId::ViewThreeQuarterRight, "1"),
+            (CommandId::ViewThreeQuarterLeft, "3"),
+            (CommandId::FrameView, "F"),
+            (CommandId::ToggleAvatar, "Shift+A"),
+            (CommandId::ToggleGarment, "Shift+C"),
+            (CommandId::IsolateSelection, "Shift+I"),
+            (CommandId::StrainMap, "Alt+7"),
+            (CommandId::TechnicalView, "Alt+0"),
         ]
     );
 }

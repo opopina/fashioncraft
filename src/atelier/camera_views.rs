@@ -119,7 +119,7 @@ impl Atelier {
     }
 
     /// Frame the selected pieces, or everything when nothing is selected.
-    fn frame_selection_or_all(&mut self) {
+    pub(super) fn frame_selection_or_all(&mut self) {
         let bounds = self.view_bounds();
         if let Some((lo, hi)) = bounds.selection.or(bounds.all) {
             self.camera

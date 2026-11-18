@@ -175,7 +175,7 @@ impl Atelier {
             None => {}
         }
     }
-    fn open_pattern_import(&mut self) {
+    pub(super) fn open_pattern_import(&mut self) {
         if self.authoring.preview.is_some() || self.has_document_draft() {
             self.status = "Finish or cancel the current drawing, placement or sewing before importing patterns".into();
             return;
@@ -218,7 +218,7 @@ impl Atelier {
             None => {}
         }
     }
-    fn open_avatar_import(&mut self, ctx: &egui::Context) {
+    pub(super) fn open_avatar_import(&mut self, ctx: &egui::Context) {
         // Pause controls without changing generation or rewinding the worker.
         // Cancelling the importer is not a document replacement.
         self.playing = false;
@@ -406,7 +406,7 @@ impl Atelier {
         project.state = Some(self.scene.state.clone());
         project
     }
-    fn save_document(&mut self, ctx: &egui::Context, save_as: bool) -> bool {
+    pub(super) fn save_document(&mut self, ctx: &egui::Context, save_as: bool) -> bool {
         self.pause_document(ctx);
         let path = if save_as || self.document.path.is_none() {
             FileDialog::new()
@@ -534,7 +534,7 @@ impl Atelier {
             Err(e) => self.status = format!("Open failed; current document retained: {e}"),
         }
     }
-    fn open_document(&mut self, ctx: &egui::Context, recovery: bool) {
+    pub(super) fn open_document(&mut self, ctx: &egui::Context, recovery: bool) {
         if !self.can_replace_document(ctx) {
             return;
         }
@@ -550,7 +550,7 @@ impl Atelier {
             self.open_document_path(path, recovery);
         }
     }
-    fn new_document(&mut self, ctx: &egui::Context) {
+    pub(super) fn new_document(&mut self, ctx: &egui::Context) {
         if !self.can_replace_document(ctx) {
             return;
         }
@@ -588,41 +588,6 @@ impl Atelier {
             let _ = std::fs::remove_file(&self.document.recovery);
         }
         self.document.last_recovery = Instant::now();
-    }
-    pub(super) fn document_menu(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        for (label, action) in [
-            ("Import SVG patterns…", 8),
-            ("Import DXF patterns…", 7),
-            ("Import avatar…", 6),
-            ("Templates…", 5),
-            ("New project…", 0),
-            ("Open…  Ctrl+O", 1),
-            ("Save  Ctrl+S", 2),
-            ("Save As…  Ctrl+Shift+S", 3),
-            ("Recover snapshot…", 4),
-        ] {
-            if ui.button(label).clicked() {
-                ui.close();
-                match action {
-                    0 => self.new_document(&ctx),
-                    1 => self.open_document(&ctx, false),
-                    2 => {
-                        self.save_document(&ctx, false);
-                    }
-                    3 => {
-                        self.save_document(&ctx, true);
-                    }
-                    4 => self.open_document(&ctx, true),
-                    6 => self.open_avatar_import(&ctx),
-                    7 => self.open_pattern_import(),
-                    8 => self.open_svg_import(),
-                    _ => self.open_template_browser(&ctx),
-                }
-            }
-        }
-        ui.separator();
-        self.export_information(ui);
     }
     // Only the explicitly selected acceptance scenario reaches this adapter.
     // It substitutes a fixture path for dialogs, not the Save/Open transactions.

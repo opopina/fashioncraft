@@ -66,6 +66,8 @@ mod layout;
 mod line_springs_ui;
 #[path = "atelier/measure.rs"]
 mod measure;
+#[path = "atelier/menus.rs"]
+mod menus;
 #[path = "atelier/palette_ui.rs"]
 mod palette_ui;
 #[path = "atelier/perf.rs"]
@@ -481,6 +483,60 @@ impl Atelier {
                     command_palette::tool_for_command(id).ok_or("Unknown authoring tool")?;
                 self.set_authoring_tool(tool, rotate);
             }
+            Id::NewProject => self.new_document(ctx),
+            Id::OpenProject => self.open_document(ctx, false),
+            Id::SaveProject => {
+                if !self.save_document(ctx, false) {
+                    return Err(self.status.clone());
+                }
+            }
+            Id::SaveProjectAs => {
+                if !self.save_document(ctx, true) {
+                    return Err(self.status.clone());
+                }
+            }
+            Id::RecoverSnapshot => self.open_document(ctx, true),
+            Id::ImportAvatar => self.open_avatar_import(ctx),
+            Id::ImportDxf => self.open_pattern_import(),
+            Id::ImportSvg => self.open_svg_import(),
+            Id::OpenTemplates => self.open_template_browser(ctx),
+            Id::Undo => self.undo_edit(false),
+            Id::Redo => self.undo_edit(true),
+            Id::ViewFront
+            | Id::ViewBack
+            | Id::ViewAvatarRight
+            | Id::ViewAvatarLeft
+            | Id::ViewTop
+            | Id::ViewBottom
+            | Id::ViewThreeQuarterRight
+            | Id::ViewThreeQuarterLeft => {
+                let view = match id {
+                    Id::ViewFront => crate::render::PresetView::Front,
+                    Id::ViewBack => crate::render::PresetView::Back,
+                    Id::ViewAvatarRight => crate::render::PresetView::Left,
+                    Id::ViewAvatarLeft => crate::render::PresetView::Right,
+                    Id::ViewTop => crate::render::PresetView::Top,
+                    Id::ViewBottom => crate::render::PresetView::Bottom,
+                    Id::ViewThreeQuarterRight => crate::render::PresetView::ThreeQuarterLeft,
+                    _ => crate::render::PresetView::ThreeQuarterRight,
+                };
+                self.camera.apply_preset(view);
+            }
+            Id::FrameView => self.frame_selection_or_all(),
+            Id::ToggleAvatar => {
+                self.prefs.garment_display.avatar = !self.prefs.garment_display.avatar;
+            }
+            Id::ToggleGarment => {
+                self.prefs.garment_display.garment = !self.prefs.garment_display.garment;
+            }
+            Id::IsolateSelection => self.toggle_isolation(),
+            Id::StrainMap => self.heat = !self.heat,
+            Id::TechnicalView => {
+                self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
+            }
+            Id::RandomPieceColours => {
+                self.prefs.garment_display.piece_colors = !self.prefs.garment_display.piece_colors;
+            }
             Id::LockSelectedPieces => {
                 self.apply_lock_action(board_locks::LockAction::LockSelected)?
             }
@@ -866,70 +922,13 @@ impl eframe::App for Atelier {
                 if play.clicked() {
                     self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
                 }
-                ui.menu_button("Simulation", |ui| {
-                    let step = commands::CommandId::StepSimulation;
-                    let enabled = commands::availability(step, self.command_context());
-                    let reason = enabled.as_ref().err().map(|e| e.message());
-                    if ui.add_enabled(enabled.is_ok(), egui::Button::new("Advance one step"))
-                        .on_disabled_hover_text(reason.unwrap_or(""))
-                        .clicked() {
-                        self.invoke_command(step, &ctx);
-                        ui.close();
-                    }
-                    if ui.button("Reset the flat arrangement").on_hover_text("Resets the drape of every panel").clicked() {
-                        self.invoke_command(commands::CommandId::ResetSimulation, &ctx); ui.close();
-                    }
-                });
-                ui.menu_button("File",|ui| self.document_menu(ui));
                 let export_button = ui.button("Export").on_hover_text("Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.");
                 self.smoke_target("export", export_button.rect.center());
                 if export_button.clicked() {
                     self.invoke_command(commands::CommandId::ExportSession, &ctx);
                 }
                 ui.separator();
-                ui.menu_button("Workspace", |ui| {
-                    ui.checkbox(&mut self.tools_visible, "Tool rail");
-                    stage_settings::menu_button()
-                        .ui(ui, |ui| {
-                        if let Some(action) = stage_settings::controls(ui, can_open_palette, &mut self.prefs.viewport) {
-                            let path = self.output.join(stage_settings::FILE_NAME);
-                            self.status = stage_settings::execute(action, &path, &mut self.camera, &mut self.prefs.viewport)
-                                .unwrap_or_else(|e| format!("Presentation: {e}"));
-                            ui.close();
-                        }
-                    });
-                    if ui.add_enabled(can_open_palette, egui::Button::new("Workspace profiles…")).clicked() {
-                        self.profiles.begin(&self.output.join(workspace_profiles::FILE_NAME));
-                        ui.close();
-                    }
-                    let inspector = self.prefs.workspace.inspector_open;
-                    if ui.selectable_label(inspector, "Properties inspector").clicked() {
-                        self.invoke_command(commands::CommandId::ToggleInspector, &ctx);
-                    }
-                    for (mode, id, label) in [
-                        (layout::ViewMode::Split,commands::CommandId::SplitView,"Split view"),
-                        (layout::ViewMode::Garment,commands::CommandId::GarmentView,"3D only"),
-                        (layout::ViewMode::Patterns,commands::CommandId::PatternView,"2D only")
-                    ] {
-                        if ui.selectable_label(self.prefs.workspace.mode == mode, label).clicked() {
-                            self.invoke_command(id, &ctx);
-                        }
-                    }
-                    ui.separator();
-                    if ui.button("Reset layout").clicked() { self.invoke_command(commands::CommandId::ResetLayout, &ctx); ui.close(); }
-                    if ui.button("Preferences…").clicked() { self.invoke_command(commands::CommandId::OpenPreferences, &ctx); ui.close(); }
-                });
-                ui.menu_button("Examples", |ui| {
-                    if ui.button("T-shirt").clicked() {
-                        self.invoke_command(commands::CommandId::LoadTshirt, &ctx);
-                        ui.close();
-                    }
-                    if ui.button("Dress").clicked() {
-                        self.invoke_command(commands::CommandId::LoadDress, &ctx);
-                        ui.close();
-                    }
-                });
-                self.online_patterns(ui);
+                self.menu_bar(ui, &ctx, can_open_palette);
             });
         });
         let mut changed = false;

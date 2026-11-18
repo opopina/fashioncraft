@@ -42,6 +42,32 @@ fn aliases(id: CommandId) -> &'static str {
         ToolMeasure => "ruler tape distance",
         ToolInspect => "debug report paint faces",
         ToolGraphic => "print logo image move scale rotate graphic",
+        NewProject => "new blank empty document",
+        OpenProject => "open load document json",
+        SaveProject => "save write document",
+        SaveProjectAs => "save as copy document",
+        RecoverSnapshot => "recovery autosave crash",
+        ImportAvatar => "avatar body obj mannequin import",
+        ImportDxf => "dxf aama astm cad import",
+        ImportSvg => "svg vector import",
+        OpenTemplates => "template library catalog block",
+        Undo => "undo back revert",
+        Redo => "redo again forward",
+        ViewFront => "camera front",
+        ViewBack => "camera back rear",
+        ViewAvatarRight => "camera side right profile",
+        ViewAvatarLeft => "camera side left profile",
+        ViewTop => "camera top above",
+        ViewBottom => "camera bottom below",
+        ViewThreeQuarterRight => "camera three quarter 3/4",
+        ViewThreeQuarterLeft => "camera three quarter 3/4",
+        FrameView => "zoom fit focus frame all",
+        ToggleAvatar => "hide show avatar body",
+        ToggleGarment => "hide show garment cloth",
+        IsolateSelection => "isolate solo hide others",
+        StrainMap => "fit map stretch heat strain",
+        TechnicalView => "schematic flat sketch lines",
+        RandomPieceColours => "colour color pieces distinct",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -766,7 +792,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ToolGraphic
+            CommandId::RandomPieceColours
         );
         h.key(
             "palette.query",

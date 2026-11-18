@@ -917,7 +917,7 @@ impl Atelier {
             }
         }
     }
-    fn undo_edit(&mut self, redo: bool) {
+    pub(super) fn undo_edit(&mut self, redo: bool) {
         self.cancel_preview();
         self.authoring.board.clear_preview();
         self.authoring.replace = false;

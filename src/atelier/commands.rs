@@ -40,6 +40,32 @@ pub enum CommandId {
     UnlockInternalLines,
     InvertSelection,
     ResetSelectedPieces3d,
+    NewProject,
+    OpenProject,
+    SaveProject,
+    SaveProjectAs,
+    RecoverSnapshot,
+    ImportAvatar,
+    ImportDxf,
+    ImportSvg,
+    OpenTemplates,
+    Undo,
+    Redo,
+    ViewFront,
+    ViewBack,
+    ViewAvatarRight,
+    ViewAvatarLeft,
+    ViewTop,
+    ViewBottom,
+    ViewThreeQuarterRight,
+    ViewThreeQuarterLeft,
+    FrameView,
+    ToggleAvatar,
+    ToggleGarment,
+    IsolateSelection,
+    StrainMap,
+    TechnicalView,
+    RandomPieceColours,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -395,6 +421,240 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Simulation,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        NewProject,
+        "file.new",
+        "New project",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenProject,
+        "file.open",
+        "Open project…",
+        Workspace,
+        Some("Cmd+O"),
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        SaveProject,
+        "file.save",
+        "Save project",
+        File,
+        Some("Cmd+S"),
+        ExternalSideEffect,
+        LocalFilesystem
+    ),
+    entry!(
+        SaveProjectAs,
+        "file.save_as",
+        "Save project as…",
+        File,
+        Some("Shift+Cmd+S"),
+        ExternalSideEffect,
+        LocalFilesystem
+    ),
+    entry!(
+        RecoverSnapshot,
+        "file.recover",
+        "Recover snapshot…",
+        Workspace,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        ImportAvatar,
+        "file.import_avatar",
+        "Import avatar…",
+        File,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
+    entry!(
+        ImportDxf,
+        "file.import_dxf",
+        "Import DXF patterns…",
+        File,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
+    entry!(
+        ImportSvg,
+        "file.import_svg",
+        "Import SVG patterns…",
+        File,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
+    entry!(
+        OpenTemplates,
+        "file.templates",
+        "Garment templates…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        Undo,
+        "edit.undo",
+        "Undo",
+        Pattern,
+        Some("Cmd+Z"),
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        Redo,
+        "edit.redo",
+        "Redo",
+        Pattern,
+        Some("Shift+Cmd+Z"),
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewFront,
+        "view.front",
+        "Front view",
+        Workspace,
+        Some("2"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewBack,
+        "view.back",
+        "Back view",
+        Workspace,
+        Some("8"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewAvatarRight,
+        "view.avatar_right",
+        "View of the avatar's right side",
+        Workspace,
+        Some("4"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewAvatarLeft,
+        "view.avatar_left",
+        "View of the avatar's left side",
+        Workspace,
+        Some("6"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewTop,
+        "view.top",
+        "Top view",
+        Workspace,
+        Some("5"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewBottom,
+        "view.bottom",
+        "Bottom view",
+        Workspace,
+        Some("0"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewThreeQuarterRight,
+        "view.three_quarter_right",
+        "Three-quarter view, avatar's right",
+        Workspace,
+        Some("1"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ViewThreeQuarterLeft,
+        "view.three_quarter_left",
+        "Three-quarter view, avatar's left",
+        Workspace,
+        Some("3"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        FrameView,
+        "view.frame",
+        "Frame selection",
+        Workspace,
+        Some("F"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleAvatar,
+        "display.avatar",
+        "Show avatar",
+        Workspace,
+        Some("Shift+A"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleGarment,
+        "display.garment",
+        "Show garment",
+        Workspace,
+        Some("Shift+C"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        IsolateSelection,
+        "display.isolate",
+        "Isolate selection",
+        Workspace,
+        Some("Shift+I"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        StrainMap,
+        "display.strain_map",
+        "Strain map",
+        Workspace,
+        Some("Alt+7"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        TechnicalView,
+        "display.technical",
+        "Technical view",
+        Workspace,
+        Some("Alt+0"),
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        RandomPieceColours,
+        "display.random_colours",
+        "Random piece colours",
+        Workspace,
+        None,
+        Preference,
         NativeWorkspace
     ),
 ];

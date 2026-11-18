@@ -116,6 +116,7 @@ pub enum CommandId {
     OpenAvatarEditor,
     DraftTshirt,
     ToggleHistory,
+    ToggleObjectBrowser,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1152,6 +1153,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ToggleHistory,
         "window.history",
         "History",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleObjectBrowser,
+        "window.object_browser",
+        "Object browser",
         Workspace,
         None,
         Preference,

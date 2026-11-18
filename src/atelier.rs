@@ -82,6 +82,8 @@ mod line_springs_ui;
 mod measure;
 #[path = "atelier/menus.rs"]
 mod menus;
+#[path = "atelier/object_browser_ui.rs"]
+mod object_browser_ui;
 #[path = "atelier/palette_ui.rs"]
 mod palette_ui;
 #[path = "atelier/perf.rs"]
@@ -587,6 +589,9 @@ impl Atelier {
             Id::ExportFbx => self.export_fbx()?,
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
+            Id::ToggleObjectBrowser => {
+                self.authoring.object_browser.open = !self.authoring.object_browser.open;
+            }
             Id::OpenAvatarEditor => {
                 self.authoring.avatar_shape.open = !self.authoring.avatar_shape.open;
             }
@@ -1181,6 +1186,7 @@ impl eframe::App for Atelier {
             self.avatar_shape_window(&ctx);
             self.draft_window(&ctx);
             self.history_window(&ctx);
+            self.object_browser_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

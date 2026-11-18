@@ -401,7 +401,7 @@ const WINDOW: &[Item] = &[
     Run("2D only", C::PatternView),
     Run("Properties inspector", C::ToggleInspector),
     Run("Library", C::ToggleLibrary),
-    Todo("Object browser"),
+    Run("Object browser", C::ToggleObjectBrowser),
     Run("History", C::ToggleHistory),
     S,
     Run("Reset layout", C::ResetLayout),
@@ -479,6 +479,7 @@ impl Atelier {
             C::OpenAvatarEditor => self.authoring.avatar_shape.open,
             C::DraftTshirt => self.authoring.shirt_draft.open,
             C::ToggleHistory => self.authoring.history_ui.open,
+            C::ToggleObjectBrowser => self.authoring.object_browser.open,
             C::OpenPose => self.authoring.pose.open,
             C::OpenAnimation => self.authoring.animation.open,
             C::RecordAnimation => self.authoring.animation.recording(),
@@ -647,7 +648,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 109, "{done} of {all}");
+        assert!(done >= 110, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

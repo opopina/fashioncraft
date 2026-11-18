@@ -674,6 +674,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Make this the outline" => "Usar como contorno",
         "Bake the look" => "Hornear el aspecto",
         "Quads" => "Cuadriláteros",
+        "Weld seams" => "Soldar costuras",
+        "Each seam's two edges joined vertex to vertex, so the pieces make one connected mesh; vertices are added where the two sides' meshes differ" => {
+            "Los dos bordes de cada costura unidos vértice a vértice, para que las piezas formen una sola malla; se añaden vértices donde las mallas de los dos lados no coinciden"
+        }
         "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one" => {
             "Triángulos vecinos unidos en cuadriláteros donde forman uno plano, convexo y casi rectangular"
         }
@@ -1030,6 +1034,9 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Pick the other segment…" => "Elige el otro segmento…",
         "Piece names" => "Nombres de las piezas",
         "Pieces stay split along seams." => "Las piezas siguen separadas en las costuras.",
+        "Pieces share their vertices along welded seams." => {
+            "Las piezas comparten sus vértices en las costuras soldadas."
+        }
         "Pin" => "Alfiler",
         "Place" => "Colocar",
         "Position" => "Posición",

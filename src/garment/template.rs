@@ -1269,6 +1269,7 @@ impl GarmentTemplate {
                 }],
                 probes: vec![point],
                 guides: vec![],
+                pairs: vec![],
                 stiffness: TACK_STIFFNESS,
                 lengths: [0.01, 0.01],
                 notches: vec![],

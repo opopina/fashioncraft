@@ -2,9 +2,10 @@
 //! thick, in one object or one per piece, with the pattern packed into the unit square or
 //! kept at its real size, in the chosen units and up axis, and the avatar beside it.
 //!
-//! Vertices stay split along seams: ClothCraft's seams join pieces along their edges rather
-//! than vertex to vertex, so there is no vertex pair to weld. Faces are wound
-//! counter-clockwise seen from the fabric's front face.
+//! Vertices stay split along seams unless welding is asked for: ClothCraft's seams join
+//! pieces along their edges rather than vertex to vertex, so welding first adds each side's
+//! vertices to the other side's edge. Faces are wound counter-clockwise seen from the
+//! fabric's front face.
 use crate::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate, appearance::FabricAppearance},
@@ -68,6 +69,9 @@ pub struct ObjOptions {
     pub per_piece: bool,
     /// Neighbouring triangles joined into quads where they make a flat, convex one.
     pub quads: bool,
+    /// Each seam's two edges joined vertex to vertex (see [`crate::weld`]), so the exported
+    /// pieces are one connected mesh.
+    pub weld: bool,
     /// Only these pieces; all of them when absent.
     pub pieces: Option<BTreeSet<String>>,
 }
@@ -211,10 +215,16 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
     if scene.state.x.len() != garment.mesh.uv.len() {
         return Err("The cloth does not match the garment".into());
     }
+    let exported: Vec<bool> = garment
+        .panels
+        .iter()
+        .map(|p| options.pieces.as_ref().is_none_or(|s| s.contains(&p.id)))
+        .collect();
     let pieces: Vec<_> = garment
         .panels
         .iter()
-        .filter(|p| options.pieces.as_ref().is_none_or(|s| s.contains(&p.id)))
+        .enumerate()
+        .filter(|(k, _)| exported[*k])
         .collect();
     if pieces.is_empty() {
         return Err("No piece to export".into());
@@ -246,14 +256,14 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
     if options.unified_uv {
         let boxes: Vec<(DVec2, DVec2)> = pieces
             .iter()
-            .map(|p| {
+            .map(|(_, p)| {
                 uv[p.vertices.clone()].iter().fold(
                     (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
                     |(lo, hi), q| (lo.min(*q), hi.max(*q)),
                 )
             })
             .collect();
-        for (piece, (offset, s)) in pieces.iter().zip(crate::bake::pack(&boxes)) {
+        for ((_, piece), (offset, s)) in pieces.iter().zip(crate::bake::pack(&boxes)) {
             for q in &mut uv[piece.vertices.clone()] {
                 *q = (*q + offset) * s;
             }
@@ -269,19 +279,43 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         }
     }
     let triangles = front_triangles(scene.template, garment);
-    let x = &scene.state.x;
-    let normal = vertex_normals(x, &triangles);
+    let welded = if options.weld {
+        crate::weld::weld(garment, &triangles, &exported)
+    } else {
+        crate::weld::Welded::none(garment, &triangles)
+    };
+    let uv = welded.extend(&uv, |a, b, t| a.lerp(b, t));
+    let group = &welded.group;
+    // One position and one normal per group: a welded vertex is written once.
+    let position = welded.positions(&welded.extend(&scene.state.x, |a, b, t| a.lerp(b, t)));
+    let x: Vec<DVec3> = group.iter().map(|g| position[*g]).collect();
+    let corners: Vec<[usize; 3]> = pieces
+        .iter()
+        .flat_map(|(k, _)| welded.triangles[*k].iter().map(|t| t.map(|i| group[i])))
+        .collect();
+    let normal = vertex_normals(&position, &corners);
+    // Edges of the exported surface's outline, between groups: a welded seam is not one.
+    let mut uses: HashMap<(usize, usize), usize> = HashMap::new();
+    for t in &corners {
+        for k in 0..3 {
+            let (a, b) = (t[k], t[(k + 1) % 3]);
+            *uses.entry((a.min(b), a.max(b))).or_default() += 1;
+        }
+    }
     let mut obj = format!(
         "# ClothCraft garment; units: {}\nmtllib {mtl_name}\n",
         options.units.label()
     );
     // Lines written so far of each kind: OBJ indices count from one across the file.
     let (mut v_count, mut vt_count, mut vn_count, mut faces) = (0usize, 0usize, 0usize, 0usize);
+    // Each group's position and normal lines, front and back, once written.
+    let mut v_line = vec![[0usize; 2]; welded.groups];
+    let mut vn_line = vec![[0usize; 2]; welded.groups];
     let mut used: BTreeMap<String, Option<FabricAppearance>> = BTreeMap::new();
     if !options.per_piece {
         obj.push_str("o garment\n");
     }
-    for piece in &pieces {
+    for (k, piece) in &pieces {
         let fabric = if scene.atlas.is_some() {
             BAKED.to_string()
         } else {
@@ -298,45 +332,51 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
             .map(|a| a.render_thickness_mm / 2000.)
             .filter(|h| *h > 0.)
             .unwrap_or(DEFAULT_THICKNESS_M / 2.);
-        let local: Vec<usize> = piece.vertices.clone().collect();
+        let local: Vec<usize> = piece
+            .vertices
+            .clone()
+            .chain(welded.piece_added[*k].iter().copied())
+            .collect();
         let index: HashMap<usize, usize> = local.iter().enumerate().map(|(k, i)| (*i, k)).collect();
         // The front copy, and the back copy when thick.
         let sides: &[f64] = if options.thick { &[1., -1.] } else { &[0.] };
-        let count = local.len();
         let kind = if options.per_piece { "o" } else { "g" };
         writeln!(obj, "{kind} {}", piece.id).unwrap();
-        for side in sides {
+        for (s, side) in sides.iter().enumerate() {
             for i in &local {
-                let p = turn((x[*i] + normal[*i] * half * side) * scale);
-                writeln!(obj, "v {:.6} {:.6} {:.6}", p.x, p.y, p.z).unwrap();
+                let g = group[*i];
+                if v_line[g][s] == 0 {
+                    let p = turn((position[g] + normal[g] * half * side) * scale);
+                    writeln!(obj, "v {:.6} {:.6} {:.6}", p.x, p.y, p.z).unwrap();
+                    v_count += 1;
+                    v_line[g][s] = v_count;
+                }
             }
         }
         for i in &local {
             writeln!(obj, "vt {:.6} {:.6}", uv[*i].x, uv[*i].y).unwrap();
         }
-        for side in sides {
+        for (s, side) in sides.iter().enumerate() {
             let sign = if *side < 0. { -1. } else { 1. };
             for i in &local {
-                let n = turn(normal[*i] * sign);
-                writeln!(obj, "vn {:.6} {:.6} {:.6}", n.x, n.y, n.z).unwrap();
+                let g = group[*i];
+                if vn_line[g][s] == 0 {
+                    let n = turn(normal[g] * sign);
+                    writeln!(obj, "vn {:.6} {:.6} {:.6}", n.x, n.y, n.z).unwrap();
+                    vn_count += 1;
+                    vn_line[g][s] = vn_count;
+                }
             }
         }
         writeln!(obj, "usemtl {fabric}").unwrap();
         let corner = |s: usize, k: usize| {
-            format!(
-                "{}/{}/{}",
-                v_count + s * count + k + 1,
-                vt_count + k + 1,
-                vn_count + s * count + k + 1
-            )
+            let g = group[local[k]];
+            format!("{}/{}/{}", v_line[g][s], vt_count + k + 1, vn_line[g][s])
         };
         let piece_faces: Vec<Vec<usize>> = if options.quads {
-            quads(x, &triangles[piece.triangles.clone()])
+            quads(&x, &welded.triangles[*k])
         } else {
-            triangles[piece.triangles.clone()]
-                .iter()
-                .map(|t| t.to_vec())
-                .collect()
+            welded.triangles[*k].iter().map(|t| t.to_vec()).collect()
         };
         for s in 0..sides.len() {
             for face in &piece_faces {
@@ -352,19 +392,19 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         }
         if options.thick {
             // A rim along the outline joins the front copy to the back one, facing out.
-            let rim = |s: usize, k: usize| {
-                format!("{}/{}", v_count + s * count + k + 1, vt_count + k + 1)
-            };
-            for [a, b] in outline(&triangles[piece.triangles.clone()]) {
+            let rim =
+                |s: usize, k: usize| format!("{}/{}", v_line[group[local[k]]][s], vt_count + k + 1);
+            for [a, b] in outline(&welded.triangles[*k]) {
+                if uses[&(group[a].min(group[b]), group[a].max(group[b]))] != 1 {
+                    continue;
+                }
                 let (a, b) = (index[&a], index[&b]);
                 writeln!(obj, "f {} {} {}", rim(0, a), rim(1, a), rim(1, b)).unwrap();
                 writeln!(obj, "f {} {} {}", rim(0, a), rim(1, b), rim(0, b)).unwrap();
                 faces += 2;
             }
         }
-        v_count += count * sides.len();
-        vt_count += count;
-        vn_count += count * sides.len();
+        vt_count += local.len();
     }
     if let Some(avatar) = scene.avatar {
         let normals = vertex_normals(&avatar.vertices, &avatar.triangles);

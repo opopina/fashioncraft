@@ -426,7 +426,13 @@ impl Atelier {
                         });
                 }
             });
-            ui.checkbox(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece"));
+            ui.checkbox(&mut o.weld, i18n::tr(ui_lang, "Weld seams"))
+                .on_hover_text(i18n::tr(ui_lang, "Each seam's two edges joined vertex to vertex, so the pieces make one connected mesh; vertices are added where the two sides' meshes differ"));
+            // Welded pieces share vertices: they stay in one object.
+            if o.weld {
+                o.per_piece = false;
+            }
+            ui.add_enabled(!o.weld, egui::Checkbox::new(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece")));
             ui.checkbox(&mut o.quads, i18n::tr(ui_lang, "Quads"))
                 .on_hover_text(i18n::tr(ui_lang, "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
@@ -441,7 +447,14 @@ impl Atelier {
                     });
                 ui.checkbox(&mut o.z_up, i18n::tr(ui_lang, "Z up"));
             });
-            ui.small(i18n::tr(ui_lang, "Pieces stay split along seams."));
+            ui.small(i18n::tr(
+                ui_lang,
+                if o.weld {
+                    "Pieces share their vertices along welded seams."
+                } else {
+                    "Pieces stay split along seams."
+                },
+            ));
             if ui.button(i18n::tr(ui_lang, "Export…")).clicked() {
                 export = true;
             }

@@ -40,3 +40,4 @@ pub mod solver_lab;
 pub mod template_catalog;
 pub mod usd_export;
 pub mod vbd;
+pub mod weld;

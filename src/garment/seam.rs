@@ -280,6 +280,9 @@ pub struct CompiledSeam {
     /// Sparse display correspondences, derived from the same rest-arclength map.
     /// These are transient attachments, never persisted or used by the solver.
     pub guides: Vec<StitchGuide>,
+    /// Every point of the common partition on A with the point of B sewn to it (both
+    /// one-sided limits at a chain's joints): what welding the seam vertex to vertex joins.
+    pub pairs: Vec<StitchGuide>,
     pub stiffness: f64,
     pub lengths: [f64; 2],
     pub notches: Vec<[f64; 2]>,
@@ -400,13 +403,27 @@ impl CompiledSeam {
             .iter()
             .map(|s| StitchPoint::new(&a, &b, *s, interpolate(&knots, *s, 0)))
             .collect();
-        let joints = a
+        let joints: Vec<f64> = a
             .joints()
             .into_iter()
             .chain(b.joints().into_iter().map(|t| interpolate(&knots, t, 1)))
-            .filter(|s| *s <= until + 1e-12);
-        probes
-            .extend(joints.map(|s| StitchPoint::limit(&a, &b, s, interpolate(&knots, s, 0), true)));
+            .filter(|s| *s <= until + 1e-12)
+            .collect();
+        probes.extend(
+            joints
+                .iter()
+                .map(|s| StitchPoint::limit(&a, &b, *s, interpolate(&knots, *s, 0), true)),
+        );
+        let pairs = partition
+            .iter()
+            .map(|s| [a.point(*s), b.point(interpolate(&knots, *s, 0))])
+            .chain(joints.iter().map(|s| {
+                [
+                    a.point_limit(*s, true),
+                    b.point_limit(interpolate(&knots, *s, 0), true),
+                ]
+            }))
+            .collect();
         let guides = (0..=8)
             .map(|i| {
                 let t = until * i as f64 / 8.;
@@ -418,6 +435,7 @@ impl CompiledSeam {
             samples,
             probes,
             guides,
+            pairs,
             stiffness: spec.stiffness,
             lengths: [a.length, b.length],
             notches: spec.notches.clone(),

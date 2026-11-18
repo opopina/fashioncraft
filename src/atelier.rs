@@ -543,6 +543,11 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::CutAndSew => {
+                if !self.cut_and_sew_selected_line() {
+                    return Err(self.status.clone());
+                }
+            }
             Id::ArchivePieces => {
                 let panels = self.selected_panels();
                 self.edit(marvelous_cloth::authoring::Command::ArchivePanels { panels });

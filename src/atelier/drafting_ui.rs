@@ -263,6 +263,25 @@ impl Atelier {
                 "Internal line created · Sew to a boundary or add a ruffle in the inspector".into();
         }
     }
+    /// Cut and sew along the selected internal line, as one undo step.
+    pub(super) fn cut_and_sew_selected_line(&mut self) -> bool {
+        let Some((panel, line)) = self
+            .authoring
+            .edge
+            .as_ref()
+            .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
+        else {
+            self.status = "Select a straight internal line first".into();
+            return false;
+        };
+        if self.edit(Command::CutAndSew { panel, line }) {
+            self.authoring.edge = None;
+            self.status = "Cut in two and sewn along the cut".into();
+            return true;
+        }
+        false
+    }
+
     pub(super) fn internal_line_properties(&mut self, ui: &mut egui::Ui) {
         let Some(edge) = self.authoring.edge.clone() else {
             return;
@@ -323,6 +342,21 @@ impl Atelier {
                 self.authoring.edge = None;
                 self.status = "Shape cloned as a piece of the same fabric".into();
             }
+            return;
+        }
+        let straight = !line.closed
+            && line.points.len() == 2
+            && line.tangents.iter().all(|t| t.length() < 1e-12);
+        if straight
+            && ui
+                .button("Cut and sew along this line")
+                .on_hover_text(
+                    "Split the piece in two along this line, carried on to the outline, and sew \
+                     the halves together; seams crossing the cut are split, not lost",
+                )
+                .clicked()
+        {
+            self.cut_and_sew_selected_line();
             return;
         }
         self.line_group_controls(ui, &edge.panel, &name);

@@ -87,6 +87,7 @@ pub enum CommandId {
     AddGraphic,
     ToggleLibrary,
     ArchivePieces,
+    CutAndSew,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -862,6 +863,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ArchivePieces,
         "pattern.archive",
         "Archive pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        CutAndSew,
+        "pattern.cut_and_sew",
+        "Cut and sew along the selected line",
         Pattern,
         None,
         TemplateHistory,

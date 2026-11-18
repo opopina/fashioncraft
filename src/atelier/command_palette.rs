@@ -89,6 +89,7 @@ fn aliases(id: CommandId) -> &'static str {
         AddGraphic => "graphic print logo image png",
         ToggleLibrary => "library assets folder browse files",
         ArchivePieces => "archive shelve put away hide pieces",
+        CutAndSew => "cut sew split slash divide piece line",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

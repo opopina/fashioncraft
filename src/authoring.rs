@@ -17,6 +17,7 @@ pub mod clipboard;
 pub mod constructions;
 mod geometry;
 mod linked;
+mod topology;
 use crate::garment::shapes::{BooleanOp, MirrorAxis, Primitive};
 
 /// A contour corner is the start of a named outgoing boundary, never a mesh index.
@@ -241,6 +242,12 @@ pub enum Command {
     /// among them) in the document's archive. One undo step.
     ArchivePanels {
         panels: Vec<String>,
+    },
+    /// Cut a piece in two along a straight internal line carried on to the outline and sew
+    /// the halves together along the cut. Seams on the cut boundaries are split and moved.
+    CutAndSew {
+        panel: String,
+        line: String,
     },
     /// Bring archived pieces back where they were.
     RestoreArchived {
@@ -3921,6 +3928,10 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                     center,
                     pieces,
                 });
+        }
+        Command::CutAndSew { panel, line } => {
+            topology::cut_and_sew(&mut template, &panel, &line)?;
+            selected = Some(panel);
         }
         Command::RestoreArchived { id } => {
             let k = template

@@ -103,6 +103,7 @@ const FILE: &[Item] = &[
     Run("Garment templates…", C::OpenTemplates),
     Run("T-shirt from measurements…", C::DraftTshirt),
     Run("Skirt from measurements…", C::DraftSkirt),
+    Run("Trousers from measurements…", C::DraftTrousers),
     Sub(
         "Examples",
         &[Run("T-shirt", C::LoadTshirt), Run("Dress", C::LoadDress)],
@@ -482,6 +483,7 @@ impl Atelier {
             C::ToggleHistory => self.authoring.history_ui.open,
             C::ToggleObjectBrowser => self.authoring.object_browser.open,
             C::DraftSkirt => self.authoring.skirt_draft.open,
+            C::DraftTrousers => self.authoring.trousers_draft.open,
             C::OpenPose => self.authoring.pose.open,
             C::OpenAnimation => self.authoring.animation.open,
             C::RecordAnimation => self.authoring.animation.recording(),
@@ -650,7 +652,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 111, "{done} of {all}");
+        assert!(done >= 112, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

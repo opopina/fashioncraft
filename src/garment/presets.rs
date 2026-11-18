@@ -443,3 +443,226 @@ pub fn skirt(m: &SkirtMeasurements, subdivisions: u32) -> Result<GarmentTemplate
     template.compile()?;
     Ok(template)
 }
+
+/// Measurements trousers are drafted from, metres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrousersMeasurements {
+    /// Waist girth of the body they are for.
+    pub waist_m: f64,
+    /// Hip girth of the body they are for.
+    pub hip_m: f64,
+    /// Added to both girths: how loose the trousers are.
+    pub ease_m: f64,
+    /// From the waist down to the widest hip.
+    pub hip_depth_m: f64,
+    /// From the waist down to the crotch.
+    pub rise_m: f64,
+    /// From the waist to the hem, down the side.
+    pub length_m: f64,
+    /// Around each leg's opening.
+    pub hem_m: f64,
+    /// Height of the waist above the floor, to place the pieces at.
+    pub waist_height_m: f64,
+}
+
+impl Default for TrousersMeasurements {
+    /// Ankle-length trousers for the 1.75 m mannequin.
+    fn default() -> Self {
+        Self {
+            waist_m: 0.74,
+            hip_m: 0.98,
+            ease_m: 0.06,
+            hip_depth_m: 0.18,
+            rise_m: 0.27,
+            length_m: 0.96,
+            hem_m: 0.44,
+            waist_height_m: 1.06,
+        }
+    }
+}
+
+impl TrousersMeasurements {
+    pub fn validate(&self) -> Result<(), String> {
+        let within = |v: f64, lo: f64, hi: f64| v.is_finite() && (lo..=hi).contains(&v);
+        if !within(self.waist_m, 0.4, 2.0)
+            || !within(self.hip_m, 0.5, 2.2)
+            || !within(self.ease_m, 0.0, 0.4)
+            || !within(self.hip_depth_m, 0.08, 0.4)
+            || !within(self.rise_m, 0.15, 0.5)
+            || !within(self.length_m, 0.3, 1.4)
+            || !within(self.hem_m, 0.2, 1.2)
+            || !within(self.waist_height_m, 0.4, 2.0)
+        {
+            return Err("Trouser measurements are out of range".into());
+        }
+        if self.waist_m > self.hip_m {
+            return Err("The waist is wider than the hip".into());
+        }
+        if self.rise_m < self.hip_depth_m + 0.04 {
+            return Err("The crotch must be below the hip".into());
+        }
+        if self.length_m < self.rise_m + 0.15 {
+            return Err("The legs are too short for this rise".into());
+        }
+        if self.length_m > self.waist_height_m - 0.02 {
+            return Err("The trousers would reach the floor".into());
+        }
+        Ok(())
+    }
+}
+
+/// Trousers drafted from `m`: a front and a back piece for each leg. Each piece runs from the
+/// waist out to the hip and down the side to the hem; on the inside it comes down the centre
+/// to the hip, slants out to the crotch point (further out at the back) and goes down the
+/// inside leg to the hem. The sides and inside legs sew each leg's front to its back, the centre and crotch
+/// edges sew the two fronts together and the two backs together. The waist is left open.
+pub fn trousers(m: &TrousersMeasurements, subdivisions: u32) -> Result<GarmentTemplate, String> {
+    m.validate()?;
+    let waist = (m.waist_m + m.ease_m) / 4.;
+    let hip = (m.hip_m + m.ease_m) / 4.;
+    let inset = (hip - waist) / 2.;
+    let half_hem = m.hem_m / 4.;
+    let front_reach = (m.hip_m + m.ease_m) / 16.;
+    let back_reach = (m.hip_m + m.ease_m) / 10.;
+    // The leg's middle, the same on the front and the back so their sides match.
+    let leg = (hip + front_reach) / 2.;
+    // A right-leg piece seen from outside, the side seam on the left: waist, centre, crotch,
+    // inside leg, hem, lower and upper side.
+    let edges = [
+        "waist",
+        "centre",
+        "crotch",
+        "inseam",
+        "hem",
+        "outseam-lower",
+        "outseam-upper",
+    ];
+    let right = |reach: f64| -> Vec<DVec2> {
+        vec![
+            DVec2::new(inset, 0.),
+            DVec2::new(hip - inset, 0.),
+            DVec2::new(hip, m.hip_depth_m),
+            DVec2::new(hip + reach, m.rise_m),
+            DVec2::new(leg + half_hem, m.length_m),
+            DVec2::new(leg - half_hem, m.length_m),
+            DVec2::new(0., m.hip_depth_m),
+        ]
+    };
+    if leg - half_hem < 0.01 {
+        return Err("The leg opening is wider than the leg".into());
+    }
+    // The left leg is the mirror image, its points in reverse so the outline turns the same
+    // way; edge k of the mirror runs backwards along edge `MIRRORED[k]` of the right leg.
+    const MIRRORED: [usize; 7] = [0, 6, 5, 4, 3, 2, 1];
+    let left = |points: &[DVec2]| -> Vec<DVec2> {
+        let width = points.iter().map(|p| p.x).fold(0., f64::max);
+        [1, 0, 6, 5, 4, 3, 2]
+            .iter()
+            .map(|&k| DVec2::new(width - points[k].x, points[k].y))
+            .collect()
+    };
+    let mut template = basic(GarmentKind::Tshirt, subdivisions);
+    let base = template.panels[0].clone();
+    let base_polygon = base
+        .polygon
+        .clone()
+        .ok_or("The base piece has no outline")?;
+    let gap = 0.012;
+    let mut panels = vec![];
+    for (id, reach, z, mirrored) in [
+        ("front-right", front_reach, 0.30, false),
+        ("front-left", front_reach, 0.30, true),
+        ("back-right", back_reach, -0.22, false),
+        ("back-left", back_reach, -0.22, true),
+    ] {
+        let outline = right(reach);
+        let width = outline.iter().map(|p| p.x).fold(0., f64::max);
+        let (points, names): (Vec<DVec2>, Vec<String>) = if mirrored {
+            (
+                left(&outline),
+                MIRRORED.iter().map(|&k| edges[k].to_string()).collect(),
+            )
+        } else {
+            (outline, edges.iter().map(|e| e.to_string()).collect())
+        };
+        // The crotch point sits just off the body's middle.
+        let crotch = if mirrored {
+            width - (hip + reach)
+        } else {
+            hip + reach
+        };
+        let x = if mirrored {
+            gap - crotch
+        } else {
+            -gap - crotch
+        };
+        let mut panel = base.clone();
+        panel.id = id.into();
+        panel.name = format!("trousers {id}");
+        let mut polygon = base_polygon.clone();
+        polygon.points = points;
+        polygon.edges = names;
+        panel.polygon = Some(polygon);
+        panel.pattern.width = width + 0.001;
+        panel.pattern.height = m.length_m;
+        panel.placement.translation = DVec3::new(x, m.waist_height_m, z);
+        panels.push(panel);
+    }
+    let seam_template = template.seams[0].clone();
+    let seam = |id: &str, a: &str, b: &str, edge: &str, reverse: bool, ease: bool| {
+        let mut s = seam_template.clone();
+        s.id = id.into();
+        s.a.panel = a.into();
+        s.a.edge = Some(edge.into());
+        s.b.panel = b.into();
+        s.b.edge = Some(edge.into());
+        s.reverse_b = reverse;
+        s.allow_ease = ease;
+        s
+    };
+    let mut seams = vec![];
+    for side in ["right", "left"] {
+        let (front, back) = (format!("front-{side}"), format!("back-{side}"));
+        for edge in ["outseam-upper", "outseam-lower"] {
+            seams.push(seam(
+                &format!("{edge}-{side}"),
+                &front,
+                &back,
+                edge,
+                false,
+                false,
+            ));
+        }
+        seams.push(seam(
+            &format!("inseam-{side}"),
+            &front,
+            &back,
+            "inseam",
+            false,
+            true,
+        ));
+    }
+    for part in ["front", "back"] {
+        let (right, left) = (format!("{part}-right"), format!("{part}-left"));
+        for edge in ["centre", "crotch"] {
+            seams.push(seam(
+                &format!("{edge}-{part}"),
+                &right,
+                &left,
+                edge,
+                true,
+                false,
+            ));
+        }
+    }
+    template.panels = panels;
+    template.seams = seams;
+    template.name = format!(
+        "Trousers for a {:.0} cm waist, {:.0} cm hip, {:.0} cm long",
+        m.waist_m * 100.,
+        m.hip_m * 100.,
+        m.length_m * 100.
+    );
+    template.compile()?;
+    Ok(template)
+}

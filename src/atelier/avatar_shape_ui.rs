@@ -474,3 +474,163 @@ impl Atelier {
         }
     }
 }
+
+/// The trousers drafting window: measurements in centimetres, filled from the avatar on asking.
+pub(super) struct TrousersDraftUi {
+    pub open: bool,
+    values: [f64; 8],
+    error: Option<String>,
+}
+
+impl Default for TrousersDraftUi {
+    fn default() -> Self {
+        let m = marvelous_cloth::garment::presets::TrousersMeasurements::default();
+        Self {
+            open: false,
+            values: [
+                m.waist_m,
+                m.hip_m,
+                m.ease_m,
+                m.hip_depth_m,
+                m.rise_m,
+                m.length_m,
+                m.hem_m,
+                m.waist_height_m,
+            ]
+            .map(|v| (v * 1000.).round() / 10.),
+            error: None,
+        }
+    }
+}
+
+impl Atelier {
+    /// The measurements of the current avatar trousers should fit, centimetres.
+    fn avatar_trouser_values(&self) -> Result<[f64; 8], String> {
+        let measured = measure(&self.project.avatar_path)?;
+        let joint = |id: &str| {
+            measured
+                .joints
+                .get(id)
+                .copied()
+                .ok_or_else(|| format!("The avatar lacks the joint {id}"))
+        };
+        let waist = joint("joint-spine-3")?;
+        let leg = joint("joint-l-upper-leg")?;
+        let ankle = joint("joint-l-ankle").or_else(|_| joint("joint-l-foot"))?;
+        let now = measured.now;
+        let mut v = self.authoring.trousers_draft.values;
+        v[0] = now.waist_m * 100.;
+        v[1] = now.hip_m * 100.;
+        v[3] = (waist.y - leg.y + 0.03) * 100.;
+        // The crotch sits a little below the hip joints.
+        v[4] = (waist.y - leg.y + 0.12) * 100.;
+        v[5] = (waist.y - ankle.y - 0.02) * 100.;
+        v[7] = (waist.y + 0.01) * 100.;
+        Ok(v.map(|x| (x * 10.).round() / 10.))
+    }
+
+    pub(super) fn trousers_draft_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
+        if !self.authoring.trousers_draft.open {
+            return;
+        }
+        let mut open = true;
+        let (mut from_avatar, mut create) = (false, false);
+        let state = &mut self.authoring.trousers_draft;
+        egui::Window::new(i18n::tr(ui_lang, "Trousers from measurements"))
+            .open(&mut open)
+            .resizable(false)
+            .default_width(300.)
+            .show(ctx, |ui| {
+                egui::Grid::new("draft.trousers").num_columns(2).show(ui, |ui| {
+                    for (k, name) in [
+                        "Waist",
+                        "Hip",
+                        "Ease",
+                        "Hip depth",
+                        "Rise",
+                        "Length",
+                        "Leg opening",
+                        "Waist height",
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
+                        ui.label(i18n::tr(ui_lang, name));
+                        ui.add(
+                            egui::DragValue::new(&mut state.values[k])
+                                .range(0.0..=250.0)
+                                .speed(0.5)
+                                .suffix(" cm"),
+                        );
+                        ui.end_row();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(i18n::tr(ui_lang, "From the avatar"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Waist, hip, depths, rise, length and placement from the current avatar",
+                        ))
+                        .clicked()
+                    {
+                        from_avatar = true;
+                    }
+                    if ui
+                        .button(i18n::tr(ui_lang, "Create"))
+                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with these trousers"))
+                        .clicked()
+                    {
+                        create = true;
+                    }
+                });
+                if let Some(e) = &state.error {
+                    ui.colored_label(Color32::LIGHT_RED, e);
+                }
+            });
+        self.authoring.trousers_draft.open &= open;
+        if from_avatar {
+            match self.avatar_trouser_values() {
+                Ok(v) => {
+                    self.authoring.trousers_draft.values = v;
+                    self.authoring.trousers_draft.error = None;
+                }
+                Err(e) => self.authoring.trousers_draft.error = Some(e),
+            }
+        }
+        if create {
+            let v = self.authoring.trousers_draft.values.map(|x| x / 100.);
+            let m = marvelous_cloth::garment::presets::TrousersMeasurements {
+                waist_m: v[0],
+                hip_m: v[1],
+                ease_m: v[2],
+                hip_depth_m: v[3],
+                rise_m: v[4],
+                length_m: v[5],
+                hem_m: v[6],
+                waist_height_m: v[7],
+            };
+            match marvelous_cloth::garment::presets::trousers(&m, 2) {
+                Ok(template) => {
+                    let mut project = FittingProject::basic(
+                        GarmentKind::Tshirt,
+                        2,
+                        self.project.avatar_path.clone(),
+                    );
+                    project.template = template;
+                    project.avatar_pose = self.project.avatar_pose.clone();
+                    project.scene_objects = self.project.scene_objects.clone();
+                    if self.load(project) {
+                        self.authoring.trousers_draft.error = None;
+                        self.status =
+                            i18n::tr(ui_lang, "Trousers drafted from the measurements").into();
+                    } else {
+                        self.authoring.trousers_draft.error = Some(self.status.clone());
+                    }
+                }
+                Err(e) => self.authoring.trousers_draft.error = Some(e),
+            }
+        }
+    }
+}

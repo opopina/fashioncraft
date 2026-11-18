@@ -120,6 +120,9 @@ fn aliases(id: CommandId) -> &'static str {
         ToggleHistory => "history undo redo edits list go back",
         ToggleObjectBrowser => "object browser scene tree outliner pieces fabrics avatar list",
         DraftSkirt => "skirt draft pattern measurements waist hip flare length size",
+        DraftTrousers => {
+            "trousers pants draft pattern measurements waist hip rise inseam length size"
+        }
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -844,7 +847,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::DraftSkirt
+            CommandId::DraftTrousers
         );
         h.key(
             "palette.query",

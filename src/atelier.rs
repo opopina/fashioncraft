@@ -590,6 +590,9 @@ impl Atelier {
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
             Id::DraftSkirt => self.authoring.skirt_draft.open = !self.authoring.skirt_draft.open,
+            Id::DraftTrousers => {
+                self.authoring.trousers_draft.open = !self.authoring.trousers_draft.open;
+            }
             Id::ToggleObjectBrowser => {
                 self.authoring.object_browser.open = !self.authoring.object_browser.open;
             }
@@ -1187,6 +1190,7 @@ impl eframe::App for Atelier {
             self.avatar_shape_window(&ctx);
             self.draft_window(&ctx);
             self.skirt_draft_window(&ctx);
+            self.trousers_draft_window(&ctx);
             self.history_window(&ctx);
             self.object_browser_window(&ctx);
         }

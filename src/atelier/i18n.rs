@@ -1577,6 +1577,15 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Replace the garment with this skirt" => "Sustituye la prenda por esta falda",
         "Skirt drafted from the measurements" => "Falda trazada a partir de las medidas",
+        "Trousers from measurements…" => "Pantalón por medidas…",
+        "Trousers from measurements" => "Pantalón por medidas",
+        "Rise" => "Tiro",
+        "Leg opening" => "Bajo de pierna",
+        "Waist, hip, depths, rise, length and placement from the current avatar" => {
+            "Cintura, cadera, profundidades, tiro, largo y colocación del avatar actual"
+        }
+        "Replace the garment with these trousers" => "Sustituye la prenda por este pantalón",
+        "Trousers drafted from the measurements" => "Pantalón trazado a partir de las medidas",
         _ => return None,
     })
 }

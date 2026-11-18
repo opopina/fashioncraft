@@ -675,6 +675,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Bake the look" => "Hornear el aspecto",
         "Quads" => "Cuadriláteros",
         "Weld seams" => "Soldar costuras",
+        "Retopology" => "Retopología",
+        "Each piece remeshed as quads of this size along its grain, lying on the drape; pieces stay apart" => {
+            "Cada pieza rehecha con cuadriláteros de este tamaño a lo largo del hilo, sobre la caída de la tela; las piezas quedan separadas"
+        }
         "Each seam's two edges joined vertex to vertex, so the pieces make one connected mesh; vertices are added where the two sides' meshes differ" => {
             "Los dos bordes de cada costura unidos vértice a vértice, para que las piezas formen una sola malla; se añaden vértices donde las mallas de los dos lados no coinciden"
         }

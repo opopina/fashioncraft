@@ -426,14 +426,27 @@ impl Atelier {
                         });
                 }
             });
-            ui.checkbox(&mut o.weld, i18n::tr(ui_lang, "Weld seams"))
+            ui.horizontal(|ui| {
+                let mut on = o.retopology.is_some();
+                ui.checkbox(&mut on, i18n::tr(ui_lang, "Retopology"))
+                    .on_hover_text(i18n::tr(ui_lang, "Each piece remeshed as quads of this size along its grain, lying on the drape; pieces stay apart"));
+                let mut mm = o.retopology.unwrap_or(0.02) * 1000.;
+                ui.add_enabled(
+                    on,
+                    egui::DragValue::new(&mut mm).range(2.0..=500.0).speed(0.5).suffix(" mm"),
+                );
+                o.retopology = on.then_some(mm / 1000.);
+            });
+            let remeshed = o.retopology.is_some();
+            ui.add_enabled(!remeshed, egui::Checkbox::new(&mut o.weld, i18n::tr(ui_lang, "Weld seams")))
                 .on_hover_text(i18n::tr(ui_lang, "Each seam's two edges joined vertex to vertex, so the pieces make one connected mesh; vertices are added where the two sides' meshes differ"));
             // Welded pieces share vertices: they stay in one object.
-            if o.weld {
+            let welded = o.weld && !remeshed;
+            if welded {
                 o.per_piece = false;
             }
-            ui.add_enabled(!o.weld, egui::Checkbox::new(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece")));
-            ui.checkbox(&mut o.quads, i18n::tr(ui_lang, "Quads"))
+            ui.add_enabled(!welded, egui::Checkbox::new(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece")));
+            ui.add_enabled(!remeshed, egui::Checkbox::new(&mut o.quads, i18n::tr(ui_lang, "Quads")))
                 .on_hover_text(i18n::tr(ui_lang, "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
             ui.horizontal(|ui| {
@@ -449,7 +462,7 @@ impl Atelier {
             });
             ui.small(i18n::tr(
                 ui_lang,
-                if o.weld {
+                if o.weld && o.retopology.is_none() {
                     "Pieces share their vertices along welded seams."
                 } else {
                     "Pieces stay split along seams."

@@ -72,6 +72,9 @@ pub struct ObjOptions {
     /// Each seam's two edges joined vertex to vertex (see [`crate::weld`]), so the exported
     /// pieces are one connected mesh.
     pub weld: bool,
+    /// Each piece remeshed as quads of this size, metres (see [`crate::retopology`]); welding
+    /// and quads then do not apply.
+    pub retopology: Option<f64>,
     /// Only these pieces; all of them when absent.
     pub pieces: Option<BTreeSet<String>>,
 }
@@ -97,6 +100,18 @@ pub struct ObjSummary {
     pub vertices: usize,
     pub faces: usize,
     pub textures: usize,
+}
+
+/// The exported pieces' mesh: each vertex's texture coordinates and position group, each
+/// group's position, and per piece its vertices, its triangles (for normals and the outline)
+/// and the faces written.
+struct Surface {
+    uv: Vec<DVec2>,
+    group: Vec<usize>,
+    position: Vec<DVec3>,
+    local: Vec<Vec<usize>>,
+    triangles: Vec<Vec<[usize; 3]>>,
+    faces: Vec<Vec<Vec<usize>>>,
 }
 
 /// Thickness used for a fabric without a look thickness, metres.
@@ -279,21 +294,63 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         }
     }
     let triangles = front_triangles(scene.template, garment);
-    let welded = if options.weld {
-        crate::weld::weld(garment, &triangles, &exported)
+    // What the pieces become: vertices with a texture coordinate each, grouped into shared
+    // positions (a welded vertex is written once), and faces.
+    let surface = if let Some(size) = options.retopology {
+        let retopo = crate::retopology::retopologize(garment, &triangles, size, &exported)?;
+        let fan = |f: &Vec<usize>| -> Vec<[usize; 3]> {
+            (1..f.len() - 1).map(|i| [f[0], f[i], f[i + 1]]).collect()
+        };
+        Surface {
+            uv: retopo.sample(&uv),
+            group: (0..retopo.points.len()).collect(),
+            position: retopo.sample(&scene.state.x),
+            local: retopo.pieces.iter().map(|p| p.vertices.clone()).collect(),
+            triangles: retopo
+                .pieces
+                .iter()
+                .map(|p| p.faces.iter().flat_map(fan).collect())
+                .collect(),
+            faces: retopo.pieces.into_iter().map(|p| p.faces).collect(),
+        }
     } else {
-        crate::weld::Welded::none(garment, &triangles)
+        let welded = if options.weld {
+            crate::weld::weld(garment, &triangles, &exported)
+        } else {
+            crate::weld::Welded::none(garment, &triangles)
+        };
+        let position = welded.positions(&welded.extend(&scene.state.x, |a, b, t| a.lerp(b, t)));
+        let x: Vec<DVec3> = welded.group.iter().map(|g| position[*g]).collect();
+        Surface {
+            uv: welded.extend(&uv, |a, b, t| a.lerp(b, t)),
+            local: garment
+                .panels
+                .iter()
+                .zip(&welded.piece_added)
+                .map(|(p, added)| p.vertices.clone().chain(added.iter().copied()).collect())
+                .collect(),
+            faces: welded
+                .triangles
+                .iter()
+                .map(|t| {
+                    if options.quads {
+                        quads(&x, t)
+                    } else {
+                        t.iter().map(|t| t.to_vec()).collect()
+                    }
+                })
+                .collect(),
+            group: welded.group,
+            position,
+            triangles: welded.triangles,
+        }
     };
-    let uv = welded.extend(&uv, |a, b, t| a.lerp(b, t));
-    let group = &welded.group;
-    // One position and one normal per group: a welded vertex is written once.
-    let position = welded.positions(&welded.extend(&scene.state.x, |a, b, t| a.lerp(b, t)));
-    let x: Vec<DVec3> = group.iter().map(|g| position[*g]).collect();
+    let (uv, group, position) = (&surface.uv, &surface.group, &surface.position);
     let corners: Vec<[usize; 3]> = pieces
         .iter()
-        .flat_map(|(k, _)| welded.triangles[*k].iter().map(|t| t.map(|i| group[i])))
+        .flat_map(|(k, _)| surface.triangles[*k].iter().map(|t| t.map(|i| group[i])))
         .collect();
-    let normal = vertex_normals(&position, &corners);
+    let normal = vertex_normals(position, &corners);
     // Edges of the exported surface's outline, between groups: a welded seam is not one.
     let mut uses: HashMap<(usize, usize), usize> = HashMap::new();
     for t in &corners {
@@ -309,8 +366,8 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
     // Lines written so far of each kind: OBJ indices count from one across the file.
     let (mut v_count, mut vt_count, mut vn_count, mut faces) = (0usize, 0usize, 0usize, 0usize);
     // Each group's position and normal lines, front and back, once written.
-    let mut v_line = vec![[0usize; 2]; welded.groups];
-    let mut vn_line = vec![[0usize; 2]; welded.groups];
+    let mut v_line = vec![[0usize; 2]; position.len()];
+    let mut vn_line = vec![[0usize; 2]; position.len()];
     let mut used: BTreeMap<String, Option<FabricAppearance>> = BTreeMap::new();
     if !options.per_piece {
         obj.push_str("o garment\n");
@@ -332,18 +389,14 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
             .map(|a| a.render_thickness_mm / 2000.)
             .filter(|h| *h > 0.)
             .unwrap_or(DEFAULT_THICKNESS_M / 2.);
-        let local: Vec<usize> = piece
-            .vertices
-            .clone()
-            .chain(welded.piece_added[*k].iter().copied())
-            .collect();
+        let local = &surface.local[*k];
         let index: HashMap<usize, usize> = local.iter().enumerate().map(|(k, i)| (*i, k)).collect();
         // The front copy, and the back copy when thick.
         let sides: &[f64] = if options.thick { &[1., -1.] } else { &[0.] };
         let kind = if options.per_piece { "o" } else { "g" };
         writeln!(obj, "{kind} {}", piece.id).unwrap();
         for (s, side) in sides.iter().enumerate() {
-            for i in &local {
+            for i in local {
                 let g = group[*i];
                 if v_line[g][s] == 0 {
                     let p = turn((position[g] + normal[g] * half * side) * scale);
@@ -353,12 +406,12 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
                 }
             }
         }
-        for i in &local {
+        for i in local {
             writeln!(obj, "vt {:.6} {:.6}", uv[*i].x, uv[*i].y).unwrap();
         }
         for (s, side) in sides.iter().enumerate() {
             let sign = if *side < 0. { -1. } else { 1. };
-            for i in &local {
+            for i in local {
                 let g = group[*i];
                 if vn_line[g][s] == 0 {
                     let n = turn(normal[g] * sign);
@@ -373,13 +426,8 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
             let g = group[local[k]];
             format!("{}/{}/{}", v_line[g][s], vt_count + k + 1, vn_line[g][s])
         };
-        let piece_faces: Vec<Vec<usize>> = if options.quads {
-            quads(&x, &welded.triangles[*k])
-        } else {
-            welded.triangles[*k].iter().map(|t| t.to_vec()).collect()
-        };
         for s in 0..sides.len() {
-            for face in &piece_faces {
+            for face in &surface.faces[*k] {
                 let mut k: Vec<usize> = face.iter().map(|i| index[i]).collect();
                 // The back copy faces the other way.
                 if s == 1 {
@@ -394,7 +442,7 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
             // A rim along the outline joins the front copy to the back one, facing out.
             let rim =
                 |s: usize, k: usize| format!("{}/{}", v_line[group[local[k]]][s], vt_count + k + 1);
-            for [a, b] in outline(&welded.triangles[*k]) {
+            for [a, b] in outline(&surface.triangles[*k]) {
                 if uses[&(group[a].min(group[b]), group[a].max(group[b]))] != 1 {
                     continue;
                 }

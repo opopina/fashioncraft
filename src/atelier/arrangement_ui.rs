@@ -47,6 +47,41 @@ struct AnchorChoice {
     max_wrap_degrees: f64,
 }
 
+/// The arrangements to try on an anchor, closest fit first: on an ellipse fitted to the
+/// body, then on a cylinder.
+fn arrangements(
+    sidecar: &Sidecar,
+    anchor: &str,
+    panel: &Panel,
+    clearance_m: f64,
+    max_wrap_degrees: Option<f64>,
+    surface: &marvelous_cloth::avatar::SurfaceMesh,
+) -> Vec<Result<Arrangement, String>> {
+    let frame = match sidecar.frame(anchor) {
+        Ok(frame) => frame,
+        Err(e) => return vec![Err(e)],
+    };
+    let outline = arrangement::rest_outline(panel);
+    let mut out = Vec::new();
+    if max_wrap_degrees.is_some() {
+        out.push(arrangement::arrange_elliptical(
+            &outline,
+            &frame,
+            clearance_m,
+            max_wrap_degrees,
+            Some(surface),
+        ));
+    }
+    out.push(arrangement::arrange(
+        &outline,
+        &frame,
+        clearance_m,
+        max_wrap_degrees,
+        Some(surface),
+    ));
+    out
+}
+
 impl Atelier {
     /// The current avatar's anchors, loaded once per avatar file.
     fn arrangement_sidecar(&mut self) -> Option<Sidecar> {
@@ -189,16 +224,15 @@ impl Atelier {
         state.anchor = Some(anchor.id.clone());
         state.clearance_mm = anchor.clearance_m * 1000.;
         state.wrap = anchor.wrap;
-        let arranged = sidecar.frame(&anchor.id).and_then(|frame| {
-            arrangement::arrange(
-                &arrangement::rest_outline(&panel),
-                &frame,
-                anchor.clearance_m,
-                anchor.wrap.then_some(anchor.max_wrap_degrees),
-                Some(&self.scene.collider.surface),
-            )
-        });
-        let report = self.place_on_anchor(&panel.id, &anchor.label, arranged);
+        let candidates = arrangements(
+            &sidecar,
+            &anchor.id,
+            &panel,
+            anchor.clearance_m,
+            anchor.wrap.then_some(anchor.max_wrap_degrees),
+            &self.scene.collider.surface,
+        );
+        let report = self.place_on_anchor(&panel.id, &anchor.label, candidates);
         self.status = match &report {
             Ok(message) => format!("{}: {message}", panel.id),
             Err(e) => e.clone(),
@@ -270,18 +304,18 @@ impl Atelier {
                 ui.checkbox(&mut state.wrap, "Wrap around body")
                     .on_hover_text("Curve the panel around the anchor axis, clearing the body across its width and height");
                 let (clearance, wrap) = (state.clearance_mm / 1000.0, state.wrap);
-                let arranged = sidecar.frame(&current).and_then(|frame| {
-                    arrangement::arrange(
-                        &arrangement::rest_outline(panel),
-                        &frame,
-                        clearance,
-                        wrap.then_some(max_wrap),
-                        Some(&self.scene.collider.surface),
-                    )
-                });
+                let candidates = arrangements(
+                    &sidecar,
+                    &current,
+                    panel,
+                    clearance,
+                    wrap.then_some(max_wrap),
+                    &self.scene.collider.surface,
+                );
                 ui.horizontal(|ui| {
                     if ui.button("Preview").on_hover_text("Show the panel on the anchor without changing the document").clicked() {
-                        match &arranged {
+                        let first = candidates.iter().find(|c| c.is_ok()).unwrap_or(&candidates[0]);
+                        match first {
                             Ok(a) => {
                                 self.preview_arrangement(&panel.id, a.placement.clone(), a.wrap);
                                 self.authoring.arrangement.report = None;
@@ -290,7 +324,7 @@ impl Atelier {
                         }
                     }
                     if ui.button("Place").on_hover_text("Check initialization, then place (one undo step)").clicked() {
-                        self.authoring.arrangement.report = Some(self.place_on_anchor(&panel.id, &label, arranged.clone()));
+                        self.authoring.arrangement.report = Some(self.place_on_anchor(&panel.id, &label, candidates.clone()));
                     }
                     if self.authoring.preview.is_some() && ui.button("Cancel").clicked() {
                         self.cancel_preview();
@@ -335,31 +369,76 @@ impl Atelier {
         self.authoring.preview = Some(placement);
     }
 
+    /// Place on the first of `candidates` (closest fit first) that starts clear of the body
+    /// and the other pieces.
     fn place_on_anchor(
         &mut self,
         panel: &str,
         label: &str,
-        arranged: Result<Arrangement, String>,
+        candidates: Vec<Result<Arrangement, String>>,
     ) -> Result<String, String> {
-        let arranged = arranged?;
-        let wrap = arranged.wrap;
         self.cancel_preview();
         self.playing = false;
+        let mut last = "No arrangement".to_string();
+        let mut chosen = None;
+        for candidate in candidates {
+            let arranged = match candidate {
+                Ok(a) => a,
+                Err(e) => {
+                    last = e;
+                    continue;
+                }
+            };
+            let command = Command::Arrange {
+                panel: panel.to_string(),
+                placement: arranged.placement.clone(),
+                wrap: arranged.wrap,
+            };
+            let edit = match authoring::apply(&self.project.template, command) {
+                Ok(edit) => edit,
+                Err(e) => {
+                    last = e;
+                    continue;
+                }
+            };
+            let state = edit.state_after(&self.scene.garment, &self.scene.state);
+            match diagnostics::check_vbd_initialization(
+                Arc::new(edit.garment),
+                &self.scene.collider.surface,
+                &state,
+            ) {
+                Ok(()) => {
+                    chosen = Some(arranged);
+                    break;
+                }
+                Err(e) => {
+                    last = format!(
+                        "Not placed: the panel would start intersecting ({e}). Increase the clearance or choose another anchor."
+                    )
+                }
+            }
+        }
+        let Some(arranged) = chosen else {
+            return Err(last);
+        };
+        let wrap = arranged.wrap;
         let command = |placement: Placement| Command::Arrange {
             panel: panel.to_string(),
             placement,
             wrap,
         };
-        let edit = authoring::apply(&self.project.template, command(arranged.placement.clone()))?;
-        let state = edit.state_after(&self.scene.garment, &self.scene.state);
-        diagnostics::check_vbd_initialization(Arc::new(edit.garment), &self.scene.collider.surface, &state).map_err(|e| {
-            format!("Not placed: the panel would start intersecting ({e}). Increase the clearance or choose another anchor.")
-        })?;
         if !self.edit(command(arranged.placement)) {
             return Err(self.status.clone());
         }
         let shape = match wrap {
-            Some(w) => format!("wrapped, radius {:.0} mm", w.radius_m.abs() * 1000.0),
+            Some(w) => match w.half_width_m {
+                Some(a) => format!(
+                    "wrapped on an ellipse {:.0} mm across, {:.0} mm deep",
+                    a * 1000.0,
+                    w.radius_m.abs() * 1000.0
+                ),
+                None => format!("wrapped, radius {:.0} mm", w.radius_m.abs() * 1000.0),
+            },
             None => "flat".to_string(),
         };
         Ok(format!(

@@ -160,17 +160,23 @@ impl Panel {
     }
 }
 
-/// Optional cylindrical wrap of a panel's flat arrangement, applied in the panel's local frame
-/// before its `Placement` (EXO-AV-002). Only initial positions change: rest geometry, material
-/// coordinates and grain are untouched. The panel bends around an axis parallel to local `y`
-/// through local `x = axis_x_m`; a positive radius curves toward local −z, a negative one toward +z.
-/// Beyond `max_angle_degrees` from the axis the panel continues along the tangent.
+/// Optional cylindrical or elliptical wrap of a panel's flat arrangement, applied in the panel's
+/// local frame before its `Placement` (EXO-AV-002). Only initial positions change: rest
+/// geometry, material coordinates and grain are untouched. The panel bends around an axis
+/// parallel to local `y` through local `x = axis_x_m`; a positive radius curves toward local −z,
+/// a negative one toward +z. With `half_width_m` the section is an ellipse whose semi-axis
+/// across the panel is that and whose semi-axis in depth is the radius; the panel lies on it by
+/// arc length. Beyond `max_angle_degrees` (of the ellipse's parameter) from the axis the panel
+/// continues along the tangent.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PanelWrap {
     pub axis_x_m: f64,
     pub radius_m: f64,
     pub max_angle_degrees: f64,
+    /// Semi-axis across the panel of an elliptical section; absent for a circle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub half_width_m: Option<f64>,
 }
 
 impl PanelWrap {
@@ -181,11 +187,20 @@ impl PanelWrap {
         if !(self.max_angle_degrees > 0.0 && self.max_angle_degrees <= 180.0) {
             return Err("Panel wrap angle must be in (0°, 180°]".into());
         }
+        if self
+            .half_width_m
+            .is_some_and(|a| !a.is_finite() || a < 0.01)
+        {
+            return Err("An elliptical panel wrap needs a half width of at least 10 mm".into());
+        }
         Ok(())
     }
 
     /// Bend a local point `(u, −v, 0)` around the wrap axis.
     pub fn bend(&self, p: DVec3) -> DVec3 {
+        if let Some(a) = self.half_width_m {
+            return self.bend_ellipse(p, a);
+        }
         let r = self.radius_m.abs();
         let s = self.radius_m.signum();
         let dx = p.x - self.axis_x_m;
@@ -199,6 +214,43 @@ impl PanelWrap {
         let on_arc = DVec3::new(self.axis_x_m + r * t.sin(), p.y, -s * r * (1.0 - t.cos()));
         let tangent = DVec3::new(t.cos(), 0.0, -s * t.sin()) * dx.signum();
         on_arc + tangent * rest + DVec3::Z * p.z
+    }
+
+    /// The ellipse `(a sin t, −s b (1 − cos t))`, walked by arc length from the axis.
+    fn bend_ellipse(&self, p: DVec3, a: f64) -> DVec3 {
+        const STEPS: usize = 256;
+        let b = self.radius_m.abs();
+        let s = self.radius_m.signum();
+        let dx = p.x - self.axis_x_m;
+        let target = dx.abs();
+        let max = self.max_angle_degrees.to_radians();
+        let speed = |t: f64| (a * a * t.cos().powi(2) + b * b * t.sin().powi(2)).sqrt();
+        let h = max / STEPS as f64;
+        let (mut t, mut walked) = (0.0, 0.0);
+        let mut rest = 0.0;
+        loop {
+            if t >= max - 1e-15 {
+                rest = target - walked;
+                t = max;
+                break;
+            }
+            // Simpson's rule over one step.
+            let segment = h / 6. * (speed(t) + 4. * speed(t + h / 2.) + speed(t + h));
+            if walked + segment >= target {
+                t += h * (target - walked) / segment;
+                break;
+            }
+            walked += segment;
+            t += h;
+        }
+        let side = if dx < 0. { -1. } else { 1. };
+        let on_arc = DVec3::new(
+            self.axis_x_m + side * a * t.sin(),
+            p.y,
+            -s * b * (1.0 - t.cos()),
+        );
+        let tangent = DVec3::new(side * a * t.cos(), 0.0, -s * b * t.sin()).normalize_or_zero();
+        on_arc + tangent * rest.max(0.) + DVec3::Z * p.z
     }
 }
 

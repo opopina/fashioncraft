@@ -6,7 +6,7 @@ use marvelous_cloth::{
     avatar_measurements::{AvatarFrame, Landmark},
     garment::{
         GarmentTemplate,
-        arrangement::{ArrangementSet, Direction, arrange, placement_for},
+        arrangement::{ArrangementSet, Direction, arrange, arrange_elliptical, placement_for},
         presets::{self, GarmentKind},
         template::PanelWrap,
     },
@@ -256,6 +256,7 @@ fn wrap_bends_around_the_axis_and_keeps_arc_length() {
         axis_x_m: 0.5,
         radius_m: 0.2,
         max_angle_degrees: 60.0,
+        half_width_m: None,
     };
     w.validate().unwrap();
     let centre = DVec3::new(0.5, -0.3, 0.0);
@@ -377,6 +378,7 @@ fn wrapped_tshirt_starts_separated_and_round_trips() {
         axis_x_m: 0.0,
         radius_m: f64::NAN,
         max_angle_degrees: 80.0,
+        half_width_m: None,
     };
     assert!(
         authoring::apply(
@@ -388,5 +390,106 @@ fn wrapped_tshirt_starts_separated_and_round_trips() {
             }
         )
         .is_err()
+    );
+}
+
+#[test]
+fn an_elliptical_wrap_keeps_arc_length_and_matches_the_circle_when_round() {
+    let circle = PanelWrap {
+        axis_x_m: 0.5,
+        radius_m: 0.2,
+        max_angle_degrees: 60.0,
+        half_width_m: None,
+    };
+    let round = PanelWrap {
+        half_width_m: Some(0.2),
+        ..circle
+    };
+    round.validate().unwrap();
+    for x in [0.3, 0.45, 0.5, 0.62, 0.9] {
+        let p = DVec3::new(x, -0.2, 0.0);
+        assert!((round.bend(p) - circle.bend(p)).length() < 1e-6, "{x}");
+    }
+    // A wide ellipse: the bent panel is as long as the flat one, point by point.
+    let wide = PanelWrap {
+        half_width_m: Some(0.35),
+        max_angle_degrees: 120.0,
+        ..circle
+    };
+    let points: Vec<DVec3> = (0..=200)
+        .map(|k| wide.bend(DVec3::new(0.5 + k as f64 * 0.004, 0.0, 0.0)))
+        .collect();
+    let length: f64 = points.windows(2).map(|w| w[0].distance(w[1])).sum();
+    assert!((length - 0.8).abs() < 2e-3, "{length}");
+    // Half a width across the axis lies on the ellipse's side.
+    let side = wide.bend(DVec3::new(0.5 - 0.35 * 1.2, 0.0, 0.0));
+    assert!(side.x < 0.5 && side.z < 0.0);
+    assert!(
+        PanelWrap {
+            half_width_m: Some(0.001),
+            ..wide
+        }
+        .validate()
+        .is_err()
+    );
+    // Documents without the field keep a circle and do not gain it.
+    let json = serde_json::to_string(&circle).unwrap();
+    assert!(!json.contains("half_width"));
+}
+
+#[test]
+fn an_elliptical_wrap_hugs_the_back_closer_than_the_cylinder() {
+    let avatar = SurfaceMesh::load_obj(Path::new("assets/makehuman/mannequin.obj")).unwrap();
+    let f = set()
+        .evaluate(&frame(), &landmarks(), "torso-middle-back")
+        .unwrap();
+    let mut gaps = Vec::new();
+    for elliptical in [false, true] {
+        let mut t = presets::basic(GarmentKind::Tshirt, 2);
+        let points = rest_points(&t, "back");
+        let a = if elliptical {
+            arrange_elliptical(&points, &f, 0.05, Some(80.0), Some(&avatar))
+        } else {
+            arrange(&points, &f, 0.05, Some(80.0), Some(&avatar))
+        }
+        .unwrap();
+        assert_eq!(a.wrap.unwrap().half_width_m.is_some(), elliptical);
+        t = authoring::apply(
+            &t,
+            Command::Arrange {
+                panel: "back".into(),
+                placement: a.placement,
+                wrap: a.wrap,
+            },
+        )
+        .unwrap()
+        .template;
+        let garment = Arc::new(t.compile().unwrap());
+        let state = garment.initial_state.clone();
+        diagnostics::check_vbd_initialization(garment.clone(), &avatar, &state)
+            .expect("the back piece starts clear");
+        let range = garment
+            .panels
+            .iter()
+            .find(|p| p.id == "back")
+            .unwrap()
+            .vertices
+            .clone();
+        let (sum, n) = range.step_by(5).fold((0.0, 0), |(sum, n), i| {
+            let x = state.x[i];
+            let d = avatar
+                .vertices
+                .iter()
+                .map(|v| v.distance(x))
+                .fold(f64::MAX, f64::min);
+            (sum + d, n + 1)
+        });
+        gaps.push(sum / n as f64);
+    }
+    assert!(
+        gaps[1] < 0.75 * gaps[0],
+        "ellipse {} vs cylinder {}",
+        gaps[1],
+        gaps[0]
     );
 }

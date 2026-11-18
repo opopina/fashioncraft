@@ -418,6 +418,46 @@ pub fn arrange(
     max_wrap_degrees: Option<f64>,
     surface: Option<&crate::avatar::SurfaceMesh>,
 ) -> Result<Arrangement, String> {
+    arrange_with(
+        rest_points,
+        anchor,
+        clearance_m,
+        max_wrap_degrees,
+        surface,
+        false,
+    )
+}
+
+/// Like [`arrange`], but the wrap's section is the smallest ellipse around the anchor axis
+/// that clears, by `clearance_m`, the body under the panel along every sampled ray (the last
+/// place each ray leaves the body, so an arm beside the torso counts): closer to a body wider
+/// than it is deep. A pair of tightly wrapped pieces can meet at the sides, so callers check
+/// the start and fall back to [`arrange`].
+pub fn arrange_elliptical(
+    rest_points: &[DVec2],
+    anchor: &AnchorFrame,
+    clearance_m: f64,
+    max_wrap_degrees: Option<f64>,
+    surface: Option<&crate::avatar::SurfaceMesh>,
+) -> Result<Arrangement, String> {
+    arrange_with(
+        rest_points,
+        anchor,
+        clearance_m,
+        max_wrap_degrees,
+        surface,
+        true,
+    )
+}
+
+fn arrange_with(
+    rest_points: &[DVec2],
+    anchor: &AnchorFrame,
+    clearance_m: f64,
+    max_wrap_degrees: Option<f64>,
+    surface: Option<&crate::avatar::SurfaceMesh>,
+    elliptical: bool,
+) -> Result<Arrangement, String> {
     if rest_points.is_empty() || rest_points.iter().any(|p| !p.is_finite()) {
         return Err("panel has no finite rest points".into());
     }
@@ -438,13 +478,35 @@ pub fn arrange(
         let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
         surface.and_then(|s| surface_distance(s, anchor.origin + anchor.up * h, dir))
     };
+    // The last place a ray leaves the body within a panel's reach: an arm beside the torso
+    // counts, not only the torso.
+    let reach = half_width.max(height) + clearance_m + 0.3;
+    let last_exit = |angle: f64, h: f64| {
+        let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
+        let s = surface?;
+        let mut origin = anchor.origin + anchor.up * h;
+        let (mut travelled, mut last) = (0.0, None);
+        for _ in 0..16 {
+            let Some(d) = surface_distance(s, origin, dir) else {
+                break;
+            };
+            travelled += d;
+            if travelled > reach {
+                break;
+            }
+            last = Some(travelled);
+            origin += dir * (d + 1e-6);
+            travelled += 1e-6;
+        }
+        last
+    };
     let skin_ahead = heights
         .iter()
         .filter_map(|h| ray(0.0, *h))
         .fold(None, |m: Option<f64>, d| Some(m.map_or(d, |m| m.max(d))));
     let mut radius = skin_ahead.unwrap_or(0.0) + clearance_m;
     let wrap = match max_wrap_degrees {
-        Some(max) if surface.is_some() && radius > 0.01 => {
+        Some(max) if surface.is_some() && radius > 0.01 && !elliptical => {
             let max = max.clamp(1.0, 180.0).to_radians();
             for _ in 0..4 {
                 let span = (half_width / radius).min(max);
@@ -467,6 +529,67 @@ pub fn arrange(
                 axis_x_m: centre.x,
                 radius_m: toward_body * radius,
                 max_angle_degrees: max.to_degrees(),
+                half_width_m: None,
+            })
+        }
+        Some(max) if surface.is_some() && radius > 0.01 => {
+            let max = max.clamp(1.0, 180.0).to_radians();
+            // An ellipse around the anchor axis, `depth` toward the panel centre and `across`
+            // sideways, as small as clears the body by `clearance_m` along every sampled ray.
+            let front = radius;
+            let (mut across, mut depth) = (radius, radius);
+            // Which way along the pattern's u a positive turn about `up` goes.
+            let turn = if anchor.up.cross(anchor.outward).dot(anchor.right) > 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            let levels: Vec<f64> = (0..9).map(|k| (k as f64 / 8.0 - 0.5) * height).collect();
+            for _ in 0..8 {
+                let span = ellipse_parameter(across, depth, half_width).min(max);
+                let mut needs = Vec::new();
+                for k in 0..=24 {
+                    let t = -span + 2.0 * span * k as f64 / 24.0;
+                    let angle = (across * t.sin()).atan2(depth * t.cos());
+                    let u = centre.x + turn * t.signum() * ellipse_arc(across, depth, t.abs());
+                    for h in &levels {
+                        // Only where the panel itself lies.
+                        if !point_in_outline(rest_points, DVec2::new(u, centre.y - h)) {
+                            continue;
+                        }
+                        if let Some(d) = last_exit(angle, *h) {
+                            needs.push((angle, d + clearance_m));
+                        }
+                    }
+                }
+                // Deep enough straight ahead and wherever the ray leans little.
+                depth = needs
+                    .iter()
+                    .map(|(a, n)| n * a.cos().abs() * 1.01)
+                    .fold(front, f64::max);
+                // Then wide enough for every ray: r(φ) = ab / √(b² sin²φ + a² cos²φ) ≥ need.
+                let wide = needs
+                    .iter()
+                    .filter(|(a, _)| a.sin().abs() > 1e-3)
+                    .map(|(a, n)| {
+                        let (s, c) = (a.sin().abs(), a.cos().abs());
+                        n * depth * s / (depth * depth - n * n * c * c).max(1e-12).sqrt()
+                    })
+                    .fold(0.5 * depth, f64::max);
+                across = wide.min(3.0 * depth);
+            }
+            radius = depth;
+            // positive radius curves toward local −z; local z maps to right × up
+            let toward_body = if anchor.right.cross(anchor.up).dot(anchor.outward) > 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            Some(crate::garment::template::PanelWrap {
+                axis_x_m: centre.x,
+                radius_m: toward_body * depth,
+                max_angle_degrees: max.to_degrees(),
+                half_width_m: Some(across),
             })
         }
         _ => None,
@@ -506,6 +629,36 @@ pub fn arrange(
         radius_m: radius,
         skin_m: skin_ahead,
     })
+}
+
+/// Arc length of the ellipse `(a sin t, b cos t)` from `t = 0` to `t`.
+fn ellipse_arc(a: f64, b: f64, t: f64) -> f64 {
+    let speed = |t: f64| (a * a * t.cos().powi(2) + b * b * t.sin().powi(2)).sqrt();
+    let steps = 64;
+    let h = t / steps as f64;
+    (0..steps)
+        .map(|k| {
+            let t0 = k as f64 * h;
+            h / 6. * (speed(t0) + 4. * speed(t0 + h / 2.) + speed(t0 + h))
+        })
+        .sum()
+}
+
+/// The parameter `t` of the ellipse `(a sin t, b cos t)` an arc `length` long from `t = 0`
+/// reaches (at most a half turn).
+fn ellipse_parameter(a: f64, b: f64, length: f64) -> f64 {
+    let speed = |t: f64| (a * a * t.cos().powi(2) + b * b * t.sin().powi(2)).sqrt();
+    let h = std::f64::consts::PI / 512.;
+    let (mut t, mut walked) = (0.0, 0.0);
+    while t < std::f64::consts::PI {
+        let segment = h / 6. * (speed(t) + 4. * speed(t + h / 2.) + speed(t + h));
+        if walked + segment >= length {
+            return t + h * (length - walked) / segment;
+        }
+        walked += segment;
+        t += h;
+    }
+    std::f64::consts::PI
 }
 
 /// Sample points of a panel in material coordinates: outline vertices plus a grid inside it.

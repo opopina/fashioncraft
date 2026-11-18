@@ -176,6 +176,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         panel_wraps: Default::default(),
         locked_panels: Default::default(),
         internal_lines_locked: false,
+        pins_attached: false,
         version: 2,
         name: format!("{} / MakeHuman 1.75 m engineering fixture", kind.name()),
         fabric_appearance: Default::default(),

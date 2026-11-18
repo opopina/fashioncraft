@@ -120,6 +120,8 @@ pub enum CommandId {
     DraftSkirt,
     DraftTrousers,
     ImportBvh,
+    AttachPins,
+    DetachPins,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1195,6 +1197,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        AttachPins,
+        "pins.attach_to_avatar",
+        "Attach all pins to the avatar",
+        Workspace,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        DetachPins,
+        "pins.detach_from_avatar",
+        "Detach all pins from the avatar",
+        Workspace,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
 ];

@@ -77,7 +77,7 @@ pub fn transfer_positions(
 }
 
 /// Closest point to `q` on triangle `[a, b, c]`.
-fn closest_on_triangle(q: DVec3, [a, b, c]: [DVec3; 3]) -> DVec3 {
+pub(crate) fn closest_on_triangle(q: DVec3, [a, b, c]: [DVec3; 3]) -> DVec3 {
     let (e1, e2) = (b - a, c - a);
     let d = q - a;
     let (g11, g12, g22) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));

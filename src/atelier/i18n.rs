@@ -1987,6 +1987,17 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Map staged · Apply appearance to show it" => {
             "Mapa preparado · Aplicar apariencia para mostrarlo"
         }
+        "Attach all pins to the avatar" => "Sujetar todos los alfileres al avatar",
+        "Detach all pins from the avatar" => "Soltar todos los alfileres del avatar",
+        "Pins attached to the avatar · they follow it while an animation records" => {
+            "Alfileres sujetos al avatar · lo siguen mientras se graba una animación"
+        }
+        "Pins detached from the avatar" => "Alfileres soltados del avatar",
+        "Attach pins to the avatar" => "Sujetar alfileres al avatar",
+        "Detach pins from the avatar" => "Soltar alfileres del avatar",
+        "There are no pins to attach; pin points with the Pin tool first" => {
+            "No hay alfileres que sujetar; fija antes puntos con la herramienta Alfiler"
+        }
         _ => return None,
     })
 }

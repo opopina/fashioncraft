@@ -364,6 +364,10 @@ pub struct GarmentTemplate {
     /// Internal lines locked on the 2D board, so clicks and boxes reach only the pieces.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub internal_lines_locked: bool,
+    /// The authored pins hold on to the avatar: while an animation records, each pinned point
+    /// moves with the spot of the skin it was nearest. Still, nothing changes.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pins_attached: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1396,6 +1400,7 @@ impl GarmentTemplate {
             panel_wraps: Default::default(),
             locked_panels: Default::default(),
             internal_lines_locked: false,
+            pins_attached: false,
             fabric_appearance: Default::default(),
             graphics: vec![],
             trims: vec![],

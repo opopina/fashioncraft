@@ -803,6 +803,7 @@ fn mesh_signature(template: &GarmentTemplate, g: &CompiledGarment) -> Result<Str
     physical_template.trims.clear();
     physical_template.locked_panels.clear();
     physical_template.internal_lines_locked = false;
+    physical_template.pins_attached = false;
     for panel in &mut physical_template.panels {
         panel.layout_2d = None;
         panel.layout_rotation_degrees = 0.;

@@ -591,6 +591,17 @@ impl Atelier {
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
             Id::DraftSkirt => self.authoring.skirt_draft.open = !self.authoring.skirt_draft.open,
             Id::ImportBvh => self.import_bvh()?,
+            Id::AttachPins | Id::DetachPins => {
+                let attached = matches!(id, Id::AttachPins);
+                if self.edit(marvelous_cloth::authoring::Command::AttachPins { attached }) {
+                    self.status = if attached {
+                        "Pins attached to the avatar · they follow it while an animation records"
+                    } else {
+                        "Pins detached from the avatar"
+                    }
+                    .into();
+                }
+            }
             Id::DraftTrousers => {
                 self.authoring.trousers_draft.open = !self.authoring.trousers_draft.open;
             }

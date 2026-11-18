@@ -422,3 +422,87 @@ fn wind_and_gravity_keys_drive_each_recorded_step() {
     set_vector_key(&mut strong.wind_keys, 2., DVec3::new(0., 0., 80.));
     assert!(strong.validate().is_err());
 }
+
+#[test]
+fn pins_attached_to_the_avatar_go_with_it_while_recording() {
+    use std::collections::BTreeMap;
+    let rest = SurfaceMesh::load_obj(&mannequin()).unwrap();
+    let rig = AvatarPose::from_sidecar(&mannequin())
+        .unwrap()
+        .rig(&rest)
+        .unwrap();
+    let mut project = FittingProject::basic(GarmentKind::Tshirt, 0, mannequin());
+    let scene = project.compile().unwrap();
+    // Pin the cloth's point nearest the left elbow, where the sleeve hangs by the arm.
+    let elbow = rig.bones[rig.bone("forearm.L").unwrap()].head;
+    let garment = &scene.garment;
+    let vertex = (0..scene.state.x.len())
+        .min_by(|a, b| {
+            scene.state.x[*a]
+                .distance(elbow)
+                .total_cmp(&scene.state.x[*b].distance(elbow))
+        })
+        .unwrap();
+    let panel = garment
+        .panels
+        .iter()
+        .find(|p| p.vertices.contains(&vertex))
+        .unwrap();
+    let selections = BTreeMap::from([(panel.id.clone(), vec![garment.mesh.uv[vertex]])]);
+    let (pinned, state) = authoring::prepare_pin_group_edit(
+        &project.template,
+        garment,
+        &scene.state,
+        &selections,
+        true,
+    )
+    .unwrap();
+    project.template = pinned.template;
+    let start = state.x[vertex];
+    // Lift the left arm 30° in half a second.
+    let animation = AvatarAnimation {
+        keys: vec![
+            PoseKey {
+                time_s: 0.,
+                pose: Pose::default(),
+            },
+            PoseKey {
+                time_s: 0.5,
+                pose: pose(&[("upper_arm.L", [0., 0., 30.])]),
+            },
+        ],
+        ..Default::default()
+    };
+    let moved = |project: &FittingProject| {
+        let mut recorder = Recorder::new(project, &animation).unwrap();
+        recorder.begin(&state.x);
+        let mut last = start;
+        let mut steps = 0;
+        while !recorder.finished() && steps < 20_000 {
+            recorder.plan(1. / 60.);
+            for &(v, p) in recorder.pin_positions() {
+                assert_eq!(v, vertex);
+                assert!(p.distance(last) < 0.003, "pins move in small steps");
+                last = p;
+            }
+            recorder.commit(&state.x);
+            steps += 1;
+        }
+        (recorder.pin_positions().len(), last)
+    };
+    // Not attached: nothing holds the pin to the arm.
+    assert_eq!(moved(&project).0, 0);
+    // Attached: it rides up with the arm, staying as far off the skin as it was.
+    project.template = authoring::apply(&project.template, Command::AttachPins { attached: true })
+        .unwrap()
+        .template;
+    let (held, end) = moved(&project);
+    assert_eq!(held, 1);
+    assert!(end.y - start.y > 0.03, "{start} → {end}");
+    // Attaching twice, or with no pins, is refused.
+    assert!(authoring::apply(&project.template, Command::AttachPins { attached: true }).is_err());
+    let mut bare = project.template.clone();
+    bare.pin_targets.clear();
+    bare.pins_attached = false;
+    assert!(authoring::apply(&bare, Command::AttachPins { attached: true }).is_err());
+}

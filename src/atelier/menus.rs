@@ -178,8 +178,8 @@ const GARMENT_3D: &[Item] = &[
         &[
             Todo("Pin (box)"),
             Todo("Pin (lasso)"),
-            Todo("Attach all pins to avatar"),
-            Todo("Detach all pins from avatar"),
+            Run("Attach all pins to avatar", C::AttachPins),
+            Run("Detach all pins from avatar", C::DetachPins),
         ],
     ),
     Todo("Style lines"),
@@ -484,6 +484,7 @@ impl Atelier {
             C::ToggleHistory => self.authoring.history_ui.open,
             C::ToggleObjectBrowser => self.authoring.object_browser.open,
             C::DraftSkirt => self.authoring.skirt_draft.open,
+            C::AttachPins => self.project.template.pins_attached,
             C::DraftTrousers => self.authoring.trousers_draft.open,
             C::OpenPose => self.authoring.pose.open,
             C::OpenAnimation => self.authoring.animation.open,
@@ -653,7 +654,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 112, "{done} of {all}");
+        assert!(done >= 114, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

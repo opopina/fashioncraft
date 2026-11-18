@@ -571,6 +571,63 @@ pub fn write_body_sequence(
     Ok(frames)
 }
 
+/// A pinned point held on to the avatar: the body triangle it was nearest, where on it, and
+/// how far off it in that triangle's own frame.
+#[derive(Clone, Debug)]
+struct PinHold {
+    vertex: usize,
+    triangle: usize,
+    at: [f64; 2],
+    local: DVec3,
+}
+
+/// A triangle's corner, edges and frame (along its first edge, across, out).
+fn triangle_frame(corners: [DVec3; 3]) -> (DVec3, DVec3, DVec3, [DVec3; 3]) {
+    let [a, b, c] = corners;
+    let (e1, e2) = (b - a, c - a);
+    let n = e1.cross(e2).normalize_or_zero();
+    let along = e1.normalize_or_zero();
+    (a, e1, e2, [along, n.cross(along), n])
+}
+
+impl PinHold {
+    fn bind(vertex: usize, p: DVec3, body: &[DVec3], triangles: &[[usize; 3]]) -> Option<Self> {
+        let (triangle, closest) = triangles
+            .iter()
+            .enumerate()
+            .map(|(k, t)| {
+                let c = crate::garment::transfer::closest_on_triangle(p, t.map(|i| body[i]));
+                (k, c)
+            })
+            .min_by(|a, b| a.1.distance_squared(p).total_cmp(&b.1.distance_squared(p)))?;
+        let (a, e1, e2, frame) = triangle_frame(triangles[triangle].map(|i| body[i]));
+        let (g11, g12, g22) = (e1.dot(e1), e1.dot(e2), e2.dot(e2));
+        let det = g11 * g22 - g12 * g12;
+        if det <= 1e-30 {
+            return None;
+        }
+        let d = closest - a;
+        let (r1, r2) = (d.dot(e1), d.dot(e2));
+        let at = [(r1 * g22 - r2 * g12) / det, (g11 * r2 - g12 * r1) / det];
+        let off = p - closest;
+        Some(Self {
+            vertex,
+            triangle,
+            at,
+            local: DVec3::new(off.dot(frame[0]), off.dot(frame[1]), off.dot(frame[2])),
+        })
+    }
+    /// Where the pinned point is with the body at `body`.
+    fn place(&self, body: &[DVec3], triangles: &[[usize; 3]]) -> DVec3 {
+        let (a, e1, e2, frame) = triangle_frame(triangles[self.triangle].map(|i| body[i]));
+        a + e1 * self.at[0]
+            + e2 * self.at[1]
+            + frame[0] * self.local.x
+            + frame[1] * self.local.y
+            + frame[2] * self.local.z
+    }
+}
+
 /// Moving into the animation's first pose before recording starts.
 struct LeadIn {
     from: Pose,
@@ -595,6 +652,9 @@ pub struct Recorder {
     time: f64,
     body: Vec<DVec3>,
     planned: Option<(f64, Vec<DVec3>, Vec<DVec3>)>,
+    /// Pinned points held on to the avatar, and where the planned step puts them.
+    holds: Vec<PinHold>,
+    pins_planned: Vec<(usize, DVec3)>,
     frame_count: usize,
     take: Take,
 }
@@ -620,6 +680,18 @@ impl Recorder {
         let props_first = props.as_ref().map_or(Vec::new(), |p| p.vertices_at(0.));
         let start = rig.posed(&rest, &avatar.pose).vertices;
         let first = rig.posed(&rest, &animation.pose_at(0.)).vertices;
+        // Pins held on to the avatar keep to the spot of the skin they are nearest now.
+        let mut holds = Vec::new();
+        if project.template.pins_attached && !project.template.pin_targets.is_empty() {
+            let garment = project.template.compile()?;
+            for (vertex, target) in
+                crate::garment::pins::resolve_targets(&garment, &project.template.pin_targets)?
+            {
+                if let Some(hold) = PinHold::bind(vertex, target, &start, &rest.triangles) {
+                    holds.push(hold);
+                }
+            }
+        }
         let farthest = start
             .iter()
             .zip(&first)
@@ -637,6 +709,8 @@ impl Recorder {
             props,
             props_now: props_still.clone(),
             props_still,
+            holds,
+            pins_planned: Vec::new(),
             animation: animation.clone(),
             lead_in,
             time: 0.,
@@ -711,6 +785,7 @@ impl Recorder {
                 .map(|(a, b)| a.lerp(*b, fraction))
                 .collect();
             let obstacle = Arc::new(self.obstacle(&body, &props));
+            self.hold_pins(&body);
             self.planned = Some((self.time, body, props));
             return (max_dt, obstacle);
         }
@@ -735,6 +810,7 @@ impl Recorder {
         }
         let dt = (end - self.time).max(MIN_STEP_S);
         let obstacle = Arc::new(self.obstacle(&body, &props));
+        self.hold_pins(&body);
         self.planned = Some((end, body, props));
         (dt, obstacle)
     }
@@ -772,6 +848,20 @@ impl Recorder {
 
     pub fn moving_into_first_pose(&self) -> bool {
         self.lead_in.is_some()
+    }
+
+    fn hold_pins(&mut self, body: &[DVec3]) {
+        self.pins_planned = self
+            .holds
+            .iter()
+            .map(|h| (h.vertex, h.place(body, &self.rest.triangles)))
+            .collect();
+    }
+
+    /// Where the planned step puts the pinned points held on to the avatar: the cloth's
+    /// vertex and its place.
+    pub fn pin_positions(&self) -> &[(usize, DVec3)] {
+        &self.pins_planned
     }
 
     /// The obstacle where the body is now: the avatar and the scene objects.
@@ -847,6 +937,11 @@ pub fn run(
     recorder.begin(&state.x);
     while !recorder.finished() {
         let (dt, obstacle) = recorder.plan(settings.dt);
+        // Pins held on to the avatar go with it.
+        for &(v, p) in recorder.pin_positions() {
+            state.x[v] = p;
+            state.v[v] = DVec3::ZERO;
+        }
         solver.set_obstacle(&state.x, &floored(&obstacle))?;
         let mut step = recorder.step_settings(settings);
         step.dt = dt;

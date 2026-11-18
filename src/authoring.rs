@@ -456,6 +456,10 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Hold the authored pins on to the avatar while an animation records, or let them go.
+    AttachPins {
+        attached: bool,
+    },
     /// Flip the front face of pieces (a look only). One undo step.
     FlipNormals {
         panels: Vec<String>,
@@ -609,6 +613,8 @@ impl Command {
             Self::UngroupLines { .. } => "Ungroup lines",
             Self::OptimizeCurvePoints { .. } => "Optimize curve points",
             Self::SetBoardLocks { .. } => "Lock on the board",
+            Self::AttachPins { attached: true } => "Attach pins to the avatar",
+            Self::AttachPins { attached: false } => "Detach pins from the avatar",
             Self::FlipNormals { .. } => "Flip faces",
             Self::SetSeamFold { .. } => "Seam fold",
             Self::AddTack { .. } => "Tack",
@@ -1487,6 +1493,8 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.locked_panels.clear();
         t.flipped_panels.clear();
         t.internal_lines_locked = false;
+        // Pins held on to the avatar only move while an animation records.
+        t.pins_attached = false;
         for p in &mut t.panels {
             p.layout_2d = None;
             p.layout_rotation_degrees = 0.;
@@ -2960,6 +2968,21 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::AttachPins { attached } => {
+            if template.pin_targets.is_empty() {
+                return Err(
+                    "There are no pins to attach; pin points with the Pin tool first".into(),
+                );
+            }
+            if template.pins_attached == attached {
+                return Err(if attached {
+                    "The pins are attached to the avatar already".into()
+                } else {
+                    "The pins are not attached to the avatar".into()
+                });
+            }
+            template.pins_attached = attached;
         }
         Command::FlipNormals { panels } => {
             if panels.is_empty() {

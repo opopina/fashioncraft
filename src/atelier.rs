@@ -580,6 +580,9 @@ impl Atelier {
             Id::ExportMddZUp => self.export_mdd(true)?,
             Id::ExportUsd => self.export_usd()?,
             Id::ExportFbx => self.export_fbx()?,
+            Id::ToggleArrangementPoints => {
+                self.authoring.arrangement.points = !self.authoring.arrangement.points;
+            }
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());

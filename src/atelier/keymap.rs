@@ -83,6 +83,7 @@ const COMPATIBLE: &[Binding] = &[
     bind(K::Y, Mods::None, C::ToggleLibrary),
     bind(K::D, Mods::None, C::ToolInspect),
     bind(K::W, Mods::Shift, C::ToggleGarment),
+    bind(K::F, Mods::Shift, C::ToggleArrangementPoints),
     bind(K::Num6, Mods::Alt, C::StrainMap),
     bind(K::K, Mods::Cmd, C::FreezePieces),
     bind(K::J, Mods::Cmd, C::DeactivatePieces),

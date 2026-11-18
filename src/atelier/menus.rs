@@ -348,7 +348,7 @@ const DISPLAY: &[Item] = &[
         "Avatar",
         &[
             Run("Show avatar", C::ToggleAvatar),
-            Todo("Show arrangement points"),
+            Run("Show arrangement points", C::ToggleArrangementPoints),
             Run("Show joints", C::ToggleSkeleton),
         ],
     ),
@@ -474,6 +474,7 @@ impl Atelier {
             C::ToggleInspector => self.prefs.workspace.inspector_open,
             C::ToggleLibrary => self.authoring.library.open,
             C::ToggleSkeleton => self.authoring.pose.skeleton,
+            C::ToggleArrangementPoints => self.authoring.arrangement.points,
             C::OpenPose => self.authoring.pose.open,
             C::OpenAnimation => self.authoring.animation.open,
             C::RecordAnimation => self.authoring.animation.recording(),
@@ -642,7 +643,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 105, "{done} of {all}");
+        assert!(done >= 106, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

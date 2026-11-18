@@ -114,6 +114,7 @@ fn aliases(id: CommandId) -> &'static str {
         ExportMddZUp => "export mdd point cache maya 3ds max z up",
         ExportUsd => "export usd usdz usda pixar apple ar quick look",
         ExportFbx => "export fbx autodesk maya 3ds max blender unity unreal",
+        ToggleArrangementPoints => "arrangement points anchors place avatar show",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -838,7 +839,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::OpenAnimation
+            CommandId::ToggleArrangementPoints
         );
         h.key(
             "palette.query",

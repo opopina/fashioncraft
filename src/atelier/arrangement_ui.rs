@@ -21,7 +21,23 @@ pub(super) struct ArrangementUi {
     wrap: bool,
     report: Option<Result<String, String>>,
     loaded: Option<(PathBuf, Result<Option<Sidecar>, String>)>,
+    /// Show the anchors as points on the avatar's skin in the 3D view.
+    pub points: bool,
+    /// Those points for the avatar surface they were found on.
+    skin_points: Option<(usize, Vec<SkinPoint>)>,
 }
+
+/// An anchor where its outward direction meets the skin.
+#[derive(Clone)]
+struct SkinPoint {
+    id: String,
+    label: String,
+    at: DVec3,
+    outward: DVec3,
+}
+
+/// How near (points) a click must land to an arrangement point.
+const POINT_PX: f32 = 9.;
 
 struct AnchorChoice {
     id: String,
@@ -32,13 +48,167 @@ struct AnchorChoice {
 }
 
 impl Atelier {
-    pub(super) fn arrangement_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+    /// The current avatar's anchors, loaded once per avatar file.
+    fn arrangement_sidecar(&mut self) -> Option<Sidecar> {
         let path = self.project.avatar_path.clone();
         if self.authoring.arrangement.loaded.as_ref().map(|(p, _)| p) != Some(&path) {
             self.authoring.arrangement.loaded =
                 Some((path.clone(), arrangement::load_sidecar(&path)));
             self.authoring.arrangement.anchor = None;
+            self.authoring.arrangement.skin_points = None;
         }
+        match &self.authoring.arrangement.loaded {
+            Some((_, Ok(Some(s)))) => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    /// Where each anchor meets the skin of the avatar as it is now.
+    fn skin_points(&mut self) -> Vec<SkinPoint> {
+        let surface = self.scene.collider.surface.clone();
+        let key = Arc::as_ptr(&surface) as usize;
+        if let Some((k, points)) = &self.authoring.arrangement.skin_points
+            && *k == key
+        {
+            return points.clone();
+        }
+        let Some(sidecar) = self.arrangement_sidecar() else {
+            return Vec::new();
+        };
+        let points: Vec<SkinPoint> = sidecar
+            .set
+            .anchors
+            .iter()
+            .filter_map(|a| {
+                let frame = sidecar.frame(&a.id).ok()?;
+                let depth = arrangement::surface_distance(&surface, frame.origin, frame.outward)
+                    .unwrap_or(0.);
+                Some(SkinPoint {
+                    id: a.id.clone(),
+                    label: a.label.clone(),
+                    at: frame.origin + frame.outward * depth,
+                    outward: frame.outward,
+                })
+            })
+            .collect();
+        self.authoring.arrangement.skin_points = Some((key, points.clone()));
+        points
+    }
+
+    /// The arrangement point under `pointer`, among those facing the camera.
+    fn point_under(
+        &mut self,
+        pointer: egui::Pos2,
+        rect: egui::Rect,
+    ) -> Option<(SkinPoint, egui::Pos2)> {
+        let eye = self.camera.eye().as_dvec3();
+        self.skin_points()
+            .into_iter()
+            .filter(|p| p.outward.dot(eye - p.at) > 0.)
+            .filter_map(|p| Some((self.camera.project(p.at.as_vec3(), rect)?, p)))
+            .filter(|(at, _)| at.distance(pointer) <= POINT_PX)
+            .min_by(|(a, _), (b, _)| a.distance(pointer).total_cmp(&b.distance(pointer)))
+            .map(|(at, p)| (p, at))
+    }
+
+    /// Draw the arrangement points facing the camera, naming the one under the pointer.
+    pub(super) fn paint_arrangement_points(&mut self, ui: &egui::Ui, rect: egui::Rect) {
+        if !self.authoring.arrangement.points {
+            return;
+        }
+        let eye = self.camera.eye().as_dvec3();
+        let painter = ui.painter().with_clip_rect(rect);
+        let blue = Color32::from_rgb(0x3D, 0x8B, 0xFF);
+        for p in self.skin_points() {
+            if p.outward.dot(eye - p.at) <= 0. {
+                continue;
+            }
+            if let Some(at) = self.camera.project(p.at.as_vec3(), rect) {
+                painter.circle_filled(at, 5., blue);
+                painter.circle_stroke(at, 5., Stroke::new(1.5, Color32::WHITE));
+            }
+        }
+        if let Some(pointer) = ui.ctx().pointer_hover_pos()
+            && rect.contains(pointer)
+            && let Some((p, at)) = self.point_under(pointer, rect)
+        {
+            painter.circle_stroke(at, 8., Stroke::new(2., Color32::WHITE));
+            painter.text(
+                at + egui::vec2(10., -10.),
+                egui::Align2::LEFT_BOTTOM,
+                &p.label,
+                egui::FontId::proportional(12.),
+                Color32::WHITE,
+            );
+        }
+    }
+
+    /// A click on an arrangement point places the selected piece there. Returns whether the
+    /// click was taken.
+    pub(super) fn arrangement_point_interaction(
+        &mut self,
+        response: &egui::Response,
+        rect: egui::Rect,
+    ) -> bool {
+        if !self.authoring.arrangement.points || !response.clicked() {
+            return false;
+        }
+        let Some(pointer) = response.interact_pointer_pos() else {
+            return false;
+        };
+        let Some((point, _)) = self.point_under(pointer, rect) else {
+            return false;
+        };
+        let Some(panel) = self.authoring.selected.clone().and_then(|id| {
+            self.project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == id)
+                .cloned()
+        }) else {
+            self.status = format!(
+                "{}: select a piece, then click the point to place it",
+                point.label
+            );
+            return true;
+        };
+        let Some(sidecar) = self.arrangement_sidecar() else {
+            return true;
+        };
+        let Some(anchor) = sidecar
+            .set
+            .anchors
+            .iter()
+            .find(|a| a.id == point.id)
+            .cloned()
+        else {
+            return true;
+        };
+        let state = &mut self.authoring.arrangement;
+        state.anchor = Some(anchor.id.clone());
+        state.clearance_mm = anchor.clearance_m * 1000.;
+        state.wrap = anchor.wrap;
+        let arranged = sidecar.frame(&anchor.id).and_then(|frame| {
+            arrangement::arrange(
+                &arrangement::rest_outline(&panel),
+                &frame,
+                anchor.clearance_m,
+                anchor.wrap.then_some(anchor.max_wrap_degrees),
+                Some(&self.scene.collider.surface),
+            )
+        });
+        let report = self.place_on_anchor(&panel.id, &anchor.label, arranged);
+        self.status = match &report {
+            Ok(message) => format!("{}: {message}", panel.id),
+            Err(e) => e.clone(),
+        };
+        self.authoring.arrangement.report = Some(report);
+        true
+    }
+
+    pub(super) fn arrangement_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        self.arrangement_sidecar();
         egui::CollapsingHeader::new("Arrange on body")
             .id_salt("arrange-on-body")
             .default_open(true)

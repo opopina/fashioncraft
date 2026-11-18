@@ -392,6 +392,8 @@ impl Atelier {
                 self.eyedropper_interaction(&ctx, &response, rect);
             } else if self.ik_interaction(&response, rect) {
                 // A hand or foot of the pose being edited is being dragged.
+            } else if self.arrangement_point_interaction(&response, rect) {
+                // A click on an arrangement point placed the selected piece.
             } else {
                 if self.authoring.tool == Tool::Grab {
                     if self.authoring.pin_tool.enabled {
@@ -551,6 +553,7 @@ impl Atelier {
             }
             self.paint_gizmo(ui, rect);
             self.paint_skeleton(ui, rect);
+            self.paint_arrangement_points(ui, rect);
             self.paint_selected_points_3d(ui, rect);
             self.paint_pins_3d(ui, rect);
             if self.authoring.tool == Tool::Grab

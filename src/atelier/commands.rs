@@ -112,6 +112,7 @@ pub enum CommandId {
     ExportMddZUp,
     ExportUsd,
     ExportFbx,
+    ToggleArrangementPoints,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1115,6 +1116,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Simulation,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleArrangementPoints,
+        "display.arrangement_points",
+        "Show arrangement points",
+        Workspace,
+        None,
+        Preference,
         NativeWorkspace
     ),
 ];

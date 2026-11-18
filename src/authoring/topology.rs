@@ -903,6 +903,132 @@ pub(super) fn unfold(
     Ok(())
 }
 
+/// Refuse to reshape an internal line that a seam sews.
+fn line_unsewn(template: &GarmentTemplate, panel: &str, line: &str) -> Result<(), String> {
+    if template.seams.iter().any(|s| {
+        s.references()
+            .any(|r| r.panel == panel && r.edge.as_deref() == Some(line))
+    }) {
+        return Err("This line is sewn; delete its seam before changing it".into());
+    }
+    Ok(())
+}
+
+/// Carry one end of internal line `line` on straight up to the outline or the nearest line.
+pub(super) fn extend_line(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+    at_start: bool,
+) -> Result<(), String> {
+    line_unsewn(template, panel, line)?;
+    let polygon = template
+        .panels
+        .iter_mut()
+        .find(|p| p.id == panel)
+        .ok_or("Panel not found")?
+        .polygon
+        .as_mut()
+        .ok_or("This panel has no editable contour")?;
+    let end = crate::garment::lines2d::extended_end(polygon, line, at_start)?;
+    let l = polygon
+        .lines
+        .iter_mut()
+        .find(|l| l.id == line)
+        .ok_or("Internal line not found")?;
+    let k = if at_start { 0 } else { l.points.len() - 1 };
+    l.points[k] = end;
+    l.samples()?;
+    Ok(())
+}
+
+/// Split open internal line `line` in two at its inner point `point`: the first part keeps
+/// the name, the second gets a new one, and they stop 0.25 mm short of the point on either
+/// side, since internal lines may not touch; elastic, tape and folds apply to both parts.
+pub(super) fn split_line(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+    point: usize,
+) -> Result<(), String> {
+    line_unsewn(template, panel, line)?;
+    let polygon = template
+        .panels
+        .iter_mut()
+        .find(|p| p.id == panel)
+        .ok_or("Panel not found")?
+        .polygon
+        .as_mut()
+        .ok_or("This panel has no editable contour")?;
+    let taken: BTreeSet<String> = polygon
+        .edges
+        .iter()
+        .chain(polygon.lines.iter().map(|l| &l.id))
+        .cloned()
+        .collect();
+    let index = polygon
+        .lines
+        .iter()
+        .position(|l| l.id == line)
+        .ok_or("Internal line not found")?;
+    let l = polygon.lines[index].clone();
+    if l.closed {
+        return Err("Split an open line; a closed shape has no ends".into());
+    }
+    if point == 0 || point + 1 >= l.points.len() {
+        return Err("Split the line at one of its inner points".into());
+    }
+    let fresh = (2..)
+        .map(|k| format!("{line}_{k}"))
+        .find(|c| !taken.contains(c))
+        .unwrap();
+    // Lines may not touch: the parts stop half the outline gap short of the split point.
+    let half_gap = crate::garment::lines2d::OUTLINE_GAP_M / 2.;
+    let at = l.points[point];
+    let (before, after) = (l.points[point - 1], l.points[point + 1]);
+    if at.distance(before) < 4. * half_gap || at.distance(after) < 4. * half_gap {
+        return Err("The segments beside the split point are too short".into());
+    }
+    let mut first = l.clone();
+    first.points.truncate(point + 1);
+    first.tangents.truncate(point + 1);
+    first.points[point] = at + (before - at).normalize() * half_gap;
+    first.tangents[point] = DVec2::ZERO;
+    let mut second = l.clone();
+    second.id = fresh.clone();
+    second.points.drain(..point);
+    second.tangents.drain(..point);
+    second.points[0] = at + (after - at).normalize() * half_gap;
+    second.tangents[0] = DVec2::ZERO;
+    first.samples()?;
+    second.samples()?;
+    polygon.lines[index] = first;
+    polygon.lines.insert(index + 1, second);
+    let springs: Vec<_> = template
+        .line_springs
+        .iter()
+        .filter(|s| s.panel == panel && s.line == line)
+        .map(|s| {
+            let mut copy = s.clone();
+            copy.line = fresh.clone();
+            copy
+        })
+        .collect();
+    template.line_springs.extend(springs);
+    let folds: Vec<_> = template
+        .line_folds
+        .iter()
+        .filter(|f| f.panel == panel && f.line == line)
+        .map(|f| {
+            let mut copy = f.clone();
+            copy.line = fresh.clone();
+            copy
+        })
+        .collect();
+    template.line_folds.extend(folds);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

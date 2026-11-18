@@ -90,6 +90,7 @@ pub enum CommandId {
     CutAndSew,
     MergeAlongSeam,
     UnfoldPiece,
+    ExtendLineEnds,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -892,6 +893,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         UnfoldPiece,
         "pattern.unfold",
         "Unfold the piece across the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ExtendLineEnds,
+        "pattern.extend_line",
+        "Extend the selected line to the outline",
         Pattern,
         None,
         TemplateHistory,

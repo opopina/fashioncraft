@@ -543,6 +543,25 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::ExtendLineEnds => {
+                let (panel, line) = self
+                    .authoring
+                    .edge
+                    .as_ref()
+                    .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
+                    .ok_or("Select an internal line first")?;
+                let mut extended = false;
+                for at_start in [true, false] {
+                    extended |= self.edit(marvelous_cloth::authoring::Command::ExtendLine {
+                        panel: panel.clone(),
+                        line: line.clone(),
+                        at_start,
+                    });
+                }
+                if !extended {
+                    return Err(self.status.clone());
+                }
+            }
             Id::UnfoldPiece => {
                 if !self.unfold_selected_segment() {
                     return Err(self.status.clone());

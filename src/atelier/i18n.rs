@@ -266,6 +266,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Cut and sew along line" => "Cortar y coser por la línea",
         "Merge pieces along seam" => "Fusionar las piezas por la costura",
         "Unfold across segment" => "Desdoblar por el segmento",
+        "Extend line to outline" => "Prolongar la línea hasta el contorno",
         "Commands…" => "Órdenes…",
         "⏸ Pause" => "⏸ Pausa",
         "▶ Sew and simulate" => "▶ Coser y simular",

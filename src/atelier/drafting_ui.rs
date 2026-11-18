@@ -359,6 +359,52 @@ impl Atelier {
             self.cut_and_sew_selected_line();
             return;
         }
+        if !line.closed {
+            let mut command = None;
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Extend to outline");
+                for (label, at_start) in [("Start", true), ("End", false)] {
+                    if ui
+                        .small_button(label)
+                        .on_hover_text(
+                            "Carry this end on straight up to the outline or the nearest line",
+                        )
+                        .clicked()
+                    {
+                        command = Some(Command::ExtendLine {
+                            panel: edge.panel.clone(),
+                            line: name.clone(),
+                            at_start,
+                        });
+                    }
+                }
+            });
+            if line.points.len() >= 3 {
+                let id = egui::Id::new(("split_line_at", &edge.panel, &name));
+                let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
+                at = at.clamp(1, line.points.len() - 2);
+                ui.horizontal(|ui| {
+                    ui.label("Split at point");
+                    ui.add(egui::DragValue::new(&mut at).range(1..=line.points.len() - 2));
+                    if ui
+                        .small_button("Split")
+                        .on_hover_text("Cut the line in two at this point")
+                        .clicked()
+                    {
+                        command = Some(Command::SplitLine {
+                            panel: edge.panel.clone(),
+                            line: name.clone(),
+                            point: at,
+                        });
+                    }
+                });
+                ui.data_mut(|d| d.insert_temp(id, at));
+            }
+            if let Some(command) = command {
+                self.edit(command);
+                return;
+            }
+        }
         self.line_group_controls(ui, &edge.panel, &name);
         self.line_spring_controls(ui, &edge.panel, &name);
         self.line_fold_controls(ui, &edge.panel, &name);

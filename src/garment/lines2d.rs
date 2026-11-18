@@ -456,3 +456,50 @@ pub fn removable_line_points(line: &InternalLine, overlap_m: f64) -> Vec<usize> 
     removed.dedup();
     removed
 }
+
+/// Where internal line `name` reaches if one end is carried on straight, along its end
+/// direction, up to the first thing it meets (the outline, a hole or another internal line),
+/// [`OUTLINE_GAP_M`] short of it. `at_start` picks the first end.
+pub fn extended_end(polygon: &PolygonPattern, name: &str, at_start: bool) -> Result<DVec2, String> {
+    let line = polygon
+        .lines
+        .iter()
+        .find(|l| l.id == name)
+        .ok_or("Internal line not found")?;
+    if line.closed {
+        return Err("A closed shape has no ends to extend".into());
+    }
+    let samples = line.samples()?;
+    let n = samples.len();
+    let (end, before) = if at_start {
+        (samples[0], samples[1])
+    } else {
+        (samples[n - 1], samples[n - 2])
+    };
+    let direction = (end - before).normalize_or_zero();
+    if direction == DVec2::ZERO {
+        return Err("The line's end has no direction".into());
+    }
+    let mut others = polygon.clone();
+    others.lines.retain(|l| l.id != name);
+    let outline = polygon.outer_points()?;
+    let (lo, hi) = outline.iter().fold(
+        (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
+        |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+    );
+    let reach = (hi - lo).length() * 2. + 1.;
+    let far = end + direction * reach;
+    let mut nearest: Option<f64> = None;
+    for [c, d] in obstacles(&others)? {
+        if let Some(t) = crossing(end, far, c, d)
+            && t * reach > 1e-9
+        {
+            nearest = Some(nearest.map_or(t, |m: f64| m.min(t)));
+        }
+    }
+    let distance = nearest.ok_or("Nothing to extend the line to")? * reach - OUTLINE_GAP_M;
+    if distance < 1e-5 {
+        return Err("This end already reaches the outline".into());
+    }
+    Ok(end + direction * distance)
+}

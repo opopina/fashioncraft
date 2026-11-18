@@ -249,6 +249,18 @@ pub enum Command {
         panel: String,
         line: String,
     },
+    /// Carry one end of an internal line on straight up to the outline or the nearest line.
+    ExtendLine {
+        panel: String,
+        line: String,
+        at_start: bool,
+    },
+    /// Split an open internal line in two at one of its inner points.
+    SplitLine {
+        panel: String,
+        line: String,
+        point: usize,
+    },
     /// Unfold a half piece across its straight boundary `edge` into the whole piece.
     Unfold {
         panel: String,
@@ -3940,6 +3952,18 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
         Command::CutAndSew { panel, line } => {
             topology::cut_and_sew(&mut template, &panel, &line)?;
+            selected = Some(panel);
+        }
+        Command::ExtendLine {
+            panel,
+            line,
+            at_start,
+        } => {
+            topology::extend_line(&mut template, &panel, &line, at_start)?;
+            selected = Some(panel);
+        }
+        Command::SplitLine { panel, line, point } => {
+            topology::split_line(&mut template, &panel, &line, point)?;
             selected = Some(panel);
         }
         Command::Unfold { panel, edge } => {

@@ -92,6 +92,7 @@ fn aliases(id: CommandId) -> &'static str {
         CutAndSew => "cut sew split slash divide piece line",
         MergeAlongSeam => "merge join combine pieces seam",
         UnfoldPiece => "unfold mirror half symmetric fold open",
+        ExtendLineEnds => "extend prolong internal line outline",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

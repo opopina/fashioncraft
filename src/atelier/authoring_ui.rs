@@ -41,6 +41,8 @@ pub(super) struct AuthoringUi {
     pub graphic_images: super::graphics_ui::GraphicImages,
     /// The fabric eyedropper waits for a click on the 3D view.
     pub eyedropper: bool,
+    /// The 3D pen, tracing a piece on the body.
+    pub trace_pen: Option<super::trace_pen::TracePen>,
     /// Selection and drag of the Transform graphic tool.
     pub graphic_tool: super::graphics_ui::GraphicTool,
     /// The library window.

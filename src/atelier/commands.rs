@@ -116,6 +116,7 @@ pub enum CommandId {
     ExportFbx,
     ExportAlembic,
     SnapshotPatterns,
+    TracePen3d,
     ToggleArrangementPoints,
     OpenAvatarEditor,
     DraftTshirt,
@@ -1153,6 +1154,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportAlembic,
         "export.alembic",
         "Export Alembic…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        TracePen3d,
+        "3d.trace_pen",
+        "Trace a piece on the body (3D pen)",
         Simulation,
         None,
         NotUndoable,

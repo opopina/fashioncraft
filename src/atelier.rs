@@ -116,6 +116,8 @@ mod sewing_ui;
 mod shapes_ui;
 #[path = "atelier/stage_settings.rs"]
 mod stage_settings;
+#[path = "atelier/trace_pen.rs"]
+mod trace_pen;
 #[path = "atelier/trims_ui.rs"]
 mod trims_ui;
 #[cfg(test)]
@@ -585,6 +587,7 @@ impl Atelier {
             Id::ExportObjSequence => self.export_obj_sequence()?,
             Id::CaptureView3d => self.capture_view3d()?,
             Id::SnapshotPatterns => self.open_print(),
+            Id::TracePen3d => self.open_trace_pen(),
             Id::CaptureVideo => self.capture_video()?,
             Id::ExportGltf => self.export_gltf()?,
             Id::ExportObj => self.open_obj_export(false)?,

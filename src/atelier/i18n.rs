@@ -42,6 +42,14 @@ pub(super) fn tr_any(language: Language, text: &str) -> &str {
 /// is in the translation, in the same order.
 const STATUS_TEMPLATES: &[(&str, &str)] = &[
     (
+        "Piece traced on the body ({} % stretch on average) · simulate to settle",
+        "Pieza trazada sobre el cuerpo ({} % de estiramiento medio) · simula para asentarla",
+    ),
+    (
+        "Piece made, but it cannot start on the body ({}); it starts in front",
+        "Pieza creada, pero no puede empezar sobre el cuerpo ({}); empieza delante",
+    ),
+    (
         "Patterns at 1:1 saved: {} pages in {}",
         "Patrones a 1:1 guardados: {} páginas en {}",
     ),
@@ -2033,6 +2041,28 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
         "Export Alembic…" => "Exportar Alembic…",
+        "Trace a piece on the body (3D pen)" => "Trazar una pieza sobre el cuerpo (lápiz 3D)",
+        "Make piece" => "Crear pieza",
+        "Remove last point" => "Quitar el último punto",
+        "3D pen cancelled" => "Lápiz 3D cancelado",
+        "Show the avatar to trace on it" => "Muestra el avatar para trazar sobre él",
+        "Click on the body to trace a piece · Enter makes it · Backspace removes the last point · Esc cancels" => {
+            "Haz clic en el cuerpo para trazar una pieza · Intro la crea · Retroceso quita el último punto · Esc cancela"
+        }
+        "Close the line and flatten the part of the body it encloses into a new piece" => {
+            "Cierra la línea y aplana la parte del cuerpo que encierra en una pieza nueva"
+        }
+        "Click on the body to add a point" => "Haz clic en el cuerpo para añadir un punto",
+        "Pick at least three points on the body" => "Elige al menos tres puntos en el cuerpo",
+        "The line crosses or touches itself; pick points further apart" => {
+            "La línea se cruza o se toca a sí misma; elige puntos más separados"
+        }
+        "The enclosed part of the body has holes; draw around them" => {
+            "La parte del cuerpo encerrada tiene agujeros; dibuja rodeándolos"
+        }
+        "The line does not close off a part of the body" => {
+            "La línea no encierra una parte del cuerpo"
+        }
         "Key fabric" => "Clave de tela",
         "Fabric keys" => "Claves de tela",
         "Key the selected pieces' pressure and shrinkage, as set in their Piece tab, at this time; recording changes them from key to key" => {

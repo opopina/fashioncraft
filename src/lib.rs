@@ -40,6 +40,7 @@ pub mod session_protocol;
 pub mod solver;
 pub mod solver_lab;
 pub mod template_catalog;
+pub mod trace3d;
 pub mod usd_export;
 pub mod vbd;
 pub mod weld;

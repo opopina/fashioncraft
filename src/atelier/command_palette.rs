@@ -119,6 +119,7 @@ fn aliases(id: CommandId) -> &'static str {
         ExportUsd => "export usd usdz usda pixar apple ar quick look",
         ExportFbx => "export fbx autodesk maya 3ds max blender unity unreal",
         ExportAlembic => "export alembic abc cache take animation houdini maya blender",
+        TracePen3d => "3d pen trace draw body avatar flatten pattern piece",
         SnapshotPatterns => {
             "snapshot print pdf svg patterns 1:1 actual size real scale tile pages a4 letter a3 plotter"
         }

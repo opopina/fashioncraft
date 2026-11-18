@@ -60,10 +60,12 @@ fn squares(layers: &[(f64, Option<f64>)]) -> Arc<CompiledGarment> {
     Arc::new(t.compile().unwrap())
 }
 
+/// With friction a stacked square stays on the one below instead of sliding off it.
 fn settings() -> VbdSettings {
     VbdSettings {
         dt: 1. / 240.,
         iterations: 32,
+        friction: 0.6,
         ..Default::default()
     }
 }
@@ -101,12 +103,13 @@ fn stacked_fabrics_keep_the_mean_of_their_distances() {
     let h = settled(squares(&[(0.004, Some(0.002)), (0.014, Some(0.010))]), 2);
     let lower_on_floor = 0.5 * (0.002 + SCENE);
     let between = 0.5 * (0.002 + 0.010);
+    // A light square rests at the very edge of its shell: allow the f32 rounding of a micron.
     assert!(
-        h[0] > 0.7 * lower_on_floor && h[0] < lower_on_floor,
+        h[0] > 0.7 * lower_on_floor && h[0] < lower_on_floor + 1e-6,
         "{h:?}"
     );
     let gap = h[1] - h[0];
-    assert!(gap > 0.8 * between && gap < between, "{h:?}");
+    assert!(gap > 0.8 * between && gap < between + 1e-6, "{h:?}");
 }
 
 #[test]

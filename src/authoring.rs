@@ -407,6 +407,14 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Hold two points of the cloth together. One undo step.
+    AddTack {
+        tack: crate::garment::template::Tack,
+    },
+    /// Remove tacks by id. One undo step.
+    RemoveTacks {
+        ids: Vec<String>,
+    },
     /// Fold an internal line (angle and strength), replacing the fold there, or unfold it
     /// (`fold: None`). One undo step.
     SetLineFold {
@@ -943,6 +951,87 @@ pub fn prepare_solidify_edit(
     };
     let next = edit.state_after(compiled, state);
     Ok((edit, next))
+}
+
+/// Fasten every button to the nearest buttonhole on another piece (by where they are now in
+/// 3D), as tacks, or unfasten them all (`fasten: false`). One undo step.
+pub fn prepare_fasten_edit(
+    source: &GarmentTemplate,
+    compiled: &CompiledGarment,
+    state: &State,
+    fasten: bool,
+) -> Result<Edit, String> {
+    use crate::garment::{
+        template::{FASTEN_PREFIX, Tack, TackPoint},
+        trims::TrimKind,
+    };
+    let mut template = source.clone();
+    template.tacks.retain(|t| !t.id.starts_with(FASTEN_PREFIX));
+    if fasten {
+        let world = |panel: &str, uv: glam::DVec2| {
+            compiled.material_point(panel, uv).map(|terms| {
+                terms
+                    .iter()
+                    .map(|(v, w)| state.x[*v] * *w)
+                    .sum::<glam::DVec3>()
+            })
+        };
+        let holes: Vec<_> = source
+            .trims
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TrimKind::Buttonhole { start_m, end_m, .. } => {
+                    let uv = (*start_m + *end_m) * 0.5;
+                    Some((t, uv, world(&t.panel_id, uv)?))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut used = std::collections::BTreeSet::new();
+        for button in &source.trims {
+            let TrimKind::Button { center_m, .. } = &button.kind else {
+                continue;
+            };
+            let Some(at) = world(&button.panel_id, *center_m) else {
+                continue;
+            };
+            let nearest = holes
+                .iter()
+                .filter(|(hole, ..)| hole.panel_id != button.panel_id && !used.contains(&hole.id))
+                .min_by(|a, b| a.2.distance(at).total_cmp(&b.2.distance(at)));
+            if let Some((hole, uv, _)) = nearest {
+                used.insert(hole.id.clone());
+                template.tacks.push(Tack {
+                    id: format!("{FASTEN_PREFIX}{}:{}", button.id, hole.id),
+                    a: TackPoint {
+                        panel: button.panel_id.clone(),
+                        uv: *center_m,
+                    },
+                    b: TackPoint {
+                        panel: hole.panel_id.clone(),
+                        uv: *uv,
+                    },
+                });
+            }
+        }
+        if !template
+            .tacks
+            .iter()
+            .any(|t| t.id.starts_with(FASTEN_PREFIX))
+        {
+            return Err("No button has a buttonhole on another piece to fasten to".into());
+        }
+    } else if template.tacks.len() == source.tacks.len() {
+        return Err("No buttons are fastened".into());
+    }
+    let garment = template.compile()?;
+    Ok(Edit {
+        reset_simulation: !same_physics(source, &template),
+        template,
+        garment,
+        selected: None,
+        new_point: None,
+    })
 }
 
 /// Capture world targets without editing a document or applying constraints.
@@ -2545,6 +2634,24 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::AddTack { tack } => {
+            if template.tacks.iter().any(|t| t.id == tack.id) {
+                return Err(format!("A tack called {} exists already", tack.id));
+            }
+            selected = Some(tack.a.panel.clone());
+            template.tacks.push(tack);
+        }
+        Command::RemoveTacks { ids } => {
+            if ids.is_empty() {
+                return Err("No tacks to remove".into());
+            }
+            for id in &ids {
+                if !template.tacks.iter().any(|t| &t.id == id) {
+                    return Err(format!("There is no tack {id}"));
+                }
+            }
+            template.tacks.retain(|t| !ids.contains(&t.id));
         }
         Command::SetLineFold { panel, line, fold } => {
             if let Some(f) = &fold

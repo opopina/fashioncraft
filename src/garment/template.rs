@@ -231,6 +231,10 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Tacks: two points of the cloth held together (basting, or a button fastened to its
+    /// buttonhole).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tacks: Vec<Tack>,
     /// Folds along internal lines: a rest angle and a stiffening of the crease.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub line_folds: Vec<LineFold>,
@@ -333,6 +337,63 @@ impl LineSpring {
             return Err("Tape keeps the cut length (ratio 100 %)".into());
         }
         Ok(())
+    }
+}
+
+/// Two material points held together by a stiff zero-length spring.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Tack {
+    pub id: String,
+    pub a: TackPoint,
+    pub b: TackPoint,
+}
+
+/// A point of a piece, in its material coordinates (metres).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TackPoint {
+    pub panel: String,
+    pub uv: glam::DVec2,
+}
+
+/// Stiffness of a tack, N/m.
+pub const TACK_STIFFNESS: f64 = 500.;
+/// Prefix of the tacks that fasten a button to its buttonhole.
+pub const FASTEN_PREFIX: &str = "fasten:";
+
+impl CompiledGarment {
+    /// The vertices and barycentric weights of a material point: the panel's triangle that
+    /// holds `uv` (or the nearest one, its weights clamped to its edges).
+    pub fn material_point(&self, panel: &str, uv: glam::DVec2) -> Option<Vec<(usize, f64)>> {
+        let range = self.panels.iter().find(|r| r.id == panel)?;
+        let mut best: Option<(f64, [usize; 3], [f64; 3])> = None;
+        for t in &self.mesh.triangles[range.triangles.clone()] {
+            let [a, b, c] = t.vertices.map(|v| self.mesh.uv[v]);
+            let (e0, e1, e2) = (b - a, c - a, uv - a);
+            let det = e0.perp_dot(e1);
+            if det.abs() < 1e-18 {
+                continue;
+            }
+            let wb = e2.perp_dot(e1) / det;
+            let wc = e0.perp_dot(e2) / det;
+            let w = [1. - wb - wc, wb, wc];
+            let score = w.iter().copied().fold(f64::INFINITY, f64::min);
+            if best.as_ref().is_none_or(|(s, ..)| score > *s) {
+                best = Some((score, t.vertices, w));
+            }
+        }
+        let (_, vertices, w) = best?;
+        let w = w.map(|x| x.max(0.));
+        let sum: f64 = w.iter().sum();
+        Some(
+            vertices
+                .iter()
+                .zip(w)
+                .filter(|(_, x)| *x > 0.)
+                .map(|(v, x)| (*v, x / sum))
+                .collect(),
+        )
     }
 }
 
@@ -534,6 +595,17 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        let mut tack_ids = BTreeSet::new();
+        for tack in &self.tacks {
+            if !tack_ids.insert(&tack.id) {
+                return Err(format!("Two tacks are called {}", tack.id));
+            }
+            for p in [&tack.a, &tack.b] {
+                if !self.panels.iter().any(|q| q.id == p.panel) || !p.uv.is_finite() {
+                    return Err(format!("Tack {} refers to an unknown panel", tack.id));
+                }
+            }
         }
         let mut folds = BTreeSet::new();
         for fold in &self.line_folds {
@@ -930,6 +1002,45 @@ impl GarmentTemplate {
             }
             out.seams.push(seam);
         }
+        for tack in &self.tacks {
+            let locate = |p: &TackPoint| {
+                out.material_point(&p.panel, p.uv)
+                    .ok_or_else(|| format!("Tack {} is on a missing panel", tack.id))
+            };
+            let mut terms: BTreeMap<usize, f64> = BTreeMap::new();
+            for (v, w) in locate(&tack.a)? {
+                *terms.entry(v).or_default() += w;
+            }
+            for (v, w) in locate(&tack.b)? {
+                *terms.entry(v).or_default() -= w;
+            }
+            terms.retain(|_, w| w.abs() > 1e-12);
+            if terms.is_empty() {
+                continue;
+            }
+            // Exactly zero sum, as a seam's correspondence requires.
+            let excess: f64 = terms.values().sum();
+            if let Some(w) = terms.values_mut().next() {
+                *w -= excess;
+            }
+            let point = super::seam::StitchPoint {
+                terms: terms.into_iter().collect(),
+            };
+            // A tack is a one-sample seam: the solvers, the GPU and the contact exclusions
+            // treat it as one, with a stiffness in N/m.
+            out.seams.push(CompiledSeam {
+                id: format!("tack:{}", tack.id),
+                samples: vec![super::seam::StitchSample {
+                    point: point.clone(),
+                    weight_m: 1.,
+                }],
+                probes: vec![point],
+                guides: vec![],
+                stiffness: TACK_STIFFNESS,
+                lengths: [0.01, 0.01],
+                notches: vec![],
+            });
+        }
         out.arrangement_positions = out.initial_state.x.clone();
         out.legacy_pins = out.mesh.pins.clone();
         out.authored_holds = vec![false; out.mesh.uv.len()];
@@ -1080,6 +1191,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            tacks: vec![],
             line_folds: vec![],
             line_springs: vec![],
             panel_shrink: Default::default(),

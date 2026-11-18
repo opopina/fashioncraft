@@ -11,6 +11,9 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Default)]
 pub(super) struct PinTool {
     pub enabled: bool,
+    /// Tack mode (within the pin mode): two clicks hold two points of the cloth together.
+    pub tack: bool,
+    tack_first: Option<usize>,
     drag: Option<(egui::Pos2, egui::Pos2)>,
 }
 
@@ -25,13 +28,36 @@ impl Atelier {
         let count = self.project.template.pin_targets.len();
         ui.horizontal_wrapped(|ui| {
             let tool = &mut self.authoring.pin_tool;
-            ui.selectable_value(&mut tool.enabled, false, "Grab")
-                .on_hover_text("Drag the cloth while it simulates");
-            ui.selectable_value(&mut tool.enabled, true, "Pin")
+            if ui
+                .selectable_label(!tool.enabled, "Grab")
+                .on_hover_text("Drag the cloth while it simulates")
+                .clicked()
+            {
+                tool.enabled = false;
+                tool.tack = false;
+            }
+            if ui
+                .selectable_label(tool.enabled && !tool.tack, "Pin")
                 .on_hover_text(
                     "Click the cloth to pin a point where it is · drag a box to pin an area · \
                  click a pin to remove it · Cmd+drag removes the pins in a box",
-                );
+                )
+                .clicked()
+            {
+                tool.enabled = true;
+                tool.tack = false;
+            }
+            if ui
+                .selectable_label(tool.enabled && tool.tack, "Tack")
+                .on_hover_text(
+                    "Click two points of the cloth to hold them together, like a basting stitch",
+                )
+                .clicked()
+            {
+                tool.enabled = true;
+                tool.tack = true;
+                tool.tack_first = None;
+            }
             ui.separator();
             ui.label(super::garment_display::counted(count, "pin", "pins"));
             if ui
@@ -40,11 +66,114 @@ impl Atelier {
             {
                 self.delete_all_pins();
             }
+            ui.separator();
+            let tacks = self.project.template.tacks.len();
+            ui.label(super::garment_display::counted(tacks, "tack", "tacks"));
+            if ui
+                .add_enabled(tacks > 0, egui::Button::new("Remove tacks"))
+                .clicked()
+            {
+                let ids = self
+                    .project
+                    .template
+                    .tacks
+                    .iter()
+                    .map(|t| t.id.clone())
+                    .collect();
+                if self.edit(authoring::Command::RemoveTacks { ids }) {
+                    self.status = "Tacks removed".into();
+                }
+            }
+            if ui
+                .button("Fasten buttons")
+                .on_hover_text("Fasten each button to the nearest buttonhole on another piece")
+                .clicked()
+            {
+                self.fasten(true);
+            }
+            if ui.button("Unfasten").clicked() {
+                self.fasten(false);
+            }
         });
+    }
+
+    fn fasten(&mut self, fasten: bool) {
+        match authoring::prepare_fasten_edit(
+            &self.project.template,
+            &self.scene.garment,
+            &self.scene.state,
+            fasten,
+        ) {
+            Ok(edit) => {
+                self.authoring.history.record(self.project.template.clone());
+                self.install_edit(edit);
+                self.status = if fasten {
+                    "Buttons fastened to their buttonholes".into()
+                } else {
+                    "Buttons unfastened".into()
+                };
+            }
+            Err(error) => self.status = error,
+        }
+    }
+
+    /// Tack-mode click: the first point, then the second, which makes the tack.
+    fn tack_click(&mut self, pos: egui::Pos2, rect: egui::Rect) {
+        let Some(v) = self.picked_vertex(pos, rect) else {
+            self.status = "Click on the cloth to tack it".into();
+            return;
+        };
+        let Some(first) = self.authoring.pin_tool.tack_first.take() else {
+            self.authoring.pin_tool.tack_first = Some(v);
+            self.status = "First point chosen · click the point to tack it to".into();
+            return;
+        };
+        let g = &self.scene.garment;
+        let point = |v: usize| {
+            g.panels.iter().find(|r| r.vertices.contains(&v)).map(|r| {
+                marvelous_cloth::garment::template::TackPoint {
+                    panel: r.id.clone(),
+                    uv: g.mesh.uv[v],
+                }
+            })
+        };
+        let (Some(a), Some(b)) = (point(first), point(v)) else {
+            return;
+        };
+        if first == v {
+            self.status = "Pick two different points".into();
+            return;
+        }
+        let n = (1..)
+            .find(|k| {
+                !self
+                    .project
+                    .template
+                    .tacks
+                    .iter()
+                    .any(|t| t.id == format!("tack_{k}"))
+            })
+            .unwrap_or(1);
+        let tack = marvelous_cloth::garment::template::Tack {
+            id: format!("tack_{n}"),
+            a,
+            b,
+        };
+        if self.edit(authoring::Command::AddTack { tack }) {
+            self.status = "Tacked · the two points are drawn together".into();
+        }
     }
 
     /// Pin-mode clicks and box drags in the 3D view.
     pub(super) fn pin_interaction(&mut self, response: &egui::Response, rect: egui::Rect) {
+        if self.authoring.pin_tool.tack {
+            if response.clicked_by(egui::PointerButton::Primary)
+                && let Some(pos) = response.interact_pointer_pos()
+            {
+                self.tack_click(pos, rect);
+            }
+            return;
+        }
         let removing = response.ctx.input(|i| i.modifiers.command);
         if response.drag_started_by(egui::PointerButton::Primary)
             && let Some(pos) = response.interact_pointer_pos()

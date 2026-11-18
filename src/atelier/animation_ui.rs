@@ -613,6 +613,55 @@ impl Atelier {
                     }
                     self.document.dirty = true;
                 }
+                // Wind and gravity as the scene has them now, at this time.
+                if ui
+                    .button(t("Key wind"))
+                    .on_hover_text(t(
+                        "Key the scene's wind, as set in Simulation, at this time; recording blows it from key to key",
+                    ))
+                    .clicked()
+                {
+                    action = Some(|s, _| {
+                        let time = s.authoring.animation.time;
+                        let wind = s.settings.wind.clone().unwrap_or(marvelous_cloth::vbd::Wind {
+                            velocity: glam::DVec3::ZERO,
+                            ..Default::default()
+                        });
+                        let a = s.animation_or_new()?;
+                        avatar_animation::set_vector_key(&mut a.wind_keys, time, wind.velocity);
+                        s.status = format!("Key set at {time:.2} s");
+                        Ok(())
+                    });
+                }
+                if ui
+                    .button(t("Key gravity"))
+                    .on_hover_text(t(
+                        "Key the scene's gravity at this time; recording changes it from key to key",
+                    ))
+                    .clicked()
+                {
+                    action = Some(|s, _| {
+                        let time = s.authoring.animation.time;
+                        let gravity = s.settings.gravity;
+                        let a = s.animation_or_new()?;
+                        avatar_animation::set_vector_key(&mut a.gravity_keys, time, gravity);
+                        s.status = format!("Key set at {time:.2} s");
+                        Ok(())
+                    });
+                }
+                let environment = self.project.avatar_animation.as_ref().map_or(0, |a| {
+                    a.wind_keys.len() + a.gravity_keys.len()
+                });
+                if environment > 0 {
+                    ui.small(format!("{}: {environment}", t("Wind and gravity keys")));
+                    if ui.small_button(t("Clear")).clicked()
+                        && let Some(a) = self.project.avatar_animation.as_mut()
+                    {
+                        a.wind_keys.clear();
+                        a.gravity_keys.clear();
+                        self.document.dirty = true;
+                    }
+                }
                 egui::ComboBox::from_id_salt("animation.motion")
                     .width(110.)
                     .selected_text(t(avatar_animation::MOTIONS[self.authoring.animation.motion]))

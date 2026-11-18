@@ -60,6 +60,49 @@ pub struct AvatarAnimation {
     pub markers: Vec<Marker>,
     #[serde(default = "default_fps")]
     pub fps: f64,
+    /// Wind velocity (m/s) at times of the animation; without keys the scene's wind blows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wind_keys: Vec<VectorKey>,
+    /// Gravity (m/s²) at times of the animation; without keys the scene's gravity pulls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gravity_keys: Vec<VectorKey>,
+}
+
+/// A vector at one time of the animation: the wind's velocity or gravity.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VectorKey {
+    pub time_s: f64,
+    pub value: [f64; 3],
+}
+
+/// The keyed vector at time `t`: straight between keys, held before the first and after the
+/// last; `None` without keys.
+fn vector_at(keys: &[VectorKey], t: f64) -> Option<DVec3> {
+    let v = |k: &VectorKey| DVec3::from_array(k.value);
+    match keys {
+        [] => None,
+        [first, ..] if t <= first.time_s => Some(v(first)),
+        [.., last] if t >= last.time_s => Some(v(last)),
+        _ => {
+            let k = keys.partition_point(|k| k.time_s <= t);
+            let (a, b) = (&keys[k - 1], &keys[k]);
+            Some(v(a).lerp(v(b), (t - a.time_s) / (b.time_s - a.time_s)))
+        }
+    }
+}
+
+/// Put `value` at `time` among `keys`, replacing a key already there.
+pub fn set_vector_key(keys: &mut Vec<VectorKey>, time: f64, value: DVec3) {
+    keys.retain(|k| (k.time_s - time).abs() > 1e-6);
+    let at = keys.partition_point(|k| k.time_s < time);
+    keys.insert(
+        at,
+        VectorKey {
+            time_s: time,
+            value: value.to_array(),
+        },
+    );
 }
 
 impl Default for AvatarAnimation {
@@ -71,6 +114,8 @@ impl Default for AvatarAnimation {
             }],
             markers: Vec::new(),
             fps: default_fps(),
+            wind_keys: Vec::new(),
+            gravity_keys: Vec::new(),
         }
     }
 }
@@ -84,7 +129,37 @@ impl AvatarAnimation {
         }
     }
 
+    /// The wind's velocity at time `t`, when the animation keys it.
+    pub fn wind_at(&self, t: f64) -> Option<DVec3> {
+        vector_at(&self.wind_keys, t)
+    }
+
+    /// Gravity at time `t`, when the animation keys it.
+    pub fn gravity_at(&self, t: f64) -> Option<DVec3> {
+        vector_at(&self.gravity_keys, t)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
+        for (keys, what, most) in [
+            (&self.wind_keys, "Wind", 50.),
+            (&self.gravity_keys, "Gravity", 100.),
+        ] {
+            let mut previous = f64::NEG_INFINITY;
+            for key in keys {
+                let value = DVec3::from_array(key.value);
+                if !key.time_s.is_finite()
+                    || !(0.0..=MAX_DURATION_S).contains(&key.time_s)
+                    || key.time_s <= previous + 1e-6
+                    || !value.is_finite()
+                    || value.length() > most
+                {
+                    return Err(format!(
+                        "{what} keys must be in time order within {MAX_DURATION_S:.0} s and at most {most} long"
+                    ));
+                }
+                previous = key.time_s;
+            }
+        }
         if !self.fps.is_finite() || !FPS_RANGE.contains(&self.fps) {
             return Err("The frame rate must be between 1 and 120 frames per second".into());
         }
@@ -727,6 +802,23 @@ impl Recorder {
         self.time
     }
 
+    /// The solver settings for the planned step: `base`, with the wind and gravity the
+    /// animation keys at the step's end.
+    pub fn step_settings(&self, base: &VbdSettings) -> VbdSettings {
+        let t = self.planned.as_ref().map_or(self.time, |p| p.0);
+        let mut settings = base.clone();
+        if let Some(g) = self.animation.gravity_at(t) {
+            settings.gravity = g;
+        }
+        if let Some(w) = self.animation.wind_at(t) {
+            settings.wind = Some(crate::vbd::Wind {
+                velocity: w,
+                ..base.wind.clone().unwrap_or_default()
+            });
+        }
+        settings
+    }
+
     pub fn take(&self) -> &Take {
         &self.take
     }
@@ -753,10 +845,10 @@ pub fn run(
     };
     let mut solver = VbdSolver::new(garment, Some(&floored(surface)), &state)?;
     recorder.begin(&state.x);
-    let mut step = settings.clone();
     while !recorder.finished() {
         let (dt, obstacle) = recorder.plan(settings.dt);
         solver.set_obstacle(&state.x, &floored(&obstacle))?;
+        let mut step = recorder.step_settings(settings);
         step.dt = dt;
         step.iterations = ((settings.iterations as f64 * dt / settings.dt).ceil() as usize)
             .clamp(MIN_ITERATIONS.min(settings.iterations), settings.iterations);

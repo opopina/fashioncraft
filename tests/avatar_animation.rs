@@ -378,3 +378,47 @@ fn a_take_is_read_back_from_its_point_cache_and_travels_with_the_project() {
     assert!(stored.path.starts_with(dir.path()));
     assert_eq!(Take::read_pc2(&stored.path, stored.fps).unwrap(), take);
 }
+
+#[test]
+fn wind_and_gravity_keys_drive_each_recorded_step() {
+    use marvelous_cloth::avatar_animation::{VectorKey, set_vector_key};
+    let mut animation = keyed(&[(0., 0.), (1., 0.)]);
+    set_vector_key(&mut animation.gravity_keys, 1., DVec3::ZERO);
+    set_vector_key(&mut animation.gravity_keys, 0., DVec3::new(0., -9.81, 0.));
+    set_vector_key(&mut animation.wind_keys, 0.5, DVec3::new(0., 0., -4.));
+    animation.validate().unwrap();
+    // Held before the first key and after the last, straight in between.
+    assert_eq!(animation.gravity_keys[0].time_s, 0.);
+    assert!((animation.gravity_at(0.25).unwrap().y + 9.81 * 0.75).abs() < 1e-12);
+    assert_eq!(animation.wind_at(0.).unwrap(), DVec3::new(0., 0., -4.));
+    assert_eq!(animation.gravity_at(3.).unwrap(), DVec3::ZERO);
+    assert!(keyed(&[(0., 0.)]).wind_at(0.).is_none());
+    // Each planned step blows and pulls as its end time asks.
+    let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    let mut recorder = Recorder::new(&project, &animation).unwrap();
+    let cloth = project.compile().unwrap().state.x.clone();
+    recorder.begin(&cloth);
+    let base = VbdSettings::default();
+    let mut steps = 0;
+    while !recorder.finished() && steps < 100_000 {
+        recorder.plan(1. / 60.);
+        let s = recorder.step_settings(&base);
+        assert!(s.gravity.y >= -9.81 - 1e-9 && s.gravity.y <= 0.);
+        assert_eq!(s.wind.as_ref().unwrap().velocity, DVec3::new(0., 0., -4.));
+        recorder.commit(&cloth);
+        steps += 1;
+    }
+    // Late steps pull less than early ones.
+    recorder.plan(1. / 60.);
+    assert!(recorder.step_settings(&base).gravity.y.abs() < 0.2);
+    // Keys out of order or too strong are refused.
+    let mut bad = animation.clone();
+    bad.gravity_keys.push(VectorKey {
+        time_s: 0.5,
+        value: [0., -9.81, 0.],
+    });
+    assert!(bad.validate().is_err());
+    let mut strong = animation;
+    set_vector_key(&mut strong.wind_keys, 2., DVec3::new(0., 0., 80.));
+    assert!(strong.validate().is_err());
+}

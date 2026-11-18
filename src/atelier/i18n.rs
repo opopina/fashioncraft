@@ -1954,6 +1954,15 @@ fn spanish(text: &str) -> Option<&'static str> {
         "OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over; with keys they move while the animation records." => {
             "Objetos OBJ, STL, PLY o COLLADA sobre los que la tela se apoya o cae; con claves se mueven mientras se graba la animación."
         }
+        "Key wind" => "Clave de viento",
+        "Key gravity" => "Clave de gravedad",
+        "Key the scene's wind, as set in Simulation, at this time; recording blows it from key to key" => {
+            "Pone como clave en este instante el viento de la escena, tal como está en Simulación; al grabar sopla de clave en clave"
+        }
+        "Key the scene's gravity at this time; recording changes it from key to key" => {
+            "Pone como clave en este instante la gravedad de la escena; al grabar cambia de clave en clave"
+        }
+        "Wind and gravity keys" => "Claves de viento y gravedad",
         _ => return None,
     })
 }

@@ -74,6 +74,7 @@ impl Atelier {
             pick_texture: false,
             palette: Some(&mut self.project.color_palette),
             eyedropper: self.authoring.eyedropper,
+            language: ui_lang,
         };
         let appearance_action = appearance_controls(
             ui,
@@ -125,8 +126,10 @@ impl Atelier {
             fabric.properties.density * 1000.
         ));
         ui.small(format!(
-            "Mass: panel {:.1} g · garment {:.1} g",
+            "{} {:.1} g · {} {:.1} g",
+            i18n::tr(ui_lang, "Mass: panel"),
             panel_mass * 1000.,
+            i18n::tr(ui_lang, "garment"),
             self.scene.garment.mesh.masses.iter().sum::<f64>() * 1000.
         ));
         let mut apply = false;
@@ -138,7 +141,7 @@ impl Atelier {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
                 let old = d.preset;
                 let combo = egui::ComboBox::from_id_salt("fabric_preset")
-                    .selected_text(d.preset.map(|i| PRESETS[i].name).unwrap_or("Choose a fabric type"))
+                    .selected_text(d.preset.map(|i| PRESETS[i].name).unwrap_or(i18n::tr(ui_lang, "Choose a fabric type")))
                     .show_ui(ui, |ui| {
                         for (i, p) in PRESETS.iter().enumerate() {
                             let response = ui.selectable_value(&mut d.preset, Some(i), p.name);
@@ -155,7 +158,7 @@ impl Atelier {
                 ui.small(i18n::tr(ui_lang, "Indicative presets. Elasticity and bending must be calibrated on your fabric."));
                 if let Some(i) = d.preset {
                     ui.small(PRESETS[i].evidence);
-                    ui.hyperlink_to("Measurement source", PRESETS[i].source);
+                    ui.hyperlink_to(i18n::tr(ui_lang, "Measurement source"), PRESETS[i].source);
                 }
                 let name = ui.text_edit_singleline(&mut d.name);
                 if let Some(smoke) = &mut self.authoring_smoke {
@@ -164,9 +167,9 @@ impl Atelier {
                 let p = &mut d.properties;
                 let before_properties = p.clone();
                 let mut gsm = p.density * 1000.;
-                if value(ui, "Area weight", &mut gsm, 1., 10., 2000., " g/m²") { p.density = gsm / 1000.; }
+                if value(ui, i18n::tr(ui_lang, "Area weight"), &mut gsm, 1., 10., 2000., " g/m²") { p.density = gsm / 1000.; }
                 let mut thickness = p.thickness * 1000.;
-                if value(ui, "Thickness", &mut thickness, 0.01, 0.02, 5., " mm") { p.thickness = thickness / 1000.; }
+                if value(ui, i18n::tr(ui_lang, "Thickness"), &mut thickness, 0.01, 0.02, 5., " mm") { p.thickness = thickness / 1000.; }
                 let mut own = p.collision_distance.is_some();
                 if ui
                     .checkbox(&mut own, i18n::tr(ui_lang, "Own collision distance"))
@@ -181,28 +184,28 @@ impl Atelier {
                 }
                 if let Some(gap) = p.collision_distance.as_mut() {
                     let mut mm = *gap * 1000.;
-                    if value(ui, "Collision distance", &mut mm, 0.05, 0.5, 20., " mm") { *gap = mm / 1000.; }
+                    if value(ui, i18n::tr(ui_lang, "Collision distance"), &mut mm, 0.05, 0.5, 20., " mm") { *gap = mm / 1000.; }
                 }
                 let mut damping_ms = p.internal_damping * 1000.;
-                if value(ui, "Internal damping", &mut damping_ms, 0.1, 0., 100., " ms") {
+                if value(ui, i18n::tr(ui_lang, "Internal damping"), &mut damping_ms, 0.1, 0., 100., " ms") {
                     p.internal_damping = damping_ms / 1000.;
                 }
                 ui.small(i18n::tr(ui_lang, "Internal damping settles stretching and bending; the piece as a whole still moves freely."));
                 ui.label(i18n::tr(ui_lang, "Stretch under 5 N on a 5 cm strip"));
                 ui.small(i18n::tr(ui_lang, "The larger the %, the more the fabric stretches. This is not the strain at failure."));
                 for (axis, label) in ["Warp", "Weft"].iter().enumerate() {
-                    if value(ui, label, &mut d.extension[axis], 0.1, 0.1, 100., " %")
+                    if value(ui, i18n::tr(ui_lang, label), &mut d.extension[axis], 0.1, 0.1, 100., " %")
                         && let Ok(k) = fabrics::stiffness_for_extension(d.extension[axis], p) {
                             if axis == 0 { p.warp = k; } else { p.weft = k; }
                         }
                 }
                 ui.collapsing(i18n::tr(ui_lang, "Advanced stiffness"), |ui| {
-                    value(ui, "Shear", &mut p.shear, 1., 0.1, 10000., " N/m");
+                    value(ui, i18n::tr(ui_lang, "Shear"), &mut p.shear, 1., 0.1, 10000., " N/m");
                     for (label, b) in [("Bending warp", &mut p.bend_warp), ("Bending weft", &mut p.bend_weft)] {
                         let mut micro = *b * 1e6;
-                        if value(ui, label, &mut micro, 1., 0., 100000., " µN·m") { *b = micro * 1e-6; }
+                        if value(ui, i18n::tr(ui_lang, label), &mut micro, 1., 0., 100000., " µN·m") { *b = micro * 1e-6; }
                     }
-                    ui.small(format!("Warp/weft membrane: {:.0} / {:.0} N/m", p.warp, p.weft));
+                    ui.small(format!("{}: {:.0} / {:.0} N/m", i18n::tr(ui_lang, "Warp/weft membrane"), p.warp, p.weft));
                     ui.small(i18n::tr(ui_lang, "Without its own collision distance a fabric uses the scene's, in Simulation."));
                 });
                 if d.properties != before_properties { d.preset = None; }
@@ -300,6 +303,8 @@ struct AppearanceExtras<'a> {
     palette: Option<&'a mut Vec<[u8; 3]>>,
     /// Whether the eyedropper is waiting for a click on the 3D view; the controls toggle it.
     eyedropper: bool,
+    /// Interface language of the labels.
+    language: super::i18n::Language,
 }
 
 fn appearance_controls(
@@ -308,10 +313,14 @@ fn appearance_controls(
     targets: &mut Vec<(&'static str, egui::Rect)>,
     extras: &mut AppearanceExtras,
 ) -> Option<Option<marvelous_cloth::garment::appearance::FabricAppearance>> {
-    ui.strong("Fabric appearance");
-    ui.small("Shared by panels using this fabric. Does not change its mechanics.");
+    let lang = extras.language;
+    let tr = |text: &'static str| super::i18n::tr(lang, text);
+    ui.strong(tr("Fabric appearance"));
+    ui.small(tr(
+        "Shared by panels using this fabric. Does not change its mechanics.",
+    ));
     let mut custom = draft.is_some();
-    let enable = ui.checkbox(&mut custom, "Custom color and roughness");
+    let enable = ui.checkbox(&mut custom, tr("Custom color and roughness"));
     #[cfg(test)]
     super::authoring_smoke::widget_harness::named(ui, &enable, "appearance.enabled");
     targets.push(("appearance.enabled", enable.rect));
@@ -320,14 +329,16 @@ fn appearance_controls(
     }
     if let Some(value) = draft {
         ui.horizontal(|ui| {
-            ui.label("Color (sRGB)");
+            ui.label(tr("Color (sRGB)"));
             let swatch = ui.color_edit_button_srgb(&mut value.color_srgb);
             #[cfg(test)]
             super::authoring_smoke::widget_harness::named(ui, &swatch, "appearance.color");
             targets.push(("appearance.color", swatch.rect));
             if ui
-                .selectable_label(extras.eyedropper, "Pick")
-                .on_hover_text("Eyedropper: click a piece in the 3D view to take its colour")
+                .selectable_label(extras.eyedropper, tr("Pick"))
+                .on_hover_text(tr(
+                    "Eyedropper: click a piece in the 3D view to take its colour",
+                ))
                 .clicked()
             {
                 extras.eyedropper = !extras.eyedropper;
@@ -349,14 +360,14 @@ fn appearance_controls(
                             .speed(1.0)
                             .prefix(format!("{label} ")),
                     )
-                    .on_hover_text("sRGB byte (0-255). Apply appearance to commit.");
+                    .on_hover_text(tr("sRGB byte (0-255). Apply appearance to commit."));
                 #[cfg(test)]
                 super::authoring_smoke::widget_harness::named(ui, &response, key);
                 targets.push((key, response.rect));
             }
         });
         let roughness =
-            ui.add(egui::Slider::new(&mut value.roughness, 0.0..=1.0).text("Roughness"));
+            ui.add(egui::Slider::new(&mut value.roughness, 0.0..=1.0).text(tr("Roughness")));
         #[cfg(test)]
         super::authoring_smoke::widget_harness::named(ui, &roughness, "appearance.roughness");
         targets.push((
@@ -369,8 +380,8 @@ fn appearance_controls(
         ui.horizontal(|ui| {
             let mut back = value.back_color_srgb.is_some();
             if ui
-                .checkbox(&mut back, "Back color")
-                .on_hover_text("A different colour on the fabric's back face, as on a lining or a two-tone fabric")
+                .checkbox(&mut back, tr("Back color"))
+                .on_hover_text(tr("A different colour on the fabric's back face, as on a lining or a two-tone fabric"))
                 .changed()
             {
                 value.back_color_srgb = back.then_some(value.color_srgb);
@@ -381,17 +392,23 @@ fn appearance_controls(
         });
         use marvelous_cloth::garment::appearance::{Weave, WeaveKind};
         ui.horizontal(|ui| {
-            ui.label("Weave");
-            let label = value.weave.as_ref().map_or("None", |w| w.kind.label());
+            ui.label(tr("Weave"));
+            let label = value
+                .weave
+                .as_ref()
+                .map_or(tr("None"), |w| tr(w.kind.label()));
             egui::ComboBox::from_id_salt("appearance_weave")
                 .selected_text(label)
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(value.weave.is_none(), "None").clicked() {
+                    if ui
+                        .selectable_label(value.weave.is_none(), tr("None"))
+                        .clicked()
+                    {
                         value.weave = None;
                     }
                     for kind in WeaveKind::ALL {
                         let on = value.weave.as_ref().is_some_and(|w| w.kind == kind);
-                        if ui.selectable_label(on, kind.label()).clicked() {
+                        if ui.selectable_label(on, tr(kind.label())).clicked() {
                             let mut w = value.weave.clone().unwrap_or_default();
                             w.kind = kind;
                             value.weave = Some(w);
@@ -401,7 +418,7 @@ fn appearance_controls(
         });
         if let Some(w) = value.weave.as_mut() {
             ui.horizontal(|ui| {
-                ui.label("Thread spacing");
+                ui.label(tr("Thread spacing"));
                 ui.add(
                     egui::DragValue::new(&mut w.spacing_mm)
                         .range(0.05..=20.0)
@@ -410,11 +427,11 @@ fn appearance_controls(
                         .suffix(" mm"),
                 );
             });
-            ui.add(egui::Slider::new(&mut w.contrast, 0.0..=1.0).text("Weave contrast"));
+            ui.add(egui::Slider::new(&mut w.contrast, 0.0..=1.0).text(tr("Weave contrast")));
             let _: &Weave = w;
         }
         ui.horizontal(|ui| {
-            ui.label("Look thickness");
+            ui.label(tr("Look thickness"));
             ui.add(
                 egui::DragValue::new(&mut value.render_thickness_mm)
                     .range(0.0..=marvelous_cloth::garment::appearance::MAX_RENDER_THICKNESS_MM)
@@ -423,30 +440,30 @@ fn appearance_controls(
                     .suffix(" mm"),
             )
             .on_hover_text(
-                "Draw the cloth this thick, with a rim along its outline; the simulation is unchanged",
+                tr("Draw the cloth this thick, with a rim along its outline; the simulation is unchanged"),
             );
         });
         ui.horizontal(|ui| {
-            ui.label("Texture");
+            ui.label(tr("Texture"));
             if value.texture.is_some() {
-                ui.label(extras.texture_name.as_deref().unwrap_or("image"));
+                ui.label(extras.texture_name.as_deref().unwrap_or(tr("image")));
             }
             let pick = if value.texture.is_some() {
-                "Replace…"
+                tr("Replace…")
             } else {
-                "Image…"
+                tr("Image…")
             };
             extras.pick_texture = ui
                 .button(pick)
-                .on_hover_text("Repeat a PNG image over the fabric along its grain")
+                .on_hover_text(tr("Repeat a PNG image over the fabric along its grain"))
                 .clicked();
-            if value.texture.is_some() && ui.small_button("Remove").clicked() {
+            if value.texture.is_some() && ui.small_button(tr("Remove")).clicked() {
                 value.texture = None;
             }
         });
         if let Some(t) = value.texture.as_mut() {
             ui.horizontal(|ui| {
-                ui.label("Repeat");
+                ui.label(tr("Repeat"));
                 ui.add(
                     egui::DragValue::new(&mut t.width_mm)
                         .range(1.0..=5000.)
@@ -465,7 +482,7 @@ fn appearance_controls(
                 );
             });
             ui.horizontal(|ui| {
-                ui.label("Angle");
+                ui.label(tr("Angle"));
                 ui.add(
                     egui::DragValue::new(&mut t.rotation_degrees)
                         .range(-360.0..=360.)
@@ -484,7 +501,7 @@ fn appearance_controls(
             ui.small("The colours tint the image: white shows it as it is.");
         }
     }
-    let apply = ui.button("Apply appearance");
+    let apply = ui.button(tr("Apply appearance"));
     #[cfg(test)]
     super::authoring_smoke::widget_harness::named(ui, &apply, "appearance.apply");
     targets.push(("appearance.apply", apply.rect));

@@ -1589,6 +1589,162 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Arm length" => "Largo de brazo",
         "Inseam" => "Entrepierna",
         "The legs do not part below the pelvis" => "Las piernas no se separan bajo la pelvis",
+        // Command palette.
+        "Start or pause simulation" => "Iniciar o pausar la simulación",
+        "Advance one simulation step" => "Avanzar un paso de simulación",
+        "Reset flat arrangement" => "Restablecer la colocación plana",
+        "Export session artifacts" => "Exportar los archivos de la sesión",
+        "Toggle properties inspector" => "Mostrar u ocultar el inspector de propiedades",
+        "Reset workspace layout" => "Restablecer la distribución del espacio de trabajo",
+        "Open preferences" => "Abrir preferencias",
+        "Load T-shirt example" => "Cargar el ejemplo de camiseta",
+        "Load dress example" => "Cargar el ejemplo de vestido",
+        "Select and edit" => "Seleccionar y editar",
+        "Draw pattern" => "Dibujar patrón",
+        "Draw freehand pattern" => "Dibujar patrón a mano alzada",
+        "Draw rectangle" => "Dibujar rectángulo",
+        "Draw ellipse" => "Dibujar elipse",
+        "Draw arc sector" => "Dibujar sector de arco",
+        "Draw internal line" => "Dibujar línea interna",
+        "Sew boundaries" => "Coser bordes",
+        "Move panel in 3D" => "Mover pieza en 3D",
+        "Rotate panel in 3D" => "Girar pieza en 3D",
+        "Measure on 2D board" => "Medir en el tablero 2D",
+        "Lock selected pieces in 2D" => "Bloquear en 2D las piezas seleccionadas",
+        "Lock all pieces in 2D" => "Bloquear en 2D todas las piezas",
+        "Unlock all pieces in 2D" => "Desbloquear en 2D todas las piezas",
+        "Lock all internal lines in 2D" => "Bloquear en 2D todas las líneas internas",
+        "Unlock all internal lines in 2D" => "Desbloquear en 2D todas las líneas internas",
+        "Invert piece selection" => "Invertir la selección de piezas",
+        "Reset 3D arrangement of selected pieces" => {
+            "Restablecer la colocación 3D de las piezas seleccionadas"
+        }
+        "Save project as…" => "Guardar proyecto como…",
+        "Import avatar…" => "Importar avatar…",
+        "Import DXF patterns…" => "Importar patrones DXF…",
+        "Import SVG patterns…" => "Importar patrones SVG…",
+        "Front view" => "Vista frontal",
+        "Back view" => "Vista trasera",
+        "View of the avatar's right side" => "Vista del lado derecho del avatar",
+        "View of the avatar's left side" => "Vista del lado izquierdo del avatar",
+        "Top view" => "Vista superior",
+        "Bottom view" => "Vista inferior",
+        "Three-quarter view, avatar's right" => "Vista tres cuartos, derecha del avatar",
+        "Three-quarter view, avatar's left" => "Vista tres cuartos, izquierda del avatar",
+        "Select all pieces" => "Seleccionar todas las piezas",
+        "Copy pieces" => "Copiar piezas",
+        "Paste pieces" => "Pegar piezas",
+        "Delete selected pieces" => "Borrar las piezas seleccionadas",
+        "Deactivate pieces" => "Desactivar piezas",
+        "Deactivate pieces and their seams" => "Desactivar piezas y sus costuras",
+        "Activate pieces" => "Activar piezas",
+        "Freeze pieces" => "Congelar piezas",
+        "Unfreeze pieces" => "Descongelar piezas",
+        "Strengthen pieces" => "Reforzar piezas",
+        "Solidify pieces" => "Solidificar piezas",
+        "Flip piece normals" => "Invertir las caras de las piezas",
+        "Add a button" => "Añadir un botón",
+        "Add a buttonhole" => "Añadir un ojal",
+        "Add a graphic…" => "Añadir un gráfico…",
+        "Cut and sew along the selected line" => "Cortar y coser por la línea seleccionada",
+        "Merge the pieces of the selected seam" => "Unir las piezas de la costura seleccionada",
+        "Unfold the piece across the selected segment" => {
+            "Desplegar la pieza sobre el segmento seleccionado"
+        }
+        "Extend the selected line to the outline" => {
+            "Prolongar la línea seleccionada hasta el contorno"
+        }
+        "Add a diamond dart to the selected piece" => {
+            "Añadir una pinza en rombo a la pieza seleccionada"
+        }
+        "Avatar pose…" => "Pose del avatar…",
+        "Show the avatar's skeleton" => "Mostrar el esqueleto del avatar",
+        "Put the avatar at rest" => "Poner el avatar en reposo",
+        "Delete the scene objects" => "Borrar los objetos de la escena",
+        "Play or pause the animation" => "Reproducir o pausar la animación",
+        "Record the cloth along the animation" => "Grabar la tela a lo largo de la animación",
+        "Delete the animation" => "Borrar la animación",
+        "Export the take as a point cache…" => "Exportar la toma como caché de puntos…",
+        "Export the take as an OBJ sequence…" => "Exportar la toma como secuencia OBJ…",
+        "Save the 3D view as PNG…" => "Guardar la vista 3D como PNG…",
+        "Capture the take as a video…" => "Capturar la toma como vídeo…",
+        "Export glTF / GLB…" => "Exportar glTF / GLB…",
+        "Export OBJ…" => "Exportar OBJ…",
+        "Export the selected pieces as OBJ…" => "Exportar las piezas seleccionadas como OBJ…",
+        "Export the take as an MDD cache…" => "Exportar la toma como caché MDD…",
+        "Export the take as an MDD cache for Maya or 3ds Max…" => {
+            "Exportar la toma como caché MDD para Maya o 3ds Max…"
+        }
+        "Export USD / USDZ…" => "Exportar USD / USDZ…",
+        "Export FBX…" => "Exportar FBX…",
+        "Commands" => "Órdenes",
+        "Search actions · arrow keys / Page Up Down navigate · Enter run · Esc close" => {
+            "Busca acciones · flechas / Re Pág Av Pág para moverse · Intro ejecuta · Esc cierra"
+        }
+        "Search commands…" => "Buscar órdenes…",
+        "No matching commands" => "Ninguna orden coincide",
+        "Close" => "Cerrar",
+        "No garment document is loaded" => "No hay ningún documento de prenda cargado",
+        "Select a panel first" => "Selecciona antes una pieza",
+        "The simulation worker is unavailable" => "El proceso de simulación no está disponible",
+        "Local export storage is unavailable" => {
+            "El almacenamiento local de exportación no está disponible"
+        }
+        "Pause simulation before stepping" => "Pausa la simulación antes de avanzar paso a paso",
+        "The previous simulation step is still pending" => {
+            "El paso de simulación anterior aún no ha terminado"
+        }
+        // Fabric tab.
+        "A different colour on the fabric's back face, as on a lining or a two-tone fabric" => {
+            "Un color distinto en el revés del tejido, como en un forro o un tejido de dos tonos"
+        }
+        "Area weight" => "Gramaje",
+        "Back color" => "Color del revés",
+        "Bending warp" => "Flexión urdimbre",
+        "Bending weft" => "Flexión trama",
+        "Choose a fabric type" => "Elige un tipo de tejido",
+        "Color (sRGB)" => "Color (sRGB)",
+        "Custom color and roughness" => "Color y rugosidad propios",
+        "Draw the cloth this thick, with a rim along its outline; the simulation is unchanged" => {
+            "Dibuja la tela con este grosor y un canto en su contorno; la simulación no cambia"
+        }
+        "Eyedropper: click a piece in the 3D view to take its colour" => {
+            "Cuentagotas: haz clic en una pieza de la vista 3D para tomar su color"
+        }
+        "Image…" => "Imagen…",
+        "Internal damping" => "Amortiguación interna",
+        "Knit" => "Punto",
+        "Look thickness" => "Grosor visual",
+        "Measurement source" => "Origen de la medida",
+        "None" => "Ninguno",
+        "Pick" => "Tomar",
+        "Plain" => "Tafetán",
+        "Repeat" => "Repetición",
+        "Repeat a PNG image over the fabric along its grain" => {
+            "Repite una imagen PNG sobre el tejido siguiendo el hilo"
+        }
+        "Roughness" => "Rugosidad",
+        "Satin" => "Raso",
+        "Shared by panels using this fabric. Does not change its mechanics." => {
+            "Común a las piezas de este tejido. No cambia su mecánica."
+        }
+        "Shear" => "Cizalla",
+        "Thickness" => "Grosor",
+        "Thread spacing" => "Separación de hilos",
+        "Twill" => "Sarga",
+        "Warp" => "Urdimbre",
+        "Warp/weft membrane" => "Membrana urdimbre/trama",
+        "Weave" => "Ligamento",
+        "Weave contrast" => "Contraste del ligamento",
+        "Weft" => "Trama",
+        "image" => "imagen",
+        "sRGB byte (0-255). Apply appearance to commit." => {
+            "Byte sRGB (0-255). Aplicar apariencia para confirmarlo."
+        }
+        "Apply appearance" => "Aplicar apariencia",
+        "Mass: panel" => "Masa: pieza",
+        "garment" => "prenda",
+        "Search actions · Ctrl/Cmd+Shift+P" => "Buscar acciones · Ctrl/Cmd+Mayús+P",
         _ => return None,
     })
 }

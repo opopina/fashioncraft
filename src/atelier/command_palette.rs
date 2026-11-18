@@ -8,6 +8,8 @@ use eframe::egui;
 #[derive(Default)]
 pub(super) struct Palette {
     pub open: bool,
+    /// Interface language: labels show in it and searches also match them in it.
+    pub language: super::i18n::Language,
     query: String,
     selected: usize,
     focus_search: bool,
@@ -164,7 +166,12 @@ fn is_subsequence(needle: &str, word: &str) -> bool {
         .all(|c| chars.any(|candidate| candidate == c))
 }
 
+#[cfg(test)]
 fn matches(query: &str) -> Vec<CommandId> {
+    matches_in(query, super::i18n::Language::English)
+}
+
+fn matches_in(query: &str, language: super::i18n::Language) -> Vec<CommandId> {
     if query.chars().count() > MAX_QUERY_CHARS {
         return Vec::new();
     }
@@ -174,9 +181,10 @@ fn matches(query: &str) -> Vec<CommandId> {
         .enumerate()
         .filter_map(|(index, d)| {
             let label = d.label.to_lowercase();
+            let shown = super::i18n::tr(language, d.label).to_lowercase();
             let key = d.key.to_lowercase();
             let shortcut = d.shortcut.unwrap_or_default().to_lowercase();
-            let text = format!("{} {} {} {}", label, key, shortcut, aliases(d.id));
+            let text = format!("{} {} {} {} {}", label, shown, key, shortcut, aliases(d.id));
             let mut fuzzy_words = 0usize;
             for word in query.split_whitespace() {
                 if text.contains(word) {
@@ -194,9 +202,17 @@ fn matches(query: &str) -> Vec<CommandId> {
             let term = query.trim();
             // Favor an actual command name over a match in a broad alias,
             // while leaving an empty search in the original registry order.
-            let relevance = if term.is_empty() || label == term || key == term || shortcut == term {
+            let relevance = if term.is_empty()
+                || label == term
+                || shown == term
+                || key == term
+                || shortcut == term
+            {
                 0
-            } else if label.starts_with(term) || key.starts_with(term) || shortcut.starts_with(term)
+            } else if label.starts_with(term)
+                || shown.starts_with(term)
+                || key.starts_with(term)
+                || shortcut.starts_with(term)
             {
                 1
             } else if label
@@ -250,10 +266,18 @@ pub(super) fn launch_shortcut(ctx: &egui::Context, enabled: bool) -> bool {
         })
 }
 
-pub(super) fn launch_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> bool {
+pub(super) fn launch_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    label: &str,
+    language: super::i18n::Language,
+) -> bool {
     let response = ui
         .add_enabled(enabled, egui::Button::new(label))
-        .on_hover_text("Search actions · Ctrl/Cmd+Shift+P");
+        .on_hover_text(super::i18n::tr(
+            language,
+            "Search actions · Ctrl/Cmd+Shift+P",
+        ));
     named(ui, &response, "palette.open");
     response.clicked()
 }
@@ -280,13 +304,17 @@ impl Palette {
         let mut cancel = false;
         let modal = egui::Modal::new(egui::Id::new("command-palette")).show(ctx, |ui| {
             ui.set_width((ctx.content_rect().width() - 64.).clamp(200., 520.));
-            ui.heading("Commands");
-            ui.small("Search actions · ↑ ↓ / Page Up Down navigate · Enter run · Esc close");
+            let lang = self.language;
+            ui.heading(super::i18n::tr(lang, "Commands"));
+            ui.small(super::i18n::tr(
+                lang,
+                "Search actions · arrow keys / Page Up Down navigate · Enter run · Esc close",
+            ));
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.query)
                     .id(egui::Id::new("palette.query"))
                     .char_limit(MAX_QUERY_CHARS)
-                    .hint_text("Search commands…")
+                    .hint_text(super::i18n::tr(lang, "Search commands…"))
                     .desired_width(f32::INFINITY),
             );
             named(ui, &response, "palette.query");
@@ -297,7 +325,7 @@ impl Palette {
             if response.changed() {
                 self.selected = 0;
             }
-            let results = matches(&self.query);
+            let results = matches_in(&self.query, lang);
             self.selected = self.selected.min(results.len().saturating_sub(1));
             let available: Vec<usize> = results
                 .iter()
@@ -353,14 +381,15 @@ impl Palette {
                 .min_scrolled_height(results_height)
                 .show(ui, |ui| {
                     if results.is_empty() {
-                        ui.label("No matching commands");
+                        ui.label(super::i18n::tr(lang, "No matching commands"));
                     }
                     for (index, &id) in results.iter().enumerate() {
                         let descriptor = id.descriptor();
                         let availability = commands::availability(id, context);
+                        let name = super::i18n::tr(lang, descriptor.label);
                         let label = match descriptor.shortcut {
-                            Some(key) => format!("{}   {key}", descriptor.label),
-                            None => descriptor.label.into(),
+                            Some(key) => format!("{name}   {key}"),
+                            None => name.into(),
                         };
                         let row = ui.add_enabled(
                             availability.is_ok(),
@@ -383,11 +412,11 @@ impl Palette {
                             command = Some(id);
                         }
                         if let Err(reason) = availability {
-                            ui.small(reason.message());
+                            ui.small(super::i18n::tr(lang, reason.message()));
                         }
                     }
                 });
-            let close = ui.button("Close");
+            let close = ui.button(super::i18n::tr(lang, "Close"));
             named(ui, &close, "palette.close");
             cancel |= close.clicked();
         });
@@ -541,6 +570,20 @@ mod tests {
     }
 
     #[test]
+    fn every_command_has_a_spanish_name_and_spanish_searches_find_it() {
+        use super::super::i18n::{Language, tr};
+        for d in commands::REGISTRY {
+            assert_ne!(tr(Language::Spanish, d.label), d.label, "{:?}", d.id);
+        }
+        assert_eq!(
+            matches_in("pantalón", Language::Spanish).first(),
+            Some(&CommandId::DraftTrousers)
+        );
+        assert!(matches_in("historial", Language::Spanish).contains(&CommandId::ToggleHistory));
+        // English names keep working with the interface in Spanish.
+        assert!(matches_in("history", Language::Spanish).contains(&CommandId::ToggleHistory));
+    }
+    #[test]
     fn search_keys_labels_and_aliases() {
         assert_eq!(matches("TEE"), vec![CommandId::LoadTshirt]);
         assert_eq!(matches("simulation.step"), vec![CommandId::StepSimulation]);
@@ -670,7 +713,7 @@ mod tests {
         let mut count = 0;
         let mut h = Harness::new(egui::vec2(900., 900.));
         let mut draw = |ui: &mut egui::Ui, count: &mut usize| {
-            if launch_button(ui, true, "Commands…") {
+            if launch_button(ui, true, "Commands…", Default::default()) {
                 *count += 1;
             }
         };

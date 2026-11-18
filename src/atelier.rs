@@ -1086,6 +1086,7 @@ impl eframe::App for Atelier {
         // Retain the barrier on the closing frame so Enter/click cannot reach a tool.
         let palette_blocked = self.palette.open || profiles_blocked;
         let context = self.command_context();
+        self.palette.language = self.prefs.language;
         if let Some(command) = self.palette.show(&ctx, context) {
             self.invoke_command(command, &ctx);
         }
@@ -1153,6 +1154,7 @@ impl eframe::App for Atelier {
                     ui,
                     can_open_palette,
                     i18n::tr(language, "Commands…"),
+                    language,
                 ) {
                     self.palette.begin();
                 }

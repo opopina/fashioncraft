@@ -11,7 +11,12 @@ use marvelous_cloth::{
 pub(super) struct SewingAuditUi {
     generation: Option<u64>,
     result: Option<Result<audit::SewingAudit, String>>,
+    /// Open the audit section on the next frame (Sewing › Check sewing length).
+    reveal: bool,
 }
+
+/// A seam whose two sides differ by more than this, in metres, is reported as uneven.
+const UNEVEN_M: f64 = 0.001;
 
 #[derive(Debug, PartialEq)]
 enum AuditAction {
@@ -179,10 +184,12 @@ fn sewing_primary_action(ui: &mut egui::Ui, editing: bool, easing_needed: bool) 
 impl Atelier {
     pub(super) fn sewing_audit_controls(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
+        let reveal = std::mem::take(&mut self.authoring.sewing_audit.reveal);
         let action = egui::CollapsingHeader::new(super::workspace::section(i18n::tr(
             ui_lang,
             "Sewing audit",
         )))
+        .open(reveal.then_some(true))
         .show(ui, |ui| {
             self.authoring.sewing_audit.show(ui, self.generation)
         })
@@ -196,6 +203,46 @@ impl Atelier {
             Some(AuditAction::Inspect(id)) => self.begin_seam_edit(&id),
             None => {}
         }
+    }
+    /// Sewing › Check sewing length: audit every seam, open the report in the inspector and
+    /// sum up the uneven ones in the status bar.
+    pub(super) fn check_sewing_lengths(&mut self) -> Result<(), String> {
+        if self.project.template.seams.is_empty() {
+            return Err("The garment has no seams to check".into());
+        }
+        let audit = &mut self.authoring.sewing_audit;
+        audit.refresh(&self.project.template, self.generation);
+        audit.reveal = true;
+        self.prefs.workspace.inspector_open = true;
+        self.inspector_tab = super::chrome::InspectorTab::Piece;
+        let report = match &self.authoring.sewing_audit.result {
+            Some(Ok(report)) => report,
+            Some(Err(error)) => return Err(format!("Sewing audit unavailable: {error}")),
+            None => return Ok(()),
+        };
+        let uneven: Vec<String> = report
+            .seams
+            .iter()
+            .filter(|s| s.difference_m.is_some_and(|d| d.abs() > UNEVEN_M))
+            .map(|s| {
+                format!(
+                    "{} {:+.1} mm",
+                    s.seam_id,
+                    s.difference_m.unwrap_or_default() * 1000.
+                )
+            })
+            .collect();
+        let broken = report.seams.iter().filter(|s| !s.errors.is_empty()).count();
+        let total = report.seams.len();
+        self.status = match (uneven.len(), broken) {
+            (0, 0) => format!("All {total} seams match within 1 mm"),
+            (0, b) => format!("{b} of {total} seams could not be measured · see the audit"),
+            (n, _) => format!(
+                "{n} of {total} seams differ by more than 1 mm: {}",
+                uneven.join(", ")
+            ),
+        };
+        Ok(())
     }
     /// A deliberate third click confirms the visible pair. Widget clicks and
     /// endpoint drags keep their own ownership; no underlying edge is selected.

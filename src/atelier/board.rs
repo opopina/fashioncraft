@@ -247,6 +247,8 @@ pub(super) struct Board {
     pub snap: bool,
     /// Smart guides: line points and dragged pieces up with the points around them.
     pub smart_guides: bool,
+    /// Snap to the pattern itself: its points, segment midpoints and lines.
+    pub snap_pattern: bool,
     /// Alignment lines to draw while a piece drag is lined up by a smart guide.
     pub smart_lines: Vec<[DVec2; 2]>,
     /// Magnet step in millimetres. The settings preference drives this value;
@@ -287,6 +289,7 @@ impl Default for Board {
             fitted: false,
             snap: true,
             smart_guides: true,
+            snap_pattern: true,
             smart_lines: Vec::new(),
             snap_mm: DEFAULT_SNAP_MM,
             view_rotation: 0.,
@@ -559,51 +562,9 @@ impl Board {
                 align_from: [None, None],
             };
         }
-        let mut best = SNAP_POINT_PX;
-        let mut captured = None;
-        for candidate in &geometry.points {
-            let distance = self.screen(rect, *candidate).distance(pointer);
-            if distance <= best {
-                best = distance;
-                captured = Some(*candidate);
-            }
-        }
-        if let Some(point) = captured {
-            return Snap::new(point, SnapKind::Point);
-        }
-        let mut best = SNAP_POINT_PX;
-        for [a, b] in &geometry.segments {
-            let midpoint = (*a + *b) * 0.5;
-            let distance = self.screen(rect, midpoint).distance(pointer);
-            if distance <= best {
-                best = distance;
-                captured = Some(midpoint);
-            }
-        }
-        if let Some(point) = captured {
-            return Snap::new(point, SnapKind::Midpoint);
-        }
-        let mut best = SNAP_EDGE_PX;
-        let mut on_edge = None;
-        for [a, b] in &geometry.segments {
-            let (start, end) = (self.screen(rect, *a), self.screen(rect, *b));
-            let d = end - start;
-            let t = ((pointer - start).dot(d) / d.length_sq().max(1e-12)).clamp(0., 1.);
-            let distance = pointer.distance(start + d * t);
-            if distance <= best {
-                best = distance;
-                let point = *a + (*b - *a) * t as f64;
-                on_edge = Some(Snap {
-                    point,
-                    kind: SnapKind::OnEdge,
-                    along_m: t as f64 * a.distance(*b),
-                    angle_degrees: 0.,
-                    suspended: false,
-                    align_from: [None, None],
-                });
-            }
-        }
-        if let Some(snap) = on_edge {
+        if self.snap_pattern
+            && let Some(snap) = self.pattern_snap(rect, pointer, geometry)
+        {
             return snap;
         }
         if let Some(point) = self.guide_snap(rect, pointer, raw, &geometry.guides) {
@@ -642,6 +603,60 @@ impl Board {
             return Snap::new(raw, SnapKind::Free);
         }
         Snap::new(self.snapped(raw), SnapKind::Grid)
+    }
+    /// A pattern point, segment midpoint or point on a line within reach of the pointer, in
+    /// that order.
+    fn pattern_snap(
+        &self,
+        rect: egui::Rect,
+        pointer: egui::Pos2,
+        geometry: &SnapGeometry,
+    ) -> Option<Snap> {
+        let mut best = SNAP_POINT_PX;
+        let mut captured = None;
+        for candidate in &geometry.points {
+            let distance = self.screen(rect, *candidate).distance(pointer);
+            if distance <= best {
+                best = distance;
+                captured = Some(*candidate);
+            }
+        }
+        if let Some(point) = captured {
+            return Some(Snap::new(point, SnapKind::Point));
+        }
+        let mut best = SNAP_POINT_PX;
+        for [a, b] in &geometry.segments {
+            let midpoint = (*a + *b) * 0.5;
+            let distance = self.screen(rect, midpoint).distance(pointer);
+            if distance <= best {
+                best = distance;
+                captured = Some(midpoint);
+            }
+        }
+        if let Some(point) = captured {
+            return Some(Snap::new(point, SnapKind::Midpoint));
+        }
+        let mut best = SNAP_EDGE_PX;
+        let mut on_edge = None;
+        for [a, b] in &geometry.segments {
+            let (start, end) = (self.screen(rect, *a), self.screen(rect, *b));
+            let d = end - start;
+            let t = ((pointer - start).dot(d) / d.length_sq().max(1e-12)).clamp(0., 1.);
+            let distance = pointer.distance(start + d * t);
+            if distance <= best {
+                best = distance;
+                let point = *a + (*b - *a) * t as f64;
+                on_edge = Some(Snap {
+                    point,
+                    kind: SnapKind::OnEdge,
+                    along_m: t as f64 * a.distance(*b),
+                    angle_degrees: 0.,
+                    suspended: false,
+                    align_from: [None, None],
+                });
+            }
+        }
+        on_edge
     }
     /// The nearest guideline within reach of the pointer, or the crossing of a horizontal and a
     /// vertical one when both are. Distances are measured on screen, so this works at any zoom
@@ -1508,6 +1523,8 @@ impl Atelier {
             ui.checkbox(&mut self.authoring.board.snap, snap_label);
             ui.checkbox(&mut self.authoring.board.smart_guides, i18n::tr(ui_lang, "Smart guides"))
                 .on_hover_text(i18n::tr(ui_lang, "Line dragged points and pieces up with the points around them · Ctrl: off while held"));
+            ui.checkbox(&mut self.authoring.board.snap_pattern, i18n::tr(ui_lang, "Snap to pattern"))
+                .on_hover_text(i18n::tr(ui_lang, "Snap to pattern points, segment midpoints and lines"));
             let display = &mut self.prefs.pattern_display;
             ui.checkbox(&mut display.names, i18n::tr(ui_lang, "Piece names"));
             ui.checkbox(&mut display.lengths, i18n::tr(ui_lang, "Segment lengths"))
@@ -4243,6 +4260,43 @@ mod tests {
         let snap = board.resolve_snap(rect, far, &geometry, None, false, false);
         assert_eq!(snap.kind, SnapKind::Grid);
         assert_eq!(snap.label(10.), "Grid 10.0 mm");
+    }
+
+    #[test]
+    fn pattern_snapping_and_the_grid_can_each_be_turned_off() {
+        let rect = canvas(800., 600.);
+        let anchor = DVec2::new(0.1, 0.1);
+        let segment = [DVec2::new(0.2, 0.2), DVec2::new(0.4, 0.2)];
+        let geometry = geometry(&[anchor], &[segment]);
+        let board = Board {
+            snap_pattern: false,
+            smart_guides: false,
+            ..Default::default()
+        };
+        // Points, midpoints and lines no longer capture the pointer: the grid does.
+        for at in [anchor, DVec2::new(0.3, 0.2), DVec2::new(0.35, 0.2)] {
+            let pointer = board.screen(rect, at) + Vec2::new(2., 1.);
+            let snap = board.resolve_snap(rect, pointer, &geometry, None, false, false);
+            assert_eq!(snap.kind, SnapKind::Grid, "{at}");
+        }
+        // Smart guides, a separate switch, still line the pointer up with pattern points.
+        let guided = Board {
+            snap_pattern: false,
+            ..Default::default()
+        };
+        let pointer = guided.screen(rect, anchor) + Vec2::new(2., 1.);
+        let snap = guided.resolve_snap(rect, pointer, &geometry, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Align);
+        // With nothing on, the pointer is taken as it is.
+        let free = Board {
+            snap_pattern: false,
+            smart_guides: false,
+            snap: false,
+            ..Default::default()
+        };
+        let pointer = free.screen(rect, anchor) + Vec2::new(2., 1.);
+        let snap = free.resolve_snap(rect, pointer, &geometry, None, false, false);
+        assert_eq!(snap.kind, SnapKind::Free);
     }
 
     #[test]

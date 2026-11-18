@@ -135,6 +135,18 @@ fn aliases(id: CommandId) -> &'static str {
         ImportBvh => "bvh motion capture mocap import animation walk dance",
         AttachPins => "attach pins avatar follow body animation hold",
         DetachPins => "detach release pins avatar",
+        ImportPointCache => "import point cache pc2 take animation playback",
+        AddSpiral => "spiral ruffle cascade strip shape create",
+        AddInternalRectangle => "internal rectangle shape hole pocket create",
+        AddInternalEllipse => "internal ellipse circle shape hole create",
+        CheckSewingLength => "check sewing length seam mismatch audit difference",
+        AddZipper => "zipper zip trim segment closure",
+        AddTopstitch => "topstitch stitch trim segment decorative",
+        ToggleSmartGuides => "smart guides align snapping board",
+        ToggleSnapToGrid => "snap grid magnet board",
+        ToggleSnapToPattern => "snap pattern points lines edges magnet board",
+        SimulationProperties => "simulation properties settings solver inspector",
+        StressMap => "stress map tension fit map fabric limit",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -900,7 +912,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::DetachPins
+            CommandId::StressMap
         );
         h.key(
             "palette.query",

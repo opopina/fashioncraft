@@ -65,12 +65,12 @@ const FILE: &[Item] = &[
         &[
             Run("SVG patterns…", C::ImportSvg),
             Run("DXF patterns…", C::ImportDxf),
-            Todo("OBJ…"),
-            Todo("FBX…"),
-            Todo("glTF…"),
+            Run("OBJ…", C::ImportAvatar),
+            Run("FBX…", C::ImportAvatar),
+            Run("glTF…", C::ImportAvatar),
             Todo("Alembic…"),
             Todo("USD…"),
-            Todo("Point cache…"),
+            Run("Point cache…", C::ImportPointCache),
             Run("Motion (BVH)…", C::ImportBvh),
             Todo("Python script…"),
         ],
@@ -84,7 +84,7 @@ const FILE: &[Item] = &[
             Run("FBX…", C::ExportFbx),
             Run("glTF / GLB…", C::ExportGltf),
             Run("Alembic…", C::ExportAlembic),
-            Todo("USD…"),
+            Run("USD…", C::ExportUsd),
             Run("Point cache…", C::ExportPointCache),
             Run("MDD cache…", C::ExportMdd),
             Run("MDD cache (Maya/3ds Max)…", C::ExportMddZUp),
@@ -225,10 +225,10 @@ const PATTERN_2D: &[Item] = &[
             Run("Rectangle", C::ToolRectangle),
             Run("Ellipse", C::ToolEllipse),
             Run("Arc sector", C::ToolSector),
-            Todo("Spiral"),
+            Run("Spiral", C::AddSpiral),
             Run("Internal polygon or line", C::ToolInternalLine),
-            Todo("Internal rectangle"),
-            Todo("Internal ellipse"),
+            Run("Internal rectangle", C::AddInternalRectangle),
+            Run("Internal ellipse", C::AddInternalEllipse),
             Run("Diamond dart", C::AddDiamondDart),
         ],
     ),
@@ -247,7 +247,7 @@ const SEWING: &[Item] = &[
     Todo("M:N segment sewing"),
     Todo("M:N free sewing"),
     Todo("Auto sewing"),
-    Todo("Check sewing length"),
+    Run("Check sewing length", C::CheckSewingLength),
     Todo("Activate all seams"),
 ];
 
@@ -276,13 +276,13 @@ const MATERIALS: &[Item] = &[
             Run("Fasten buttons", C::FastenButtons),
         ],
     ),
-    Todo("Zipper"),
+    Run("Zipper", C::AddZipper),
     Todo("Piping"),
     Todo("Tape"),
     Sub(
         "Topstitch",
         &[
-            Todo("Segment topstitch"),
+            Run("Segment topstitch", C::AddTopstitch),
             Todo("Free topstitch"),
             Todo("Seamline topstitch"),
         ],
@@ -372,7 +372,7 @@ const DISPLAY: &[Item] = &[
         "Fit maps",
         &[
             Run("Strain map", C::StrainMap),
-            Todo("Stress map"),
+            Run("Stress map", C::StressMap),
             Todo("Pressure map"),
         ],
     ),
@@ -387,14 +387,14 @@ const SETTINGS: &[Item] = &[
     Sub(
         "2D snapping",
         &[
-            Todo("Smart guides"),
-            Todo("Snap to pattern"),
-            Todo("Snap to grid"),
+            Run("Smart guides", C::ToggleSmartGuides),
+            Run("Snap to pattern", C::ToggleSnapToPattern),
+            Run("Snap to grid", C::ToggleSnapToGrid),
         ],
     ),
-    Todo("Grid properties…"),
+    Run("Grid properties…", C::OpenPreferences),
     Todo("Camera properties…"),
-    Todo("Simulation properties…"),
+    Run("Simulation properties…", C::SimulationProperties),
     X(Custom::Language),
     X(Custom::Keymap),
     Run("Preferences…", C::OpenPreferences),
@@ -470,7 +470,11 @@ impl Atelier {
         match id {
             C::ToggleAvatar => display.avatar,
             C::ToggleGarment => display.garment,
-            C::StrainMap => self.heat,
+            C::StrainMap => self.heat && !display.strain_fabric,
+            C::StressMap => self.heat && display.strain_fabric,
+            C::ToggleSmartGuides => self.authoring.board.smart_guides,
+            C::ToggleSnapToGrid => self.authoring.board.snap,
+            C::ToggleSnapToPattern => self.authoring.board.snap_pattern,
             C::TechnicalView => display.schematic,
             C::RandomPieceColours => display.piece_colors,
             C::IsolateSelection => self.authoring.view3d.isolated.is_some(),
@@ -656,7 +660,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 119, "{done} of {all}");
+        assert!(done >= 136, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

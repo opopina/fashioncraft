@@ -153,22 +153,7 @@ impl Atelier {
     /// Topstitch or a zipper along the selected contour segment, a little inside it.
     pub(super) fn segment_trims(&mut self, ui: &mut egui::Ui, panel: &str, edge: &str) {
         let ui_lang = self.prefs.language;
-        let Some(polygon) = self
-            .project
-            .template
-            .panels
-            .iter()
-            .find(|p| p.id == panel)
-            .and_then(|p| p.polygon.clone())
-        else {
-            return;
-        };
-        let inside = |d: f64| {
-            lines2d::offset_lines(&polygon, edge, 1, d, false, false)
-                .ok()
-                .and_then(|mut lines| lines.pop())
-        };
-        let mut kind = None;
+        let mut zipper = None;
         ui.horizontal_wrapped(|ui| {
             if ui
                 .button(i18n::tr(ui_lang, "Topstitch"))
@@ -178,30 +163,78 @@ impl Atelier {
                 ))
                 .clicked()
             {
-                kind = inside(0.004).map(|path_m| TrimKind::Topstitch {
-                    path_m,
-                    rows: 1,
-                    spacing_m: 0.002,
-                });
+                zipper = Some(false);
             }
             if ui
                 .button(i18n::tr(ui_lang, "Zipper"))
                 .on_hover_text(i18n::tr(ui_lang, "An 8 mm zipper 6 mm inside this segment"))
                 .clicked()
             {
-                kind = inside(0.006).map(|path_m| TrimKind::Zipper {
-                    path_m,
-                    width_m: 0.008,
-                });
+                zipper = Some(true);
             }
         });
-        if let Some(kind) = kind {
-            let trim = Trim {
-                id: self.new_trim_id(),
-                panel_id: panel.into(),
-                kind,
-            };
-            self.edit(Command::SetTrim { trim });
+        if let Some(zipper) = zipper {
+            self.add_segment_trim(panel, edge, zipper);
         }
+    }
+
+    /// A row of topstitching 4 mm, or an 8 mm zipper 6 mm, inside a contour segment.
+    pub(super) fn add_segment_trim(&mut self, panel: &str, edge: &str, zipper: bool) -> bool {
+        let Some(polygon) = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.clone())
+        else {
+            self.status = "The piece has no outline".into();
+            return false;
+        };
+        let inside = |d: f64| {
+            lines2d::offset_lines(&polygon, edge, 1, d, false, false)
+                .ok()
+                .and_then(|mut lines| lines.pop())
+        };
+        let kind = if zipper {
+            inside(0.006).map(|path_m| TrimKind::Zipper {
+                path_m,
+                width_m: 0.008,
+            })
+        } else {
+            inside(0.004).map(|path_m| TrimKind::Topstitch {
+                path_m,
+                rows: 1,
+                spacing_m: 0.002,
+            })
+        };
+        let Some(kind) = kind else {
+            self.status = "This segment is too short or too curved for a trim inside it".into();
+            return false;
+        };
+        let trim = Trim {
+            id: self.new_trim_id(),
+            panel_id: panel.into(),
+            kind,
+        };
+        self.edit(Command::SetTrim { trim })
+    }
+
+    /// The outline segment selected on the board, as (piece, segment name).
+    pub(super) fn selected_segment(&self) -> Option<(String, String)> {
+        let edge = self.authoring.edge.as_ref()?;
+        let name = edge.edge.clone()?;
+        let polygon = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == edge.panel)?
+            .polygon
+            .as_ref()?;
+        polygon
+            .edges
+            .contains(&name)
+            .then(|| (edge.panel.clone(), name))
     }
 }

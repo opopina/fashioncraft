@@ -563,7 +563,53 @@ impl Atelier {
                 self.prefs.garment_display.garment = !self.prefs.garment_display.garment;
             }
             Id::IsolateSelection => self.toggle_isolation(),
-            Id::StrainMap => self.heat = !self.heat,
+            Id::StrainMap | Id::StressMap => {
+                // One fit map at a time: picking the other one switches to it.
+                let stress = id == Id::StressMap;
+                let display = &mut self.prefs.garment_display;
+                if self.heat && display.strain_fabric == stress {
+                    self.heat = false;
+                } else {
+                    self.heat = true;
+                    display.strain_fabric = stress;
+                }
+            }
+            Id::ImportPointCache => self.import_point_cache()?,
+            Id::AddSpiral => {
+                if !self.add_spiral() {
+                    return Err(self.status.clone());
+                }
+            }
+            Id::AddInternalRectangle => {
+                self.add_internal_shape(
+                    marvelous_cloth::garment::shapes2d::InternalShapeKind::Rectangle,
+                )?;
+            }
+            Id::AddInternalEllipse => {
+                self.add_internal_shape(
+                    marvelous_cloth::garment::shapes2d::InternalShapeKind::Ellipse,
+                )?;
+            }
+            Id::CheckSewingLength => self.check_sewing_lengths()?,
+            Id::AddZipper | Id::AddTopstitch => {
+                let (panel, edge) = self
+                    .selected_segment()
+                    .ok_or("Select an outline segment first")?;
+                if !self.add_segment_trim(&panel, &edge, id == Id::AddZipper) {
+                    return Err(self.status.clone());
+                }
+            }
+            Id::ToggleSmartGuides => {
+                self.authoring.board.smart_guides = !self.authoring.board.smart_guides;
+            }
+            Id::ToggleSnapToGrid => self.authoring.board.snap = !self.authoring.board.snap,
+            Id::ToggleSnapToPattern => {
+                self.authoring.board.snap_pattern = !self.authoring.board.snap_pattern;
+            }
+            Id::SimulationProperties => {
+                self.prefs.workspace.inspector_open = true;
+                self.inspector_tab = chrome::InspectorTab::Simulation;
+            }
             Id::TechnicalView => {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }

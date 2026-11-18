@@ -104,28 +104,81 @@ impl Atelier {
                 "A spiral strip, e.g. for a ruffle or a cascade",
             ))
             .clicked()
+            && self.add_spiral()
         {
-            let size = spiral
-                .polygon(MeshingSettings::default())
-                .ok()
-                .and_then(|p| p.points.iter().copied().reduce(DVec2::max))
-                .unwrap_or(DVec2::ZERO);
-            let command = Command::Spiral {
-                spiral,
-                origin: self.authoring.board.center - size * 0.5,
-                meshing: MeshingSettings {
-                    target_edge_m: self.mesh_mm * 0.001,
-                    anisotropy: self.anisotropy,
-                    axis_degrees: self.mesh_axis,
-                    ..Default::default()
-                },
-                fabric: self.project.template.fabrics[0].id.clone(),
-            };
-            if self.edit(command) {
-                self.set_authoring_tool(Tool::Edit, false);
-                ui.close();
-            }
+            ui.close();
         }
+    }
+
+    /// The spiral of the form, at the middle of the board, then the edit tool.
+    pub(super) fn add_spiral(&mut self) -> bool {
+        let spiral = self.authoring.shapes.spiral;
+        let size = spiral
+            .polygon(MeshingSettings::default())
+            .ok()
+            .and_then(|p| p.points.iter().copied().reduce(DVec2::max))
+            .unwrap_or(DVec2::ZERO);
+        let command = Command::Spiral {
+            spiral,
+            origin: self.authoring.board.center - size * 0.5,
+            meshing: MeshingSettings {
+                target_edge_m: self.mesh_mm * 0.001,
+                anisotropy: self.anisotropy,
+                axis_degrees: self.mesh_axis,
+                ..Default::default()
+            },
+            fabric: self.project.template.fabrics[0].id.clone(),
+        };
+        if !self.edit(command) {
+            return false;
+        }
+        self.set_authoring_tool(Tool::Edit, false);
+        true
+    }
+
+    /// An internal shape of the form's size at the middle of the selected piece.
+    pub(super) fn add_internal_shape(&mut self, kind: InternalShapeKind) -> Result<(), String> {
+        let panel = self
+            .authoring
+            .selected
+            .clone()
+            .ok_or("Select a piece first")?;
+        let poly = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.clone())
+            .ok_or("The piece has no outline to draw in")?;
+        let (lo, hi) = poly.points.iter().fold(
+            (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
+            |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+        );
+        let state = &self.authoring.shapes;
+        let size_mm = state.size_mm;
+        let command = Command::InternalShape {
+            panel,
+            kind,
+            center: (lo + hi) * 0.5,
+            size: DVec2::from_array(size_mm) / 1000.,
+            count: 1,
+            interval_m: state.interval_mm / 1000.,
+            angle_degrees: state.angle_degrees,
+        };
+        if !self.edit(command) {
+            return Err(self.status.clone());
+        }
+        self.status = format!(
+            "Internal {} ({:.0} × {:.0} mm) added at the middle of the piece · select it to cut it out as a hole",
+            match kind {
+                InternalShapeKind::Rectangle => "rectangle",
+                InternalShapeKind::Ellipse => "ellipse",
+            },
+            size_mm[0],
+            size_mm[1]
+        );
+        Ok(())
     }
 
     /// "Internal shapes & holes" in the piece inspector.

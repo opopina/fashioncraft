@@ -2260,6 +2260,33 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Pins detached from the avatar" => "Alfileres soltados del avatar",
         "Attach pins to the avatar" => "Sujetar alfileres al avatar",
         "Detach pins from the avatar" => "Soltar alfileres del avatar",
+        "Import a point cache…" => "Importar una caché de puntos…",
+        "Add a spiral at the board centre" => "Añadir una espiral en el centro del tablero",
+        "Add an internal rectangle to the selected piece" => {
+            "Añadir un rectángulo interno a la pieza seleccionada"
+        }
+        "Add an internal ellipse to the selected piece" => {
+            "Añadir una elipse interna a la pieza seleccionada"
+        }
+        "Check sewing lengths" => "Comprobar las longitudes de costura",
+        "Zipper along the selected segment" => "Cremallera a lo largo del segmento seleccionado",
+        "Topstitch along the selected segment" => "Pespunte a lo largo del segmento seleccionado",
+        "Smart guides on the board" => "Guías inteligentes en el tablero",
+        "Snap to the board grid" => "Ajustar a la rejilla del tablero",
+        "Snap to pattern points and lines" => "Ajustar a los puntos y líneas del patrón",
+        "Simulation properties" => "Propiedades de la simulación",
+        "Snap to pattern points, segment midpoints and lines" => {
+            "Ajustar a los puntos del patrón, a los puntos medios de los segmentos y a las líneas"
+        }
+        "Select an outline segment first" => "Selecciona antes un segmento del contorno",
+        "The garment has no seams to check" => "La prenda no tiene costuras que comprobar",
+        "Select a piece first" => "Selecciona antes una pieza",
+        "The piece has no outline to draw in" => "La pieza no tiene contorno en el que dibujar",
+        "The piece has no outline" => "La pieza no tiene contorno",
+        "This segment is too short or too curved for a trim inside it" => {
+            "Este segmento es demasiado corto o curvo para poner un adorno dentro"
+        }
+        "Stop the recording first" => "Detén antes la grabación",
         "There are no pins to attach; pin points with the Pin tool first" => {
             "No hay alfileres que sujetar; fija antes puntos con la herramienta Alfiler"
         }

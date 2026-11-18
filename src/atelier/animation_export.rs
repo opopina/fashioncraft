@@ -128,6 +128,19 @@ impl Atelier {
         Ok(())
     }
 
+    /// File › Import › Point cache: a PC2 cache of this garment's mesh becomes the take on the
+    /// timeline, played back and exported like a recording.
+    pub(super) fn import_point_cache(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .set_title("Import a point cache")
+            .add_filter("PC2 point cache", &["pc2"])
+            .pick_file()
+        else {
+            return Ok(());
+        };
+        self.load_point_cache(&path)
+    }
+
     pub(super) fn export_obj_sequence(&mut self) -> Result<(), String> {
         let take = self.current_take().ok_or(NO_TAKE)?;
         let Some(dir) = FileDialog::new()

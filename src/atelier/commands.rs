@@ -127,6 +127,18 @@ pub enum CommandId {
     ImportBvh,
     AttachPins,
     DetachPins,
+    ImportPointCache,
+    AddSpiral,
+    AddInternalRectangle,
+    AddInternalEllipse,
+    CheckSewingLength,
+    AddZipper,
+    AddTopstitch,
+    ToggleSmartGuides,
+    ToggleSnapToGrid,
+    ToggleSnapToPattern,
+    SimulationProperties,
+    StressMap,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1267,6 +1279,114 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         TemplateHistory,
         NativeWorkspace
     ),
+    entry!(
+        ImportPointCache,
+        "file.import_point_cache",
+        "Import a point cache…",
+        Simulation,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        AddSpiral,
+        "pattern.add_spiral",
+        "Add a spiral at the board centre",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddInternalRectangle,
+        "pattern.internal_rectangle",
+        "Add an internal rectangle to the selected piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddInternalEllipse,
+        "pattern.internal_ellipse",
+        "Add an internal ellipse to the selected piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        CheckSewingLength,
+        "sewing.check_length",
+        "Check sewing lengths",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        AddZipper,
+        "trims.zipper",
+        "Zipper along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddTopstitch,
+        "trims.topstitch",
+        "Topstitch along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleSmartGuides,
+        "board.smart_guides",
+        "Smart guides on the board",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleSnapToGrid,
+        "board.snap_grid",
+        "Snap to the board grid",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleSnapToPattern,
+        "board.snap_pattern",
+        "Snap to pattern points and lines",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        SimulationProperties,
+        "workspace.simulation_properties",
+        "Simulation properties",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        StressMap,
+        "display.stress_map",
+        "Stress map",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
 ];
 
 impl CommandId {
@@ -1355,6 +1475,8 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
             | CommandId::AddGraphic
             | CommandId::ArchivePieces
             | CommandId::AddDiamondDart
+            | CommandId::AddInternalRectangle
+            | CommandId::AddInternalEllipse
     ) && !ctx.selected_panel
     {
         return Err(UnavailableReason::NoSelectedPanel);

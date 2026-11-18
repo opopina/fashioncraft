@@ -518,6 +518,37 @@ impl Atelier {
         }
     }
 
+    /// A PC2 cache of this garment's mesh as the take on the timeline.
+    pub(super) fn load_point_cache(&mut self, path: &std::path::Path) -> Result<(), String> {
+        if self.authoring.animation.recording() {
+            return Err("Stop the recording first".into());
+        }
+        let fps = self
+            .project
+            .avatar_animation
+            .as_ref()
+            .map_or(30., |a| a.fps);
+        let take = Take::read_pc2(path, fps)?;
+        let points = self.scene.state.x.len();
+        if take.frames[0].len() != points {
+            return Err(format!(
+                "{} holds {} points but the garment on show has {points}: it was cached from another mesh",
+                path.display(),
+                take.frames[0].len()
+            ));
+        }
+        let frames = take.frames.len();
+        let a = &mut self.authoring.animation;
+        a.take = Some((points, take));
+        a.take_file = Some(path.to_path_buf());
+        a.time = 0.;
+        a.error = None;
+        a.open = true;
+        self.status =
+            format!("Point cache loaded: {frames} frames at {fps} fps · play it from the timeline");
+        Ok(())
+    }
+
     /// How far a recording in progress has come.
     fn recording_time(&self) -> Option<f64> {
         let job = self.authoring.animation.recording.as_ref()?;

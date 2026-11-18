@@ -407,6 +407,12 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Set the shrinkage of pieces, percent [warp, weft] (100, 100 clears it). One undo step.
+    SetShrink {
+        panels: Vec<String>,
+        warp: f64,
+        weft: f64,
+    },
     /// Set the inflating pressure of pieces, Pa (0 clears it). One undo step.
     SetPressure {
         panels: Vec<String>,
@@ -2525,6 +2531,40 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::SetShrink { panels, warp, weft } => {
+            if panels.is_empty() {
+                return Err("Select pieces to set their shrinkage".into());
+            }
+            let range = crate::garment::template::SHRINK_RANGE;
+            if !range.contains(&warp) || !range.contains(&weft) {
+                return Err(format!(
+                    "Shrinkage goes from {} to {} %",
+                    range.start(),
+                    range.end()
+                ));
+            }
+            let mut changed = false;
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Cannot shrink {id}: panel not found"));
+                }
+                let before = template
+                    .panel_shrink
+                    .get(id)
+                    .copied()
+                    .unwrap_or([100., 100.]);
+                changed |= before != [warp, weft];
+                if warp == 100. && weft == 100. {
+                    template.panel_shrink.remove(id);
+                } else {
+                    template.panel_shrink.insert(id.clone(), [warp, weft]);
+                }
+            }
+            if !changed {
+                return Err("The shrinkage is set that way already".into());
+            }
+            selected = panels.first().cloned();
         }
         Command::SetPressure { panels, pressure } => {
             if panels.is_empty() {

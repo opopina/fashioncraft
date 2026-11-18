@@ -4,7 +4,7 @@
 use super::*;
 use marvelous_cloth::{
     authoring::Command,
-    garment::template::{MAX_LAYER, MAX_PRESSURE},
+    garment::template::{MAX_LAYER, MAX_PRESSURE, SHRINK_RANGE},
 };
 
 impl Atelier {
@@ -59,48 +59,109 @@ impl Atelier {
         }
     }
 
-    /// Inflating pressure of the piece, Pa. The value is committed (one undo step) when a drag
-    /// ends or a typed value is entered, not on every frame of a drag.
+    /// Inflating pressure and shrinkage of the piece. Each value is committed (one undo step)
+    /// when a drag ends or a typed value is entered, not on every frame of a drag.
     fn pressure_property(&mut self, ui: &mut egui::Ui, panel: &str) {
-        let current = self
-            .project
-            .template
-            .panel_pressure
-            .get(panel)
-            .copied()
-            .unwrap_or(0.);
-        let id = egui::Id::new(("pressure_draft", panel));
-        let mut draft = ui.data_mut(|d| *d.get_temp_mut_or(id, current));
-        let mut commit = false;
-        ui.horizontal(|ui| {
-            ui.label("Pressure").on_hover_text(
-                "Pushes the piece along its normal, like air inside a closed garment or a \
-                 cushion; negative values pull. A few pascals already outweigh the fabric",
-            );
-            let response = ui.add(
-                egui::DragValue::new(&mut draft)
-                    .range(-MAX_PRESSURE..=MAX_PRESSURE)
-                    .speed(0.5)
-                    .fixed_decimals(1)
-                    .suffix(" Pa"),
-            );
-            commit = response.drag_stopped() || (response.changed() && !response.dragged());
-            if current != 0. && ui.small_button("0").on_hover_text("No pressure").clicked() {
-                draft = 0.;
-                commit = true;
-            }
-        });
-        if commit && draft != current {
-            self.edit(Command::SetPressure {
+        let t = &self.project.template;
+        let pressure = t.panel_pressure.get(panel).copied().unwrap_or(0.);
+        let [warp, weft] = t.panel_shrink.get(panel).copied().unwrap_or([100., 100.]);
+        let mut command = None;
+        if let Some(p) = committed_value(
+            ui,
+            ("pressure", panel),
+            pressure,
+            Field {
+                label: "Pressure",
+                hover: "Pushes the piece along its normal, like air inside a closed garment or a \
+                        cushion; negative values pull. A few pascals already outweigh the fabric",
+                range: -MAX_PRESSURE..=MAX_PRESSURE,
+                speed: 0.5,
+                decimals: 1,
+                suffix: " Pa",
+                reset: 0.,
+            },
+        ) {
+            command = Some(Command::SetPressure {
                 panels: vec![panel.to_string()],
-                pressure: draft,
+                pressure: p,
             });
-            ui.data_mut(|d| d.remove::<f64>(id));
-        } else if !commit {
-            ui.data_mut(|d| d.insert_temp(id, draft));
         }
-        if commit {
-            ui.data_mut(|d| d.remove::<f64>(id));
+        for (k, name, value) in [(0, "Shrink warp", warp), (1, "Shrink weft", weft)] {
+            if let Some(v) = committed_value(
+                ui,
+                ("shrink", panel, k),
+                value,
+                Field {
+                    label: name,
+                    hover: "Size the piece draws in to along this grain direction, in percent \
+                            of its cut size, as a fabric that shrinks. 100 % is none",
+                    range: SHRINK_RANGE,
+                    speed: 0.2,
+                    decimals: 1,
+                    suffix: " %",
+                    reset: 100.,
+                },
+            ) {
+                let [w, f] = if k == 0 { [v, weft] } else { [warp, v] };
+                command = Some(Command::SetShrink {
+                    panels: vec![panel.to_string()],
+                    warp: w,
+                    weft: f,
+                });
+            }
         }
+        if let Some(command) = command {
+            self.edit(command);
+        }
+    }
+}
+
+struct Field<'a> {
+    label: &'a str,
+    hover: &'a str,
+    range: std::ops::RangeInclusive<f64>,
+    speed: f64,
+    decimals: usize,
+    suffix: &'a str,
+    reset: f64,
+}
+
+/// A number field whose new value is returned once, when a drag ends, a value is typed or
+/// the reset button is clicked; the in-progress value lives in egui's temporary memory.
+fn committed_value(
+    ui: &mut egui::Ui,
+    key: impl std::hash::Hash + std::fmt::Debug,
+    current: f64,
+    field: Field,
+) -> Option<f64> {
+    let id = egui::Id::new(key);
+    let mut draft = ui.data_mut(|d| *d.get_temp_mut_or(id, current));
+    let mut commit = false;
+    ui.horizontal(|ui| {
+        ui.label(field.label).on_hover_text(field.hover);
+        let response = ui.add(
+            egui::DragValue::new(&mut draft)
+                .range(field.range.clone())
+                .speed(field.speed)
+                .fixed_decimals(field.decimals)
+                .suffix(field.suffix),
+        );
+        commit = response.drag_stopped() || (response.changed() && !response.dragged());
+        if current != field.reset
+            && ui
+                .small_button(format!("{}", field.reset))
+                .on_hover_text("Back to none")
+                .clicked()
+        {
+            draft = field.reset;
+            commit = true;
+        }
+    });
+    if commit {
+        ui.data_mut(|d| d.remove::<f64>(id));
+        (draft != current).then_some(draft)
+    } else {
+        ui.data_mut(|d| d.insert_temp(id, draft));
+        None
     }
 }

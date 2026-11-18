@@ -231,6 +231,10 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Shrinkage by panel id: [warp, weft] in percent of the cut size (100 = none). Below 100
+    /// the piece draws in along that grain direction, as a fabric that shrinks; its mass stays.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub panel_shrink: BTreeMap<String, [f64; 2]>,
     /// Inflating pressure by panel id, Pa: each triangle is pushed along its normal (the side
     /// its winding faces) with p times its area; negative values pull. Absent = 0.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -270,6 +274,30 @@ pub struct MirrorLink {
 }
 /// Highest simulation layer a panel can take.
 pub const MAX_LAYER: u32 = 9;
+/// Allowed shrinkage, percent of the cut size.
+pub const SHRINK_RANGE: std::ops::RangeInclusive<f64> = 50.0..=150.0;
+
+/// Scale a panel's rest shape by `warp` and `weft` along its grain: rest coordinates X become
+/// S·X with S = R·diag(warp, weft)·Rᵀ, so a warp fibre's rest length is `warp` times its cut
+/// length. Masses are left as cut.
+fn shrink(out: &mut CompiledGarment, range: &PanelRange, warp: f64, weft: f64) {
+    let (s, c) = out.materials[range.material]
+        .grain_degrees
+        .to_radians()
+        .sin_cos();
+    let r = glam::DMat2::from_cols(glam::DVec2::new(c, s), glam::DVec2::new(-s, c));
+    let scale = r * glam::DMat2::from_diagonal(glam::DVec2::new(warp, weft)) * r.transpose();
+    let inverse = scale.inverse();
+    for t in &mut out.mesh.triangles[range.triangles.clone()] {
+        t.rest = t.rest.map(|p| scale * p);
+        t.inv_dm *= inverse;
+        t.area *= warp * weft;
+    }
+    for a in &mut out.mesh.rest_area[range.vertices.clone()] {
+        *a *= warp * weft;
+    }
+}
+
 /// Largest pressure magnitude on a panel, Pa.
 pub const MAX_PRESSURE: f64 = 2000.;
 /// Stiffness factor of a strengthened panel.
@@ -361,6 +389,18 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for (id, factors) in &self.panel_shrink {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Shrinkage refers to unknown panel {id}"));
+            }
+            if factors.iter().any(|f| !SHRINK_RANGE.contains(f)) {
+                return Err(format!(
+                    "Shrinkage goes from {} to {} %",
+                    SHRINK_RANGE.start(),
+                    SHRINK_RANGE.end()
+                ));
+            }
         }
         for (id, pressure) in &self.panel_pressure {
             if !self.panels.iter().any(|p| &p.id == id) {
@@ -731,6 +771,11 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        for range in out.panels.clone() {
+            if let Some([warp, weft]) = self.panel_shrink.get(&range.id) {
+                shrink(&mut out, &range, warp / 100., weft / 100.);
+            }
+        }
         if self.panel_pressure.values().any(|p| *p != 0.) {
             out.pressure = vec![0.; out.mesh.triangles.len()];
             for range in &out.panels {
@@ -788,6 +833,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            panel_shrink: Default::default(),
             panel_pressure: Default::default(),
             strengthened_panels: Default::default(),
             solidified_panels: vec![],

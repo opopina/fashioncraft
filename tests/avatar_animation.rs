@@ -335,3 +335,46 @@ fn takes_and_the_moving_avatar_are_written_as_obj_sequences() {
     assert_eq!(first.triangles, rest.triangles);
     assert_ne!(body(0), body(2));
 }
+
+#[test]
+fn a_take_is_read_back_from_its_point_cache_and_travels_with_the_project() {
+    let take = Take {
+        fps: 24.,
+        frames: vec![
+            vec![[0., 1., 2.], [3., 4., 5.]],
+            vec![[6., 7., 8.], [9., 10., 11.]],
+            vec![[1., 1., 1.], [2., 2., 2.]],
+        ],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("take.pc2");
+    take.write_pc2(&cache).unwrap();
+    assert_eq!(Take::read_pc2(&cache, 24.).unwrap(), take);
+    assert!(Take::read_pc2(&cache, 0.).is_err());
+    // Truncated or foreign files are refused.
+    let bytes = std::fs::read(&cache).unwrap();
+    std::fs::write(dir.path().join("short.pc2"), &bytes[..bytes.len() - 4]).unwrap();
+    assert!(Take::read_pc2(&dir.path().join("short.pc2"), 24.).is_err());
+    std::fs::write(
+        dir.path().join("other.pc2"),
+        b"not a point cache at all, really",
+    )
+    .unwrap();
+    assert!(Take::read_pc2(&dir.path().join("other.pc2"), 24.).is_err());
+
+    // Saved, the cache is copied next to the project and found again on opening it.
+    let mut p = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    p.animation_take = Some(marvelous_cloth::fitting::AnimationTake {
+        path: cache.clone(),
+        fps: 24.,
+    });
+    let saved = dir.path().join("walk.json");
+    p.save(&saved).unwrap();
+    let text = std::fs::read_to_string(&saved).unwrap();
+    assert!(text.contains("walk.json.assets/take-"), "{text}");
+    std::fs::remove_file(&cache).unwrap();
+    let opened = FittingProject::load(&saved).unwrap();
+    let stored = opened.animation_take.unwrap();
+    assert!(stored.path.starts_with(dir.path()));
+    assert_eq!(Take::read_pc2(&stored.path, stored.fps).unwrap(), take);
+}

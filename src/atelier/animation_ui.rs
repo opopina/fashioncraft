@@ -38,6 +38,8 @@ pub(super) struct AnimationUi {
     recording: Option<RecordingJob>,
     /// The last take, with the vertex count it was recorded on.
     take: Option<(usize, Take)>,
+    /// The take's point cache on disk, which saving the project copies next to it.
+    take_file: Option<std::path::PathBuf>,
     error: Option<String>,
 }
 
@@ -55,6 +57,7 @@ impl Default for AnimationUi {
             posed: None,
             recording: None,
             take: None,
+            take_file: None,
             error: None,
         }
     }
@@ -350,8 +353,12 @@ impl Atelier {
                 Err(e) => self.authoring.animation.error = Some(e),
             }
         }
+        // Kept on disk so the project can be saved with it.
+        let file = self.output.join("recorded-take.pc2");
+        let written = frames > 0 && take.write_pc2(&file).is_ok();
         let a = &mut self.authoring.animation;
         a.time = take.duration();
+        a.take_file = written.then_some(file);
         if frames > 0 {
             a.take = Some((self.scene.state.x.len(), take));
         }
@@ -408,6 +415,36 @@ impl Atelier {
         ctx.request_repaint();
     }
 
+    /// The take to save with the project: its point cache and frame rate.
+    pub(super) fn take_to_save(&self) -> Option<marvelous_cloth::fitting::AnimationTake> {
+        let take = self.current_take()?;
+        let path = self.authoring.animation.take_file.clone()?;
+        Some(marvelous_cloth::fitting::AnimationTake {
+            path,
+            fps: take.fps,
+        })
+    }
+
+    /// Read back a take saved with the project, when it still fits the cloth on show.
+    pub(super) fn restore_take(&mut self, saved: Option<marvelous_cloth::fitting::AnimationTake>) {
+        let a = &mut self.authoring.animation;
+        a.take = None;
+        a.take_file = None;
+        a.time = 0.;
+        a.previewing = false;
+        let Some(saved) = saved else {
+            return;
+        };
+        match Take::read_pc2(&saved.path, saved.fps) {
+            Ok(take) if take.frames[0].len() == self.scene.state.x.len() => {
+                a.take = Some((self.scene.state.x.len(), take));
+                a.take_file = Some(saved.path);
+            }
+            Ok(_) => a.error = Some("The saved take was recorded on another mesh".into()),
+            Err(e) => a.error = Some(format!("The saved take could not be read: {e}")),
+        }
+    }
+
     /// How far a recording in progress has come.
     fn recording_time(&self) -> Option<f64> {
         let job = self.authoring.animation.recording.as_ref()?;
@@ -457,6 +494,7 @@ impl Atelier {
         self.project.avatar_animation = None;
         let a = &mut self.authoring.animation;
         a.take = None;
+        a.take_file = None;
         a.time = 0.;
         a.previewing = false;
         a.posed = None;
@@ -630,6 +668,8 @@ impl Atelier {
                     .clicked()
                 {
                     self.authoring.animation.take = None;
+                    self.authoring.animation.take_file = None;
+                    self.document.dirty = true;
                 }
             }
         });

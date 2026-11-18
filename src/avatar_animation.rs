@@ -344,6 +344,41 @@ impl Take {
         let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
         file.write_all(&bytes).map_err(|e| e.to_string())
     }
+
+    /// Read a PC2 point cache as a take recorded at `fps`.
+    pub fn read_pc2(path: &Path, fps: f64) -> Result<Self, String> {
+        if !fps.is_finite() || !FPS_RANGE.contains(&fps) {
+            return Err("The frame rate must be between 1 and 120 frames per second".into());
+        }
+        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if bytes.len() < 32 || &bytes[..12] != b"POINTCACHE2\0" {
+            return Err(format!("{} is not a PC2 point cache", path.display()));
+        }
+        let int = |at: usize| i32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        let (points, samples) = (int(16), int(28));
+        if points <= 0 || samples <= 0 {
+            return Err(format!("{} holds no points", path.display()));
+        }
+        let (points, samples) = (points as usize, samples as usize);
+        if bytes.len() != 32 + points * samples * 12 {
+            return Err(format!("{} is truncated", path.display()));
+        }
+        let float = |at: usize| f32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        let frames = (0..samples)
+            .map(|s| {
+                (0..points)
+                    .map(|p| {
+                        let at = 32 + (s * points + p) * 12;
+                        [float(at), float(at + 4), float(at + 8)]
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        if frames.iter().flatten().flatten().any(|c| !c.is_finite()) {
+            return Err(format!("{} holds invalid positions", path.display()));
+        }
+        Ok(Self { fps, frames })
+    }
 }
 
 impl Take {

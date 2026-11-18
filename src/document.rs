@@ -36,6 +36,12 @@ pub fn portable_object(source: &Path, project: &Path) -> Result<PathBuf, String>
     portable_asset(source, project, "object", "obj")
 }
 
+/// Content-addressed point cache of a recorded take next to the project. Same rules as
+/// [`portable_avatar`].
+pub fn portable_cache(source: &Path, project: &Path) -> Result<PathBuf, String> {
+    portable_asset(source, project, "take", "pc2")
+}
+
 /// Content-addressed reference image next to the project, keeping the source's lowercase
 /// extension (PNG when it has none). Same rules as [`portable_avatar`].
 pub fn portable_image(source: &Path, project: &Path) -> Result<PathBuf, String> {

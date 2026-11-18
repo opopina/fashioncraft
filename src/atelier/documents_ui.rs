@@ -408,6 +408,7 @@ impl Atelier {
         project.prearrange = false;
         project.simulation = Some(self.settings.clone());
         project.state = Some(self.scene.state.clone());
+        project.animation_take = self.take_to_save();
         project
     }
     pub(super) fn save_document(&mut self, ctx: &egui::Context, save_as: bool) -> bool {
@@ -519,6 +520,7 @@ impl Atelier {
                 self.document.staged_avatar = None;
                 self.authoring = AuthoringUi::default();
                 self.authoring.board.snap_mm = self.prefs.snap_mm;
+                self.restore_take(self.project.animation_take.clone());
                 self.generation += 1;
                 self.pending = false;
                 self.playing = false;

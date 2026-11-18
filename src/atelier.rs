@@ -831,7 +831,9 @@ impl Atelier {
                 };
                 self.scene = scene;
                 self.issue.invalidate();
+                let saved = p.animation_take.clone();
                 self.project = p;
+                self.restore_take(saved);
                 self.generation += 1;
                 self.playing = false;
                 self.pending = false;

@@ -63,6 +63,27 @@ pub struct FittingProject {
     /// The avatar's motion: keyed poses and markers. Absent in older documents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_animation: Option<crate::avatar_animation::AvatarAnimation>,
+    /// The last recorded take, as a point cache next to the project. Absent when none was
+    /// recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation_take: Option<AnimationTake>,
+}
+
+/// Where a recorded take's point cache is kept and the frame rate it was recorded at.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AnimationTake {
+    pub path: PathBuf,
+    pub fps: f64,
+}
+
+impl AnimationTake {
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.fps.is_finite() || !crate::avatar_animation::FPS_RANGE.contains(&self.fps) {
+            return Err("The take's frame rate must be between 1 and 120".into());
+        }
+        Ok(())
+    }
 }
 
 /// A static OBJ prop placed in the scene. Relative paths resolve against the project JSON
@@ -443,6 +464,7 @@ impl FittingProject {
             avatar_pose: None,
             scene_objects: Vec::new(),
             avatar_animation: None,
+            animation_take: None,
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -469,6 +491,12 @@ impl FittingProject {
         }
         if let Some(animation) = &project.avatar_animation {
             animation.validate()?;
+        }
+        if let Some(take) = project.animation_take.as_mut() {
+            take.validate()?;
+            if take.path.is_relative() {
+                take.path = directory.join(&take.path);
+            }
         }
         for object in &mut project.scene_objects {
             object.validate()?;
@@ -619,6 +647,10 @@ impl FittingProject {
         for object in &mut copy.scene_objects {
             object.validate()?;
             object.path = crate::document::portable_object(&object.path, path)?;
+        }
+        if let Some(take) = copy.animation_take.as_mut() {
+            take.validate()?;
+            take.path = crate::document::portable_cache(&take.path, path)?;
         }
         let bytes = serde_json::to_vec_pretty(&copy).map_err(|e| e.to_string())?;
         crate::document::atomic_write(path, &bytes)

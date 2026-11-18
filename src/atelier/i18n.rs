@@ -1945,6 +1945,15 @@ fn spanish(text: &str) -> Option<&'static str> {
         "T-pose" => "Pose en T",
         "Arms forward" => "Brazos al frente",
         "Step" => "Paso",
+        "Key at" => "Clave en",
+        "Keep this position and turn at the animation's current time; while recording, the object moves from key to key" => {
+            "Guarda esta posición y giro en el instante actual de la animación; al grabar, el objeto va de clave en clave"
+        }
+        "Clear keys" => "Borrar claves",
+        "Keys" => "Claves",
+        "OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over; with keys they move while the animation records." => {
+            "Objetos OBJ, STL, PLY o COLLADA sobre los que la tela se apoya o cae; con claves se mueven mientras se graba la animación."
+        }
         _ => return None,
     })
 }

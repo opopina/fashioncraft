@@ -32,7 +32,10 @@ pub(super) struct AnimationUi {
     motion: usize,
     /// The avatar's skeleton and rest surface, keyed by its path and joints.
     rig: Option<(String, Arc<Rig>, Arc<SurfaceMesh>)>,
-    props: Option<(Vec<SceneObject>, Option<Arc<SurfaceMesh>>)>,
+    props: Option<(
+        Vec<SceneObject>,
+        Option<Arc<marvelous_cloth::fitting::MovingProps>>,
+    )>,
     /// The avatar posed at a timeline time, keyed by that time and the animation.
     posed: Option<(u64, AvatarAnimation, Arc<SurfaceMesh>)>,
     recording: Option<RecordingJob>,
@@ -64,6 +67,10 @@ impl Default for AnimationUi {
 }
 
 impl AnimationUi {
+    /// The timeline's time, seconds.
+    pub(super) fn time(&self) -> f64 {
+        self.time
+    }
     pub(super) fn recording(&self) -> bool {
         self.recording.is_some()
     }
@@ -175,9 +182,16 @@ impl Atelier {
         }
         let animation = self.project.avatar_animation.clone()?;
         let time = self.authoring.animation.time;
+        let same_props = self
+            .authoring
+            .animation
+            .props
+            .as_ref()
+            .is_some_and(|(objects, _)| *objects == self.project.scene_objects);
         if let Some((t, a, surface)) = &self.authoring.animation.posed
             && *t == time.to_bits()
             && *a == animation
+            && same_props
         {
             return Some(surface.clone());
         }
@@ -199,14 +213,14 @@ impl Atelier {
                 .as_ref()
                 .is_none_or(|(objects, _)| *objects != self.project.scene_objects)
             {
-                let mesh =
-                    marvelous_cloth::fitting::scene_objects_mesh(&self.project.scene_objects)?;
-                state.props = Some((self.project.scene_objects.clone(), mesh.map(Arc::new)));
+                let props =
+                    marvelous_cloth::fitting::MovingProps::new(&self.project.scene_objects)?;
+                state.props = Some((self.project.scene_objects.clone(), props.map(Arc::new)));
             }
             let (_, rig, rest) = state.rig.as_ref().unwrap();
             let mut body = rig.posed(rest, &animation.pose_at(time));
             if let Some(props) = &state.props.as_ref().unwrap().1 {
-                body = body.merged(props);
+                body = body.merged(&props.mesh_at(time));
             }
             Ok(Arc::new(body))
         })();

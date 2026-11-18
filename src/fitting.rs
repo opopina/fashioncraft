@@ -101,7 +101,23 @@ pub struct SceneObject {
     pub rotation_degrees: [f64; 3],
     /// Uniform scale from the OBJ's units to metres.
     pub scale: f64,
+    /// Where the object is at given times of the avatar's animation, in time order. Without
+    /// keys it stays where `translation` and `rotation_degrees` put it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<ObjectKey>,
 }
+
+/// A scene object's place at one time of the animation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObjectKey {
+    pub time_s: f64,
+    pub translation: [f64; 3],
+    pub rotation_degrees: [f64; 3],
+}
+
+/// Most keys one scene object may have.
+pub const MAX_OBJECT_KEYS: usize = 1000;
 
 impl SceneObject {
     pub fn validate(&self) -> Result<(), String> {
@@ -120,21 +136,120 @@ impl SceneObject {
                 self.name
             ));
         }
+        if self.keys.len() > MAX_OBJECT_KEYS
+            || self.keys.iter().any(|k| {
+                !k.time_s.is_finite()
+                    || k.time_s < 0.
+                    || k.translation
+                        .iter()
+                        .chain(&k.rotation_degrees)
+                        .any(|v| !v.is_finite())
+            })
+            || self.keys.windows(2).any(|w| w[1].time_s <= w[0].time_s)
+        {
+            return Err(format!(
+                "Scene object {} needs at most {MAX_OBJECT_KEYS} keys at finite, increasing times",
+                self.name
+            ));
+        }
         Ok(())
+    }
+
+    /// Where the object is at animation time `t`: between keys, its position runs straight
+    /// and its turn the shortest way; before the first key and after the last it holds them.
+    pub fn transform_at(&self, t: f64) -> (glam::DQuat, glam::DVec3) {
+        let turn = |r: [f64; 3]| {
+            let [x, y, z] = r.map(f64::to_radians);
+            glam::DQuat::from_euler(glam::EulerRot::XYZ, x, y, z)
+        };
+        let at = |k: &ObjectKey| {
+            (
+                turn(k.rotation_degrees),
+                glam::DVec3::from_array(k.translation),
+            )
+        };
+        match self.keys.as_slice() {
+            [] => (
+                turn(self.rotation_degrees),
+                glam::DVec3::from_array(self.translation),
+            ),
+            [first, ..] if t <= first.time_s => at(first),
+            [.., last] if t >= last.time_s => at(last),
+            keys => {
+                let k = keys.partition_point(|k| k.time_s <= t);
+                let (a, b) = (&keys[k - 1], &keys[k]);
+                let s = (t - a.time_s) / (b.time_s - a.time_s);
+                let ((qa, pa), (qb, pb)) = (at(a), at(b));
+                (qa.slerp(qb, s), pa.lerp(pb, s))
+            }
+        }
+    }
+
+    /// The prop's mesh in its own units scaled to metres, before it is turned and placed.
+    pub fn local_mesh(&self) -> Result<SurfaceMesh, String> {
+        self.validate()?;
+        let mut mesh = crate::mesh_import::load(&self.path)?;
+        for v in &mut mesh.vertices {
+            *v *= self.scale;
+        }
+        Ok(mesh)
     }
 
     /// The prop's mesh, placed in the scene.
     pub fn mesh(&self) -> Result<SurfaceMesh, String> {
-        self.validate()?;
-        let mut mesh = crate::mesh_import::load(&self.path)?;
+        let mut mesh = self.local_mesh()?;
         let [x, y, z] = self.rotation_degrees.map(f64::to_radians);
         let rotation = glam::DQuat::from_euler(glam::EulerRot::XYZ, x, y, z);
         let offset = glam::DVec3::from_array(self.translation);
         for v in &mut mesh.vertices {
-            *v = offset + rotation * (*v * self.scale);
+            *v = offset + rotation * *v;
         }
         mesh.validate()?;
         Ok(mesh)
+    }
+}
+
+/// The scene objects that move, each with its mesh before placing, to place them quickly at
+/// any time of the animation.
+#[derive(Clone, Debug)]
+pub struct MovingProps {
+    parts: Vec<(SceneObject, SurfaceMesh)>,
+}
+
+impl MovingProps {
+    pub fn new(objects: &[SceneObject]) -> Result<Option<Self>, String> {
+        let parts = objects
+            .iter()
+            .map(|o| o.local_mesh().map(|m| (o.clone(), m)))
+            .collect::<Result<Vec<_>, String>>()?;
+        Ok((!parts.is_empty()).then_some(Self { parts }))
+    }
+    /// Whether any object has keys.
+    pub fn moves(&self) -> bool {
+        self.parts.iter().any(|(o, _)| !o.keys.is_empty())
+    }
+    /// Every object's vertices at animation time `t`, in order.
+    pub fn vertices_at(&self, t: f64) -> Vec<glam::DVec3> {
+        let mut out = Vec::new();
+        for (object, mesh) in &self.parts {
+            let (q, p) = object.transform_at(t);
+            out.extend(mesh.vertices.iter().map(|v| p + q * *v));
+        }
+        out
+    }
+    /// The objects as one obstacle at animation time `t`.
+    pub fn mesh_at(&self, t: f64) -> SurfaceMesh {
+        let vertices = self.vertices_at(t);
+        let mut triangles = Vec::new();
+        let mut base = 0;
+        for (_, mesh) in &self.parts {
+            triangles.extend(mesh.triangles.iter().map(|tri| tri.map(|i| i + base)));
+            base += mesh.vertices.len();
+        }
+        SurfaceMesh {
+            vertices,
+            triangles,
+        }
     }
 }
 

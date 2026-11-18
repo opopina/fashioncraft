@@ -238,6 +238,7 @@ fn props_load_in_their_own_units_and_travel_with_the_project() {
         translation: [0.6, 0., 0.],
         rotation_degrees: [0.; 3],
         scale: 0.001,
+        keys: vec![],
     });
     let placed = project.scene_objects[0].mesh().unwrap();
     assert!((bounds(&placed).1.y - 0.45).abs() < 1e-9);

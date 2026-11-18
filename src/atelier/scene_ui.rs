@@ -72,6 +72,7 @@ impl Atelier {
         if !self.authoring.scene.open {
             return;
         }
+        let now = self.authoring.animation.time();
         let draft = self
             .authoring
             .scene
@@ -87,7 +88,7 @@ impl Atelier {
             .show(ctx, |ui| {
                 ui.small(i18n::tr(
                     ui_lang,
-                    "Static OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over.",
+                    "OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over; with keys they move while the animation records.",
                 ));
                 if draft.is_empty() {
                     ui.label(i18n::tr(ui_lang, "No objects yet."));
@@ -142,6 +143,36 @@ impl Atelier {
                         )
                         .on_hover_text(i18n::tr(ui_lang, "From the file's units to metres"));
                     });
+                    // Keys: where the object is at times of the avatar's animation.
+                    ui.horizontal(|ui| {
+                        if ui
+                            .small_button(format!("{} {now:.2} s", i18n::tr(ui_lang, "Key at")))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Keep this position and turn at the animation's current time; while recording, the object moves from key to key",
+                            ))
+                            .clicked()
+                        {
+                            let key = marvelous_cloth::fitting::ObjectKey {
+                                time_s: now,
+                                translation: object.translation,
+                                rotation_degrees: object.rotation_degrees,
+                            };
+                            object.keys.retain(|k| (k.time_s - now).abs() > 1e-6);
+                            let at = object.keys.partition_point(|k| k.time_s < now);
+                            object.keys.insert(at, key);
+                        }
+                        if !object.keys.is_empty() {
+                            ui.small(format!(
+                                "{}: {}",
+                                i18n::tr(ui_lang, "Keys"),
+                                object.keys.len()
+                            ));
+                            if ui.small_button(i18n::tr(ui_lang, "Clear keys")).clicked() {
+                                object.keys.clear();
+                            }
+                        }
+                    });
                 }
                 if let Some(k) = remove {
                     draft.remove(k);
@@ -183,6 +214,7 @@ impl Atelier {
                         translation: [0.6, 0., 0.],
                         rotation_degrees: [0.; 3],
                         scale,
+                        keys: vec![],
                     });
                 }
                 Err(e) => self.status = e,

@@ -465,12 +465,13 @@ pub fn body_frames(
     };
     let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
     let rig = avatar.rig(&rest)?;
-    let props = crate::fitting::scene_objects_mesh(&project.scene_objects)?;
+    let props = crate::fitting::MovingProps::new(&project.scene_objects)?;
     Ok((0..frames)
         .map(|k| {
-            let body = rig.posed(&rest, &animation.pose_at(k as f64 / animation.fps));
+            let t = k as f64 / animation.fps;
+            let body = rig.posed(&rest, &animation.pose_at(t));
             match &props {
-                Some(props) => body.merged(props),
+                Some(props) => body.merged(&props.mesh_at(t)),
                 None => body,
             }
         })
@@ -509,12 +510,16 @@ struct LeadIn {
 pub struct Recorder {
     rig: Rig,
     rest: SurfaceMesh,
-    props: Option<SurfaceMesh>,
+    /// The scene objects, which may move along their own keys.
+    props: Option<crate::fitting::MovingProps>,
+    /// Where the scene objects' vertices are now, and where they were before recording.
+    props_now: Vec<DVec3>,
+    props_still: Vec<DVec3>,
     animation: AvatarAnimation,
     lead_in: Option<LeadIn>,
     time: f64,
     body: Vec<DVec3>,
-    planned: Option<(f64, Vec<DVec3>)>,
+    planned: Option<(f64, Vec<DVec3>, Vec<DVec3>)>,
     frame_count: usize,
     take: Take,
 }
@@ -530,12 +535,20 @@ impl Recorder {
         };
         let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
         let rig = avatar.rig(&rest)?;
-        let props = crate::fitting::scene_objects_mesh(&project.scene_objects)?;
+        let props = crate::fitting::MovingProps::new(&project.scene_objects)?;
+        // The objects stand where the scene put them, then move to their first keys
+        // together with the body moving into the first pose.
+        let props_still = match crate::fitting::scene_objects_mesh(&project.scene_objects)? {
+            Some(mesh) => mesh.vertices,
+            None => Vec::new(),
+        };
+        let props_first = props.as_ref().map_or(Vec::new(), |p| p.vertices_at(0.));
         let start = rig.posed(&rest, &avatar.pose).vertices;
         let first = rig.posed(&rest, &animation.pose_at(0.)).vertices;
         let farthest = start
             .iter()
             .zip(&first)
+            .chain(props_still.iter().zip(&props_first))
             .map(|(a, b)| a.distance(*b))
             .fold(0., f64::max);
         let lead_in = (farthest > 1e-9).then(|| LeadIn {
@@ -547,6 +560,8 @@ impl Recorder {
             rig,
             rest,
             props,
+            props_now: props_still.clone(),
+            props_still,
             animation: animation.clone(),
             lead_in,
             time: 0.,
@@ -575,21 +590,31 @@ impl Recorder {
         );
     }
 
-    fn obstacle(&self, body: &[DVec3]) -> SurfaceMesh {
+    fn obstacle(&self, body: &[DVec3], props: &[DVec3]) -> SurfaceMesh {
         let surface = SurfaceMesh {
             vertices: body.to_vec(),
             triangles: self.rest.triangles.clone(),
         };
         match &self.props {
-            Some(props) => surface.merged(props),
+            Some(moving) => {
+                let mut objects = moving.mesh_at(0.);
+                objects.vertices = props.to_vec();
+                surface.merged(&objects)
+            }
             None => surface,
         }
     }
 
-    fn farthest(&self, body: &[DVec3]) -> f64 {
+    /// The scene objects' vertices at animation time `t`.
+    fn props_at(&self, t: f64) -> Vec<DVec3> {
+        self.props.as_ref().map_or(Vec::new(), |p| p.vertices_at(t))
+    }
+
+    fn farthest(&self, body: &[DVec3], props: &[DVec3]) -> f64 {
         self.body
             .iter()
             .zip(body)
+            .chain(self.props_now.iter().zip(props))
             .map(|(a, b)| a.distance(*b))
             .fold(0., f64::max)
     }
@@ -603,39 +628,49 @@ impl Recorder {
                 .rig
                 .transforms(|b| blend.get(b).copied().unwrap_or_default());
             let body = self.rig.skin(&self.rest, &transforms).vertices;
-            let obstacle = Arc::new(self.obstacle(&body));
-            self.planned = Some((self.time, body));
+            let first = self.props_at(0.);
+            let props: Vec<DVec3> = self
+                .props_still
+                .iter()
+                .zip(&first)
+                .map(|(a, b)| a.lerp(*b, fraction))
+                .collect();
+            let obstacle = Arc::new(self.obstacle(&body, &props));
+            self.planned = Some((self.time, body, props));
             return (max_dt, obstacle);
         }
         let next_frame = self.take.frames.len() as f64 / self.animation.fps;
         let mut end = (self.time + max_dt).min(next_frame);
-        let mut body = self
-            .rig
-            .posed(&self.rest, &self.animation.pose_at(end))
-            .vertices;
+        let at = |end: f64| {
+            (
+                self.rig
+                    .posed(&self.rest, &self.animation.pose_at(end))
+                    .vertices,
+                self.props_at(end),
+            )
+        };
+        let (mut body, mut props) = at(end);
         for _ in 0..8 {
-            let moved = self.farthest(&body);
+            let moved = self.farthest(&body, &props);
             if moved <= BODY_STEP_M || end - self.time <= MIN_STEP_S {
                 break;
             }
             end = self.time + ((end - self.time) * 0.9 * BODY_STEP_M / moved).max(MIN_STEP_S);
-            body = self
-                .rig
-                .posed(&self.rest, &self.animation.pose_at(end))
-                .vertices;
+            (body, props) = at(end);
         }
         let dt = (end - self.time).max(MIN_STEP_S);
-        let obstacle = Arc::new(self.obstacle(&body));
-        self.planned = Some((end, body));
+        let obstacle = Arc::new(self.obstacle(&body, &props));
+        self.planned = Some((end, body, props));
         (dt, obstacle)
     }
 
     /// The planned step was taken and the cloth is now `x`.
     pub fn commit(&mut self, x: &[DVec3]) {
-        let Some((time, body)) = self.planned.take() else {
+        let Some((time, body, props)) = self.planned.take() else {
             return;
         };
         self.body = body;
+        self.props_now = props;
         if let Some(lead) = self.lead_in.as_mut() {
             lead.step += 1;
             if lead.step >= lead.steps {
@@ -666,7 +701,7 @@ impl Recorder {
 
     /// The obstacle where the body is now: the avatar and the scene objects.
     pub fn obstacle_now(&self) -> SurfaceMesh {
-        self.obstacle(&self.body)
+        self.obstacle(&self.body, &self.props_now)
     }
 
     /// The pose the body is in now, part way into the first pose while moving into it.

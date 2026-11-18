@@ -1,4 +1,5 @@
 //! Static avatar import confirmation, driven by the named-widget CPU harness.
+use super::super::i18n::{self, Language};
 use eframe::egui;
 use marvelous_cloth::avatar_import::Candidate;
 
@@ -39,12 +40,12 @@ impl ImportUi {
             }
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context) -> Option<Action> {
+    pub fn show(&mut self, ctx: &egui::Context, language: Language) -> Option<Action> {
         if !self.open {
             return None;
         }
         let action = egui::Modal::new(egui::Id::new("avatar-import"))
-            .show(ctx, |ui| self.controls(ui))
+            .show(ctx, |ui| self.controls(ui, language))
             .inner;
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             Some(Action::Cancel)
@@ -52,42 +53,44 @@ impl ImportUi {
             action
         }
     }
-    fn controls(&mut self, ui: &mut egui::Ui) -> Option<Action> {
+    fn controls(&mut self, ui: &mut egui::Ui, language: Language) -> Option<Action> {
+        let tr = |text: &'static str| i18n::tr(language, text);
+        let status = |text: &str| i18n::status(language, text).into_owned();
         ui.set_width((ui.ctx().content_rect().width() - 64.).clamp(160., 560.));
-        ui.heading("Import static avatar");
+        ui.heading(tr("Import static avatar"));
         let height = (ui.ctx().content_rect().height() - 170.).clamp(80., 400.);
         egui::ScrollArea::vertical().id_salt("avatar-import-details")
             .auto_shrink([false, false]).max_height(height).min_scrolled_height(height)
             .show(ui, |ui| {
-                ui.label("OBJ · glTF · GLB · STL · PLY · COLLADA · metres · Y-up");
-                if let Some(error) = &self.error { ui.colored_label(egui::Color32::LIGHT_RED, error); }
+                ui.label(tr("OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metres · Y-up"));
+                if let Some(error) = &self.error { ui.colored_label(egui::Color32::LIGHT_RED, status(error)); }
                 if let Some(candidate) = &self.candidate {
-                    ui.label(format!("Source: {}", candidate.source.display()));
-                    ui.label(format!("{} vertices · {} triangles", candidate.vertices, candidate.triangles));
+                    ui.label(status(&format!("Source: {}", candidate.source.display())));
+                    ui.label(status(&format!("{} vertices · {} triangles", candidate.vertices, candidate.triangles)));
                     let [lo, hi] = candidate.bounds;
                     let size = hi - lo;
-                    ui.label(format!("Size X/Y/Z: {:.4} / {:.4} / {:.4} m", size.x, size.y, size.z));
-                    ui.small(format!("Min: {:.4}, {:.4}, {:.4} m · Max: {:.4}, {:.4}, {:.4} m", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z));
-                    for warning in &candidate.warnings { ui.label(warning); }
+                    ui.label(status(&format!("Size X/Y/Z: {:.4} / {:.4} / {:.4} m", size.x, size.y, size.z)));
+                    ui.small(status(&format!("Min: {:.4}, {:.4}, {:.4} m · Max: {:.4}, {:.4}, {:.4} m", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z)));
+                    for warning in &candidate.warnings { ui.label(status(warning)); }
                 } else {
-                    ui.label("Choose a local static mesh. Animated or skinned glTF assets are not supported.");
+                    ui.label(tr("Choose a local static mesh. Animated glTF assets are not supported; skinned ones only as VRM avatars, in their bind pose."));
                 }
                 ui.separator();
-                ui.label("Authored patterns, seams, materials and placement are kept. Unfinished edits are discarded. Save your current drape first if you want to keep it.");
+                ui.label(tr("Authored patterns, seams, materials and placement are kept. Unfinished edits are discarded. Save your current drape first if you want to keep it."));
             });
         ui.separator();
-        ui.strong("Resets draped cloth and undo history.");
+        ui.strong(tr("Resets draped cloth and undo history."));
         let mut action = None;
         ui.horizontal_wrapped(|ui| {
-            if button(ui, "Cancel", "avatar.cancel", true) {
+            if button(ui, tr("Cancel"), "avatar.cancel", true) {
                 action = Some(Action::Cancel);
             }
-            if button(ui, "Choose file…", "avatar.choose", true) {
+            if button(ui, tr("Choose file…"), "avatar.choose", true) {
                 action = Some(Action::Choose);
             }
             if button(
                 ui,
-                "Replace avatar",
+                tr("Replace avatar"),
                 "avatar.confirm",
                 self.candidate.is_some(),
             ) {
@@ -140,7 +143,11 @@ mod tests {
         }
     }
     fn draw(ui: &mut egui::Ui, case: &mut Case) {
-        match case.document.avatar_import.show(ui.ctx()) {
+        match case
+            .document
+            .avatar_import
+            .show(ui.ctx(), Language::English)
+        {
             Some(Action::Choose) => case.document.avatar_import.choose(&case.source),
             Some(Action::Cancel) => case.document.avatar_import = Default::default(),
             Some(Action::Confirm) => {
@@ -304,7 +311,7 @@ mod tests {
                 },
                 |ui| {
                     egui::CentralPanel::default().show(ui, |ui| {
-                        import.controls(ui);
+                        import.controls(ui, Language::English);
                     });
                 },
             );

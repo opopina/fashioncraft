@@ -247,13 +247,13 @@ impl Atelier {
     }
     fn avatar_import_tick(&mut self, ctx: &egui::Context) {
         use avatar_import_ui::Action;
-        match self.document.avatar_import.show(ctx) {
+        match self.document.avatar_import.show(ctx, self.prefs.language) {
             Some(Action::Choose) => {
                 if let Some(path) = FileDialog::new()
                     .set_title("Import static avatar")
                     .add_filter(
                         "Static mesh",
-                        &["obj", "gltf", "glb", "stl", "ply", "dae", "fbx"],
+                        &["obj", "gltf", "glb", "vrm", "stl", "ply", "dae", "fbx"],
                     )
                     .pick_file()
                 {

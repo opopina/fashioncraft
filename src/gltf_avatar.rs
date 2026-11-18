@@ -415,6 +415,8 @@ struct Document {
     animations: Vec<serde_json::Value>,
     #[serde(default)]
     extensions_required: Vec<String>,
+    #[serde(default)]
+    extensions: BTreeMap<String, serde_json::Value>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -511,6 +513,62 @@ pub fn import(
     scene: Option<usize>,
     limits: Limits,
 ) -> Result<ImportedAvatar, String> {
+    import_with(bytes, directory, scene, limits, false).map(|(avatar, _)| avatar)
+}
+
+/// Load a VRM avatar (a GLB with the VRM extension) in its bind pose: see [`import_vrm`].
+pub fn load_vrm(path: &Path, limits: Limits) -> Result<ImportedAvatar, String> {
+    let bytes = read_bounded(path, limits.document_bytes)?;
+    import_vrm(
+        &bytes,
+        path.parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+        limits,
+    )
+}
+
+/// A VRM avatar: a GLB whose document carries the `VRM` (0.x) or `VRMC_vrm` (1.0) extension.
+/// Its skinned meshes are read in their bind pose, as authored (glTF ignores the transform of
+/// a skinned mesh's own node); skins, morph targets, animations and node extensions are left
+/// out rather than refused. VRM 0.x avatars face −Z, so they are turned to face +Z like the
+/// others; VRM 1.0 avatars already do.
+pub fn import_vrm(
+    bytes: &[u8],
+    directory: &Path,
+    limits: Limits,
+) -> Result<ImportedAvatar, String> {
+    let (mut avatar, extensions) = import_with(bytes, directory, None, limits, true)?;
+    if extensions.contains_key("VRMC_vrm") {
+        avatar
+            .warnings
+            .push("VRM 1.0 avatar, read in its bind pose.".into());
+    } else if extensions.contains_key("VRM") {
+        for p in &mut avatar.mesh.vertices {
+            *p = DVec3::new(-p.x, p.y, -p.z);
+        }
+        avatar
+            .warnings
+            .push("VRM 0.x avatar, read in its bind pose and turned to face +Z.".into());
+    } else {
+        return Err("Not a VRM avatar: the file has no VRM extension".into());
+    }
+    avatar
+        .warnings
+        .push("Skinning, blend shapes, spring bones and expressions are not imported.".into());
+    Ok(avatar)
+}
+
+/// The importer itself. With `bind_pose`, skinned and morphed meshes are read as authored
+/// (their bind pose and base shape) instead of refused, and the document's extensions are
+/// returned.
+fn import_with(
+    bytes: &[u8],
+    directory: &Path,
+    scene: Option<usize>,
+    limits: Limits,
+    bind_pose: bool,
+) -> Result<(ImportedAvatar, BTreeMap<String, serde_json::Value>), String> {
     let packed = container(bytes, limits.document_bytes)?;
     let doc: Document =
         serde_json::from_slice(packed.json).map_err(|e| format!("Invalid glTF JSON: {e}"))?;
@@ -523,7 +581,7 @@ pub fn import(
             doc.extensions_required
         ));
     }
-    if !doc.skins.is_empty() || !doc.animations.is_empty() {
+    if !bind_pose && (!doc.skins.is_empty() || !doc.animations.is_empty()) {
         return Err("Skinned or animated avatars are unsupported; export a static mesh".into());
     }
     if doc.nodes.len() > limits.nodes {
@@ -568,7 +626,9 @@ pub fn import(
     }
     let mut parents = vec![None; doc.nodes.len()];
     for (parent, node) in doc.nodes.iter().enumerate() {
-        if node.skin.is_some() || node.weights.is_some() || !node.extensions.is_empty() {
+        if !bind_pose
+            && (node.skin.is_some() || node.weights.is_some() || !node.extensions.is_empty())
+        {
             return Err("Node skinning, morph weights or extensions are unsupported".into());
         }
         for &child in &node.children {
@@ -622,19 +682,27 @@ pub fn import(
         }
         let node = &doc.nodes[index];
         let world = parent * transform(node)?;
+        // A skinned mesh is placed by its joints, not by its node: in the bind pose, as authored.
+        let placement = if node.skin.is_some() {
+            DMat4::IDENTITY
+        } else {
+            world
+        };
         if !world.is_finite() || !world.determinant().is_finite() || world.determinant() == 0. {
             return Err("Invalid accumulated node transform".into());
         }
         if let Some(id) = node.mesh {
             let source = doc.meshes.get(id).ok_or("Invalid node mesh index")?;
-            if source.weights.is_some() {
+            if source.weights.is_some() && !bind_pose {
                 return Err("Morph meshes are unsupported".into());
             }
             if source.primitives.is_empty() {
                 return Err("Empty glTF mesh".into());
             }
             for primitive in &source.primitives {
-                append_primitive(&doc, &buffers, primitive, world, &mut mesh, limits)?;
+                append_primitive(
+                    &doc, &buffers, primitive, placement, &mut mesh, limits, bind_pose,
+                )?;
             }
         }
         for &child in node.children.iter().rev() {
@@ -648,7 +716,7 @@ pub fn import(
             return Err("Transformed triangle exceeds finite geometric range".into());
         }
     }
-    Ok(ImportedAvatar { mesh, scene: selected, warnings: vec!["Static geometry only: normals, UVs, materials, textures, cameras and lights are not imported.".into()] })
+    Ok((ImportedAvatar { mesh, scene: selected, warnings: vec!["Static geometry only: normals, UVs, materials, textures, cameras and lights are not imported.".into()] }, doc.extensions))
 }
 
 fn transform(node: &Node) -> Result<DMat4, String> {
@@ -776,14 +844,17 @@ fn append_primitive(
     world: DMat4,
     mesh: &mut SurfaceMesh,
     limits: Limits,
+    bind_pose: bool,
 ) -> Result<(), String> {
-    if p.attributes
-        .keys()
-        .any(|name| name.starts_with("JOINTS_") || name.starts_with("WEIGHTS_"))
+    if !bind_pose
+        && p.attributes
+            .keys()
+            .any(|name| name.starts_with("JOINTS_") || name.starts_with("WEIGHTS_"))
     {
         return Err("Skinning attributes are unsupported; export a static mesh".into());
     }
-    if p.mode.unwrap_or(4) != 4 || !p.targets.is_empty() || !p.extensions.is_empty() {
+    if p.mode.unwrap_or(4) != 4 || (!p.targets.is_empty() && !bind_pose) || !p.extensions.is_empty()
+    {
         return Err(
             "Only static triangle primitives without geometry extensions are supported".into(),
         );

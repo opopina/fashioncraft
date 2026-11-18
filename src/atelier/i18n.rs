@@ -45,6 +45,13 @@ const STATUS_TEMPLATES: &[(&str, &str)] = &[
         "Avatar made to {} / {} / {} / {} / {} / {} cm · confirm to replace the current one",
         "Avatar hecho a {} / {} / {} / {} / {} / {} cm · confirma para sustituir el actual",
     ),
+    ("Source: {}", "Origen: {}"),
+    ("{} vertices · {} triangles", "{} vértices · {} triángulos"),
+    ("Size X/Y/Z: {} / {} / {} m", "Tamaño X/Y/Z: {} / {} / {} m"),
+    (
+        "Min: {}, {}, {} m · Max: {}, {}, {} m",
+        "Mín.: {}, {}, {} m · Máx.: {}, {}, {} m",
+    ),
     (
         "Graphic {} lies across the cut; move it first",
         "El gráfico {} queda sobre el corte; muévelo antes",
@@ -656,6 +663,37 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Clone as piece" => "Clonar como pieza",
         "Make this the outline" => "Usar como contorno",
+        "Import static avatar" => "Importar avatar estático",
+        "OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metres · Y-up" => {
+            "OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metros · Y arriba"
+        }
+        "Choose a local static mesh. Animated glTF assets are not supported; skinned ones only as VRM avatars, in their bind pose." => {
+            "Elige una malla estática local. Los glTF animados no se admiten; los que tienen piel, solo como avatares VRM, en su pose de unión."
+        }
+        "Authored patterns, seams, materials and placement are kept. Unfinished edits are discarded. Save your current drape first if you want to keep it." => {
+            "Se conservan los patrones, costuras, materiales y la colocación. Las ediciones sin terminar se descartan. Guarda antes el drapeado actual si quieres conservarlo."
+        }
+        "Resets draped cloth and undo history." => {
+            "Reinicia la tela drapeada y el historial de deshacer."
+        }
+        "Choose file…" => "Elegir archivo…",
+        "Replace avatar" => "Sustituir el avatar",
+        "VRM 1.0 avatar, read in its bind pose." => "Avatar VRM 1.0, leído en su pose de unión.",
+        "VRM 0.x avatar, read in its bind pose and turned to face +Z." => {
+            "Avatar VRM 0.x, leído en su pose de unión y girado para mirar a +Z."
+        }
+        "Skinning, blend shapes, spring bones and expressions are not imported." => {
+            "No se importan la piel, las formas de mezcla, los huesos elásticos ni las expresiones."
+        }
+        "Static geometry only: normals, UVs, materials, textures, cameras and lights are not imported." => {
+            "Solo geometría estática: no se importan normales, UV, materiales, texturas, cámaras ni luces."
+        }
+        "Import does not repair intersections, open surfaces or inconsistent winding. Check placement before simulating." => {
+            "La importación no repara intersecciones, superficies abiertas ni orientación incoherente. Revisa la colocación antes de simular."
+        }
+        "Geometry only: materials, textures, skinning and animation are not read; skinned meshes are in their bind pose." => {
+            "Solo geometría: no se leen materiales, texturas, piel ni animación; las mallas con piel quedan en su pose de unión."
+        }
         "Trim segment" => "Recortar tramo",
         "Cut away" => "Recortar",
         "Remove this segment of the line; the parts on either side stay" => {
@@ -1121,8 +1159,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Solver settings" => "Ajustes del solver",
         "Split" => "Dividir",
         "Split at point" => "Dividir en un punto",
-        "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA · FBX" => {
-            "Avatares estáticos: OBJ · glTF · GLB · STL · PLY · COLLADA · FBX"
+        "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX" => {
+            "Avatares estáticos: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX"
         }
         "Store this required length and set the boundary to it" => {
             "Guardar este largo exigido y llevar el borde a él"

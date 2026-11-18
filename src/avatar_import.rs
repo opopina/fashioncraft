@@ -47,6 +47,10 @@ impl Candidate {
                 let imported = gltf_avatar::load(path, None, limits)?;
                 (imported.mesh, imported.warnings)
             }
+            "vrm" => {
+                let imported = gltf_avatar::load_vrm(path, limits)?;
+                (imported.mesh, imported.warnings)
+            }
             "obj" => {
                 let mut bytes = Vec::new();
                 std::fs::File::open(path)
@@ -95,7 +99,7 @@ impl Candidate {
             }
             _ => {
                 return Err(
-                    "Choose a static OBJ, glTF, GLB, STL, PLY, COLLADA or FBX avatar".into(),
+                    "Choose a static OBJ, glTF, GLB, VRM, STL, PLY, COLLADA or FBX avatar".into(),
                 );
             }
         };

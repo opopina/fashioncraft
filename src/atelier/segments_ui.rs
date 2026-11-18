@@ -334,6 +334,7 @@ impl Atelier {
         if elastic_ui {
             ui.indent("segment-elastic", |ui| {
                 self.line_spring_controls(ui, &panel.id, &name);
+                self.segment_trims(ui, &panel.id, &name);
             });
         }
         if let Some(pick) = &self.authoring.segments.pick {

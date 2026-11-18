@@ -134,6 +134,14 @@ impl Atelier {
 }
 
 impl Atelier {
+    /// Whether a piece is on show in 3D (not isolated away).
+    pub(super) fn panel_shown(&self, panel: &str) -> bool {
+        self.authoring
+            .view3d
+            .isolated
+            .as_ref()
+            .is_none_or(|ids| ids.contains(panel))
+    }
     /// Per-triangle flipped front faces for the renderer; `None` when no piece is flipped.
     pub(super) fn flipped_faces(&self) -> Option<Vec<bool>> {
         let flipped = &self.project.template.flipped_panels;

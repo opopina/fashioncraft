@@ -23,6 +23,8 @@ pub struct DrawModel<'a> {
     pub avatar: Option<&'a SurfaceMesh>,
     pub collider: Option<&'a dyn Collider>,
     pub seams: &'a [CompiledSeam],
+    /// Trims (buttons, buttonholes, zippers, topstitching) as coloured triangles.
+    pub trims: &'a [crate::garment::trims::TrimTriangle],
     pub display: DisplayOptions<'a>,
 }
 
@@ -882,6 +884,7 @@ impl Viewport {
                 avatar: None,
                 collider: p.sphere.as_ref().map(|s| s as &dyn Collider),
                 seams: &[],
+                trims: &[],
                 display: DisplayOptions::default(),
             },
             wire,
@@ -908,6 +911,7 @@ impl Viewport {
             avatar,
             collider,
             seams,
+            trims,
             display,
         } = model;
         let device = &self.render_state.device;
@@ -1123,6 +1127,16 @@ impl Viewport {
                     None,
                 );
             }
+        }
+        for t in trims {
+            triangle(
+                t.points.map(|p| p.as_vec3()),
+                t.color,
+                false,
+                None,
+                0.45,
+                None,
+            );
         }
         for seam in seams {
             for side in [1.0, -1.0] {

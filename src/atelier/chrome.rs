@@ -426,6 +426,24 @@ impl Atelier {
             marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
         let (visible_faces, face_colors) = self.display_buffers();
         let flipped_faces = self.flipped_faces();
+        // Trims of the pieces on show, lying on their front faces.
+        let trims = if self.prefs.garment_display.garment {
+            let shown: Vec<_> = self
+                .project
+                .template
+                .trims
+                .iter()
+                .filter(|t| self.panel_shown(&t.panel_id))
+                .cloned()
+                .collect();
+            marvelous_cloth::garment::trims::trim_triangles(
+                &shown,
+                &self.scene.garment,
+                &self.scene.state.x,
+            )
+        } else {
+            vec![]
+        };
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
@@ -453,6 +471,7 @@ impl Atelier {
                 } else {
                     &[]
                 },
+                trims: &trims,
                 display: marvelous_cloth::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),

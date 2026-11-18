@@ -231,6 +231,9 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Fold angle and strength of seams, by seam id: the two pieces meet at that angle.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seam_folds: BTreeMap<String, SeamFold>,
     /// Tacks: two points of the cloth held together (basting, or a button fastened to its
     /// buttonhole).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -340,6 +343,25 @@ impl LineSpring {
     }
 }
 
+/// The angle at which a seam's two pieces meet, as a cloth tool's seam fold angle: 180° flat,
+/// below 180 folding toward the side the faces' normal points to. Strength multiplies the
+/// fabric's bending stiffness across the seam.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeamFold {
+    pub angle: f64,
+    pub strength: f64,
+}
+
+impl Default for SeamFold {
+    fn default() -> Self {
+        Self {
+            angle: 180.,
+            strength: 1.,
+        }
+    }
+}
+
 /// Two material points held together by a stiff zero-length spring.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -433,6 +455,20 @@ pub struct CompiledLine {
     pub vertices: [usize; 2],
     pub rest: f64,
     pub stiffness: f64,
+}
+
+/// The triangle holding the boundary edge (a, b), and its third vertex.
+fn edge_triangle(mesh: &crate::model::Mesh, a: usize, b: usize) -> Option<(usize, usize)> {
+    mesh.triangles.iter().enumerate().find_map(|(i, t)| {
+        let v = t.vertices;
+        (v.contains(&a) && v.contains(&b))
+            .then(|| (i, *v.iter().find(|x| **x != a && **x != b).unwrap()))
+    })
+}
+
+/// Whether `vertices`, in winding order, run from `a` to `b`.
+fn winds(vertices: &[usize; 3], a: usize, b: usize) -> bool {
+    (0..3).any(|k| vertices[k] == a && vertices[(k + 1) % 3] == b)
 }
 
 /// `chain` carried on at both ends along mesh edges that continue it in a straight line
@@ -595,6 +631,16 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for (id, fold) in &self.seam_folds {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Fold angle refers to unknown seam {id}"));
+            }
+            if !(0.0..=360.0).contains(&fold.angle) || !(1.0..=1000.0).contains(&fold.strength) {
+                return Err(
+                    "A seam fold needs an angle of 0 to 360° and a strength of 1 to 1000".into(),
+                );
+            }
         }
         let mut tack_ids = BTreeSet::new();
         for tack in &self.tacks {
@@ -1002,6 +1048,59 @@ impl GarmentTemplate {
             }
             out.seams.push(seam);
         }
+        // Seam folds: a hinge across the seam for each edge of its first side, from that edge's
+        // triangle to the triangle at the matching place on the other side.
+        let mut seam_hinges = vec![];
+        for spec in &self.seams {
+            let Some(fold) = self.seam_folds.get(&spec.id) else {
+                continue;
+            };
+            if !out.seams.iter().any(|s| s.id == spec.id) {
+                continue;
+            }
+            let a = BoundaryCurve::concatenate(
+                spec.side(false)
+                    .map(|r| curve(r, false))
+                    .collect::<Result<_, _>>()?,
+                false,
+            )?;
+            let b = BoundaryCurve::concatenate(
+                spec.side(true)
+                    .map(|r| curve(r, false))
+                    .collect::<Result<_, _>>()?,
+                spec.reverse_b,
+            )?;
+            let rest = (fold.angle - 180.).to_radians();
+            let breaks = a.breakpoints();
+            for w in breaks.windows(2) {
+                let t = 0.5 * (w[0] + w[1]);
+                let [(a0, _), (a1, _)] = a.point(t);
+                let [(b0, _), (b1, _)] = b.point(t);
+                let (Some((ta, c)), Some((tb, d))) = (
+                    edge_triangle(&out.mesh, a0, a1),
+                    edge_triangle(&out.mesh, b0, b1),
+                ) else {
+                    continue;
+                };
+                // The edge in the winding order of its own triangle, so the first normal is
+                // that face's own.
+                let (p, q) = if winds(&out.mesh.triangles[ta].vertices, a0, a1) {
+                    (a0, a1)
+                } else {
+                    (a1, a0)
+                };
+                let e = out.mesh.uv[q] - out.mesh.uv[p];
+                let areas = out.mesh.triangles[ta].area + out.mesh.triangles[tb].area;
+                seam_hinges.push(crate::model::Hinge {
+                    vertices: [p, q, c, d],
+                    weight: 3. * e.length_squared() / areas * fold.strength,
+                    across: glam::DVec2::new(-e.y, e.x).normalize(),
+                    material: out.mesh.triangles[ta].material,
+                    rest_angle: rest,
+                });
+            }
+        }
+        out.mesh.hinges.extend(seam_hinges);
         for tack in &self.tacks {
             let locate = |p: &TackPoint| {
                 out.material_point(&p.panel, p.uv)
@@ -1191,6 +1290,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            seam_folds: Default::default(),
             tacks: vec![],
             line_folds: vec![],
             line_springs: vec![],

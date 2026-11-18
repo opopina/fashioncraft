@@ -407,6 +407,11 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Set the angle at which a seam's pieces meet, or clear it (`fold: None`). One undo step.
+    SetSeamFold {
+        seam: String,
+        fold: Option<crate::garment::template::SeamFold>,
+    },
     /// Hold two points of the cloth together. One undo step.
     AddTack {
         tack: crate::garment::template::Tack,
@@ -1153,6 +1158,57 @@ pub fn layout(template: &GarmentTemplate, index: usize) -> DVec2 {
         )
     })
 }
+/// Drop the simulation settings of pieces, lines and seams an edit removed (a deleted piece
+/// takes its layer, pressure, elastics, folds and tacks with it; a deleted seam its fold), so
+/// the edit is not refused for pointing at them.
+pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
+    let panels: std::collections::BTreeSet<String> =
+        template.panels.iter().map(|p| p.id.clone()).collect();
+    let line_exists = |t: &GarmentTemplate, panel: &str, line: &str| {
+        t.panels
+            .iter()
+            .find(|p| p.id == panel)
+            .is_some_and(|p| match &p.polygon {
+                Some(poly) => {
+                    poly.edges.iter().any(|e| e == line) || poly.lines.iter().any(|l| l.id == line)
+                }
+                None => matches!(line, "top" | "right" | "bottom" | "left"),
+            })
+    };
+    template
+        .deactivated_panels
+        .retain(|d| panels.contains(&d.panel));
+    template
+        .solidified_panels
+        .retain(|s| panels.contains(&s.panel));
+    template
+        .strengthened_panels
+        .retain(|id| panels.contains(id));
+    template.panel_layers.retain(|id, _| panels.contains(id));
+    template.panel_pressure.retain(|id, _| panels.contains(id));
+    template.panel_shrink.retain(|id, _| panels.contains(id));
+    template
+        .tacks
+        .retain(|t| panels.contains(&t.a.panel) && panels.contains(&t.b.panel));
+    let springs: Vec<_> = template
+        .line_springs
+        .iter()
+        .filter(|s| line_exists(template, &s.panel, &s.line))
+        .cloned()
+        .collect();
+    template.line_springs = springs;
+    let folds: Vec<_> = template
+        .line_folds
+        .iter()
+        .filter(|f| line_exists(template, &f.panel, &f.line))
+        .cloned()
+        .collect();
+    template.line_folds = folds;
+    let seams: std::collections::BTreeSet<String> =
+        template.seams.iter().map(|s| s.id.clone()).collect();
+    template.seam_folds.retain(|id, _| seams.contains(id));
+}
+
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
     let without_layout = |t: &GarmentTemplate| {
         let mut t = t.clone();
@@ -2635,6 +2691,23 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             // A locked piece cannot stay selected on the board.
             selected = None;
         }
+        Command::SetSeamFold { seam, fold } => {
+            if !template.seams.iter().any(|s| s.id == seam) {
+                return Err(format!("There is no seam {seam}"));
+            }
+            let before = template.seam_folds.get(&seam).cloned();
+            if before == fold {
+                return Err("The seam is set that way already".into());
+            }
+            match fold {
+                Some(f) => {
+                    template.seam_folds.insert(seam, f);
+                }
+                None => {
+                    template.seam_folds.remove(&seam);
+                }
+            }
+        }
         Command::AddTack { tack } => {
             if template.tacks.iter().any(|t| t.id == tack.id) {
                 return Err(format!("A tack called {} exists already", tack.id));
@@ -3966,6 +4039,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
     template
         .locked_panels
         .retain(|id| template.panels.iter().any(|p| &p.id == id));
+    prune_simulation_settings(&mut template);
     let garment = template.compile()?;
     Ok(Edit {
         reset_simulation: !same_physics(source, &template),

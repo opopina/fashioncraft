@@ -56,6 +56,7 @@ impl Atelier {
             if button.clicked() {
                 remove = Some(id.clone());
             }
+            self.seam_fold_controls(ui, id);
         }
         let mut select = None;
         egui::CollapsingHeader::new(format!(
@@ -123,5 +124,59 @@ impl Atelier {
             self.begin_seam_edit(&id);
         }
         ui.separator();
+    }
+}
+
+impl Atelier {
+    /// The angle at which the selected seam's pieces meet (180° flat) and its strength.
+    fn seam_fold_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
+        use marvelous_cloth::garment::template::SeamFold;
+        let current = self.project.template.seam_folds.get(seam).cloned();
+        let mut wanted: Option<Option<SeamFold>> = None;
+        ui.horizontal(|ui| {
+            if ui
+                .selectable_label(current.is_some(), "Fold angle")
+                .on_hover_text("Make the two pieces meet at an angle across this seam, like a pressed collar or a turned facing")
+                .clicked()
+            {
+                wanted = Some(current.is_none().then_some(SeamFold {
+                    angle: 90.,
+                    strength: 10.,
+                }));
+            }
+            if let Some(fold) = &current {
+                let mut edited = fold.clone();
+                let mut commit = false;
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut edited.angle)
+                            .range(0.0..=360.0)
+                            .speed(1.0)
+                            .fixed_decimals(0)
+                            .suffix("°"),
+                    )
+                    .on_hover_text("180° is flat; less folds toward the pieces' front, more away from it");
+                commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut edited.strength)
+                            .range(1.0..=1000.0)
+                            .speed(0.5)
+                            .fixed_decimals(0)
+                            .prefix("×"),
+                    )
+                    .on_hover_text("Bending stiffness across the seam, times the fabric's");
+                commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                if commit && &edited != fold {
+                    wanted = Some(Some(edited));
+                }
+            }
+        });
+        if let Some(fold) = wanted {
+            self.edit(marvelous_cloth::authoring::Command::SetSeamFold {
+                seam: seam.into(),
+                fold,
+            });
+        }
     }
 }

@@ -23,7 +23,7 @@ fn ready() -> CapabilityContext {
 fn every_command_has_a_unique_stable_key_and_a_real_descriptor() {
     let mut keys = std::collections::BTreeSet::new();
     let mut ids = std::collections::HashSet::new();
-    assert_eq!(REGISTRY.len(), 59);
+    assert_eq!(REGISTRY.len(), 78);
     for desc in REGISTRY {
         assert!(!desc.label.trim().is_empty());
         assert!(desc.key.contains('.'), "{:?}", desc.id);
@@ -66,6 +66,9 @@ fn shortcuts_are_only_for_wired_keys() {
             (CommandId::IsolateSelection, "Shift+I"),
             (CommandId::StrainMap, "Alt+7"),
             (CommandId::TechnicalView, "Alt+0"),
+            (CommandId::SelectAllPieces, "Cmd+A"),
+            (CommandId::CopyPieces, "Cmd+C"),
+            (CommandId::PastePieces, "Cmd+V"),
         ]
     );
 }

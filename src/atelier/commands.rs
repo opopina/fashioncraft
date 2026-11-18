@@ -66,6 +66,25 @@ pub enum CommandId {
     StrainMap,
     TechnicalView,
     RandomPieceColours,
+    SelectAllPieces,
+    CopyPieces,
+    PastePieces,
+    DeletePieces,
+    DuplicatePiece,
+    DeactivatePieces,
+    DeactivatePiecesWithSeams,
+    ActivatePieces,
+    FreezePieces,
+    UnfreezePieces,
+    StrengthenPieces,
+    SolidifyPieces,
+    FlipPieceNormals,
+    SuperimposeOver,
+    SuperimposeUnder,
+    AddButton,
+    AddButtonhole,
+    FastenButtons,
+    AddGraphic,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -657,6 +676,177 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Preference,
         NativeWorkspace
     ),
+    entry!(
+        SelectAllPieces,
+        "edit.select_all",
+        "Select all pieces",
+        Pattern,
+        Some("Cmd+A"),
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        CopyPieces,
+        "edit.copy",
+        "Copy pieces",
+        Pattern,
+        Some("Cmd+C"),
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PastePieces,
+        "edit.paste",
+        "Paste pieces",
+        Pattern,
+        Some("Cmd+V"),
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        DeletePieces,
+        "edit.delete",
+        "Delete selected pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        DuplicatePiece,
+        "pattern.duplicate",
+        "Duplicate piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        DeactivatePieces,
+        "pattern.deactivate",
+        "Deactivate pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        DeactivatePiecesWithSeams,
+        "pattern.deactivate_with_seams",
+        "Deactivate pieces and their seams",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ActivatePieces,
+        "pattern.activate",
+        "Activate pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FreezePieces,
+        "pattern.freeze",
+        "Freeze pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        UnfreezePieces,
+        "pattern.unfreeze",
+        "Unfreeze pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        StrengthenPieces,
+        "pattern.strengthen",
+        "Strengthen pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SolidifyPieces,
+        "pattern.solidify",
+        "Solidify pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FlipPieceNormals,
+        "pattern.flip_normals",
+        "Flip piece normals",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SuperimposeOver,
+        "pattern.superimpose_over",
+        "Superimpose over",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        SuperimposeUnder,
+        "pattern.superimpose_under",
+        "Superimpose under",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        AddButton,
+        "trim.button",
+        "Add a button",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddButtonhole,
+        "trim.buttonhole",
+        "Add a buttonhole",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FastenButtons,
+        "trim.fasten",
+        "Fasten buttons",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddGraphic,
+        "graphic.add",
+        "Add a graphic…",
+        Pattern,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
 ];
 
 impl CommandId {
@@ -724,7 +914,25 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
     }
     if matches!(
         id,
-        CommandId::ToolMove | CommandId::ToolRotate | CommandId::LockSelectedPieces
+        CommandId::ToolMove
+            | CommandId::ToolRotate
+            | CommandId::LockSelectedPieces
+            | CommandId::CopyPieces
+            | CommandId::DeletePieces
+            | CommandId::DuplicatePiece
+            | CommandId::DeactivatePieces
+            | CommandId::DeactivatePiecesWithSeams
+            | CommandId::ActivatePieces
+            | CommandId::FreezePieces
+            | CommandId::UnfreezePieces
+            | CommandId::StrengthenPieces
+            | CommandId::SolidifyPieces
+            | CommandId::FlipPieceNormals
+            | CommandId::SuperimposeOver
+            | CommandId::SuperimposeUnder
+            | CommandId::AddButton
+            | CommandId::AddButtonhole
+            | CommandId::AddGraphic
     ) && !ctx.selected_panel
     {
         return Err(UnavailableReason::NoSelectedPanel);

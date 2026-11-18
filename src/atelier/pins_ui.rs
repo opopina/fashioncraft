@@ -277,6 +277,37 @@ fn selected_material_points(
 }
 
 impl Atelier {
+    /// Freeze or unfreeze the selected pieces as one undo step.
+    pub(super) fn freeze_selected(&mut self, freeze: bool) {
+        let selected = self.selected_panels();
+        let Some(first) = selected.first().cloned() else {
+            self.status = "Select the pieces first".into();
+            return;
+        };
+        let action = match (selected.len() > 1, freeze) {
+            (false, true) => Action::Freeze,
+            (false, false) => Action::Thaw,
+            (true, true) => Action::FreezeSelected,
+            (true, false) => Action::ThawSelected,
+        };
+        let empty = BTreeMap::new();
+        match prepare(
+            &self.project.template,
+            &self.scene.garment,
+            &self.scene.state,
+            Some(&self.scene.collider.surface),
+            (&first, &empty, &selected, action),
+        ) {
+            Ok(edit) if edit.reset_simulation => {
+                self.authoring.history.record(self.project.template.clone());
+                self.install_edit(edit);
+                self.status = if freeze { "Frozen" } else { "Unfrozen" }.into();
+            }
+            Ok(_) => self.status = "Panel holds already match the request".into(),
+            Err(error) => self.status = error,
+        }
+    }
+
     pub(super) fn pin_properties(
         &mut self,
         ui: &mut egui::Ui,

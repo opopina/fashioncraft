@@ -539,7 +539,7 @@ impl Atelier {
     }
 
     /// Place a PNG at the middle of a piece, 12 cm wide.
-    fn add_graphic(&mut self, panel: &str) {
+    pub(super) fn add_graphic(&mut self, panel: &str) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("PNG image", &["png"])
             .pick_file()

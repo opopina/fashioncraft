@@ -29,6 +29,30 @@ impl Atelier {
         (!uv.is_empty()).then(|| uv.iter().sum::<DVec2>() / uv.len() as f64)
     }
 
+    /// A 15 mm button, or an 18 mm buttonhole, at the middle of a piece.
+    pub(super) fn centre_trim(&self, panel: &str, buttonhole: bool) -> Option<Command> {
+        let c = self.piece_centre(panel)?;
+        let kind = if buttonhole {
+            TrimKind::Buttonhole {
+                start_m: c - DVec2::new(0.009, 0.),
+                end_m: c + DVec2::new(0.009, 0.),
+                width_m: 0.004,
+            }
+        } else {
+            TrimKind::Button {
+                center_m: c,
+                diameter_m: 0.015,
+            }
+        };
+        Some(Command::SetTrim {
+            trim: Trim {
+                id: self.new_trim_id(),
+                panel_id: panel.into(),
+                kind,
+            },
+        })
+    }
+
     /// "Trims" in the Piece inspector.
     pub(super) fn piece_trims(&mut self, ui: &mut egui::Ui, panel: &str) {
         let mine: Vec<Trim> = self

@@ -103,10 +103,10 @@ const EDIT: &[Item] = &[
     Run("Undo", C::Undo),
     Run("Redo", C::Redo),
     S,
-    Todo("Delete"),
-    Todo("Copy"),
-    Todo("Paste"),
-    Todo("Select all"),
+    Run("Delete", C::DeletePieces),
+    Run("Copy", C::CopyPieces),
+    Run("Paste", C::PastePieces),
+    Run("Select all", C::SelectAllPieces),
     Todo("Select all seams"),
     Run("Invert selection", C::InvertSelection),
     S,
@@ -129,6 +129,26 @@ const GARMENT_3D: &[Item] = &[
     Todo("High-resolution garment"),
     Todo("Low-resolution garment"),
     Todo("Custom resolution…"),
+    S,
+    Sub(
+        "Pieces",
+        &[
+            Run("Deactivate", C::DeactivatePieces),
+            Run("Deactivate with seams", C::DeactivatePiecesWithSeams),
+            Run("Activate", C::ActivatePieces),
+            Run("Freeze", C::FreezePieces),
+            Run("Unfreeze", C::UnfreezePieces),
+            Run("Strengthen", C::StrengthenPieces),
+            Run("Solidify", C::SolidifyPieces),
+            Run("Flip normals", C::FlipPieceNormals),
+            Todo("Convert to quads"),
+            Todo("Convert to triangles"),
+            S,
+            Run("Superimpose over", C::SuperimposeOver),
+            Run("Superimpose under", C::SuperimposeUnder),
+            Todo("Superimpose side"),
+        ],
+    ),
     S,
     Run("Move in 3D", C::ToolMove),
     Run("Rotate in 3D", C::ToolRotate),
@@ -169,6 +189,7 @@ const PATTERN_2D: &[Item] = &[
         "Edit",
         &[
             Run("Transform pattern", C::ToolEdit),
+            Run("Duplicate piece", C::DuplicatePiece),
             Todo("Add point / split line"),
             Todo("Smooth curve"),
             Todo("Cut and extend"),
@@ -221,13 +242,17 @@ const MATERIALS: &[Item] = &[
         "Graphics",
         &[
             Run("Transform graphic", C::ToolGraphic),
-            Todo("Graphic on a 2D pattern"),
+            Run("Graphic on the selected piece…", C::AddGraphic),
             Todo("Graphic on the 3D garment"),
         ],
     ),
     Sub(
         "Buttons",
-        &[Todo("Button"), Todo("Buttonhole"), Todo("Fasten buttons")],
+        &[
+            Run("Button", C::AddButton),
+            Run("Buttonhole", C::AddButtonhole),
+            Run("Fasten buttons", C::FastenButtons),
+        ],
     ),
     Todo("Zipper"),
     Todo("Piping"),
@@ -544,7 +569,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 59, "{done} of {all}");
+        assert!(done >= 78, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

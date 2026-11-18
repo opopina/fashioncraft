@@ -1033,7 +1033,7 @@ impl Atelier {
             });
         });
     }
-    fn copy_panels(&mut self, ctx: &egui::Context) {
+    pub(super) fn copy_panels(&mut self, ctx: &egui::Context) {
         match PatternClipboard::capture(&self.project.template, &self.selected_panels())
             .and_then(|clip| clip.to_text().map(|text| (clip, text)))
         {
@@ -1050,7 +1050,7 @@ impl Atelier {
             Err(error) => self.status = error,
         }
     }
-    fn paste_panels(&mut self, clip: PatternClipboard, ctx: &egui::Context) {
+    pub(super) fn paste_panels(&mut self, clip: PatternClipboard, ctx: &egui::Context) {
         let board = &self.authoring.board;
         let cursor = ctx.input(|i| i.pointer.hover_pos());
         let center = self

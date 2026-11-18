@@ -152,6 +152,31 @@ impl Atelier {
         );
     }
 
+    /// Select every piece, leaving out pieces locked in 2D.
+    pub(super) fn select_all_pieces(&mut self) {
+        let locked = &self.project.template.locked_panels;
+        let next: BTreeSet<String> = self
+            .project
+            .template
+            .panels
+            .iter()
+            .filter(|p| !locked.contains(&p.id))
+            .map(|p| p.id.clone())
+            .collect();
+        self.cancel_preview();
+        self.authoring.selected = next.iter().next().cloned();
+        self.authoring.selection.panels = next;
+        self.authoring.board.selection.clear();
+        self.authoring.board.selection_panel = None;
+        self.authoring.board.point_groups.clear();
+        self.authoring.anchor = None;
+        self.authoring.edge = None;
+        self.status = format!(
+            "{} selected",
+            super::garment_display::pieces(self.selected_panels().len())
+        );
+    }
+
     /// Field of view and saved views, under the 3D view's camera menu.
     pub(super) fn camera_controls(&mut self, ui: &mut egui::Ui) {
         ui.separator();

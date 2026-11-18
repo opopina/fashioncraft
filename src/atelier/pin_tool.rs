@@ -97,7 +97,7 @@ impl Atelier {
         });
     }
 
-    fn fasten(&mut self, fasten: bool) {
+    pub(super) fn fasten(&mut self, fasten: bool) {
         match authoring::prepare_fasten_edit(
             &self.project.template,
             &self.scene.garment,

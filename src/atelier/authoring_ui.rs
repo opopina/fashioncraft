@@ -1258,6 +1258,9 @@ impl Atelier {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::K)) {
             self.set_authoring_tool(Tool::Graphic, false);
         }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::A)) {
+            self.select_all_pieces();
+        }
         if ctx.input(|i| !i.modifiers.command && !i.modifiers.alt && i.key_pressed(egui::Key::R)) {
             self.set_authoring_tool(Tool::Place, true);
         }

@@ -537,6 +537,86 @@ impl Atelier {
             Id::RandomPieceColours => {
                 self.prefs.garment_display.piece_colors = !self.prefs.garment_display.piece_colors;
             }
+            Id::SelectAllPieces => self.select_all_pieces(),
+            Id::CopyPieces => self.copy_panels(ctx),
+            Id::PastePieces => {
+                let clip = self
+                    .authoring
+                    .selection
+                    .clipboard
+                    .clone()
+                    .ok_or("Nothing copied yet")?;
+                self.paste_panels(clip, ctx);
+            }
+            Id::DeletePieces => {
+                let panels = self.selected_panels();
+                self.edit(marvelous_cloth::authoring::Command::RemovePanels { panels });
+            }
+            Id::DuplicatePiece => {
+                let panel = self
+                    .authoring
+                    .selected
+                    .clone()
+                    .ok_or("Select a panel first")?;
+                self.edit(marvelous_cloth::authoring::Command::Duplicate { panel });
+            }
+            Id::DeactivatePieces | Id::DeactivatePiecesWithSeams | Id::ActivatePieces => {
+                let ids = self.selected_panels();
+                self.set_active(
+                    &ids,
+                    id != Id::ActivatePieces,
+                    id == Id::DeactivatePiecesWithSeams,
+                );
+            }
+            Id::FreezePieces => self.freeze_selected(true),
+            Id::UnfreezePieces => self.freeze_selected(false),
+            Id::StrengthenPieces => {
+                let panels = self.selected_panels();
+                // Toggle as a group: strengthen unless every selected piece already is.
+                let on = !panels
+                    .iter()
+                    .all(|p| self.project.template.strengthened_panels.contains(p));
+                self.edit(marvelous_cloth::authoring::Command::Strengthen { panels, on });
+            }
+            Id::SolidifyPieces => {
+                let ids = self.selected_panels();
+                let solid = ids.iter().all(|p| {
+                    self.project
+                        .template
+                        .solidified_panels
+                        .iter()
+                        .any(|s| &s.panel == p)
+                });
+                self.set_solid(&ids, !solid);
+            }
+            Id::FlipPieceNormals => {
+                let panels = self.selected_panels();
+                self.edit(marvelous_cloth::authoring::Command::FlipNormals { panels });
+            }
+            Id::SuperimposeOver | Id::SuperimposeUnder => {
+                let ids = self.selected_panels();
+                self.superimpose_panels(&ids, id == Id::SuperimposeOver);
+            }
+            Id::AddButton | Id::AddButtonhole => {
+                let panel = self
+                    .authoring
+                    .selected
+                    .clone()
+                    .ok_or("Select a panel first")?;
+                let command = self
+                    .centre_trim(&panel, id == Id::AddButtonhole)
+                    .ok_or("The piece has no mesh yet")?;
+                self.edit(command);
+            }
+            Id::FastenButtons => self.fasten(true),
+            Id::AddGraphic => {
+                let panel = self
+                    .authoring
+                    .selected
+                    .clone()
+                    .ok_or("Select a panel first")?;
+                self.add_graphic(&panel);
+            }
             Id::LockSelectedPieces => {
                 self.apply_lock_action(board_locks::LockAction::LockSelected)?
             }

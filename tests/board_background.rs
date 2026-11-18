@@ -61,10 +61,21 @@ fn the_background_travels_with_the_project() {
 
     // Saving again reuses the same content-addressed asset.
     loaded.save(&file).unwrap();
-    let assets = fs::read_dir(dir.path().join("coat.json.assets"))
+    let mut assets: Vec<String> = fs::read_dir(dir.path().join("coat.json.assets"))
         .unwrap()
-        .count();
-    assert_eq!(assets, 2, "one avatar and one image");
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assets.sort();
+    // One avatar with its anchors and joints, and one image.
+    let kinds: Vec<_> = assets
+        .iter()
+        .map(|name| name.split_once('.').unwrap().1)
+        .collect();
+    assert_eq!(
+        kinds,
+        ["arrangement.json", "measurements.json", "obj", "png"],
+        "{assets:?}"
+    );
 }
 
 #[test]

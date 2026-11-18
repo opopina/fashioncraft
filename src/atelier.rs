@@ -584,6 +584,7 @@ impl Atelier {
             Id::ExportPointCache => self.export_point_cache()?,
             Id::ExportObjSequence => self.export_obj_sequence()?,
             Id::CaptureView3d => self.capture_view3d()?,
+            Id::SnapshotPatterns => self.open_print(),
             Id::CaptureVideo => self.capture_video()?,
             Id::ExportGltf => self.export_gltf()?,
             Id::ExportObj => self.open_obj_export(false)?,
@@ -1217,6 +1218,7 @@ impl eframe::App for Atelier {
             self.pose_window(&ctx);
             self.scene_window(&ctx);
             self.obj_export_window(&ctx);
+            self.print_window(&ctx);
             self.avatar_shape_window(&ctx);
             self.draft_window(&ctx);
             self.skirt_draft_window(&ctx);

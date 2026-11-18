@@ -95,7 +95,7 @@ const FILE: &[Item] = &[
     Sub(
         "Snapshot",
         &[
-            Todo("2D patterns at 1:1…"),
+            Run("2D patterns at 1:1…", C::SnapshotPatterns),
             Run("3D view…", C::CaptureView3d),
         ],
     ),
@@ -656,7 +656,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 117, "{done} of {all}");
+        assert!(done >= 118, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -115,6 +115,7 @@ pub enum CommandId {
     ExportUsd,
     ExportFbx,
     ExportAlembic,
+    SnapshotPatterns,
     ToggleArrangementPoints,
     OpenAvatarEditor,
     DraftTshirt,
@@ -1152,6 +1153,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportAlembic,
         "export.alembic",
         "Export Alembic…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        SnapshotPatterns,
+        "capture.patterns_1to1",
+        "Save the 2D patterns at 1:1…",
         Simulation,
         None,
         NotUndoable,

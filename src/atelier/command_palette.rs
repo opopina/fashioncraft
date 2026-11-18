@@ -119,6 +119,9 @@ fn aliases(id: CommandId) -> &'static str {
         ExportUsd => "export usd usdz usda pixar apple ar quick look",
         ExportFbx => "export fbx autodesk maya 3ds max blender unity unreal",
         ExportAlembic => "export alembic abc cache take animation houdini maya blender",
+        SnapshotPatterns => {
+            "snapshot print pdf svg patterns 1:1 actual size real scale tile pages a4 letter a3 plotter"
+        }
         ToggleArrangementPoints => "arrangement points anchors place avatar show",
         OpenAvatarEditor => "avatar editor measurements height bust waist hip size body",
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",

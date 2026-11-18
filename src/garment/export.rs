@@ -185,27 +185,23 @@ pub fn pattern_svg(template: &GarmentTemplate) -> String {
     out
 }
 
-/// Produce a physically dimensioned, untiled SVG of the *sewing outlines* and
-/// any stored draft markings.
-///
-/// Both the root SVG dimensions and its viewBox are in millimetres, so one
-/// user-space unit represents one millimetre at 100% print size. When seam
-/// allowances are present, the joined cutting contour is included together with
-/// the sewing-line notch markers. This remains a single sheet: page tiling and
-/// printer scaling are deliberately outside this export's scope.
-pub fn print_pattern_svg(template: &GarmentTemplate) -> Result<String, String> {
-    template.compile()?;
-    print_pattern_svg_validated(template)
+/// Margin, label height, gap between pieces and ruler space of the 1:1 print sheet, mm.
+pub(crate) const MARGIN_MM: f64 = 20.0;
+pub(crate) const LABEL_MM: f64 = 14.0;
+pub(crate) const GAP_MM: f64 = 22.0;
+pub(crate) const RULER_MM: f64 = 35.0;
+
+/// Where the pieces go on the 1:1 print sheet: one under another, each below its label, then
+/// a 100 mm calibration ruler. Millimetres, y downward.
+pub(crate) struct PrintLayout {
+    pub width_mm: f64,
+    pub height_mm: f64,
+    /// Per piece: the lowest corner of its markings (material space) and their size.
+    pub pieces: Vec<(DVec2, DVec2)>,
 }
 
-// Call only after compiling this template successfully. Artifact export shares
-// that validation with its JSON output instead of triangulating twice.
-fn print_pattern_svg_validated(template: &GarmentTemplate) -> Result<String, String> {
-    const MARGIN_MM: f64 = 20.0;
-    const LABEL_MM: f64 = 14.0;
-    const GAP_MM: f64 = 22.0;
-    const RULER_MM: f64 = 35.0;
-
+/// The 1:1 print sheet's layout; call only after compiling `template` successfully.
+pub(crate) fn print_layout(template: &GarmentTemplate) -> Result<PrintLayout, String> {
     if template.panels.is_empty() {
         return Err("Cannot print a template without panels".into());
     }
@@ -272,6 +268,34 @@ fn print_pattern_svg_validated(template: &GarmentTemplate) -> Result<String, Str
         bounds.push((min * 1000.0, size));
     }
     height_mm += RULER_MM + MARGIN_MM;
+    Ok(PrintLayout {
+        width_mm,
+        height_mm,
+        pieces: bounds,
+    })
+}
+
+/// Produce a physically dimensioned, untiled SVG of the *sewing outlines* and
+/// any stored draft markings.
+///
+/// Both the root SVG dimensions and its viewBox are in millimetres, so one
+/// user-space unit represents one millimetre at 100% print size. When seam
+/// allowances are present, the joined cutting contour is included together with
+/// the sewing-line notch markers. This remains a single sheet: page tiling and
+/// printer scaling are deliberately outside this export's scope.
+pub fn print_pattern_svg(template: &GarmentTemplate) -> Result<String, String> {
+    template.compile()?;
+    print_pattern_svg_validated(template)
+}
+
+// Call only after compiling this template successfully. Artifact export shares
+// that validation with its JSON output instead of triangulating twice.
+fn print_pattern_svg_validated(template: &GarmentTemplate) -> Result<String, String> {
+    let PrintLayout {
+        width_mm,
+        height_mm,
+        pieces: bounds,
+    } = print_layout(template)?;
     let mut out = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width_mm:.3}mm\" height=\"{height_mm:.3}mm\" viewBox=\"0 0 {width_mm:.3} {height_mm:.3}\"><title>{}</title><desc>Material-space sewing outlines and stored draft markings at 1 SVG unit per mm. Print at 100% and check the 100 mm ruler. Single sheet; no page tiling or cutting certification.</desc><rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n",
         xml(&template.name)

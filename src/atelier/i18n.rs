@@ -42,6 +42,10 @@ pub(super) fn tr_any(language: Language, text: &str) -> &str {
 /// is in the translation, in the same order.
 const STATUS_TEMPLATES: &[(&str, &str)] = &[
     (
+        "Patterns at 1:1 saved: {} pages in {}",
+        "Patrones a 1:1 guardados: {} páginas en {}",
+    ),
+    (
         "Alembic saved: {} frames in {}",
         "Alembic guardado: {} fotogramas en {}",
     ),
@@ -2029,6 +2033,18 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
         "Export Alembic…" => "Exportar Alembic…",
+        "Save the 2D patterns at 1:1…" => "Guardar los patrones 2D a 1:1…",
+        "2D patterns at 1:1" => "Patrones 2D a 1:1",
+        "Paper" => "Papel",
+        "A4" => "A4",
+        "A3" => "A3",
+        "Letter" => "Carta",
+        "One sheet" => "Una sola hoja",
+        "Pieces at actual size, tiled over framed pages to trim and tape edge to edge. Print at 100% and check the 100 mm ruler." => {
+            "Piezas a tamaño real, repartidas en páginas con marco para recortar y pegar borde con borde. Imprime al 100 % y comprueba la regla de 100 mm."
+        }
+        "Save PDF…" => "Guardar PDF…",
+        "Save SVG (one sheet)…" => "Guardar SVG (una hoja)…",
         "Commands" => "Órdenes",
         "Search actions · arrow keys / Page Up Down navigate · Enter run · Esc close" => {
             "Busca acciones · flechas / Re Pág Av Pág para moverse · Intro ejecuta · Esc cierra"

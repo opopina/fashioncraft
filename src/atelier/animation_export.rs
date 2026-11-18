@@ -36,6 +36,14 @@ pub(super) struct Media3d {
     capture: Option<Capture>,
     encoding: Option<std::thread::JoinHandle<Result<String, String>>>,
     obj: ObjDialog,
+    print: PrintDialog,
+}
+
+/// The 1:1 pattern print options, kept between saves.
+#[derive(Default)]
+struct PrintDialog {
+    open: bool,
+    paper: marvelous_cloth::garment::print_pdf::Paper,
 }
 
 /// The OBJ export options, kept between exports.
@@ -332,6 +340,88 @@ impl Atelier {
             path.display()
         );
         Ok(())
+    }
+
+    pub(super) fn open_print(&mut self) {
+        self.authoring.media3d.print.open = true;
+    }
+
+    /// The 1:1 pattern print options: the paper to tile over, and PDF or SVG.
+    pub(super) fn print_window(&mut self, ctx: &egui::Context) {
+        if !self.authoring.media3d.print.open {
+            return;
+        }
+        let ui_lang = self.prefs.language;
+        let mut open = true;
+        let (mut pdf, mut svg) = (false, false);
+        let paper = &mut self.authoring.media3d.print.paper;
+        egui::Window::new(i18n::tr(ui_lang, "2D patterns at 1:1"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(i18n::tr(ui_lang, "Paper"));
+                    egui::ComboBox::from_id_salt("print.paper")
+                        .selected_text(i18n::tr(ui_lang, paper.label()))
+                        .show_ui(ui, |ui| {
+                            for p in marvelous_cloth::garment::print_pdf::Paper::ALL {
+                                ui.selectable_value(paper, p, i18n::tr(ui_lang, p.label()));
+                            }
+                        });
+                });
+                ui.small(i18n::tr(ui_lang, "Pieces at actual size, tiled over framed pages to trim and tape edge to edge. Print at 100% and check the 100 mm ruler."));
+                ui.horizontal(|ui| {
+                    pdf = ui.button(i18n::tr(ui_lang, "Save PDF…")).clicked();
+                    svg = ui.button(i18n::tr(ui_lang, "Save SVG (one sheet)…")).clicked();
+                });
+            });
+        self.authoring.media3d.print.open &= open;
+        let saved = if pdf {
+            self.save_print(true)
+        } else if svg {
+            self.save_print(false)
+        } else {
+            return;
+        };
+        match saved {
+            Ok(true) => self.authoring.media3d.print.open = false,
+            Ok(false) => {}
+            Err(e) => self.status = e,
+        }
+    }
+
+    /// Save the patterns at 1:1 as a tiled PDF or a one-sheet SVG; whether a file was saved.
+    fn save_print(&mut self, pdf: bool) -> Result<bool, String> {
+        let (filter, extension, name) = if pdf {
+            ("PDF", "pdf", "patterns-1to1.pdf")
+        } else {
+            ("SVG", "svg", "patterns-1to1.svg")
+        };
+        let Some(path) = FileDialog::new()
+            .add_filter(filter, &[extension])
+            .set_file_name(name)
+            .save_file()
+        else {
+            return Ok(false);
+        };
+        let template = &self.project.template;
+        let (bytes, pages) = if pdf {
+            let paper = self.authoring.media3d.print.paper;
+            let (bytes, summary) =
+                marvelous_cloth::garment::print_pdf::print_pattern_pdf(template, paper)?;
+            (bytes, summary.pages)
+        } else {
+            let svg = marvelous_cloth::garment::export::print_pattern_svg(template)?;
+            (svg.into_bytes(), 1)
+        };
+        std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        self.status = format!(
+            "Patterns at 1:1 saved: {} pages in {}",
+            pages,
+            path.display()
+        );
+        Ok(true)
     }
 
     /// Open the OBJ export options, for every piece or only the selected ones.

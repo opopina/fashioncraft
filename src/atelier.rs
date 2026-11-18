@@ -221,6 +221,7 @@ pub fn run(
         options,
         Box::new(move |cc| {
             let render = cc.wgpu_render_state.clone().ok_or("wgpu unavailable")?;
+            let gpu_device = (render.device.clone(), render.queue.clone());
             // Preferences choose the theme and the startup display defaults, so
             // they are loaded and applied before the first frame is drawn.
             // Applying them afterwards would show a flash of the wrong theme.
@@ -294,6 +295,7 @@ pub fn run(
                 seam_links,
                 clean_view: false,
                 gpu: true,
+                gpu_device,
                 settings: simulation,
                 metrics: None,
                 cadence: Default::default(),
@@ -383,6 +385,9 @@ struct Atelier {
     seam_links: bool,
     clean_view: bool,
     gpu: bool,
+    /// The window's wgpu device and queue, for GPU work outside the simulation worker (the
+    /// animation recording thread).
+    gpu_device: (eframe::wgpu::Device, eframe::wgpu::Queue),
     settings: VbdSettings,
     metrics: Option<VbdMetrics>,
     status: String,

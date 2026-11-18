@@ -924,9 +924,31 @@ impl Recorder {
 pub fn run(
     garment: Arc<CompiledGarment>,
     surface: &SurfaceMesh,
+    state: State,
+    recorder: Recorder,
+    settings: &VbdSettings,
+    progress: impl FnMut(&Recorder, &State) -> bool,
+) -> Result<(Recorder, State), String> {
+    run_stepping(
+        garment,
+        surface,
+        state,
+        recorder,
+        settings,
+        |solver, state, step| solver.step(state, step, None).map(|_| ()),
+        progress,
+    )
+}
+
+/// [`run`], each solver step taken by `step` — for instance on the GPU, which works on the
+/// same solver (its obstacle, pins and contacts) as the CPU does.
+pub fn run_stepping(
+    garment: Arc<CompiledGarment>,
+    surface: &SurfaceMesh,
     mut state: State,
     mut recorder: Recorder,
     settings: &VbdSettings,
+    mut step_with: impl FnMut(&mut VbdSolver, &mut State, &VbdSettings) -> Result<(), String>,
     mut progress: impl FnMut(&Recorder, &State) -> bool,
 ) -> Result<(Recorder, State), String> {
     let floored = |surface: &SurfaceMesh| match settings.floor {
@@ -947,7 +969,7 @@ pub fn run(
         step.dt = dt;
         step.iterations = ((settings.iterations as f64 * dt / settings.dt).ceil() as usize)
             .clamp(MIN_ITERATIONS.min(settings.iterations), settings.iterations);
-        solver.step(&mut state, &step, None)?;
+        step_with(&mut solver, &mut state, &step)?;
         recorder.commit(&state.x);
         if !progress(&recorder, &state) {
             break;

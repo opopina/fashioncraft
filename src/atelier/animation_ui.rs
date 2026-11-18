@@ -320,26 +320,45 @@ impl Atelier {
         let surface = self.scene.collider.surface.clone();
         let state = self.scene.state.clone();
         let settings = self.settings.clone();
+        // With GPU compute on, the recording steps on the GPU too.
+        let gpu = self.gpu.then(|| self.gpu_device.clone());
         let (shared, halt, repaint) = (progress.clone(), stop.clone(), ctx.clone());
         let thread = std::thread::Builder::new()
             .name("cloth-record".into())
             .stack_size(8 * 1024 * 1024)
             .spawn(move || {
+                let gpu =
+                    gpu.map(|(device, queue)| marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue));
+                let step =
+                    |solver: &mut marvelous_cloth::vbd::VbdSolver,
+                     state: &mut marvelous_cloth::model::State,
+                     step: &marvelous_cloth::vbd::VbdSettings| match &gpu {
+                        Some(gpu) => gpu.step(solver, state, step, None).map(|_| ()),
+                        None => solver.step(state, step, None).map(|_| ()),
+                    };
                 let mut shown = std::time::Instant::now() - SHOW_EVERY;
-                avatar_animation::run(garment, &surface, state, recorder, &settings, |r, s| {
-                    if shown.elapsed() >= SHOW_EVERY {
-                        shown = std::time::Instant::now();
-                        if let Ok(mut p) = shared.lock() {
-                            p.time = r.time();
-                            p.share = r.progress();
-                            p.lead_in = r.moving_into_first_pose();
-                            p.cloth = Some(s.x.clone());
-                            p.body = Some(Arc::new(r.obstacle_now()));
+                avatar_animation::run_stepping(
+                    garment,
+                    &surface,
+                    state,
+                    recorder,
+                    &settings,
+                    step,
+                    |r, s| {
+                        if shown.elapsed() >= SHOW_EVERY {
+                            shown = std::time::Instant::now();
+                            if let Ok(mut p) = shared.lock() {
+                                p.time = r.time();
+                                p.share = r.progress();
+                                p.lead_in = r.moving_into_first_pose();
+                                p.cloth = Some(s.x.clone());
+                                p.body = Some(Arc::new(r.obstacle_now()));
+                            }
+                            repaint.request_repaint();
                         }
-                        repaint.request_repaint();
-                    }
-                    !halt.load(Ordering::Relaxed)
-                })
+                        !halt.load(Ordering::Relaxed)
+                    },
+                )
             })
             .map_err(|e| e.to_string())?;
         let a = &mut self.authoring.animation;

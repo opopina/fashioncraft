@@ -46,6 +46,15 @@ const STATUS_TEMPLATES: &[(&str, &str)] = &[
         "Avatar hecho a {} / {} / {} / {} / {} / {} cm · confirma para sustituir el actual",
     ),
     ("Source: {}", "Origen: {}"),
+    (
+        "Recorded {} frames · scrub the timeline to play the take back",
+        "Grabados {} fotogramas · recorre la línea de tiempo para reproducir la toma",
+    ),
+    (
+        "Recording stopped after {} frames",
+        "Grabación detenida tras {} fotogramas",
+    ),
+    ("Recording… {} %", "Grabando… {} %"),
     ("{} vertices · {} triangles", "{} vértices · {} triángulos"),
     ("Size X/Y/Z: {} / {} / {} m", "Tamaño X/Y/Z: {} / {} / {} m"),
     (
@@ -1349,6 +1358,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Outline replaced by the shape" => "Contorno reemplazado por la forma",
         "Wedge opened along the line" => "Cuña abierta por la línea",
+        "Recording · moving into the first pose…" => "Grabando · yendo a la primera pose…",
         "A line with one segment is deleted, not trimmed" => {
             "Una línea de un solo tramo se borra, no se recorta"
         }

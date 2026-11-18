@@ -126,7 +126,7 @@ impl SceneObject {
     /// The prop's mesh, placed in the scene.
     pub fn mesh(&self) -> Result<SurfaceMesh, String> {
         self.validate()?;
-        let mut mesh = SurfaceMesh::load_obj(&self.path)?;
+        let mut mesh = crate::mesh_import::load(&self.path)?;
         let [x, y, z] = self.rotation_degrees.map(f64::to_radians);
         let rotation = glam::DQuat::from_euler(glam::EulerRot::XYZ, x, y, z);
         let offset = glam::DVec3::from_array(self.translation);

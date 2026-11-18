@@ -213,3 +213,42 @@ fn the_avatar_importer_takes_stl_ply_and_collada_files() {
     std::fs::write(&other, b"x").unwrap();
     assert!(Candidate::load(&other).is_err());
 }
+
+#[test]
+fn props_load_in_their_own_units_and_travel_with_the_project() {
+    use marvelous_cloth::{
+        fitting::{FittingProject, SceneObject},
+        garment::presets::GarmentKind,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("stool.stl");
+    std::fs::write(&path, binary_stl(&tetrahedron(450.))).unwrap();
+    // As it is: no unit guess for props.
+    let raw = mesh_import::load(&path).unwrap();
+    assert!((bounds(&raw).1.y - 450.).abs() < 1e-9);
+    let mut project = FittingProject::basic(
+        GarmentKind::Tshirt,
+        1,
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj"),
+    );
+    project.scene_objects.push(SceneObject {
+        id: "object_1".into(),
+        name: "Stool".into(),
+        path: path.clone(),
+        translation: [0.6, 0., 0.],
+        rotation_degrees: [0.; 3],
+        scale: 0.001,
+    });
+    let placed = project.scene_objects[0].mesh().unwrap();
+    assert!((bounds(&placed).1.y - 0.45).abs() < 1e-9);
+    let saved = dir.path().join("p.json");
+    project.save(&saved).unwrap();
+    let text = std::fs::read_to_string(&saved).unwrap();
+    assert!(
+        text.contains("p.json.assets/object-") && text.contains(".stl"),
+        "{text}"
+    );
+    let opened = FittingProject::load(&saved).unwrap();
+    assert!((bounds(&opened.scene_objects[0].mesh().unwrap()).1.y - 0.45).abs() < 1e-9);
+    assert!(mesh_import::load(&dir.path().join("x.fbx")).is_err());
+}

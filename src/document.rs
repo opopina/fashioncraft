@@ -30,10 +30,15 @@ pub fn portable_avatar(source: &Path, project: &Path) -> Result<PathBuf, String>
     portable_asset(source, project, "avatar", "obj")
 }
 
-/// Content-addressed scene object (an OBJ prop) next to the project. Same rules as
-/// [`portable_avatar`].
+/// Content-addressed scene object (an OBJ, STL, PLY or COLLADA prop) next to the project,
+/// keeping its format's extension. Same rules as [`portable_avatar`].
 pub fn portable_object(source: &Path, project: &Path) -> Result<PathBuf, String> {
-    portable_asset(source, project, "object", "obj")
+    let extension = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .filter(|e| matches!(e.as_str(), "obj" | "stl" | "ply" | "dae"))
+        .unwrap_or_else(|| "obj".into());
+    portable_asset(source, project, "object", &extension)
 }
 
 /// Content-addressed point cache of a recorded take next to the project. Same rules as

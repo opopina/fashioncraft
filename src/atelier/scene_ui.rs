@@ -1,4 +1,4 @@
-//! Scene and props: static OBJ objects the cloth collides with (a stool, a table…), listed
+//! Scene and props: static mesh objects the cloth collides with (a stool, a table…), listed
 //! with their placement. Applying rebuilds the obstacle; the drape starts again.
 use super::*;
 use marvelous_cloth::fitting::SceneObject;
@@ -10,10 +10,10 @@ pub(super) struct SceneUi {
     draft: Option<Vec<SceneObject>>,
 }
 
-/// A new object's scale from its size: files whose height exceeds 10 units are taken to be
-/// in centimetres, others in metres.
+/// A new object's scale from its size: files larger than 500 units are taken to be in
+/// millimetres, larger than 10 in centimetres, others in metres.
 fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
-    let mesh = marvelous_cloth::avatar::SurfaceMesh::load_obj(path)?;
+    let mesh = marvelous_cloth::mesh_import::load(path)?;
     let (lo, hi) = mesh.vertices.iter().fold(
         (
             glam::DVec3::splat(f64::INFINITY),
@@ -21,7 +21,10 @@ fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
         ),
         |(lo, hi), p| (lo.min(*p), hi.max(*p)),
     );
-    Ok(if (hi - lo).max_element() > 10. {
+    let size = (hi - lo).max_element();
+    Ok(if size > 500. {
+        0.001
+    } else if size > 10. {
         0.01
     } else {
         1.
@@ -76,7 +79,9 @@ impl Atelier {
             .default_width(320.)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.small("Static OBJ objects the cloth rests on or drapes over.");
+                ui.small(
+                    "Static OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over.",
+                );
                 if draft.is_empty() {
                     ui.label("No objects yet.");
                 }
@@ -136,9 +141,9 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Add OBJ…").clicked() {
+                    if ui.button("Add object…").clicked() {
                         add = rfd::FileDialog::new()
-                            .add_filter("OBJ mesh", &["obj"])
+                            .add_filter("Mesh", &["obj", "stl", "ply", "dae"])
                             .pick_file();
                     }
                     if ui

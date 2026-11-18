@@ -101,6 +101,32 @@ fn finish(
 
 /// STL, binary or ASCII.
 pub fn stl(bytes: &[u8]) -> Result<Imported, String> {
+    stl_with(bytes, true)
+}
+
+/// A mesh file as it is, in its own units (COLLADA's declared unit turned into metres): OBJ,
+/// STL, PLY or COLLADA, by extension. For props, whose scale the caller sets.
+pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
+    let extension = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if extension == "obj" {
+        return SurfaceMesh::load_obj(path);
+    }
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(match extension.as_str() {
+        "stl" => stl_with(&bytes, false)?.mesh,
+        "ply" => ply_with(&bytes, false)?.mesh,
+        "dae" => {
+            dae(std::str::from_utf8(&bytes).map_err(|e| format!("COLLADA must be UTF-8: {e}"))?)?
+                .mesh
+        }
+        _ => return Err("Choose an OBJ, STL, PLY or COLLADA mesh".into()),
+    })
+}
+
+fn stl_with(bytes: &[u8], units: bool) -> Result<Imported, String> {
     let binary = bytes.len() >= 84 && {
         let count = u32::from_le_bytes(bytes[80..84].try_into().unwrap()) as usize;
         bytes.len() == 84 + count * 50
@@ -151,7 +177,9 @@ pub fn stl(bytes: &[u8]) -> Result<Imported, String> {
         "STL holds geometry only: corners at the same position are joined into one surface."
             .to_string(),
     ];
-    guess_units(&mut mesh, &mut warnings, "STL");
+    if units {
+        guess_units(&mut mesh, &mut warnings, "STL");
+    }
     finish(mesh, dropped, warnings)
 }
 
@@ -220,6 +248,10 @@ enum Property {
 
 /// PLY, ASCII or binary in either byte order.
 pub fn ply(bytes: &[u8]) -> Result<Imported, String> {
+    ply_with(bytes, true)
+}
+
+fn ply_with(bytes: &[u8], units: bool) -> Result<Imported, String> {
     let end = bytes
         .windows(10)
         .position(|w| w == b"end_header")
@@ -349,7 +381,9 @@ pub fn ply(bytes: &[u8]) -> Result<Imported, String> {
             "{polygons} polygons were split into triangles as fans."
         ));
     }
-    guess_units(&mut mesh, &mut warnings, "PLY");
+    if units {
+        guess_units(&mut mesh, &mut warnings, "PLY");
+    }
     finish(mesh, 0, warnings)
 }
 

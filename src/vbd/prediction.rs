@@ -12,7 +12,8 @@ pub(crate) struct Prediction {
     damping: f64,
 }
 impl Prediction {
-    pub fn guess(&self, state: &State, settings: &VbdSettings) -> Vec<DVec3> {
+    /// `external` holds this step's accelerations besides gravity (wind), possibly empty.
+    pub fn guess(&self, state: &State, settings: &VbdSettings, external: &[DVec3]) -> Vec<DVec3> {
         let valid = self.last.as_ref().is_some_and(|s| {
             s.time == state.time
                 && s.x == state.x
@@ -34,7 +35,8 @@ impl Prediction {
                 } else {
                     1.
                 };
-                *x + (*v * settings.dt + factor * settings.gravity * settings.dt.powi(2))
+                let extra = external.get(i).copied().unwrap_or(DVec3::ZERO);
+                *x + (*v * settings.dt + (factor * settings.gravity + extra) * settings.dt.powi(2))
                     / (1. + settings.damping * settings.dt)
             })
             .collect()
@@ -77,7 +79,7 @@ mod tests {
         };
         let mut p = Prediction::default();
         for _ in 0..5 {
-            let next = p.guess(&state, &settings);
+            let next = p.guess(&state, &settings, &[]);
             let expected = (state.v[0] * settings.dt + settings.gravity * settings.dt.powi(2))
                 / (1. + settings.damping * settings.dt);
             assert!((next[0] - state.x[0] - expected).length() < 1e-12);
@@ -89,8 +91,8 @@ mod tests {
         }
         state.v[0] = DVec3::ZERO;
         p.record(&[DVec3::ZERO], &state, &settings);
-        assert_eq!(p.guess(&state, &settings), state.x);
+        assert_eq!(p.guess(&state, &settings, &[]), state.x);
         state.x[0].x += 0.01;
-        assert!(p.guess(&state, &settings)[0].y < state.x[0].y);
+        assert!(p.guess(&state, &settings, &[])[0].y < state.x[0].y);
     }
 }

@@ -1,7 +1,9 @@
 //! Scene environment and quality presets in the Simulation tab: a physical floor, gravity,
-//! and time-step / iteration presets like a CAD cloth tool's Normal / Animation / Fitting.
+//! wind, the collision distance, and time-step / iteration presets like a CAD cloth tool's
+//! Normal / Animation / Fitting.
 use super::*;
 use glam::DVec3;
+use marvelous_cloth::vbd::Wind;
 
 /// Friction of new documents: a typical value for cotton on skin and on cotton.
 pub(super) const DEFAULT_FRICTION: f64 = 0.3;
@@ -71,6 +73,26 @@ impl Atelier {
                 }
             }
         });
+        let mut gap = self.settings.contact.radius * 1000.;
+        ui.horizontal(|ui| {
+            ui.label("Collision distance");
+            if ui
+                .add(
+                    egui::DragValue::new(&mut gap)
+                        .range(1.0..=10.0)
+                        .speed(0.05)
+                        .fixed_decimals(1)
+                        .suffix(" mm"),
+                )
+                .on_hover_text(
+                    "Gap the solver keeps between cloth and the avatar, the floor and other \
+                     cloth. Larger is more forgiving with thick layers; smaller fits closer",
+                )
+                .changed()
+            {
+                self.settings.contact.radius = gap / 1000.;
+            }
+        });
         ui.separator();
         ui.strong("Environment");
         let feet = self
@@ -130,5 +152,64 @@ impl Atelier {
                 self.settings.gravity = DVec3::new(0., -9.81, 0.);
             }
         });
+        self.wind_controls(ui);
+    }
+
+    fn wind_controls(&mut self, ui: &mut egui::Ui) {
+        let mut on = self.settings.wind.is_some();
+        if ui
+            .checkbox(&mut on, "Wind")
+            .on_hover_text(
+                "A steady breeze. Cloth feels pressure drag where it faces the flow, and the same \
+                 drag slows it as it falls",
+            )
+            .changed()
+        {
+            self.settings.wind = on.then(Wind::default);
+        }
+        let Some(wind) = self.settings.wind.as_mut() else {
+            return;
+        };
+        let flat = DVec3::new(wind.velocity.x, 0., wind.velocity.z);
+        let mut speed = flat.length();
+        // The direction the wind comes from, clockwise seen from above, 0° from +Z.
+        let mut from = (-flat.x).atan2(-flat.z).to_degrees().rem_euclid(360.);
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label("Wind speed");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut speed)
+                        .range(0.0..=20.0)
+                        .speed(0.05)
+                        .fixed_decimals(1)
+                        .suffix(" m/s"),
+                )
+                .on_hover_text("2 m/s is a light breeze, 8 m/s a strong wind")
+                .changed();
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("From");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut from)
+                        .range(0.0..=359.0)
+                        .speed(1.0)
+                        .fixed_decimals(0)
+                        .suffix("°"),
+                )
+                .on_hover_text("Where the wind comes from: 0° is +Z, 90° is +X, seen from above")
+                .changed();
+            for (label, angle) in [("+Z", 0.), ("+X", 90.), ("−Z", 180.), ("−X", 270.)] {
+                if ui.small_button(label).clicked() {
+                    from = angle;
+                    changed = true;
+                }
+            }
+        });
+        if changed {
+            let a = f64::to_radians(from);
+            wind.velocity = DVec3::new(-a.sin() * speed, wind.velocity.y, -a.cos() * speed);
+        }
     }
 }

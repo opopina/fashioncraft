@@ -224,12 +224,13 @@ impl GpuVbd {
         // lose precision merely because the garment sits at shoulder height.
         let origin = state.x.iter().copied().sum::<DVec3>() / n as f64;
         let old_velocity = state.v.clone();
-        let guess = solver.prediction.guess(state, settings);
+        solver.prepare_external(settings, state);
+        let guess = solver.prediction.guess(state, settings, &solver.external);
         let damp = 1. + settings.damping * dt;
-        let motion = state
-            .v
-            .iter()
-            .map(|v| ((*v * dt + settings.gravity * dt * dt) / damp).length())
+        let motion = (0..n)
+            .map(|i| {
+                ((state.v[i] * dt + solver.acceleration(settings, i) * dt * dt) / damp).length()
+            })
             .fold(0., f64::max);
         // A bounded query controls broad-phase work. This can slow convergence,
         // never enlarge the allowable movement beyond a conservative ball.
@@ -445,7 +446,8 @@ impl GpuVbd {
             ]
         }));
         targets.extend((0..n).map(|i| {
-            let t = state.x[i] - origin + (state.v[i] * dt + settings.gravity * dt * dt) / damp;
+            let t = state.x[i] - origin
+                + (state.v[i] * dt + solver.acceleration(settings, i) * dt * dt) / damp;
             [
                 t.x as f32,
                 t.y as f32,

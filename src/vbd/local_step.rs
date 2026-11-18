@@ -142,7 +142,8 @@ impl VbdSolver {
         for _ in 0..2 {
             for group in &groups {
                 let solve = |&v: &usize| {
-                    let target = state.x[v] + (state.v[v] * dt + settings.gravity * dt * dt) / damp;
+                    let target = state.x[v]
+                        + (state.v[v] * dt + self.acceleration(settings, v) * dt * dt) / damp;
                     let inertia = self.garment.mesh.masses[v] * damp / (dt * dt);
                     (
                         v,

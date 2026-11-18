@@ -155,8 +155,9 @@ impl Problem<'_> {
         let dt = self.settings.dt;
         let damp = 1. + self.settings.damping * dt;
         for &v in &block.vertices {
-            let target =
-                self.state.x[v] + (self.state.v[v] * dt + self.settings.gravity * dt * dt) / damp;
+            let target = self.state.x[v]
+                + (self.state.v[v] * dt + self.solver.acceleration(self.settings, v) * dt * dt)
+                    / damp;
             let gap = crate::math::sub(get(v), target.to_array().map(S::c));
             e = e + S::c(0.5 * g.mesh.masses[v] * damp / (dt * dt)) * crate::math::dot(gap, gap);
         }
@@ -211,7 +212,8 @@ impl Problem<'_> {
                 );
                 let inertia = self.solver.garment.mesh.masses[v] * damp / (dt * dt);
                 let target = self.state.x[v]
-                    + (self.state.v[v] * dt + self.settings.gravity * dt * dt) / damp;
+                    + (self.state.v[v] * dt + self.solver.acceleration(self.settings, v) * dt * dt)
+                        / damp;
                 let g = DVec3::from_array(jet.g) + (self.x[v] - target) * inertia;
                 // Keep material/contact local curvature, but assemble the complete
                 // sewing matrix separately, including every off-diagonal coupling.

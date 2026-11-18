@@ -32,11 +32,94 @@ pub struct VbdSettings {
     /// zero is frictionless, as before this setting existed.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub friction: f64,
+    /// Steady wind; none is still air (no aerodynamic force at all, as before).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wind: Option<Wind>,
     /// Height of a physical floor in metres (world y), or none. The floor is a fixed
     /// obstacle like the avatar: cloth rests on it within the contact shell.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
 }
+/// A steady, uniform wind acting on the cloth as pressure drag: each triangle of area A and
+/// unit normal n, moving with velocity v, feels F = ½ ρ C_d A (r·n)|r·n| n with r = wind − v,
+/// shared equally by its three corners. A thin sheet edge-on to the flow feels nothing;
+/// broadside it feels the full drag. Evaluated at the start of each step (explicit), so it
+/// is also the air resistance of falling cloth when the wind speed is zero.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Wind {
+    /// Wind velocity, m/s.
+    pub velocity: DVec3,
+    /// Drag coefficient C_d of a flat sheet broadside to the flow (about 1.2).
+    pub drag: f64,
+    /// Air density ρ, kg/m³.
+    pub density: f64,
+}
+
+impl Default for Wind {
+    fn default() -> Self {
+        Self {
+            // A light breeze from +Z.
+            velocity: DVec3::new(0., 0., -2.),
+            drag: 1.2,
+            density: 1.2,
+        }
+    }
+}
+
+impl Wind {
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.velocity.is_finite()
+            || self.velocity.length() > 50.
+            || !(0.0..=10.0).contains(&self.drag)
+            || !(0.0..=10.0).contains(&self.density)
+        {
+            return Err("Wind needs a speed up to 50 m/s and a drag and density up to 10".into());
+        }
+        Ok(())
+    }
+
+    /// Acceleration of every vertex from the drag on its triangles, at positions `x` with
+    /// velocities `v`. Pinned vertices get none.
+    pub fn accelerations(&self, garment: &CompiledGarment, x: &[DVec3], v: &[DVec3]) -> Vec<DVec3> {
+        let mut force = vec![DVec3::ZERO; x.len()];
+        for t in &garment.mesh.triangles {
+            let [a, b, c] = t.vertices;
+            let cross = (x[b] - x[a]).cross(x[c] - x[a]);
+            let double_area = cross.length();
+            if double_area <= 1e-18 {
+                continue;
+            }
+            let n = cross / double_area;
+            let relative = self.velocity - (v[a] + v[b] + v[c]) / 3.;
+            let normal_speed = relative.dot(n);
+            let f = n
+                * (0.5
+                    * self.density
+                    * self.drag
+                    * 0.5
+                    * double_area
+                    * normal_speed
+                    * normal_speed.abs());
+            for i in t.vertices {
+                force[i] += f / 3.;
+            }
+        }
+        force
+            .into_iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let m = garment.mesh.masses[i];
+                if garment.mesh.pins[i].is_some() || m <= 0. {
+                    DVec3::ZERO
+                } else {
+                    f / m
+                }
+            })
+            .collect()
+    }
+}
+
 fn is_zero(v: &f64) -> bool {
     *v == 0.0
 }
@@ -49,6 +132,7 @@ impl Default for VbdSettings {
             gravity: DVec3::new(0.0, -9.81, 0.0),
             contact: Default::default(),
             friction: 0.0,
+            wind: None,
             floor: None,
         }
     }
@@ -66,6 +150,7 @@ impl VbdSettings {
             || self.floor.is_some_and(|h| !h.is_finite())
             || !self.friction.is_finite()
             || !(0.0..=5.0).contains(&self.friction)
+            || self.wind.as_ref().is_some_and(|w| w.validate().is_err())
         {
             return Err("Invalid VBD settings".into());
         }
@@ -196,6 +281,8 @@ pub struct VbdSolver {
     /// Friction of the current contact set, frozen at its detection; matched to a contact by
     /// index and checked by kind and vertices, so another contact set never picks it up.
     pub(crate) friction: Vec<Option<friction::FrictionTerm>>,
+    /// Accelerations besides gravity for the current step (wind), per vertex; empty if none.
+    pub(crate) external: Vec<DVec3>,
 }
 impl VbdSolver {
     pub fn new(
@@ -297,8 +384,20 @@ impl VbdSolver {
                 .map(|neighbors| neighbors.into_iter().collect())
                 .collect(),
             friction: vec![],
+            external: vec![],
         };
         Ok(solver)
+    }
+    /// Gravity plus this step's external acceleration of vertex `v`.
+    pub(crate) fn acceleration(&self, settings: &VbdSettings, v: usize) -> DVec3 {
+        settings.gravity + self.external.get(v).copied().unwrap_or(DVec3::ZERO)
+    }
+    /// Set this step's external accelerations from the settings at the given state.
+    pub(crate) fn prepare_external(&mut self, settings: &VbdSettings, state: &State) {
+        self.external = match &settings.wind {
+            Some(wind) => wind.accelerations(&self.garment, &state.x, &state.v),
+            None => vec![],
+        };
     }
     pub(crate) fn colors(&self, contact: &ContactSet, grab: Option<&Grab>) -> Vec<Vec<usize>> {
         coloring::colors(&self.graph, contact, grab)
@@ -406,13 +505,13 @@ impl VbdSolver {
         };
         let dt = settings.dt;
         let old_velocity = state.v.clone();
-        let guess = self.prediction.guess(state, settings);
+        self.prepare_external(settings, state);
+        let guess = self.prediction.guess(state, settings, &self.external);
         let damp = 1.0 + settings.damping * dt;
-        let target: Vec<_> = state
-            .x
-            .iter()
-            .zip(&state.v)
-            .map(|(x, v)| *x + (*v * dt + settings.gravity * dt * dt) / damp)
+        let target: Vec<_> = (0..n)
+            .map(|i| {
+                state.x[i] + (state.v[i] * dt + self.acceleration(settings, i) * dt * dt) / damp
+            })
             .collect();
         let inertia: Vec<_> = self
             .garment

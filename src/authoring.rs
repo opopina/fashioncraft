@@ -407,6 +407,13 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Put an elastic or tape on a contour segment or internal line, replacing the one there,
+    /// or remove it (`spring: None`). One undo step.
+    SetLineSpring {
+        panel: String,
+        line: String,
+        spring: Option<crate::garment::template::LineSpring>,
+    },
     /// Set the shrinkage of pieces, percent [warp, weft] (100, 100 clears it). One undo step.
     SetShrink {
         panels: Vec<String>,
@@ -2531,6 +2538,35 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::SetLineSpring {
+            panel,
+            line,
+            spring,
+        } => {
+            if let Some(s) = &spring
+                && (s.panel != panel || s.line != line)
+            {
+                return Err("The elastic belongs to another line".into());
+            }
+            let before = template
+                .line_springs
+                .iter()
+                .position(|s| s.panel == panel && s.line == line);
+            match (before, spring) {
+                (None, None) => return Err("That line has no elastic or tape".into()),
+                (Some(i), None) => {
+                    template.line_springs.remove(i);
+                }
+                (Some(i), Some(s)) => {
+                    if template.line_springs[i] == s {
+                        return Err("The elastic is set that way already".into());
+                    }
+                    template.line_springs[i] = s;
+                }
+                (None, Some(s)) => template.line_springs.push(s),
+            }
+            selected = Some(panel);
         }
         Command::SetShrink { panels, warp, weft } => {
             if panels.is_empty() {

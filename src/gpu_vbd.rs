@@ -593,7 +593,10 @@ impl GpuVbd {
                 let energy =
                     j.v + 0.5 * targets[i][3] as f64 * (rounded[i] - target).length_squared();
                 if (energy - probes[i][3] as f64).abs() > 1e-5 + 0.001 * energy.abs() {
-                    return Err(format!("GPU energy mismatch at {i}"));
+                    return Err(format!(
+                        "GPU energy mismatch at {i}: {} vs {energy}",
+                        probes[i][3]
+                    ));
                 }
             }
             eprintln!(
@@ -808,6 +811,13 @@ impl Prepared {
             let mut t = Term::new(&h.vertices, 1);
             t.info[2] = (m.internal_damping as f32).to_bits();
             t.a[0] = (h.weight * (m.bend_warp * aw * aw + m.bend_weft * af * af)) as f32;
+            terms.push(t);
+        }
+        // Elastic and tape: kind 4, a = (rest, stiffness).
+        for line in &g.lines {
+            let mut t = Term::new(&line.vertices, 4);
+            t.a[0] = line.rest as f32;
+            t.a[1] = line.stiffness as f32;
             terms.push(t);
         }
         for seam in &g.seams {

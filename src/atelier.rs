@@ -60,6 +60,8 @@ mod issue_ui;
 mod layers_ui;
 #[path = "atelier/layout.rs"]
 mod layout;
+#[path = "atelier/line_springs_ui.rs"]
+mod line_springs_ui;
 #[path = "atelier/measure.rs"]
 mod measure;
 #[path = "atelier/perf.rs"]

@@ -137,6 +137,7 @@ impl Atelier {
             state.length_mm = measured * 1000.;
         }
         let mut command = None;
+        let mut elastic_ui = false;
         egui::CollapsingHeader::new("Segment")
             .id_salt("segment-tools")
             .default_open(true)
@@ -148,6 +149,7 @@ impl Atelier {
                     (k + 1) % n + 1,
                     measured * 1000.
                 ));
+                elastic_ui = true;
                 ui.horizontal(|ui| {
                     ui.label("Length");
                     ui.add(
@@ -329,6 +331,11 @@ impl Atelier {
                     });
                 }
             });
+        if elastic_ui {
+            ui.indent("segment-elastic", |ui| {
+                self.line_spring_controls(ui, &panel.id, &name);
+            });
+        }
         if let Some(pick) = &self.authoring.segments.pick {
             self.status = pick_prompt(pick.action).into();
         }

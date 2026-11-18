@@ -231,6 +231,9 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Elastic and tape along contour segments and internal lines.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub line_springs: Vec<LineSpring>,
     /// Shrinkage by panel id: [warp, weft] in percent of the cut size (100 = none). Below 100
     /// the piece draws in along that grain direction, as a fabric that shrinks; its mass stays.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -274,6 +277,70 @@ pub struct MirrorLink {
 }
 /// Highest simulation layer a panel can take.
 pub const MAX_LAYER: u32 = 9;
+/// Elastic or tape along a contour segment or internal line of a piece.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineSpring {
+    pub panel: String,
+    /// A polygon edge or internal line name, or a rectangle side (top, right, bottom, left).
+    pub line: String,
+    pub kind: LineKind,
+    /// Rest length, percent of the cut length: below 100 an elastic draws the line in.
+    pub ratio: f64,
+    /// Axial stiffness, N: the pull per unit of stretch beyond the rest length.
+    pub strength: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineKind {
+    /// Gathers the line to `ratio` of its length.
+    Elastic,
+    /// Keeps the line from stretching (`ratio` 100).
+    Tape,
+}
+
+impl LineSpring {
+    pub fn elastic(panel: &str, line: &str) -> Self {
+        Self {
+            panel: panel.into(),
+            line: line.into(),
+            kind: LineKind::Elastic,
+            ratio: 80.,
+            strength: 20.,
+        }
+    }
+    pub fn tape(panel: &str, line: &str) -> Self {
+        Self {
+            panel: panel.into(),
+            line: line.into(),
+            kind: LineKind::Tape,
+            ratio: 100.,
+            strength: 2000.,
+        }
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        if !(30.0..=100.0).contains(&self.ratio) || !(0.1..=10_000.0).contains(&self.strength) {
+            return Err(
+                "Elastic and tape need a ratio of 30 to 100 % and a strength of 0.1 to 10000 N"
+                    .into(),
+            );
+        }
+        if self.kind == LineKind::Tape && self.ratio != 100. {
+            return Err("Tape keeps the cut length (ratio 100 %)".into());
+        }
+        Ok(())
+    }
+}
+
+/// One tension-only spring of an elastic or tape: E = ½·k·max(0, |x_a − x_b| − rest)².
+#[derive(Clone, Debug)]
+pub struct CompiledLine {
+    pub vertices: [usize; 2],
+    pub rest: f64,
+    pub stiffness: f64,
+}
+
 /// Allowed shrinkage, percent of the cut size.
 pub const SHRINK_RANGE: std::ops::RangeInclusive<f64> = 50.0..=150.0;
 
@@ -336,6 +403,8 @@ pub struct CompiledGarment {
     pub solid: Vec<SolidGroup>,
     /// Pressure on each triangle, Pa; empty when no panel has any.
     pub pressure: Vec<f64>,
+    /// Elastic and tape as tension-only springs between consecutive vertices of their lines.
+    pub lines: Vec<CompiledLine>,
     /// One orientation-bound material per panel, derived from shared fabric properties.
     pub materials: Vec<Material>,
     pub vertex_material: Vec<usize>,
@@ -389,6 +458,19 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        let mut lines = BTreeSet::new();
+        for spring in &self.line_springs {
+            if !self.panels.iter().any(|p| p.id == spring.panel) {
+                return Err(format!("Elastic refers to unknown panel {}", spring.panel));
+            }
+            if !lines.insert((&spring.panel, &spring.line)) {
+                return Err(format!(
+                    "Line {} of {} has two elastics or tapes",
+                    spring.line, spring.panel
+                ));
+            }
+            spring.validate()?;
         }
         for (id, factors) in &self.panel_shrink {
             if !self.panels.iter().any(|p| &p.id == id) {
@@ -536,6 +618,7 @@ impl GarmentTemplate {
             layers: vec![],
             solid: vec![],
             pressure: vec![],
+            lines: vec![],
             mesh: Mesh {
                 uv: vec![],
                 triangles: vec![],
@@ -771,6 +854,53 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        for spring in &self.line_springs {
+            let range = out
+                .panels
+                .iter()
+                .find(|r| r.id == spring.panel)
+                .ok_or("Elastic on a missing panel")?;
+            let chain = match range.boundaries.get(&spring.line) {
+                Some(chain) => chain.clone(),
+                None => {
+                    let panel = self
+                        .panels
+                        .iter()
+                        .find(|p| p.id == spring.panel)
+                        .ok_or("Elastic on a missing panel")?;
+                    let side = match spring.line.as_str() {
+                        "top" => Side::Top,
+                        "right" => Side::Right,
+                        "bottom" => Side::Bottom,
+                        "left" => Side::Left,
+                        other => {
+                            return Err(format!(
+                                "Panel {} has no segment or internal line {other}",
+                                spring.panel
+                            ));
+                        }
+                    };
+                    if panel.polygon.is_some() {
+                        return Err(format!(
+                            "Panel {} has no segment or internal line {}",
+                            spring.panel, spring.line
+                        ));
+                    }
+                    panel.boundary_vertices(side, range.vertices.start)
+                }
+            };
+            for pair in chain.windows(2) {
+                let cut = out.mesh.uv[pair[0]].distance(out.mesh.uv[pair[1]]);
+                if cut <= 1e-12 {
+                    continue;
+                }
+                out.lines.push(CompiledLine {
+                    vertices: [pair[0], pair[1]],
+                    rest: cut * spring.ratio / 100.,
+                    stiffness: spring.strength / cut,
+                });
+            }
+        }
         for range in out.panels.clone() {
             if let Some([warp, weft]) = self.panel_shrink.get(&range.id) {
                 shrink(&mut out, &range, warp / 100., weft / 100.);
@@ -833,6 +963,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            line_springs: vec![],
             panel_shrink: Default::default(),
             panel_pressure: Default::default(),
             strengthened_panels: Default::default(),

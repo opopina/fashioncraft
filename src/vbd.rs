@@ -40,6 +40,21 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
 }
+/// Energy of one elastic or tape spring, tension only: ½·k·max(0, |x_a − x_b| − rest)².
+pub(crate) fn line_energy<S: Scalar>(
+    line: &crate::garment::template::CompiledLine,
+    get: impl Fn(usize) -> [S; 3],
+) -> S {
+    let [a, b] = line.vertices;
+    let d = crate::math::sub(get(a), get(b));
+    let length = crate::math::dot(d, d).sqrt();
+    if length.value() <= line.rest {
+        return S::c(0.);
+    }
+    let stretch = length - S::c(line.rest);
+    S::c(0.5 * line.stiffness) * stretch * stretch
+}
+
 /// Acceleration of every vertex from its panels' pressure at positions `x`: each triangle is
 /// pushed with p·A along its winding normal, shared by its corners. Pinned vertices get none.
 /// Evaluated at the start of each step, like wind.
@@ -338,6 +353,8 @@ pub struct VbdSolver {
     hinges: Vec<Vec<usize>>,
     stitches: Vec<Stitch>,
     vertex_stitches: Vec<Vec<usize>>,
+    /// Elastic and tape springs touching each vertex (indices into `garment.lines`).
+    pub(crate) vertex_lines: Vec<Vec<usize>>,
     graph: Vec<Vec<usize>>,
     /// Friction of the current contact set, frozen at its detection; matched to a contact by
     /// index and checked by kind and vertices, so another contact set never picks it up.
@@ -407,6 +424,7 @@ impl VbdSolver {
         let mut triangles = vec![vec![]; n];
         let mut hinges = vec![vec![]; n];
         let mut vertex_stitches = vec![vec![]; n];
+        let mut vertex_lines = vec![vec![]; n];
         let mut graph = vec![BTreeSet::new(); n];
         let mut connect = |ids: &[usize]| {
             for a in ids {
@@ -436,6 +454,12 @@ impl VbdSolver {
             }
             connect(&ids);
         }
+        for (i, line) in garment.lines.iter().enumerate() {
+            for v in line.vertices {
+                vertex_lines[v].push(i);
+            }
+            connect(&line.vertices);
+        }
         let mut solver = Self {
             contact_refresh_audit: None,
             contact_refresh_capture: None,
@@ -450,6 +474,7 @@ impl VbdSolver {
             hinges,
             stitches,
             vertex_stitches,
+            vertex_lines,
             graph: graph
                 .into_iter()
                 .map(|neighbors| neighbors.into_iter().collect())
@@ -672,6 +697,9 @@ impl VbdSolver {
             let h = &self.garment.mesh.hinges[*i];
             let m = &self.garment.materials[h.material];
             value = value + energy::bending(h.vertices.map(get), h, m) * S::c(damped(m, settings));
+        }
+        for i in &self.vertex_lines[v] {
+            value = value + line_energy(&self.garment.lines[*i], get);
         }
         for i in &self.vertex_stitches[v] {
             let s = &self.stitches[*i];

@@ -33,8 +33,9 @@ fn barrier(d:f32,r:f32,k:f32)->vec3f {
 }
 // Internal damping scales a fabric's elastic terms by 1 + k_d/dt (info.z holds k_d bits); the
 // constant part rides on the inertia target, as on the CPU.
+fn damping_scale(t:Term)->f32 {return 1+bitcast<f32>(t.info.z)*bitcast<f32>(config.inverse_dt);}
 fn damped(r:Result,t:Term)->Result {
-    let s=1+bitcast<f32>(t.info.z)*bitcast<f32>(config.inverse_dt);
+    let s=damping_scale(t);
     return Result(r.e*s,r.g*s,r.h*s);
 }
 fn evaluate(t:Term,v:u32,p:vec3f)->Result {
@@ -72,6 +73,14 @@ fn evaluate(t:Term,v:u32,p:vec3f)->Result {
         for(var j=1u;j<t.info.y;j++){d+=t.a[j]*(x[j]-x[0]);first_weight-=t.a[j];}
         let weight=select(t.a[local],first_weight,local==0u);
         r.e=0.5*t.b.x*dot(d,d);r.g=t.b.x*weight*d;r.h=I*(t.b.x*weight*weight);
+    } else if t.info.x==4u {
+        // Elastic or tape: tension-only spring, a = (rest length, stiffness).
+        let d=x[0]-x[1];let l=length(d);let rest=t.a.x;let k=t.a.y;
+        if l>rest && l>1e-12 {
+            let u=d/l;let s=select(-1.0,1.0,local==0u);let stretch=l-rest;
+            r.e=0.5*k*stretch*stretch;r.g=k*stretch*s*u;
+            r.h=k*(outer(u,u)+(stretch/l)*(I-outer(u,u)));
+        }
     } else if t.info.x==3u {
         // Lagged smoothed Coulomb friction (IPC f0): a = side weights, b = (normal, mu*lambda),
         // c = (sum of weight * start position, epsilon). PSD Hessian mu*lambda*f1/y*w^2*P.
@@ -127,19 +136,23 @@ fn energy_value(t:Term,v:u32,p:vec3f)->f32 {
         let w=t.a.y*e1+t.a.z*e2;let f=t.b.y*e1+t.b.z*e2;
         let ew=0.5*(dot(w,w)-1);let ef=0.5*(dot(f,f)-1);let shear=dot(w,f);
         let aw=axial(ew,t.b.w,t.c.z,t.c.w);let af=axial(ef,t.c.x,t.c.z,t.c.w);
-        return t.a.w*(aw.x+af.x+0.5*t.c.y*shear*shear);
+        return damping_scale(t)*t.a.w*(aw.x+af.x+0.5*t.c.y*shear*shear);
     }
     if t.info.x==1u {
         let e=x[1]-x[0];let u=x[2]-x[0];let w=x[3]-x[0];
         let na=cross(e,u);let nb=cross(w,e);let la=length(na);let lb=length(nb);
         if min(la,lb)<1e-12 {return 1e30;}
         let a=na/la;let b=nb/lb;let d=a-b;
-        return 0.5*t.a.x*dot(d,d);
+        return damping_scale(t)*0.5*t.a.x*dot(d,d);
     }
     if t.info.x==2u {
         var d=t.c.w*x[0]-t.c.xyz;
         for(var j=1u;j<t.info.y;j++){d+=t.a[j]*(x[j]-x[0]);}
         return 0.5*t.b.x*dot(d,d);
+    }
+    if t.info.x==4u {
+        let l=length(x[0]-x[1]);let stretch=max(l-t.a.x,0.0);
+        return 0.5*t.a.y*stretch*stretch;
     }
     if t.info.x==3u {
         var u=-t.c.xyz;for(var j=0u;j<t.info.y;j++){u+=t.a[j]*x[j];}

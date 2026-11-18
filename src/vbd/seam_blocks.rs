@@ -10,6 +10,7 @@ pub(super) struct Block {
     triangles: Vec<usize>,
     hinges: Vec<usize>,
     stitches: Vec<usize>,
+    lines: Vec<usize>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -80,6 +81,7 @@ pub(super) fn blocks(solver: &VbdSolver) -> Vec<Block> {
                 triangles: gather(&solver.triangles),
                 hinges: gather(&solver.hinges),
                 stitches: gather(&solver.vertex_stitches),
+                lines: gather(&solver.vertex_lines),
                 vertices,
             }
         })
@@ -111,6 +113,9 @@ impl Problem<'_> {
             let h = &g.mesh.hinges[i];
             let m = &g.materials[h.material];
             e = e + energy::bending(h.vertices.map(get), h, m) * S::c(damped(m, self.settings));
+        }
+        for &i in &block.lines {
+            e = e + crate::vbd::line_energy(&g.lines[i], get);
         }
         for &i in &block.stitches {
             let s = &self.solver.stitches[i];
@@ -784,6 +789,7 @@ mod tests {
             triangles: union(&solver.triangles[a], &solver.triangles[b]),
             hinges: union(&solver.hinges[a], &solver.hinges[b]),
             stitches: union(&solver.vertex_stitches[a], &solver.vertex_stitches[b]),
+            lines: union(&solver.vertex_lines[a], &solver.vertex_lines[b]),
         };
         let grab = Grab {
             patch: Vec::new(),

@@ -44,7 +44,9 @@ fn gpu_internal_damping_settles_stretching_but_not_a_fall() {
     assert_ne!(adapter.get_info().device_type, wgpu::DeviceType::Cpu);
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
-    let gpu = GpuVbd::new(device, queue);
+    let mut gpu = GpuVbd::new(device, queue);
+    // Energies and forces of every vertex against the f64 terms, each step.
+    gpu.check_gradients = true;
     let far = SurfaceMesh {
         vertices: vec![
             DVec3::new(50., 0.5, 50.),

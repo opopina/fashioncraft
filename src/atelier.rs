@@ -10,6 +10,8 @@ use marvelous_cloth::{
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 #[path = "atelier/activation_ui.rs"]
 mod activation_ui;
+#[path = "atelier/animation_ui.rs"]
+mod animation_ui;
 #[path = "atelier/arrange_ui.rs"]
 mod arrange_ui;
 #[path = "atelier/arrangement_ui.rs"]
@@ -430,6 +432,9 @@ impl Atelier {
             .map_err(|reason| reason.message().to_owned())?;
         match id {
             Id::ToggleSimulation => {
+                if self.authoring.animation.recording() {
+                    return Err("Recording · stop it from the timeline first".into());
+                }
                 if self.playing {
                     self.playing = false;
                 } else if self.prepare_simulation() {
@@ -549,6 +554,19 @@ impl Atelier {
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
             Id::OpenPose => self.authoring.pose.open = !self.authoring.pose.open,
             Id::OpenSceneObjects => self.authoring.scene.open = !self.authoring.scene.open,
+            Id::OpenAnimation => {
+                self.authoring.animation.open = !self.authoring.animation.open;
+            }
+            Id::PlayAnimation => self.toggle_animation_preview()?,
+            Id::RecordAnimation => {
+                if self.authoring.animation.recording() {
+                    self.stop_animation_recording();
+                } else {
+                    self.authoring.animation.open = true;
+                    self.start_animation_recording(ctx)?;
+                }
+            }
+            Id::DeleteAnimation => self.delete_animation()?,
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());
@@ -1120,6 +1138,7 @@ impl eframe::App for Atelier {
                 self.menu_bar(ui, &ctx, can_open_palette);
             });
         });
+        self.animation_tick(&ctx);
         let mut changed = false;
         if !palette_blocked {
             settings::window(&ctx, &mut self.settings_open, &mut self.prefs, &mut changed);
@@ -1159,6 +1178,9 @@ impl eframe::App for Atelier {
                     .on_hover_text(&self.status);
             });
         });
+        if self.authoring.animation.open {
+            egui::Panel::bottom("animation").show(ui, |ui| self.animation_timeline(ui));
+        }
         if self.tools_visible {
             egui::Panel::left("authoring-tools")
                 .exact_size(52.)

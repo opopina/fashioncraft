@@ -15,7 +15,7 @@ pub(super) struct PoseUi {
     pub skeleton: bool,
     bone: usize,
     /// The pose being edited, until applied.
-    draft: Option<AvatarPose>,
+    pub draft: Option<AvatarPose>,
     /// Bones of the current avatar, for the X-ray view, keyed by the joints they came from.
     bones: Option<(String, Arc<Rig>)>,
     error: Option<String>,
@@ -23,6 +23,12 @@ pub(super) struct PoseUi {
     transition: Option<Transition>,
     /// The limb whose end is being dragged, and the camera-facing plane it moves in.
     reaching: Option<(usize, glam::DVec3, glam::DVec3)>,
+}
+
+impl PoseUi {
+    pub(super) fn transition_running(&self) -> bool {
+        self.transition.is_some()
+    }
 }
 
 /// How near (points) a press must land to a hand or foot to drag it.

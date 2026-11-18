@@ -49,6 +49,8 @@ pub(super) struct AuthoringUi {
     pub pose: super::pose_ui::PoseUi,
     /// The scene objects window.
     pub scene: super::scene_ui::SceneUi,
+    /// The animation timeline and recording.
+    pub animation: super::animation_ui::AnimationUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,

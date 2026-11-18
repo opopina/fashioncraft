@@ -291,8 +291,16 @@ const AVATAR: &[Item] = &[
     ),
     Run("Pose…", C::OpenPose),
     Run("Rest pose", C::RestPose),
-    Todo("Play animation"),
+    Run("Play animation", C::PlayAnimation),
     Todo("Avatar editor…"),
+];
+
+const ANIMATION: &[Item] = &[
+    Run("Animation editor", C::OpenAnimation),
+    Run("Record", C::RecordAnimation),
+    Run("Delete animation", C::DeleteAnimation),
+    S,
+    Todo("Video capture…"),
 ];
 
 const RENDER: &[Item] = &[
@@ -408,6 +416,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
     ("Sewing", SEWING),
     ("Materials", MATERIALS),
     ("Avatar", AVATAR),
+    ("Animation", ANIMATION),
     ("Render", RENDER),
     ("Display", DISPLAY),
     ("Settings", SETTINGS),
@@ -457,6 +466,8 @@ impl Atelier {
             C::ToggleLibrary => self.authoring.library.open,
             C::ToggleSkeleton => self.authoring.pose.skeleton,
             C::OpenPose => self.authoring.pose.open,
+            C::OpenAnimation => self.authoring.animation.open,
+            C::RecordAnimation => self.authoring.animation.recording(),
             _ => false,
         }
     }
@@ -622,7 +633,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 90, "{done} of {all}");
+        assert!(done >= 94, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

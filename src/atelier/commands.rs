@@ -97,6 +97,10 @@ pub enum CommandId {
     RestPose,
     OpenSceneObjects,
     ClearSceneObjects,
+    OpenAnimation,
+    PlayAnimation,
+    RecordAnimation,
+    DeleteAnimation,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -962,6 +966,42 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ClearSceneObjects,
         "avatar.clear_scene_objects",
         "Delete the scene objects",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenAnimation,
+        "animation.editor",
+        "Animation editor",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PlayAnimation,
+        "animation.play",
+        "Play or pause the animation",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        RecordAnimation,
+        "animation.record",
+        "Record the cloth along the animation",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        DeleteAnimation,
+        "animation.delete",
+        "Delete the animation",
         Simulation,
         None,
         NotUndoable,

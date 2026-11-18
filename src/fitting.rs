@@ -60,6 +60,9 @@ pub struct FittingProject {
     /// Props the cloth also collides with (a chair, a table…). Absent in older documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scene_objects: Vec<SceneObject>,
+    /// The avatar's motion: keyed poses and markers. Absent in older documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_animation: Option<crate::avatar_animation::AvatarAnimation>,
 }
 
 /// A static OBJ prop placed in the scene. Relative paths resolve against the project JSON
@@ -439,6 +442,7 @@ impl FittingProject {
             color_palette: Vec::new(),
             avatar_pose: None,
             scene_objects: Vec::new(),
+            avatar_animation: None,
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -462,6 +466,9 @@ impl FittingProject {
             if asset.path.is_relative() {
                 asset.path = directory.join(&asset.path);
             }
+        }
+        if let Some(animation) = &project.avatar_animation {
+            animation.validate()?;
         }
         for object in &mut project.scene_objects {
             object.validate()?;

@@ -209,6 +209,7 @@ impl Selection {
             color_palette: current.color_palette.clone(),
             avatar_pose: current.avatar_pose.clone(),
             scene_objects: current.scene_objects.clone(),
+            avatar_animation: current.avatar_animation.clone(),
         };
         let scene = project.compile()?;
         Ok(Prepared { project, scene })

@@ -317,7 +317,8 @@ pub const LIMBS: [(&str, &str, &str); 4] = [
     ("Right foot", "thigh.R", "shin.R"),
 ];
 
-fn euler_degrees(q: DQuat) -> [f64; 3] {
+/// `q` as rotations in degrees about X, Y and Z, in the order poses use.
+pub fn euler_degrees(q: DQuat) -> [f64; 3] {
     let (x, y, z) = q.to_euler(EulerRot::XYZ);
     [x.to_degrees(), y.to_degrees(), z.to_degrees()]
 }

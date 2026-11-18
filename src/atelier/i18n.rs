@@ -38,6 +38,39 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Sewing" => "Costura",
         "Materials" => "Materiales",
         "Avatar" => "Avatar",
+        "Animation" => "Animación",
+        "Animation editor" => "Editor de animación",
+        "Record" => "Grabar",
+        "Delete animation" => "Borrar animación",
+        "Video capture…" => "Captura de vídeo…",
+        "To the start" => "Al inicio",
+        "Play" => "Reproducir",
+        "Pause" => "Pausa",
+        "frame" => "fotograma",
+        "frames" => "fotogramas",
+        "Playback speed" => "Velocidad de reproducción",
+        "Loop" => "Bucle",
+        "Set key" => "Poner clave",
+        "Key the pose being edited in the Pose window, or the avatar's pose, at this time" => {
+            "Pone como clave en este instante la pose que se edita en la ventana Pose o, si no, la del avatar"
+        }
+        "Delete key" => "Borrar clave",
+        "Walk in place" => "Caminar en el sitio",
+        "Raise arms" => "Subir los brazos",
+        "Wave" => "Saludar",
+        "Twist" => "Girar el torso",
+        "Use motion" => "Usar movimiento",
+        "Replace the keys with this motion, starting from the avatar's pose" => {
+            "Sustituye las claves por este movimiento, a partir de la pose del avatar"
+        }
+        "Add marker" => "Añadir marcador",
+        "Frames recorded per second" => "Fotogramas grabados por segundo",
+        "Stop" => "Detener",
+        "Simulate the cloth while the avatar moves, from the drape as it is now" => {
+            "Simula la tela mientras el avatar se mueve, desde el drapeado actual"
+        }
+        "Take" => "Toma",
+        "Clear take" => "Borrar toma",
         "Render" => "Render",
         "Display" => "Mostrar",
         "Settings" => "Ajustes",

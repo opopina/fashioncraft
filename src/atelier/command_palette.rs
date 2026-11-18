@@ -99,6 +99,10 @@ fn aliases(id: CommandId) -> &'static str {
         RestPose => "rest pose reset avatar a-pose",
         OpenSceneObjects => "scene props objects obj chair table",
         ClearSceneObjects => "delete clear scene props objects",
+        OpenAnimation => "animation timeline keys keyframes motion markers",
+        PlayAnimation => "play pause animation timeline preview",
+        RecordAnimation => "record animation cloth cache take",
+        DeleteAnimation => "delete clear animation keys",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -823,7 +827,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::OpenSceneObjects
+            CommandId::OpenAnimation
         );
         h.key(
             "palette.query",

@@ -430,6 +430,12 @@ impl Atelier {
             self.camera.garment_interact(&response);
         }
         let size = rect.size() * ctx.pixels_per_point();
+        // The animation timeline shows its take and posed avatar in place of the live drape,
+        // for drawing only.
+        let animated_avatar = self.animation_avatar();
+        let live_state = self
+            .animation_frame_state()
+            .map(|shown| std::mem::replace(&mut self.scene.state, shown));
         let optics =
             marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
         let (visible_faces, face_colors) = self.display_buffers();
@@ -487,7 +493,11 @@ impl Atelier {
                 materials: &self.scene.garment.materials,
                 optics: Some(&optics),
                 sphere: None,
-                avatar: display.avatar.then_some(&self.scene.collider.surface),
+                avatar: display.avatar.then_some(
+                    animated_avatar
+                        .as_deref()
+                        .unwrap_or(&self.scene.collider.surface),
+                ),
                 // The contact map asks the collider which cloth touches the avatar.
                 collider: (display.contacts && !self.clean_view).then_some(
                     self.scene.collider.as_ref() as &dyn marvelous_cloth::contact::Collider,
@@ -553,6 +563,9 @@ impl Atelier {
                     Stroke::new(1.5, Color32::from_rgb(255, 194, 64)),
                 );
             }
+        }
+        if let Some(live) = live_state {
+            self.scene.state = live;
         }
         if !self.clean_view
             && let Some(g) = &self.grab

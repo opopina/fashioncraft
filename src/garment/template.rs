@@ -226,6 +226,11 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Simulation layer by panel id (absent = 0): where two pieces of different layers touch,
+    /// only the higher (outer) one gives way, as if the lower lay under it unmoved. Used to
+    /// settle layered garments, then usually reset to 0.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub panel_layers: BTreeMap<String, u32>,
     /// Cylindrical arrangement wraps by panel id; absent in older documents.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub panel_wraps: BTreeMap<String, PanelWrap>,
@@ -245,6 +250,9 @@ pub struct MirrorLink {
     pub b: String,
     pub axis: super::shapes::MirrorAxis,
 }
+/// Highest simulation layer a panel can take.
+pub const MAX_LAYER: u32 = 9;
+
 #[derive(Clone, Debug)]
 pub struct PanelRange {
     pub id: String,
@@ -265,6 +273,8 @@ pub struct CompiledGarment {
     pub authored_holds: Vec<bool>,
     /// Vertices of deactivated panels: the solver leaves them out of every contact.
     pub inert: Vec<bool>,
+    /// Simulation layer of each vertex's panel; empty when every panel is on layer 0.
+    pub layers: Vec<u32>,
     /// One orientation-bound material per panel, derived from shared fabric properties.
     pub materials: Vec<Material>,
     pub vertex_material: Vec<usize>,
@@ -318,6 +328,14 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for (id, layer) in &self.panel_layers {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Layer refers to unknown panel {id}"));
+            }
+            if *layer > MAX_LAYER {
+                return Err(format!("Layers go from 0 to {MAX_LAYER}"));
+            }
         }
         let mut deactivated = BTreeSet::new();
         for d in &self.deactivated_panels {
@@ -409,6 +427,7 @@ impl GarmentTemplate {
             legacy_pins: vec![],
             authored_holds: vec![],
             inert: vec![],
+            layers: vec![],
             mesh: Mesh {
                 uv: vec![],
                 triangles: vec![],
@@ -644,6 +663,13 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        if self.panel_layers.values().any(|l| *l > 0) {
+            out.layers = vec![0; out.mesh.uv.len()];
+            for range in &out.panels {
+                let layer = self.panel_layers.get(&range.id).copied().unwrap_or(0);
+                out.layers[range.vertices.clone()].fill(layer);
+            }
+        }
         out.inert = vec![false; out.mesh.uv.len()];
         let holds: Vec<_> = self.deactivated_panels.iter().map(|d| d.hold()).collect();
         for (i, target) in super::pins::resolve_frozen(&out, &holds)? {
@@ -666,6 +692,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            panel_layers: Default::default(),
             panel_wraps: Default::default(),
             locked_panels: Default::default(),
             internal_lines_locked: false,

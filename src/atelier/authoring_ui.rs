@@ -1381,6 +1381,7 @@ impl Atelier {
         {
             self.set_piece_locked(&panel.id, locked);
         }
+        self.layer_properties(ui, &panel.id);
         self.arrangement_properties(ui, &panel);
         self.pin_properties(ui, &panel);
         self.activation_properties(ui, &panel);

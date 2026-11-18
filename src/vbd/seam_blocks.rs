@@ -123,6 +123,14 @@ impl Problem<'_> {
         }
         for &i in contact_ids {
             let c = &self.contacts.contacts[i];
+            // A block on the lower-layer side of a layered contact gives it no way.
+            if c.vertices[..c.count]
+                .iter()
+                .filter(|u| block.vertices.binary_search(u).is_ok())
+                .all(|&u| self.solver.yields(c, u))
+            {
+                continue;
+            }
             e = e + c.energy(
                 c.vertices.map(get),
                 self.contacts.radius(i, self.settings.contact.radius),

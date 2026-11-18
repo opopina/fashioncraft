@@ -404,9 +404,12 @@ impl GpuVbd {
         // Reuse it instead of allocating and filling another vector per vertex.
         for (v, contacts_at_vertex) in contacts.incident.iter().enumerate() {
             let start = (prepared.incident.len() + incident.len()) as u32;
+            // The lower-layer side of a layered contact keeps none of its terms.
+            let kept = |c: &usize| !solver.yields(&contacts.contacts[*c], v);
             incident.extend(
                 contacts_at_vertex
                     .iter()
+                    .filter(|c| kept(c))
                     .map(|i| (prepared.terms.len() + i) as u32),
             );
             if let Some(grab) = grab {
@@ -420,7 +423,7 @@ impl GpuVbd {
                         .push((prepared.terms.len() + contacts.contacts.len() + 1 + index) as u32);
                 }
             }
-            for &c in contacts_at_vertex.iter() {
+            for &c in contacts_at_vertex.iter().filter(|c| kept(c)) {
                 if let Some(&k) = friction_index.get(c).filter(|k| **k != u32::MAX) {
                     incident.push((prepared.terms.len() + friction_base) as u32 + k);
                 }

@@ -403,6 +403,34 @@ impl VbdSolver {
         }
         Ok(solver)
     }
+    /// Whether vertex `v` gives no way to contact `c`: it sits on the lower-layer side of a
+    /// contact between pieces of different simulation layers. That side keeps no energy of
+    /// the contact, so the outer piece alone moves; the conservative bounds still keep both
+    /// apart. Contacts with the avatar or the floor, and layer-0 garments, are unaffected.
+    pub(crate) fn yields(&self, c: &crate::ogc::potential::Contact, v: usize) -> bool {
+        let layers = &self.garment.layers;
+        if layers.is_empty() {
+            return false;
+        }
+        use crate::ogc::potential::Kind;
+        let first = match c.kind {
+            Kind::EdgeEdge | Kind::EdgeEdgeInterior | Kind::SegmentSegment => 2,
+            _ => 1,
+        };
+        let side = |vertices: &[usize]| {
+            vertices
+                .iter()
+                .filter_map(|u| layers.get(*u))
+                .max()
+                .copied()
+        };
+        let (a, b) = (&c.vertices[..first], &c.vertices[first..c.count]);
+        let (Some(la), Some(lb)) = (side(a), side(b)) else {
+            return false;
+        };
+        let mine = if a.contains(&v) { la } else { lb };
+        mine < la.max(lb)
+    }
     /// Hand the contact detection each vertex's collision distance for these settings, and
     /// return the largest contact radius.
     pub(crate) fn prepare_collision(&mut self, settings: &VbdSettings) -> Result<f64, String> {
@@ -459,6 +487,9 @@ impl VbdSolver {
         }
         for i in &contact.incident[v] {
             let c = &contact.contacts[*i];
+            if self.yields(c, v) {
+                continue;
+            }
             value = value
                 + c.energy(
                     c.vertices.map(get),

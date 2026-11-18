@@ -56,6 +56,8 @@ mod gizmo;
 mod icons;
 #[path = "atelier/issue_ui.rs"]
 mod issue_ui;
+#[path = "atelier/layers_ui.rs"]
+mod layers_ui;
 #[path = "atelier/layout.rs"]
 mod layout;
 #[path = "atelier/measure.rs"]

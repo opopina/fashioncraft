@@ -407,6 +407,12 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Put pieces on a simulation layer (0 clears it): where pieces of different layers touch,
+    /// only the outer one gives way. One undo step.
+    SetLayer {
+        panels: Vec<String>,
+        layer: u32,
+    },
     /// Create or replace a nonphysical placement, addressed by its stable ID.
     SetGraphic {
         placement: crate::garment::graphics::GraphicPlacement,
@@ -2448,6 +2454,34 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::SetLayer { panels, layer } => {
+            if panels.is_empty() {
+                return Err("Select pieces to put on a layer".into());
+            }
+            if layer > crate::garment::template::MAX_LAYER {
+                return Err(format!(
+                    "Layers go from 0 to {}",
+                    crate::garment::template::MAX_LAYER
+                ));
+            }
+            let mut changed = false;
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Cannot set the layer of {id}: panel not found"));
+                }
+                let before = template.panel_layers.get(id).copied().unwrap_or(0);
+                changed |= before != layer;
+                if layer == 0 {
+                    template.panel_layers.remove(id);
+                } else {
+                    template.panel_layers.insert(id.clone(), layer);
+                }
+            }
+            if !changed {
+                return Err(format!("Already on layer {layer}"));
+            }
+            selected = panels.first().cloned();
         }
         Command::FabricAppearance { fabric, appearance } => {
             if !template.fabrics.iter().any(|f| f.id == fabric) {

@@ -407,6 +407,13 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Fold an internal line (angle and strength), replacing the fold there, or unfold it
+    /// (`fold: None`). One undo step.
+    SetLineFold {
+        panel: String,
+        line: String,
+        fold: Option<crate::garment::template::LineFold>,
+    },
     /// Put an elastic or tape on a contour segment or internal line, replacing the one there,
     /// or remove it (`spring: None`). One undo step.
     SetLineSpring {
@@ -2538,6 +2545,31 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::SetLineFold { panel, line, fold } => {
+            if let Some(f) = &fold
+                && (f.panel != panel || f.line != line)
+            {
+                return Err("The fold belongs to another line".into());
+            }
+            let before = template
+                .line_folds
+                .iter()
+                .position(|f| f.panel == panel && f.line == line);
+            match (before, fold) {
+                (None, None) => return Err("That line has no fold".into()),
+                (Some(i), None) => {
+                    template.line_folds.remove(i);
+                }
+                (Some(i), Some(f)) => {
+                    if template.line_folds[i] == f {
+                        return Err("The fold is set that way already".into());
+                    }
+                    template.line_folds[i] = f;
+                }
+                (None, Some(f)) => template.line_folds.push(f),
+            }
+            selected = Some(panel);
         }
         Command::SetLineSpring {
             panel,

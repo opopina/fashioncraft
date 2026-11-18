@@ -70,3 +70,66 @@ impl Atelier {
         }
     }
 }
+
+impl Atelier {
+    /// Fold of the selected internal line: on/off, its angle (180° flat) and strength.
+    pub(super) fn line_fold_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        use marvelous_cloth::garment::template::LineFold;
+        let current = self
+            .project
+            .template
+            .line_folds
+            .iter()
+            .find(|f| f.panel == panel && f.line == line)
+            .cloned();
+        let mut wanted: Option<Option<LineFold>> = None;
+        ui.horizontal(|ui| {
+            let on = current.is_some();
+            if ui
+                .selectable_label(on, "Fold")
+                .on_hover_text(
+                    "Crease the piece along this line at a set angle, like a pressed pleat",
+                )
+                .clicked()
+            {
+                wanted = Some((!on).then(|| LineFold::new(panel, line)));
+            }
+            if let Some(fold) = &current {
+                let mut edited = fold.clone();
+                let mut commit = false;
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut edited.angle)
+                            .range(0.0..=360.0)
+                            .speed(1.0)
+                            .fixed_decimals(0)
+                            .suffix("°"),
+                    )
+                    .on_hover_text(
+                        "180° is flat; less folds toward the piece's front, more away from it",
+                    );
+                commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut edited.strength)
+                            .range(1.0..=1000.0)
+                            .speed(0.5)
+                            .fixed_decimals(0)
+                            .prefix("×"),
+                    )
+                    .on_hover_text("Bending stiffness of the crease, times the fabric's");
+                commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                if commit && &edited != fold {
+                    wanted = Some(Some(edited));
+                }
+            }
+        });
+        if let Some(fold) = wanted {
+            self.edit(Command::SetLineFold {
+                panel: panel.into(),
+                line: line.into(),
+                fold,
+            });
+        }
+    }
+}

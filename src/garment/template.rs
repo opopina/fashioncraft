@@ -231,6 +231,9 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Folds along internal lines: a rest angle and a stiffening of the crease.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub line_folds: Vec<LineFold>,
     /// Elastic and tape along contour segments and internal lines.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub line_springs: Vec<LineSpring>,
@@ -333,12 +336,85 @@ impl LineSpring {
     }
 }
 
+/// A fold along an internal line, as a cloth tool's fold angle and strength.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineFold {
+    pub panel: String,
+    pub line: String,
+    /// Fold angle, degrees, 0 to 360: 180 is flat; below 180 the piece folds toward the side
+    /// its normal faces, above 180 away from it.
+    pub angle: f64,
+    /// Bending stiffness of the crease, times the fabric's.
+    pub strength: f64,
+}
+
+impl LineFold {
+    pub fn new(panel: &str, line: &str) -> Self {
+        Self {
+            panel: panel.into(),
+            line: line.into(),
+            angle: 90.,
+            strength: 10.,
+        }
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        if !(0.0..=360.0).contains(&self.angle) || !(1.0..=1000.0).contains(&self.strength) {
+            return Err("A fold needs an angle of 0 to 360° and a strength of 1 to 1000".into());
+        }
+        Ok(())
+    }
+}
+
 /// One tension-only spring of an elastic or tape: E = ½·k·max(0, |x_a − x_b| − rest)².
 #[derive(Clone, Debug)]
 pub struct CompiledLine {
     pub vertices: [usize; 2],
     pub rest: f64,
     pub stiffness: f64,
+}
+
+/// `chain` carried on at both ends along mesh edges that continue it in a straight line
+/// (within about 2.5°), as far as such edges go.
+fn extend_straight(mesh: &crate::model::Mesh, chain: &[usize]) -> Vec<usize> {
+    if chain.len() < 2 {
+        return chain.to_vec();
+    }
+    let mut neighbours: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+    for t in &mesh.triangles {
+        let [a, b, c] = t.vertices;
+        for (p, q) in [(a, b), (b, c), (c, a)] {
+            neighbours.entry(p).or_default().insert(q);
+            neighbours.entry(q).or_default().insert(p);
+        }
+    }
+    let carry = |mut prev: usize, mut end: usize, seen: &BTreeSet<usize>| {
+        let mut more: Vec<usize> = vec![];
+        for _ in 0..64 {
+            let dir = (mesh.uv[end] - mesh.uv[prev]).normalize();
+            let next = neighbours.get(&end).and_then(|ns| {
+                ns.iter().copied().find(|&w| {
+                    !seen.contains(&w)
+                        && !more.contains(&w)
+                        && (mesh.uv[w] - mesh.uv[end]).normalize().dot(dir) > 0.999
+                })
+            });
+            let Some(w) = next else { break };
+            more.push(w);
+            prev = end;
+            end = w;
+        }
+        more
+    };
+    let seen: BTreeSet<usize> = chain.iter().copied().collect();
+    let n = chain.len();
+    let tail = carry(chain[n - 2], chain[n - 1], &seen);
+    let mut head = carry(chain[1], chain[0], &seen);
+    head.reverse();
+    head.into_iter()
+        .chain(chain.iter().copied())
+        .chain(tail)
+        .collect()
 }
 
 /// Allowed shrinkage, percent of the cut size.
@@ -458,6 +534,19 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        let mut folds = BTreeSet::new();
+        for fold in &self.line_folds {
+            if !self.panels.iter().any(|p| p.id == fold.panel) {
+                return Err(format!("Fold refers to unknown panel {}", fold.panel));
+            }
+            if !folds.insert((&fold.panel, &fold.line)) {
+                return Err(format!(
+                    "Line {} of {} has two folds",
+                    fold.line, fold.panel
+                ));
+            }
+            fold.validate()?;
         }
         let mut lines = BTreeSet::new();
         for spring in &self.line_springs {
@@ -854,6 +943,34 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        for fold in &self.line_folds {
+            let range = out
+                .panels
+                .iter()
+                .find(|r| r.id == fold.panel)
+                .ok_or("Fold on a missing panel")?;
+            let line = range.boundaries.get(&fold.line).ok_or_else(|| {
+                format!("Panel {} has no internal line {}", fold.panel, fold.line)
+            })?;
+            // Internal lines stop just short of the outline; a fold that stopped there would
+            // have to stretch the cloth at its ends. Carry it on straight to the outline.
+            let chain = &extend_straight(&out.mesh, line);
+            let crease: BTreeSet<[usize; 2]> = chain
+                .windows(2)
+                .map(|w| [w[0].min(w[1]), w[0].max(w[1])])
+                .collect();
+            // Below 180° the halves turn toward the side the faces' winding normal points to.
+            let rest = (fold.angle - 180.).to_radians();
+            for h in &mut out.mesh.hinges {
+                let [a, b, ..] = h.vertices;
+                if crease.contains(&[a.min(b), a.max(b)]) {
+                    // With consistently wound faces the signed dihedral angle does not depend
+                    // on which way the hinge's edge runs, so one rest angle fits the crease.
+                    h.rest_angle = rest;
+                    h.weight *= fold.strength;
+                }
+            }
+        }
         for spring in &self.line_springs {
             let range = out
                 .panels
@@ -963,6 +1080,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            line_folds: vec![],
             line_springs: vec![],
             panel_shrink: Default::default(),
             panel_pressure: Default::default(),

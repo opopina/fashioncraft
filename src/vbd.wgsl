@@ -66,6 +66,18 @@ fn evaluate(t:Term,v:u32,p:vec3f)->Result {
         if local==3u {db=skew(-e);}
         let jac=(I-outer(a,a))*da*(1/la)-(I-outer(b,b))*db*(1/lb);let d=a-b;
         r.e=0.5*t.a.x*dot(d,d);r.g=t.a.x*transpose(jac)*d;r.h=t.a.x*transpose(jac)*jac;
+        if t.a.y!=0.0 {
+            // Folded rest (a.y = rest angle θ₀): W·(1 − cos θ·cos θ₀ − sin θ·sin θ₀), with
+            // cos θ = a·b and sin θ = (a×b)·ê. The Hessian is a PSD Gauss–Newton estimate.
+            let ja=(I-outer(a,a))*da*(1/la);let jb=(I-outer(b,b))*db*(1/lb);
+            let le=length(e);let eh=e/le;let pe=(I-outer(eh,eh))*(1/le);
+            var je=mat3x3f();if local==0u {je=pe*(-1.0);} if local==1u {je=pe;}
+            let c0=cos(t.a.y);let s0=sin(t.a.y);let cr=cross(a,b);
+            r.e=t.a.x*(1-dot(a,b)*c0-dot(cr,eh)*s0);
+            r.g=-t.a.x*(c0*(transpose(ja)*b+transpose(jb)*a)
+                +s0*(transpose(ja)*cross(b,eh)+transpose(jb)*cross(eh,a)+transpose(je)*cr));
+            r.h=t.a.x*(transpose(ja)*ja+transpose(jb)*jb);
+        }
         r=damped(r,t);
     } else if t.info.x==2u {
         // c.w is the exact weight sum: zero for seams, one for a mouse grab.
@@ -143,6 +155,10 @@ fn energy_value(t:Term,v:u32,p:vec3f)->f32 {
         let na=cross(e,u);let nb=cross(w,e);let la=length(na);let lb=length(nb);
         if min(la,lb)<1e-12 {return 1e30;}
         let a=na/la;let b=nb/lb;let d=a-b;
+        if t.a.y!=0.0 {
+            let eh=e/length(e);
+            return damping_scale(t)*t.a.x*(1-dot(a,b)*cos(t.a.y)-dot(cross(a,b),eh)*sin(t.a.y));
+        }
         return damping_scale(t)*0.5*t.a.x*dot(d,d);
     }
     if t.info.x==2u {

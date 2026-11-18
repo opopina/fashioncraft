@@ -132,6 +132,9 @@ pub struct Hinge {
     pub weight: f64,
     pub across: DVec2,
     pub material: usize,
+    /// Rest dihedral angle, radians, about the edge a→b from the first face to the second;
+    /// 0 is flat. Set by folds along internal lines.
+    pub rest_angle: f64,
 }
 #[derive(Clone, Debug)]
 pub struct Mesh {
@@ -232,6 +235,7 @@ impl Pattern {
                         weight: 3.0 * edge.length_squared() / (area + t.area),
                         across,
                         material: 0,
+                        rest_angle: 0.,
                     });
                 } else {
                     edges.insert(key, (c, t.area));

@@ -294,6 +294,7 @@ impl PolygonPattern {
                         weight: 3.0 * e.length_squared() / (area + other_area),
                         across: DVec2::new(-e.y, e.x).normalize(),
                         material: 0,
+                        rest_angle: 0.,
                     });
                 } else {
                     edges.insert(key, (c, area));

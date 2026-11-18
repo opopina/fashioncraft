@@ -811,6 +811,7 @@ impl Prepared {
             let mut t = Term::new(&h.vertices, 1);
             t.info[2] = (m.internal_damping as f32).to_bits();
             t.a[0] = (h.weight * (m.bend_warp * aw * aw + m.bend_weft * af * af)) as f32;
+            t.a[1] = h.rest_angle as f32;
             terms.push(t);
         }
         // Elastic and tape: kind 4, a = (rest, stiffness).

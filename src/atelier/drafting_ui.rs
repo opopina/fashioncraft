@@ -327,6 +327,7 @@ impl Atelier {
         }
         self.line_group_controls(ui, &edge.panel, &name);
         self.line_spring_controls(ui, &edge.panel, &name);
+        self.line_fold_controls(ui, &edge.panel, &name);
         if !line.closed {
             self.internal_line_offsets(ui, &edge.panel, &name);
         }

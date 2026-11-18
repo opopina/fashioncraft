@@ -36,11 +36,25 @@ pub fn bending<S: Scalar>(x: [[S; 3]; 4], h: &Hinge, m: &Material) -> S {
     let length2 = dot(n2, n2).sqrt();
     // 0.5*|unit(n1)-unit(n2)|² equals 1-cos(theta), but avoids cancellation
     // (and tiny negative energy) for nearly flat hinges. No derivative clipping.
-    let difference = std::array::from_fn(|i| n1[i] / length1 - n2[i] / length2);
     let (s, c) = m.grain_degrees.to_radians().sin_cos();
     let aw = h.across.x * c + h.across.y * s;
     let af = -h.across.x * s + h.across.y * c;
     // Directional interpolation is a baseline, not a calibrated orthotropic shell tensor.
+    let weight = h.weight * (m.bend_warp * aw * aw + m.bend_weft * af * af);
+    if h.rest_angle != 0. {
+        // A folded rest: W·(1 − cos(θ − θ₀)), with cos θ = a·b and sin θ = (a × b)·ê for the
+        // unit normals a, b and the unit edge ê. At θ₀ = 0 this is the flat form below.
+        let a: [S; 3] = std::array::from_fn(|i| n1[i] / length1);
+        let b: [S; 3] = std::array::from_fn(|i| n2[i] / length2);
+        let length = dot(edge, edge).sqrt();
+        let e: [S; 3] = std::array::from_fn(|i| edge[i] / length);
+        let (s0, c0) = h.rest_angle.sin_cos();
+        let cos = dot(a, b);
+        let sin = dot(cross(a, b), e);
+        return S::c(weight) * (S::c(1.) - cos * S::c(c0) - sin * S::c(s0));
+    }
+    let difference = std::array::from_fn(|i| n1[i] / length1 - n2[i] / length2);
+    // Same arithmetic order as before folds existed, so flat hinges are unchanged bit for bit.
     S::c(0.5 * h.weight * (m.bend_warp * aw * aw + m.bend_weft * af * af))
         * dot(difference, difference)
 }

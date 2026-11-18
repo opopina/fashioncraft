@@ -66,6 +66,7 @@ impl PatternClipboard {
         template.panel_pressure.retain(|id, _| ids.contains(id));
         template.panel_shrink.retain(|id, _| ids.contains(id));
         template.line_springs.retain(|s| ids.contains(&s.panel));
+        template.line_folds.retain(|f| ids.contains(&f.panel));
         template.panel_wraps.retain(|id, _| ids.contains(id));
         template.locked_panels.retain(|id| ids.contains(id));
         template

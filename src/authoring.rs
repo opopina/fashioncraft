@@ -407,6 +407,11 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Set the inflating pressure of pieces, Pa (0 clears it). One undo step.
+    SetPressure {
+        panels: Vec<String>,
+        pressure: f64,
+    },
     /// Strengthen pieces (their fabric simulated `STRENGTHEN_FACTOR` times stiffer) or return
     /// them to normal. One undo step.
     Strengthen {
@@ -2520,6 +2525,32 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::SetPressure { panels, pressure } => {
+            if panels.is_empty() {
+                return Err("Select pieces to set their pressure".into());
+            }
+            let limit = crate::garment::template::MAX_PRESSURE;
+            if !pressure.is_finite() || pressure.abs() > limit {
+                return Err(format!("Pressure must be within ±{limit} Pa"));
+            }
+            let mut changed = false;
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Cannot set the pressure of {id}: panel not found"));
+                }
+                let before = template.panel_pressure.get(id).copied().unwrap_or(0.);
+                changed |= before != pressure;
+                if pressure == 0. {
+                    template.panel_pressure.remove(id);
+                } else {
+                    template.panel_pressure.insert(id.clone(), pressure);
+                }
+            }
+            if !changed {
+                return Err(format!("The pressure is {pressure} Pa already"));
+            }
+            selected = panels.first().cloned();
         }
         Command::Strengthen { panels, on } => {
             if panels.is_empty() {

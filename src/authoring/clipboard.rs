@@ -11,7 +11,8 @@ const MAX_BYTES: usize = 2 * 1024 * 1024;
 pub struct PatternClipboard {
     format: String,
     version: u32,
-    template: GarmentTemplate,
+    // Boxed: a template is large and travels inside `Command::Paste`.
+    template: Box<GarmentTemplate>,
 }
 
 impl PatternClipboard {
@@ -53,6 +54,18 @@ impl PatternClipboard {
             .graphics
             .retain(|graphic| ids.contains(&graphic.panel_id));
         template.trims.retain(|trim| ids.contains(&trim.panel_id));
+        // Per-piece simulation settings of other pieces have no place on the clipboard.
+        template
+            .deactivated_panels
+            .retain(|d| ids.contains(&d.panel));
+        template
+            .solidified_panels
+            .retain(|s| ids.contains(&s.panel));
+        template.strengthened_panels.retain(|id| ids.contains(id));
+        template.panel_layers.retain(|id, _| ids.contains(id));
+        template.panel_pressure.retain(|id, _| ids.contains(id));
+        template.panel_wraps.retain(|id, _| ids.contains(id));
+        template.locked_panels.retain(|id| ids.contains(id));
         template
             .fabrics
             .retain(|f| template.panels.iter().any(|p| p.fabric == f.id));
@@ -75,7 +88,7 @@ impl PatternClipboard {
         Ok(Self {
             format: FORMAT.into(),
             version: 1,
-            template,
+            template: Box::new(template),
         })
     }
 

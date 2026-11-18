@@ -40,6 +40,36 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
 }
+/// Acceleration of every vertex from its panels' pressure at positions `x`: each triangle is
+/// pushed with p·A along its winding normal, shared by its corners. Pinned vertices get none.
+/// Evaluated at the start of each step, like wind.
+fn pressure_accelerations(garment: &CompiledGarment, x: &[DVec3]) -> Vec<DVec3> {
+    let mut force = vec![DVec3::ZERO; x.len()];
+    for (t, p) in garment.mesh.triangles.iter().zip(&garment.pressure) {
+        if *p == 0. {
+            continue;
+        }
+        let [a, b, c] = t.vertices;
+        // Half the cross product is the area times the unit normal.
+        let f = (x[b] - x[a]).cross(x[c] - x[a]) * (0.5 * p);
+        for i in t.vertices {
+            force[i] += f / 3.;
+        }
+    }
+    force
+        .into_iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let m = garment.mesh.masses[i];
+            if garment.mesh.pins[i].is_some() || m <= 0. {
+                DVec3::ZERO
+            } else {
+                f / m
+            }
+        })
+        .collect()
+}
+
 /// Stiffness per unit mass (1/s²) drawing a solidified panel to its fitted shape: a 10 Hz
 /// spring, firm against the cloth's own sag yet soft enough to stay well conditioned.
 pub const SOLIDIFY_STIFFNESS: f64 =
@@ -493,6 +523,16 @@ impl VbdSolver {
             Some(wind) => wind.accelerations(&self.garment, &state.x, &state.v),
             None => vec![],
         };
+        if !self.garment.pressure.is_empty() {
+            let push = pressure_accelerations(&self.garment, &state.x);
+            if self.external.is_empty() {
+                self.external = push;
+            } else {
+                for (a, p) in self.external.iter_mut().zip(push) {
+                    *a += p;
+                }
+            }
+        }
         self.prepare_damping(settings, state);
         self.prepare_solid(settings, state);
     }

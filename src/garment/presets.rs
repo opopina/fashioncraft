@@ -162,6 +162,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         pin_targets: vec![],
         frozen_panels: vec![],
         deactivated_panels: vec![],
+        panel_pressure: Default::default(),
         strengthened_panels: Default::default(),
         solidified_panels: vec![],
         panel_layers: Default::default(),

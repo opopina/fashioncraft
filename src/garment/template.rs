@@ -231,6 +231,10 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Inflating pressure by panel id, Pa: each triangle is pushed along its normal (the side
+    /// its winding faces) with p times its area; negative values pull. Absent = 0.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub panel_pressure: BTreeMap<String, f64>,
     /// Panels simulated with their fabric stiffened `STRENGTHEN_FACTOR` times, to hold their
     /// shape while a garment settles; usually switched off afterwards.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -266,6 +270,8 @@ pub struct MirrorLink {
 }
 /// Highest simulation layer a panel can take.
 pub const MAX_LAYER: u32 = 9;
+/// Largest pressure magnitude on a panel, Pa.
+pub const MAX_PRESSURE: f64 = 2000.;
 /// Stiffness factor of a strengthened panel.
 pub const STRENGTHEN_FACTOR: f64 = 10.;
 
@@ -300,6 +306,8 @@ pub struct CompiledGarment {
     pub layers: Vec<u32>,
     /// Solidified panels: their vertices and captured reference positions.
     pub solid: Vec<SolidGroup>,
+    /// Pressure on each triangle, Pa; empty when no panel has any.
+    pub pressure: Vec<f64>,
     /// One orientation-bound material per panel, derived from shared fabric properties.
     pub materials: Vec<Material>,
     pub vertex_material: Vec<usize>,
@@ -353,6 +361,14 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for (id, pressure) in &self.panel_pressure {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Pressure refers to unknown panel {id}"));
+            }
+            if !pressure.is_finite() || pressure.abs() > MAX_PRESSURE {
+                return Err(format!("Pressure must be within ±{MAX_PRESSURE} Pa"));
+            }
         }
         for id in &self.strengthened_panels {
             if !self.panels.iter().any(|p| &p.id == id) {
@@ -479,6 +495,7 @@ impl GarmentTemplate {
             inert: vec![],
             layers: vec![],
             solid: vec![],
+            pressure: vec![],
             mesh: Mesh {
                 uv: vec![],
                 triangles: vec![],
@@ -714,6 +731,14 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        if self.panel_pressure.values().any(|p| *p != 0.) {
+            out.pressure = vec![0.; out.mesh.triangles.len()];
+            for range in &out.panels {
+                if let Some(p) = self.panel_pressure.get(&range.id) {
+                    out.pressure[range.triangles.clone()].fill(*p);
+                }
+            }
+        }
         for range in &out.panels {
             if self.strengthened_panels.contains(&range.id) {
                 let m = &mut out.materials[range.material];
@@ -763,6 +788,7 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            panel_pressure: Default::default(),
             strengthened_panels: Default::default(),
             solidified_panels: vec![],
             panel_layers: Default::default(),

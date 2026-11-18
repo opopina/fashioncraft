@@ -1098,7 +1098,7 @@ impl Atelier {
         let uv =
             super::board_display::silhouette_uv(surface, reference.map(|i| &panels[i].placement));
         let board = &self.authoring.board;
-        let color = Color32::from_rgb(0xE4, 0xE2, 0xDD);
+        let color = self.prefs.pattern_display.colors().silhouette;
         let mut mesh = egui::Mesh::default();
         mesh.vertices.reserve(uv.len());
         for p in uv {
@@ -1480,7 +1480,7 @@ impl Atelier {
         let ui_lang = self.prefs.language;
         let header = super::chrome::view_header(
             ui,
-            super::i18n::tr(self.prefs.language, "2D PATTERNS"),
+            super::i18n::tr(self.prefs.language, "2D patterns"),
             self.prefs.workspace.mode == super::layout::ViewMode::Patterns,
             false,
             super::i18n::tr(ui_lang, super::view_controls::HINT_2D_VIEW),
@@ -1513,6 +1513,11 @@ impl Atelier {
             ui.checkbox(&mut display.lengths, i18n::tr(ui_lang, "Segment lengths"))
                 .on_hover_text(i18n::tr(ui_lang, "Rest length of every outline segment, in millimetres"));
             ui.checkbox(&mut display.grid, i18n::tr(ui_lang, "Grid"));
+            ui.checkbox(&mut display.white_sheet, i18n::tr(ui_lang, "White sheet"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A white drafting sheet with tinted pieces instead of the grey board with white pieces",
+                ));
             ui.checkbox(&mut display.measurements, i18n::tr(ui_lang, "2D measurements")).on_hover_text(
                 i18n::tr(ui_lang, "Distances to the outline from the cursor while drawing an internal line, and from the selected internal line"),
             );
@@ -2910,9 +2915,10 @@ impl Atelier {
         }
         let mut smoke_targets: Vec<(String, egui::Pos2)> = vec![];
         let painter = ui.painter().with_clip_rect(rect);
-        // The pattern board is a white drafting sheet; the 3D window has its own
-        // studio backdrop, so the two do not share a background colour.
-        painter.rect_filled(rect, 0., Color32::from_rgb(0xFA, 0xFA, 0xFB));
+        // The pattern board is a drafting board (neutral grey, or a white sheet); the 3D
+        // window has its own studio backdrop, so the two do not share a background colour.
+        let colors = self.prefs.pattern_display.colors();
+        painter.rect_filled(rect, 0., colors.background);
         // Back to front: silhouette, then the tracing image (its opacity lets the body show
         // through instead of the opaque silhouette hiding the lines to trace), grid, pieces.
         if self.prefs.pattern_display.silhouette {
@@ -2932,7 +2938,7 @@ impl Atelier {
                         board.screen(rect, DVec2::new(k as f64 * spacing, lo.y)),
                         board.screen(rect, DVec2::new(k as f64 * spacing, hi.y)),
                     ],
-                    Stroke::new(0.5, Color32::from_gray(0xDC)),
+                    Stroke::new(0.5, colors.grid),
                 );
             }
             for k in (lo.y / spacing).floor() as i32..=(hi.y / spacing).ceil() as i32 {
@@ -2941,7 +2947,7 @@ impl Atelier {
                         board.screen(rect, DVec2::new(lo.x, k as f64 * spacing)),
                         board.screen(rect, DVec2::new(hi.x, k as f64 * spacing)),
                     ],
-                    Stroke::new(0.5, Color32::from_gray(0xDC)),
+                    Stroke::new(0.5, colors.grid),
                 );
             }
         }
@@ -2970,15 +2976,13 @@ impl Atelier {
                     mesh.colored_vertex(
                         point(uv),
                         if locked {
-                            // Locked pieces fade into the sheet: visible, not pickable.
-                            Color32::from_rgb(0xF3, 0xF4, 0xF6)
+                            // Locked pieces fade into the board: visible, not pickable.
+                            colors.locked
                         } else if self.panel_selected(&panel.id) {
-                            // Light blue for the active piece, light grey for the
-                            // rest: the board is white, so the fill carries the
-                            // selection instead of a bright outline on dark.
-                            Color32::from_rgb(0xC9, 0xDF, 0xF5)
+                            // The fill carries the selection rather than a bright outline.
+                            colors.selected
                         } else {
-                            Color32::from_rgb(0xE9, 0xEC, 0xF1)
+                            colors.piece
                         },
                     );
                 }

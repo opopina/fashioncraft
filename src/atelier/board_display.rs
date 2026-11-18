@@ -30,6 +30,47 @@ pub(super) struct PatternDisplay {
     /// Distances to the piece outline from the cursor (internal-line tool) and from the
     /// selected internal line.
     pub(super) measurements: bool,
+    /// A white drafting sheet with tinted pieces instead of the neutral grey board with
+    /// white pieces.
+    pub(super) white_sheet: bool,
+}
+
+/// The board's colours: background, grid lines, piece fill, selected and locked fills,
+/// and the avatar silhouette.
+pub(super) struct BoardColors {
+    pub(super) background: eframe::egui::Color32,
+    pub(super) grid: eframe::egui::Color32,
+    pub(super) piece: eframe::egui::Color32,
+    pub(super) selected: eframe::egui::Color32,
+    pub(super) locked: eframe::egui::Color32,
+    pub(super) silhouette: eframe::egui::Color32,
+}
+
+impl PatternDisplay {
+    pub(super) fn colors(&self) -> BoardColors {
+        use eframe::egui::Color32;
+        if self.white_sheet {
+            BoardColors {
+                background: Color32::from_rgb(0xFA, 0xFA, 0xFB),
+                grid: Color32::from_gray(0xDC),
+                piece: Color32::from_rgb(0xE9, 0xEC, 0xF1),
+                selected: Color32::from_rgb(0xC9, 0xDF, 0xF5),
+                locked: Color32::from_rgb(0xF3, 0xF4, 0xF6),
+                silhouette: Color32::from_rgb(0xE4, 0xE2, 0xDD),
+            }
+        } else {
+            // A neutral grey drafting board: white pieces stand out, the selected one warms
+            // to the accent.
+            BoardColors {
+                background: Color32::from_gray(0xC6),
+                grid: Color32::from_gray(0xB8),
+                piece: Color32::WHITE,
+                selected: Color32::from_rgb(0xFF, 0xEC, 0xCC),
+                locked: Color32::from_gray(0xDA),
+                silhouette: Color32::from_gray(0xD2),
+            }
+        }
+    }
 }
 
 impl Default for PatternDisplay {
@@ -43,6 +84,7 @@ impl Default for PatternDisplay {
             guides: true,
             ruler_unit: Default::default(),
             measurements: true,
+            white_sheet: false,
         }
     }
 }

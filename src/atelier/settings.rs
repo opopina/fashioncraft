@@ -295,6 +295,7 @@ mod tests {
                 guides: false,
                 ruler_unit: super::super::board_guides::RulerUnit::Inch,
                 measurements: false,
+                white_sheet: true,
             },
             dt: 1.0 / 120.0,
             iterations: 24,

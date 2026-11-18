@@ -381,7 +381,7 @@ impl Atelier {
                     }
                 }
                 ui.separator();
-                ui.collapsing(i18n::tr(ui_lang, "Bones and skin weights"), |ui| {
+                ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Bones and skin weights")), |ui| {
                     let mut remove = None;
                     for (k, b) in draft.added_bones.iter().enumerate() {
                         ui.horizontal(|ui| {

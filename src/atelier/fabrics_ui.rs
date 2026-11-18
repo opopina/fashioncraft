@@ -141,7 +141,7 @@ impl Atelier {
         let mut discard = false;
         let mut targets = vec![];
         let scene_gap = self.settings.contact.radius;
-        let header = egui::CollapsingHeader::new(i18n::tr(ui_lang, "Fabric · weight and stretch"))
+        let header = egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Fabric · weight and stretch")))
             .id_salt("fabric_controls").default_open(true).show(ui, |ui| {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
                 let old = d.preset;
@@ -204,7 +204,7 @@ impl Atelier {
                             if axis == 0 { p.warp = k; } else { p.weft = k; }
                         }
                 }
-                ui.collapsing(i18n::tr(ui_lang, "Advanced stiffness"), |ui| {
+                ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Advanced stiffness")), |ui| {
                     value(ui, i18n::tr(ui_lang, "Shear"), &mut p.shear, 1., 0.1, 10000., " N/m");
                     for (label, b) in [("Bending warp", &mut p.bend_warp), ("Bending weft", &mut p.bend_weft)] {
                         let mut micro = *b * 1e6;

@@ -159,7 +159,7 @@ impl Radial {
                 } else {
                     Color32::from_rgb(32, 45, 65)
                 };
-                let accent = Color32::from_rgb(57, 145, 238);
+                let accent = super::workspace::ACCENT;
                 p.circle_filled(
                     center + Vec2::new(0., 5.),
                     OUTER + 10.,

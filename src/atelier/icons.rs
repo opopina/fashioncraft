@@ -86,10 +86,18 @@ pub(super) enum Icon {
     Measure,
     /// A framed picture: the tool that moves, scales and turns graphics.
     Graphic,
+    /// A standing figure: show or hide the avatar.
+    Avatar,
+    /// A shirt: show or hide the garment.
+    Garment,
+    /// A bone: the X-ray skeleton.
+    Skeleton,
+    /// A shirt drawn in outline: the technical view.
+    Technical,
 }
 
 #[cfg(test)]
-const ALL: [Icon; 41] = [
+const ALL: [Icon; 45] = [
     Icon::Select,
     Icon::Edit,
     Icon::Pen,
@@ -131,6 +139,10 @@ const ALL: [Icon; 41] = [
     Icon::Intersect,
     Icon::Measure,
     Icon::Graphic,
+    Icon::Avatar,
+    Icon::Garment,
+    Icon::Skeleton,
+    Icon::Technical,
 ];
 
 // ---------------------------------------------------------------------------
@@ -531,6 +543,55 @@ pub(super) fn geometry(icon: Icon) -> Vec<Prim> {
             seg([0.59, 0.20], [0.59, 0.80]),
             seg([0.76, 0.13], [0.76, 0.87]),
         ],
+        Icon::Avatar => vec![
+            circle([0.50, 0.19], 0.10),
+            closed(&[[0.36, 0.34], [0.64, 0.34], [0.60, 0.60], [0.40, 0.60]]),
+            seg([0.36, 0.36], [0.26, 0.60]),
+            seg([0.64, 0.36], [0.74, 0.60]),
+            seg([0.44, 0.60], [0.41, 0.88]),
+            seg([0.56, 0.60], [0.59, 0.88]),
+        ],
+        Icon::Garment => vec![closed(&[
+            [0.36, 0.18],
+            [0.44, 0.25],
+            [0.56, 0.25],
+            [0.64, 0.18],
+            [0.86, 0.32],
+            [0.78, 0.47],
+            [0.70, 0.42],
+            [0.70, 0.84],
+            [0.30, 0.84],
+            [0.30, 0.42],
+            [0.22, 0.47],
+            [0.14, 0.32],
+        ])],
+        Icon::Skeleton => vec![
+            seg([0.32, 0.68], [0.68, 0.32]),
+            circle([0.27, 0.67], 0.07),
+            circle([0.33, 0.73], 0.07),
+            circle([0.67, 0.27], 0.07),
+            circle([0.73, 0.33], 0.07),
+        ],
+        Icon::Technical => vec![
+            closed(&[
+                [0.36, 0.18],
+                [0.44, 0.25],
+                [0.56, 0.25],
+                [0.64, 0.18],
+                [0.86, 0.32],
+                [0.78, 0.47],
+                [0.70, 0.42],
+                [0.70, 0.84],
+                [0.30, 0.84],
+                [0.30, 0.42],
+                [0.22, 0.47],
+                [0.14, 0.32],
+            ]),
+            dot([0.50, 0.40], 0.025),
+            dot([0.50, 0.52], 0.025),
+            dot([0.50, 0.64], 0.025),
+            dot([0.50, 0.76], 0.025),
+        ],
     }
 }
 
@@ -822,7 +883,7 @@ mod tests {
         // Recorded per icon. If a glyph silently loses its geometry (or gains a
         // stray primitive), the count changes and this fails instead of the
         // blank button reaching the user.
-        let expected: [(Icon, usize); 41] = [
+        let expected: [(Icon, usize); 45] = [
             (Icon::Select, 1),
             (Icon::Edit, 3),
             (Icon::Pen, 3),
@@ -864,6 +925,10 @@ mod tests {
             (Icon::Intersect, 4),
             (Icon::Measure, 5),
             (Icon::Graphic, 3),
+            (Icon::Avatar, 6),
+            (Icon::Garment, 1),
+            (Icon::Skeleton, 5),
+            (Icon::Technical, 5),
         ];
         // A new variant without a recorded count is itself a regression.
         assert_eq!(expected.len(), ALL.len());

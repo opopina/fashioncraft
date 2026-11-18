@@ -259,7 +259,7 @@ impl Atelier {
     pub(super) fn arrangement_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
         let ui_lang = self.prefs.language;
         self.arrangement_sidecar();
-        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Arrange on body"))
+        egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Arrange on body")))
             .id_salt("arrange-on-body")
             .default_open(true)
             .show(ui, |ui| {

@@ -91,9 +91,10 @@ impl Default for Appearance {
             lighting: Lighting::default(),
             anti_aliasing: AntiAliasing::Msaa4,
             gradient: true,
-            top: [60, 67, 78],
-            bottom: [116, 126, 140],
-            floor_color: [98, 107, 119],
+            // A neutral grey studio, darker above.
+            top: [62, 63, 66],
+            bottom: [118, 119, 122],
+            floor_color: [100, 101, 104],
             floor: true,
             grid: true,
             shadow: true,

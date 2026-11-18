@@ -369,6 +369,14 @@ impl Atelier {
             ui.checkbox(&mut display.avatar, i18n::tr(ui_lang, "Avatar · Shift+A"));
             ui.color_edit_button_srgb(&mut display.avatar_color)
                 .on_hover_text(i18n::tr(ui_lang, "Avatar colour"));
+            for (name, linear) in [
+                ("Skin", render::AVATAR_COLOR),
+                ("Grey", render::AVATAR_GREY),
+            ] {
+                if ui.small_button(i18n::tr(ui_lang, name)).clicked() {
+                    display.avatar_color = linear.map(linear_to_srgb);
+                }
+            }
         });
         ui.checkbox(&mut display.garment, i18n::tr(ui_lang, "Garment · Shift+C"));
         ui.checkbox(
@@ -639,6 +647,78 @@ pub(super) fn strain_readout(
             tension[index] / reference_n_per_m.max(1e-9) * 100.
         ),
         render::StrainMode::Global => format!("{name} · stretch {elongation:+.1} %"),
+    }
+}
+
+impl Atelier {
+    /// The display toggles floating at the top-left corner of the 3D view: avatar, garment,
+    /// strain map, X-ray skeleton and technical view.
+    pub(super) fn display_overlay(&mut self, ctx: &egui::Context, rect: egui::Rect) {
+        let ui_lang = self.prefs.language;
+        egui::Area::new(egui::Id::new("display_overlay"))
+            .fixed_pos(rect.min + egui::vec2(10., 10.))
+            .order(egui::Order::Middle)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(Color32::from_black_alpha(150))
+                    .corner_radius(8.)
+                    .inner_margin(4.)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.;
+                            let display = &mut self.prefs.garment_display;
+                            let toggles: [(super::icons::Icon, bool, &str); 5] = [
+                                (
+                                    super::icons::Icon::Avatar,
+                                    display.avatar,
+                                    "Avatar · Shift+A",
+                                ),
+                                (
+                                    super::icons::Icon::Garment,
+                                    display.garment,
+                                    "Garment · Shift+C",
+                                ),
+                                (
+                                    super::icons::Icon::Gradient,
+                                    self.heat,
+                                    "Strain map · Alt+7",
+                                ),
+                                (
+                                    super::icons::Icon::Skeleton,
+                                    self.authoring.pose.skeleton,
+                                    "Show skeleton (X-ray)",
+                                ),
+                                (
+                                    super::icons::Icon::Technical,
+                                    display.schematic,
+                                    "Technical view · Alt+0",
+                                ),
+                            ];
+                            for (k, (icon, on, tip)) in toggles.into_iter().enumerate() {
+                                if super::icons::icon_only(
+                                    ui,
+                                    icon,
+                                    26.,
+                                    on,
+                                    i18n::tr(ui_lang, tip),
+                                )
+                                .clicked()
+                                {
+                                    match k {
+                                        0 => display.avatar = !display.avatar,
+                                        1 => display.garment = !display.garment,
+                                        2 => self.heat = !self.heat,
+                                        3 => {
+                                            self.authoring.pose.skeleton =
+                                                !self.authoring.pose.skeleton
+                                        }
+                                        _ => display.schematic = !display.schematic,
+                                    }
+                                }
+                            }
+                        });
+                    });
+            });
     }
 }
 

@@ -73,11 +73,11 @@ impl Atelier {
             self.seam_zipper_controls(ui, id);
         }
         let mut select = None;
-        egui::CollapsingHeader::new(format!(
+        egui::CollapsingHeader::new(super::workspace::section(format!(
             "{} ({})",
             i18n::tr(ui_lang, "Existing seams"),
             self.project.template.seams.len()
-        ))
+        )))
         .id_salt("existing_seams")
         .default_open(false)
         .show(ui, |ui| {

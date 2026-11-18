@@ -1257,9 +1257,29 @@ impl eframe::App for Atelier {
                         .on_hover_text("Actual physical time advanced per wall-clock second. Independent of render FPS.");
                     ui.separator();
                 }
-                let status = i18n::status(self.prefs.language, &self.status);
-                ui.add(egui::Label::new(status.as_ref()).truncate())
-                    .on_hover_text(status.as_ref());
+                // The views at the right end: split, 3D only, 2D only.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let ui_lang = self.prefs.language;
+                    for (label, hint, mode) in [
+                        ("2D", "2D only", layout::ViewMode::Patterns),
+                        ("3D", "3D only", layout::ViewMode::Garment),
+                        ("3D | 2D", "Split view", layout::ViewMode::Split),
+                    ] {
+                        if ui
+                            .selectable_label(self.prefs.workspace.mode == mode, label)
+                            .on_hover_text(i18n::tr(ui_lang, hint))
+                            .clicked()
+                        {
+                            self.prefs.workspace.mode = mode;
+                        }
+                    }
+                    ui.separator();
+                    let status = i18n::status(self.prefs.language, &self.status);
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(egui::Label::new(status.as_ref()).truncate())
+                            .on_hover_text(status.as_ref());
+                    });
+                });
             });
         });
         if self.authoring.animation.open {

@@ -159,7 +159,7 @@ impl Atelier {
         }
         let mut command = None;
         let mut elastic_ui = false;
-        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Segment"))
+        egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Segment")))
             .id_salt("segment-tools")
             .default_open(true)
             .show(ui, |ui| {
@@ -563,7 +563,7 @@ impl Atelier {
             .map(|p| p.id.clone())
             .collect();
         let mut command = None;
-        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Outline offsets and clean-up"))
+        egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Outline offsets and clean-up")))
             .id_salt("outline-cleanup")
             .show(ui, |ui| {
                 let state = &mut self.authoring.segments;

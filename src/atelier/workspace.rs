@@ -2,9 +2,16 @@
 use super::*;
 use std::sync::OnceLock;
 
-/// Workspace accent: a saturated blue that reads on the light chrome, on the
-/// white pattern board and on the dark variant.
-pub(super) const ACCENT: Color32 = Color32::from_rgb(30, 136, 229);
+/// Workspace accent: a warm amber that reads on the dark chrome, on the neutral pattern
+/// board and on the light variant; selected things, active tools and section titles carry it.
+pub(super) const ACCENT: Color32 = Color32::from_rgb(0xF2, 0xA1, 0x3A);
+/// Text drawn on the accent.
+const ON_ACCENT: Color32 = Color32::from_rgb(0x1B, 0x1B, 0x1F);
+
+/// A section title in an inspector or window: the accent, bold.
+pub(super) fn section(text: impl Into<String>) -> egui::RichText {
+    egui::RichText::new(text).strong().color(ACCENT)
+}
 
 /// Pristine egui base styles, captured before the first install. Deriving each
 /// theme from its own base keeps switching Light -> Dark -> Light idempotent
@@ -42,10 +49,10 @@ fn light_visuals(visuals: &mut egui::Visuals) {
     visuals.faint_bg_color = Color32::from_rgb(0xDD, 0xDD, 0xDD);
     visuals.extreme_bg_color = Color32::WHITE;
     visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., Color32::from_rgb(21, 101, 192));
+    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xDD, 0xDD, 0xDD);
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xCB, 0xDD, 0xF0);
-    visuals.widgets.active.bg_fill = Color32::from_rgb(0xAE, 0xCC, 0xEC);
+    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xF1, 0xDF, 0xC6);
+    visuals.widgets.active.bg_fill = Color32::from_rgb(0xEC, 0xC9, 0x95);
 }
 
 /// Dark counterpart of the light palette, carrying the same accent. Text and
@@ -56,10 +63,10 @@ fn dark_visuals(visuals: &mut egui::Visuals) {
     visuals.faint_bg_color = Color32::from_rgb(0x2C, 0x2C, 0x32);
     visuals.extreme_bg_color = Color32::from_rgb(0x12, 0x12, 0x15);
     visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., Color32::from_rgb(0x8A, 0xC4, 0xF8));
+    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x32, 0x32, 0x38);
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x2A, 0x40, 0x57);
-    visuals.widgets.active.bg_fill = Color32::from_rgb(0x23, 0x4E, 0x74);
+    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x4A, 0x40, 0x33);
+    visuals.widgets.active.bg_fill = Color32::from_rgb(0x6B, 0x52, 0x2E);
 }
 
 fn install(ctx: &egui::Context, dark: bool) {
@@ -92,11 +99,11 @@ impl Atelier {
     pub(super) fn panel_browser(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
         let mut select = None;
-        egui::CollapsingHeader::new(format!(
+        egui::CollapsingHeader::new(section(format!(
             "{} ({})",
             i18n::tr(ui_lang, "Pieces"),
             self.project.template.panels.len()
-        ))
+        )))
         .id_salt("panel_browser")
         .default_open(true)
         .show(ui, |ui| {
@@ -140,9 +147,9 @@ impl Atelier {
             return;
         }
         let mut command = None;
-        egui::CollapsingHeader::new(format!("{} ({})", i18n::tr(ui_lang, "Archived"),
+        egui::CollapsingHeader::new(section(format!("{} ({})", i18n::tr(ui_lang, "Archived"),
             self.project.template.archive.len()
-        ))
+        )))
         .id_salt("archive_list")
         .show(ui, |ui| {
             for entry in &self.project.template.archive {
@@ -172,7 +179,7 @@ impl Atelier {
     }
     pub(super) fn export_information(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
-        ui.collapsing(i18n::tr(ui_lang, "Files & formats"), |ui| {
+        ui.collapsing(section(i18n::tr(ui_lang, "Files & formats")), |ui| {
             ui.label(i18n::tr(ui_lang, "Import"));
             ui.small(i18n::tr(ui_lang, "ClothCraft project and template JSON"));
             ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX"));

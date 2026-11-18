@@ -142,166 +142,210 @@ impl Atelier {
             .filter(|p| p.id != panel.id && p.polygon.is_some())
             .map(|p| (p.id.clone(), p.name.clone()))
             .collect();
-        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Internal shapes & holes"))
-            .id_salt("internal-shapes")
-            .show(ui, |ui| {
-                let state = &mut self.authoring.shapes;
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut state.kind, InternalShapeKind::Rectangle, i18n::tr(ui_lang, "Rectangle"));
-                    ui.selectable_value(&mut state.kind, InternalShapeKind::Ellipse, i18n::tr(ui_lang, "Ellipse"));
-                });
-                for (label, value) in ["Width", "Height"].into_iter().zip(state.size_mm.iter_mut()) {
-                    ui.horizontal(|ui| {
-                        ui.label(label);
-                        ui.add(
-                            egui::DragValue::new(value)
-                                .range(2.0..=10_000.0)
-                                .fixed_decimals(1)
-                                .suffix(" mm"),
-                        );
-                    });
-                }
-                let (lo, hi) = poly.points.iter().fold(
-                    (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
-                    |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+        egui::CollapsingHeader::new(super::workspace::section(i18n::tr(
+            ui_lang,
+            "Internal shapes & holes",
+        )))
+        .id_salt("internal-shapes")
+        .show(ui, |ui| {
+            let state = &mut self.authoring.shapes;
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut state.kind,
+                    InternalShapeKind::Rectangle,
+                    i18n::tr(ui_lang, "Rectangle"),
                 );
-                let middle = ((lo + hi) * 500.).to_array();
-                let mut centre = match &state.center_mm {
-                    Some((id, at)) if *id == panel.id => *at,
-                    _ => middle,
-                };
-                let mut moved = false;
+                ui.selectable_value(
+                    &mut state.kind,
+                    InternalShapeKind::Ellipse,
+                    i18n::tr(ui_lang, "Ellipse"),
+                );
+            });
+            for (label, value) in ["Width", "Height"]
+                .into_iter()
+                .zip(state.size_mm.iter_mut())
+            {
                 ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Centre"));
-                    for value in centre.iter_mut() {
-                        moved |= ui
-                            .add(egui::DragValue::new(value).fixed_decimals(1).suffix(" mm"))
-                            .on_hover_text(i18n::tr(ui_lang, "Position in the piece, from its top-left corner"))
-                            .changed();
-                    }
-                });
-                if ui
-                    .small_button(i18n::tr(ui_lang, "Centre of the piece"))
-                    .on_hover_text(i18n::tr(ui_lang, "Put the first shape in the middle of the piece"))
-                    .clicked()
-                {
-                    state.center_mm = None;
-                    moved = false;
-                }
-                if moved {
-                    state.center_mm = Some((panel.id.clone(), centre));
-                }
-                ui.label(i18n::tr(ui_lang, "Replicate"));
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Copies"));
-                    ui.add(egui::DragValue::new(&mut state.count).range(1..=50))
-                        .on_hover_text(i18n::tr(ui_lang, "Shapes created in one go, the first one included"));
-                });
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Interval"));
+                    ui.label(label);
                     ui.add(
-                        egui::DragValue::new(&mut state.interval_mm)
-                            .range(-10_000.0..=10_000.0)
+                        egui::DragValue::new(value)
+                            .range(2.0..=10_000.0)
                             .fixed_decimals(1)
                             .suffix(" mm"),
-                    )
-                    .on_hover_text(i18n::tr(ui_lang, "Distance between the centres of neighbouring copies"));
+                    );
                 });
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Angle"));
-                    ui.add(
-                        egui::DragValue::new(&mut state.angle_degrees)
-                            .range(-360.0..=360.0)
-                            .fixed_decimals(1)
-                            .suffix("°"),
-                    )
-                    .on_hover_text(i18n::tr(ui_lang, "Direction of the copies: 0° up, 90° right"));
-                });
-                let command = Command::InternalShape {
-                    panel: panel.id.clone(),
-                    kind: state.kind,
-                    center: DVec2::from_array(centre) / 1000.,
-                    size: DVec2::from_array(state.size_mm) / 1000.,
-                    count: state.count,
-                    interval_m: state.interval_mm / 1000.,
-                    angle_degrees: state.angle_degrees,
-                };
-                if ui.button(i18n::tr(ui_lang, "Add internal shape")).clicked() && self.edit(command) {
-                    self.status = i18n::tr(ui_lang, "Internal shape added · select it to cut it out as a hole").into();
-                }
-                if ui
-                    .button(i18n::tr(ui_lang, "Add diamond dart"))
-                    .on_hover_text(
-                        i18n::tr(ui_lang, "A diamond hole of this width and height at Centre, its upper and lower \
-                         legs sewn together: it closes into a dart along the height"),
-                    )
-                    .clicked()
-                    && self.edit(Command::DiamondDart {
-                        panel: panel.id.clone(),
-                        center: DVec2::from_array(centre) / 1000.,
-                        width: self.authoring.shapes.size_mm[0] / 1000.,
-                        height: self.authoring.shapes.size_mm[1] / 1000.,
-                    })
-                {
-                    self.status = i18n::tr(ui_lang, "Diamond dart added and sewn").into();
-                }
-                if !others.is_empty() {
-                    ui.separator();
-                    let chosen = &mut self.authoring.segments.clone_source;
-                    if !chosen
-                        .as_ref()
-                        .is_some_and(|c| others.iter().any(|(id, _)| id == c))
-                    {
-                        *chosen = Some(others[0].0.clone());
-                    }
-                    let label = others
-                        .iter()
-                        .find(|(id, _)| Some(id) == chosen.as_ref())
-                        .map_or("", |(_, name)| name.as_str());
-                    ui.horizontal(|ui| {
-                        ui.label(i18n::tr(ui_lang, "Outline of"));
-                        egui::ComboBox::from_id_salt("clone-outline-source")
-                            .selected_text(label)
-                            .show_ui(ui, |ui| {
-                                for (id, name) in &others {
-                                    ui.selectable_value(chosen, Some(id.clone()), name);
-                                }
-                            });
-                    });
-                    let source = chosen.clone();
-                    if ui
-                        .button(i18n::tr(ui_lang, "Add as internal shape"))
-                        .on_hover_text(i18n::tr(ui_lang, "Copy that piece's outline into this one, centred on Centre"))
-                        .clicked()
-                        && let Some(source) = source
-                        && self.edit(Command::ClonePanelAsShape {
-                            source,
-                            target: panel.id.clone(),
-                            center: DVec2::from_array(centre) / 1000.,
-                        })
-                    {
-                        self.status = i18n::tr(ui_lang, "Outline copied as an internal shape").into();
-                    }
-                }
-                if !poly.holes.is_empty() {
-                    ui.separator();
-                    for (index, hole) in poly.holes.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.small(format!("Hole {} · {} points", index + 1, hole.points.len()));
-                            if ui
-                                .small_button(i18n::tr(ui_lang, "Fill"))
-                                .on_hover_text(i18n::tr(ui_lang, "Fill the hole back in, leaving an internal shape along its rim"))
-                                .clicked()
-                                && self.edit(Command::ConvertToInternalShape {
-                                    panel: panel.id.clone(),
-                                    hole: index,
-                                })
-                            {
-                                self.status = i18n::tr(ui_lang, "Hole filled · an internal shape keeps its outline").into();
-                            }
-                        });
-                    }
+            }
+            let (lo, hi) = poly.points.iter().fold(
+                (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
+                |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+            );
+            let middle = ((lo + hi) * 500.).to_array();
+            let mut centre = match &state.center_mm {
+                Some((id, at)) if *id == panel.id => *at,
+                _ => middle,
+            };
+            let mut moved = false;
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr(ui_lang, "Centre"));
+                for value in centre.iter_mut() {
+                    moved |= ui
+                        .add(egui::DragValue::new(value).fixed_decimals(1).suffix(" mm"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Position in the piece, from its top-left corner",
+                        ))
+                        .changed();
                 }
             });
+            if ui
+                .small_button(i18n::tr(ui_lang, "Centre of the piece"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Put the first shape in the middle of the piece",
+                ))
+                .clicked()
+            {
+                state.center_mm = None;
+                moved = false;
+            }
+            if moved {
+                state.center_mm = Some((panel.id.clone(), centre));
+            }
+            ui.label(i18n::tr(ui_lang, "Replicate"));
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr(ui_lang, "Copies"));
+                ui.add(egui::DragValue::new(&mut state.count).range(1..=50))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Shapes created in one go, the first one included",
+                    ));
+            });
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr(ui_lang, "Interval"));
+                ui.add(
+                    egui::DragValue::new(&mut state.interval_mm)
+                        .range(-10_000.0..=10_000.0)
+                        .fixed_decimals(1)
+                        .suffix(" mm"),
+                )
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Distance between the centres of neighbouring copies",
+                ));
+            });
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr(ui_lang, "Angle"));
+                ui.add(
+                    egui::DragValue::new(&mut state.angle_degrees)
+                        .range(-360.0..=360.0)
+                        .fixed_decimals(1)
+                        .suffix("°"),
+                )
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Direction of the copies: 0° up, 90° right",
+                ));
+            });
+            let command = Command::InternalShape {
+                panel: panel.id.clone(),
+                kind: state.kind,
+                center: DVec2::from_array(centre) / 1000.,
+                size: DVec2::from_array(state.size_mm) / 1000.,
+                count: state.count,
+                interval_m: state.interval_mm / 1000.,
+                angle_degrees: state.angle_degrees,
+            };
+            if ui.button(i18n::tr(ui_lang, "Add internal shape")).clicked() && self.edit(command) {
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Internal shape added · select it to cut it out as a hole",
+                )
+                .into();
+            }
+            if ui
+                .button(i18n::tr(ui_lang, "Add diamond dart"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A diamond hole of this width and height at Centre, its upper and lower \
+                         legs sewn together: it closes into a dart along the height",
+                ))
+                .clicked()
+                && self.edit(Command::DiamondDart {
+                    panel: panel.id.clone(),
+                    center: DVec2::from_array(centre) / 1000.,
+                    width: self.authoring.shapes.size_mm[0] / 1000.,
+                    height: self.authoring.shapes.size_mm[1] / 1000.,
+                })
+            {
+                self.status = i18n::tr(ui_lang, "Diamond dart added and sewn").into();
+            }
+            if !others.is_empty() {
+                ui.separator();
+                let chosen = &mut self.authoring.segments.clone_source;
+                if !chosen
+                    .as_ref()
+                    .is_some_and(|c| others.iter().any(|(id, _)| id == c))
+                {
+                    *chosen = Some(others[0].0.clone());
+                }
+                let label = others
+                    .iter()
+                    .find(|(id, _)| Some(id) == chosen.as_ref())
+                    .map_or("", |(_, name)| name.as_str());
+                ui.horizontal(|ui| {
+                    ui.label(i18n::tr(ui_lang, "Outline of"));
+                    egui::ComboBox::from_id_salt("clone-outline-source")
+                        .selected_text(label)
+                        .show_ui(ui, |ui| {
+                            for (id, name) in &others {
+                                ui.selectable_value(chosen, Some(id.clone()), name);
+                            }
+                        });
+                });
+                let source = chosen.clone();
+                if ui
+                    .button(i18n::tr(ui_lang, "Add as internal shape"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Copy that piece's outline into this one, centred on Centre",
+                    ))
+                    .clicked()
+                    && let Some(source) = source
+                    && self.edit(Command::ClonePanelAsShape {
+                        source,
+                        target: panel.id.clone(),
+                        center: DVec2::from_array(centre) / 1000.,
+                    })
+                {
+                    self.status = i18n::tr(ui_lang, "Outline copied as an internal shape").into();
+                }
+            }
+            if !poly.holes.is_empty() {
+                ui.separator();
+                for (index, hole) in poly.holes.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.small(format!("Hole {} · {} points", index + 1, hole.points.len()));
+                        if ui
+                            .small_button(i18n::tr(ui_lang, "Fill"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Fill the hole back in, leaving an internal shape along its rim",
+                            ))
+                            .clicked()
+                            && self.edit(Command::ConvertToInternalShape {
+                                panel: panel.id.clone(),
+                                hole: index,
+                            })
+                        {
+                            self.status = i18n::tr(
+                                ui_lang,
+                                "Hole filled · an internal shape keeps its outline",
+                            )
+                            .into();
+                        }
+                    });
+                }
+            }
+        });
     }
 }

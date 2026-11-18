@@ -120,8 +120,10 @@ pub fn fibre_tension(stretch: [f64; 2], material: &Material) -> [f64; 2] {
     ]
 }
 
-/// Default avatar grey, linear RGB.
-pub const AVATAR_COLOR: [f32; 3] = [0.46, 0.47, 0.49];
+/// Default avatar colour, a light skin tone, linear RGB.
+pub const AVATAR_COLOR: [f32; 3] = [0.95, 0.68, 0.55];
+/// The neutral grey the avatar can be shown in instead, linear RGB.
+pub const AVATAR_GREY: [f32; 3] = [0.46, 0.47, 0.49];
 /// Default strain-map maximum: 20 % (stretched to 120 % of the rest length).
 pub const STRAIN_MAX: f64 = 0.2;
 

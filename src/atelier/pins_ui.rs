@@ -33,39 +33,43 @@ fn individual_pin_controls(
         return None;
     }
     let mut action = None;
-    let section = egui::CollapsingHeader::new("Individual authored pins")
-        .id_salt(("individual-pins", panel))
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .id_salt(("individual-pin-scroll", panel))
-                .max_height(144.)
-                .show_rows(ui, 24., points.len(), |ui, rows| {
-                    for index in rows {
-                        let uv = points[index];
-                        ui.push_id((uv.x.to_bits(), uv.y.to_bits()), |ui| {
-                            ui.horizontal(|ui| {
-                                let release = ui.add_enabled(
-                                    available && !frozen,
-                                    egui::Button::new("Release"),
-                                );
-                                #[cfg(test)]
-                                super::authoring_smoke::widget_harness::named(
-                                    ui,
-                                    &release,
-                                    format!("pins.release_one.{index}"),
-                                );
-                                if release.clicked() {
-                                    action = Some(Action::ReleaseOne(uv));
-                                }
-                                let coordinates =
-                                    format!("X {:.2} mm · Y {:.2} mm", uv.x * 1000., uv.y * 1000.);
-                                ui.add(egui::Label::new(&coordinates).truncate())
-                                    .on_hover_text(coordinates);
+    let section =
+        egui::CollapsingHeader::new(super::workspace::section("Individual authored pins"))
+            .id_salt(("individual-pins", panel))
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt(("individual-pin-scroll", panel))
+                    .max_height(144.)
+                    .show_rows(ui, 24., points.len(), |ui, rows| {
+                        for index in rows {
+                            let uv = points[index];
+                            ui.push_id((uv.x.to_bits(), uv.y.to_bits()), |ui| {
+                                ui.horizontal(|ui| {
+                                    let release = ui.add_enabled(
+                                        available && !frozen,
+                                        egui::Button::new("Release"),
+                                    );
+                                    #[cfg(test)]
+                                    super::authoring_smoke::widget_harness::named(
+                                        ui,
+                                        &release,
+                                        format!("pins.release_one.{index}"),
+                                    );
+                                    if release.clicked() {
+                                        action = Some(Action::ReleaseOne(uv));
+                                    }
+                                    let coordinates = format!(
+                                        "X {:.2} mm · Y {:.2} mm",
+                                        uv.x * 1000.,
+                                        uv.y * 1000.
+                                    );
+                                    ui.add(egui::Label::new(&coordinates).truncate())
+                                        .on_hover_text(coordinates);
+                                });
                             });
-                        });
-                    }
-                });
-        });
+                        }
+                    });
+            });
     #[cfg(test)]
     super::authoring_smoke::widget_harness::named(ui, &section.header_response, "pins.individual");
     #[cfg(not(test))]

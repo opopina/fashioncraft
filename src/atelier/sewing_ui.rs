@@ -89,7 +89,7 @@ impl SewingAuditUi {
             for seam in &report.seams {
                 ui.push_id(seam.seam_index, |ui| {
                     let mismatch = seam.difference_m.map_or_else(|| "unresolved".into(), |d| format!("{:+.2} mm", d * 1000.));
-                    let _header = egui::CollapsingHeader::new(format!("{} · B − A {mismatch}", seam.seam_id)).show(ui, |ui| {
+                    let _header = egui::CollapsingHeader::new(super::workspace::section(format!("{} · B − A {mismatch}", seam.seam_id))).show(ui, |ui| {
                         if let Some([a, b]) = seam.lengths_m {
                             ui.label(format!("A {:.2} mm · B {:.2} mm", a * 1000., b * 1000.));
                         }
@@ -179,12 +179,15 @@ fn sewing_primary_action(ui: &mut egui::Ui, editing: bool, easing_needed: bool) 
 impl Atelier {
     pub(super) fn sewing_audit_controls(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
-        let action = egui::CollapsingHeader::new(i18n::tr(ui_lang, "Sewing audit"))
-            .show(ui, |ui| {
-                self.authoring.sewing_audit.show(ui, self.generation)
-            })
-            .body_returned
-            .flatten();
+        let action = egui::CollapsingHeader::new(super::workspace::section(i18n::tr(
+            ui_lang,
+            "Sewing audit",
+        )))
+        .show(ui, |ui| {
+            self.authoring.sewing_audit.show(ui, self.generation)
+        })
+        .body_returned
+        .flatten();
         match action {
             Some(AuditAction::Refresh) => self
                 .authoring

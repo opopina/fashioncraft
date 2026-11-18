@@ -202,7 +202,7 @@ impl ImportUi {
                         if r.changed() { if checked {self.selected.insert(i);} else {self.selected.remove(&i);} self.acknowledged=false; }
                     }
                 });
-                egui::CollapsingHeader::new(format!("Unsupported entities ({})",d.issues.len())).show(ui,|ui| {
+                egui::CollapsingHeader::new(super::workspace::section(format!("Unsupported entities ({})",d.issues.len()))).show(ui,|ui| {
                     egui::ScrollArea::vertical().id_salt("dxf-issues").max_height(120.).show_rows(ui,22.,d.issues.len(),|ui,rows| {
                         for i in rows { let e=&d.issues[i]; let text=format!("{} · {}: {}",e.layer,e.entity,e.reason); ui.add(egui::Label::new(&text).truncate()).on_hover_text(text); }
                     });

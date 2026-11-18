@@ -109,42 +109,46 @@ impl Atelier {
     pub(super) fn drafting_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
         let ui_lang = self.prefs.language;
         self.linked_mirror_properties(ui, &panel.id);
-        ui.collapsing(i18n::tr(ui_lang, "Mirrors and booleans"), |ui| {
-            ui.small(i18n::tr(
-                ui_lang,
-                "X: left / right · Y: up / down in local pattern coordinates.",
-            ));
-            ui.horizontal_wrapped(|ui| {
-                for (axis, label) in [(MirrorAxis::X, "Mirror X"), (MirrorAxis::Y, "Mirror Y")] {
-                    if ui.button(label).clicked() {
-                        self.edit(Command::Mirror {
-                            panel: panel.id.clone(),
-                            axis,
-                            copy_side: None,
-                        });
+        ui.collapsing(
+            super::workspace::section(i18n::tr(ui_lang, "Mirrors and booleans")),
+            |ui| {
+                ui.small(i18n::tr(
+                    ui_lang,
+                    "X: left / right · Y: up / down in local pattern coordinates.",
+                ));
+                ui.horizontal_wrapped(|ui| {
+                    for (axis, label) in [(MirrorAxis::X, "Mirror X"), (MirrorAxis::Y, "Mirror Y")]
+                    {
+                        if ui.button(label).clicked() {
+                            self.edit(Command::Mirror {
+                                panel: panel.id.clone(),
+                                axis,
+                                copy_side: None,
+                            });
+                        }
                     }
-                }
-            });
-            ui.label(i18n::tr(ui_lang, "Create an independent mirrored copy"));
-            ui.horizontal(|ui| {
-                for (axis, side, label) in [
-                    (MirrorAxis::X, -1, "−X"),
-                    (MirrorAxis::X, 1, "+X"),
-                    (MirrorAxis::Y, -1, "−Y"),
-                    (MirrorAxis::Y, 1, "+Y"),
-                ] {
-                    if ui.button(label).clicked() {
-                        self.edit(Command::Mirror {
-                            panel: panel.id.clone(),
-                            axis,
-                            copy_side: Some(side),
-                        });
+                });
+                ui.label(i18n::tr(ui_lang, "Create an independent mirrored copy"));
+                ui.horizontal(|ui| {
+                    for (axis, side, label) in [
+                        (MirrorAxis::X, -1, "−X"),
+                        (MirrorAxis::X, 1, "+X"),
+                        (MirrorAxis::Y, -1, "−Y"),
+                        (MirrorAxis::Y, 1, "+Y"),
+                    ] {
+                        if ui.button(label).clicked() {
+                            self.edit(Command::Mirror {
+                                panel: panel.id.clone(),
+                                axis,
+                                copy_side: Some(side),
+                            });
+                        }
                     }
-                }
-            });
-            ui.separator();
-            self.boolean_properties(ui, panel);
-        });
+                });
+                ui.separator();
+                self.boolean_properties(ui, panel);
+            },
+        );
         self.internal_shape_properties(ui, panel);
         self.piece_line_tools(ui, panel);
     }

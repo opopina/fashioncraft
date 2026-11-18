@@ -2041,6 +2041,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
         "Export Alembic…" => "Exportar Alembic…",
+        "2D patterns" => "Patrones 2D",
+        "Skin" => "Piel",
+        "Grey" => "Gris",
+        "White sheet" => "Hoja blanca",
+        "A white drafting sheet with tinted pieces instead of the grey board with white pieces" => {
+            "Una hoja blanca con piezas tintadas en vez del tablero gris con piezas blancas"
+        }
         "Full-speed falls" => "Caídas a toda velocidad",
         "Split a step into up to 16 shorter ones when the cloth moves faster than one step's contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while cloth moves fast; settled cloth is unaffected" => {
             "Divide un paso en hasta 16 más cortos cuando la tela se mueve más deprisa de lo que permiten los contactos de un paso (unos 0,3 m/s), para que la tela que cae siga a la gravedad. Más lento mientras la tela se mueve deprisa; la tela asentada no cambia"

@@ -33,7 +33,7 @@ impl Atelier {
             .iter()
             .any(|s| s.panel == panel.id);
         let mut action = None;
-        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Simulation state"))
+        egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Simulation state")))
             .id_salt("activation")
             .show(ui, |ui| {
                 ui.small(match state {

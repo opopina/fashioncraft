@@ -65,82 +65,86 @@ impl Atelier {
             .cloned()
             .collect();
         let mut command = None;
-        egui::CollapsingHeader::new(format!("{} ({})", i18n::tr(ui_lang, "Trims"), mine.len()))
-            .id_salt("piece_trims")
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    let centre = self.piece_centre(panel);
-                    if ui
-                        .add_enabled(
-                            centre.is_some(),
-                            egui::Button::new(i18n::tr(ui_lang, "Add button")),
-                        )
-                        .on_hover_text(i18n::tr(
-                            ui_lang,
-                            "A 15 mm button at the middle of the piece",
-                        ))
-                        .clicked()
-                        && let Some(c) = centre
-                    {
-                        command = Some(Command::SetTrim {
-                            trim: Trim {
-                                id: self.new_trim_id(),
-                                panel_id: panel.into(),
-                                kind: TrimKind::Button {
-                                    center_m: c,
-                                    diameter_m: 0.015,
-                                },
-                            },
-                        });
-                    }
-                    if ui
-                        .add_enabled(
-                            centre.is_some(),
-                            egui::Button::new(i18n::tr(ui_lang, "Add buttonhole")),
-                        )
-                        .on_hover_text(i18n::tr(
-                            ui_lang,
-                            "An 18 mm buttonhole at the middle of the piece",
-                        ))
-                        .clicked()
-                        && let Some(c) = centre
-                    {
-                        command = Some(Command::SetTrim {
-                            trim: Trim {
-                                id: self.new_trim_id(),
-                                panel_id: panel.into(),
-                                kind: TrimKind::Buttonhole {
-                                    start_m: c - DVec2::new(0.009, 0.),
-                                    end_m: c + DVec2::new(0.009, 0.),
-                                    width_m: 0.004,
-                                },
-                            },
-                        });
-                    }
-                });
-                if mine.is_empty() {
-                    ui.small(i18n::tr(
+        egui::CollapsingHeader::new(super::workspace::section(format!(
+            "{} ({})",
+            i18n::tr(ui_lang, "Trims"),
+            mine.len()
+        )))
+        .id_salt("piece_trims")
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let centre = self.piece_centre(panel);
+                if ui
+                    .add_enabled(
+                        centre.is_some(),
+                        egui::Button::new(i18n::tr(ui_lang, "Add button")),
+                    )
+                    .on_hover_text(i18n::tr(
                         ui_lang,
-                        "Topstitching and zippers go along a selected segment.",
-                    ));
+                        "A 15 mm button at the middle of the piece",
+                    ))
+                    .clicked()
+                    && let Some(c) = centre
+                {
+                    command = Some(Command::SetTrim {
+                        trim: Trim {
+                            id: self.new_trim_id(),
+                            panel_id: panel.into(),
+                            kind: TrimKind::Button {
+                                center_m: c,
+                                diameter_m: 0.015,
+                            },
+                        },
+                    });
                 }
-                for trim in &mine {
-                    ui.horizontal(|ui| {
-                        let kind = match &trim.kind {
-                            TrimKind::Button { .. } => "Button",
-                            TrimKind::Buttonhole { .. } => "Buttonhole",
-                            TrimKind::Zipper { .. } => "Zipper",
-                            TrimKind::Topstitch { .. } => "Topstitch",
-                        };
-                        ui.label(format!("{kind} · {}", trim.id));
-                        if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
-                            command = Some(Command::RemoveTrim {
-                                id: trim.id.clone(),
-                            });
-                        }
+                if ui
+                    .add_enabled(
+                        centre.is_some(),
+                        egui::Button::new(i18n::tr(ui_lang, "Add buttonhole")),
+                    )
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "An 18 mm buttonhole at the middle of the piece",
+                    ))
+                    .clicked()
+                    && let Some(c) = centre
+                {
+                    command = Some(Command::SetTrim {
+                        trim: Trim {
+                            id: self.new_trim_id(),
+                            panel_id: panel.into(),
+                            kind: TrimKind::Buttonhole {
+                                start_m: c - DVec2::new(0.009, 0.),
+                                end_m: c + DVec2::new(0.009, 0.),
+                                width_m: 0.004,
+                            },
+                        },
                     });
                 }
             });
+            if mine.is_empty() {
+                ui.small(i18n::tr(
+                    ui_lang,
+                    "Topstitching and zippers go along a selected segment.",
+                ));
+            }
+            for trim in &mine {
+                ui.horizontal(|ui| {
+                    let kind = match &trim.kind {
+                        TrimKind::Button { .. } => "Button",
+                        TrimKind::Buttonhole { .. } => "Buttonhole",
+                        TrimKind::Zipper { .. } => "Zipper",
+                        TrimKind::Topstitch { .. } => "Topstitch",
+                    };
+                    ui.label(format!("{kind} · {}", trim.id));
+                    if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
+                        command = Some(Command::RemoveTrim {
+                            id: trim.id.clone(),
+                        });
+                    }
+                });
+            }
+        });
         if let Some(command) = command {
             self.edit(command);
         }

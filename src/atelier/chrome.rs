@@ -30,12 +30,24 @@ pub(super) fn view_header(
 ) -> ViewHeader {
     let compact = ui.available_width() < 430.;
     ui.horizontal(|ui| {
-        ui.strong(if compact {
-            if is_3d { "3D" } else { "2D" }
+        // The title sits in the middle of the header (on the left when the view is narrow).
+        let row = ui.max_rect();
+        if compact {
+            ui.strong(if is_3d { "3D" } else { "2D" })
+                .on_hover_text(help);
         } else {
-            title
-        })
-        .on_hover_text(help);
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let colour = ui.visuals().strong_text_color();
+            let galley = ui.painter().layout_no_wrap(title.to_string(), font, colour);
+            let at = egui::pos2(
+                row.center().x - galley.size().x / 2.,
+                row.center().y - galley.size().y / 2.,
+            );
+            let area = egui::Rect::from_min_size(at, galley.size());
+            ui.painter().galley(at, galley, colour);
+            ui.interact(area, ui.id().with("view_title"), egui::Sense::hover())
+                .on_hover_text(help);
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let expand = ui
                 .small_button(i18n::tr(ui_lang, if expanded { "Split" } else { "Expand" }))
@@ -93,6 +105,7 @@ pub(super) fn appearance_controls(ui: &mut egui::Ui, value: &mut Appearance, msa
     ui.strong("Background");
     ui.horizontal(|ui| {
         for (name, top, bottom, floor) in [
+            ("Neutral", [62, 63, 66], [118, 119, 122], [100, 101, 104]),
             ("Studio", [60, 67, 78], [116, 126, 140], [98, 107, 119]),
             ("Light", [190, 199, 210], [231, 235, 240], [196, 203, 212]),
             ("Dark", [27, 30, 36], [65, 72, 83], [54, 61, 71]),
@@ -146,7 +159,7 @@ impl Atelier {
         let ui_lang = self.prefs.language;
         let header = view_header(
             ui,
-            i18n::tr(self.prefs.language, "3D GARMENT"),
+            i18n::tr(self.prefs.language, "3D garment"),
             self.prefs.workspace.mode == ViewMode::Garment,
             true,
             i18n::tr(ui_lang, view_controls::hint_3d(self.authoring.tool)),
@@ -244,7 +257,7 @@ impl Atelier {
                     }
                 }
                 InspectorTab::Simulation => {
-                    ui.collapsing(i18n::tr(ui_lang, "Avatar collision diagnostics"), |ui| {
+                    ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Avatar collision diagnostics")), |ui| {
                         avatar_diagnostics::show(ui, &self.scene, &self.settings, self.generation, self.playing, self.pending);
                     });
                     ui.strong(i18n::tr(ui_lang, "Mesh resolution"));
@@ -269,7 +282,7 @@ impl Atelier {
                     )
                     .on_hover_text(i18n::tr(ui_lang, "Air damping: how much the air slows the cloth down (1/s)"));
                     self.simulation_environment(ui);
-                    ui.collapsing(i18n::tr(ui_lang, "Advanced meshing"), |ui| {
+                    ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Advanced meshing")), |ui| {
                         ui.add(
                             egui::Slider::new(&mut self.anisotropy, 1.0..=4.0).text(i18n::tr(ui_lang, "Anisotropy")),
                         );
@@ -277,7 +290,7 @@ impl Atelier {
                             egui::Slider::new(&mut self.mesh_axis, 0.0..=180.0).text(i18n::tr(ui_lang, "Mesh axis")),
                         );
                     });
-                    ui.collapsing(i18n::tr(ui_lang, "Diagnostics"), |ui| {
+                    ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Diagnostics")), |ui| {
                         ui.checkbox(&mut self.seams, i18n::tr(ui_lang, "All seam samples"));
                         ui.small(if self.settings.friction > 0. {
                             i18n::tr(ui_lang, "Hybrid VBD / OGC · lagged Coulomb friction · uncalibrated materials")
@@ -336,7 +349,7 @@ impl Atelier {
                             ui.ctx().request_repaint();
                         }
                     });
-                    ui.collapsing(i18n::tr(ui_lang, "Motion / jitter"), |ui| {
+                    ui.collapsing(super::workspace::section(i18n::tr(ui_lang, "Motion / jitter")), |ui| {
                         let mut inspect = false;
                         if let Some(m) = self.metrics.as_ref().and_then(|m| m.motion.as_ref()) {
                             ui.small(format!("High-pass RMS {:.3} mm · max {:.3} mm", m.highpass_rms_m * 1000., m.highpass_max_m * 1000.));
@@ -406,6 +419,7 @@ impl Atelier {
             egui::Sense::click_and_drag(),
         );
         self.authoring.selection.garment_rect = Some(rect);
+        self.display_overlay(&ctx, rect);
         if !self.authoring.radial.blocked && !self.quick.blocked {
             self.sewing_wheel(&response);
             if response.secondary_clicked()

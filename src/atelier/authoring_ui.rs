@@ -1543,118 +1543,121 @@ impl Atelier {
             self.authoring.height_mm = panel.pattern.height * 1000.;
             self.authoring.numeric_anchor = None;
         }
-        ui.collapsing(i18n::tr(ui_lang, "Dimensions and points"), |ui| {
-            ui.strong(i18n::tr(ui_lang, "Dimensions (mm)"));
-            ui.horizontal_wrapped(|ui| {
-                ui.label(i18n::tr(ui_lang, "Width"));
-                millimetre_field(ui, &mut self.authoring.width_mm);
-                ui.label(i18n::tr(ui_lang, "Height"));
-                millimetre_field(ui, &mut self.authoring.height_mm);
-            });
-            if ui
-                .button(i18n::tr(ui_lang, "Apply dimensions"))
-                .on_hover_text(i18n::tr(
-                    ui_lang,
-                    "Exact millimetre size; invalid values leave the document unchanged",
-                ))
-                .clicked()
-            {
-                self.edit(Command::Dimensions {
-                    panel: panel.id.clone(),
-                    width: authoring::mm_to_m(self.authoring.width_mm),
-                    height: authoring::mm_to_m(self.authoring.height_mm),
+        ui.collapsing(
+            super::workspace::section(i18n::tr(ui_lang, "Dimensions and points")),
+            |ui| {
+                ui.strong(i18n::tr(ui_lang, "Dimensions (mm)"));
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(i18n::tr(ui_lang, "Width"));
+                    millimetre_field(ui, &mut self.authoring.width_mm);
+                    ui.label(i18n::tr(ui_lang, "Height"));
+                    millimetre_field(ui, &mut self.authoring.height_mm);
                 });
-            }
-            if let Some(polygon) = panel.polygon.as_ref() {
-                if !polygon.target_diagnostics().is_empty() {
-                    ui.colored_label(
-                        Color32::GOLD,
-                        i18n::tr(ui_lang, "A stored target length is invalid and is ignored."),
-                    );
-                }
-                if let Some(k) = self
-                    .authoring
-                    .anchor
-                    .as_ref()
-                    .filter(|(id, k)| id == &panel.id && *k < polygon.points.len())
-                    .map(|(_, k)| *k)
-                {
-                    if self.authoring.numeric_anchor != Some(k) {
-                        self.authoring.numeric_anchor = Some(k);
-                        self.authoring.anchor_x_mm = authoring::m_to_mm(polygon.points[k].x);
-                        self.authoring.anchor_y_mm = authoring::m_to_mm(polygon.points[k].y);
-                    }
-                    ui.strong(format!("Point {} (mm)", k + 1));
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label("X");
-                        millimetre_field(ui, &mut self.authoring.anchor_x_mm);
-                        ui.label("Y");
-                        millimetre_field(ui, &mut self.authoring.anchor_y_mm);
-                    });
-                    // Visible nudge buttons for discoverability. They dispatch the
-                    // same `Command::Nudge` as the board's arrow keys, so the two
-                    // paths cannot drift apart in behaviour.
-                    for (label, steps) in [
-                        (
-                            "Nudge X",
-                            [
-                                ("-1", DVec2::new(-1., 0.)),
-                                ("+1", DVec2::new(1., 0.)),
-                                ("-10", DVec2::new(-10., 0.)),
-                                ("+10", DVec2::new(10., 0.)),
-                            ],
-                        ),
-                        (
-                            "Nudge Y",
-                            [
-                                ("-1", DVec2::new(0., -1.)),
-                                ("+1", DVec2::new(0., 1.)),
-                                ("-10", DVec2::new(0., -10.)),
-                                ("+10", DVec2::new(0., 10.)),
-                            ],
-                        ),
-                    ] {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(label);
-                            for (step_label, step) in steps {
-                                if ui.small_button(step_label).clicked() {
-                                    self.edit(Command::Nudge {
-                                        panel: panel.id.clone(),
-                                        points: vec![k],
-                                        delta_mm: step,
-                                    });
-                                }
-                            }
-                        });
-                    }
-                    if ui
-                        .button(i18n::tr(ui_lang, "Apply point"))
-                        .on_hover_text(i18n::tr(
-                            ui_lang,
-                            "Material coordinates in millimetres; the rest origin is re-based \
-                         without moving the other points",
-                        ))
-                        .clicked()
-                    {
-                        let position = DVec2::new(
-                            authoring::mm_to_m(self.authoring.anchor_x_mm),
-                            authoring::mm_to_m(self.authoring.anchor_y_mm),
-                        );
-                        self.edit(Command::Anchor {
-                            panel: panel.id.clone(),
-                            anchor: k,
-                            position,
-                        });
-                    }
-                } else {
-                    ui.small(i18n::tr(
+                if ui
+                    .button(i18n::tr(ui_lang, "Apply dimensions"))
+                    .on_hover_text(i18n::tr(
                         ui_lang,
-                        "Click a point on the 2D board to edit its exact position.",
-                    ));
+                        "Exact millimetre size; invalid values leave the document unchanged",
+                    ))
+                    .clicked()
+                {
+                    self.edit(Command::Dimensions {
+                        panel: panel.id.clone(),
+                        width: authoring::mm_to_m(self.authoring.width_mm),
+                        height: authoring::mm_to_m(self.authoring.height_mm),
+                    });
                 }
-                self.target_length_properties(ui, &panel, polygon);
-            }
-        });
+                if let Some(polygon) = panel.polygon.as_ref() {
+                    if !polygon.target_diagnostics().is_empty() {
+                        ui.colored_label(
+                            Color32::GOLD,
+                            i18n::tr(ui_lang, "A stored target length is invalid and is ignored."),
+                        );
+                    }
+                    if let Some(k) = self
+                        .authoring
+                        .anchor
+                        .as_ref()
+                        .filter(|(id, k)| id == &panel.id && *k < polygon.points.len())
+                        .map(|(_, k)| *k)
+                    {
+                        if self.authoring.numeric_anchor != Some(k) {
+                            self.authoring.numeric_anchor = Some(k);
+                            self.authoring.anchor_x_mm = authoring::m_to_mm(polygon.points[k].x);
+                            self.authoring.anchor_y_mm = authoring::m_to_mm(polygon.points[k].y);
+                        }
+                        ui.strong(format!("Point {} (mm)", k + 1));
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("X");
+                            millimetre_field(ui, &mut self.authoring.anchor_x_mm);
+                            ui.label("Y");
+                            millimetre_field(ui, &mut self.authoring.anchor_y_mm);
+                        });
+                        // Visible nudge buttons for discoverability. They dispatch the
+                        // same `Command::Nudge` as the board's arrow keys, so the two
+                        // paths cannot drift apart in behaviour.
+                        for (label, steps) in [
+                            (
+                                "Nudge X",
+                                [
+                                    ("-1", DVec2::new(-1., 0.)),
+                                    ("+1", DVec2::new(1., 0.)),
+                                    ("-10", DVec2::new(-10., 0.)),
+                                    ("+10", DVec2::new(10., 0.)),
+                                ],
+                            ),
+                            (
+                                "Nudge Y",
+                                [
+                                    ("-1", DVec2::new(0., -1.)),
+                                    ("+1", DVec2::new(0., 1.)),
+                                    ("-10", DVec2::new(0., -10.)),
+                                    ("+10", DVec2::new(0., 10.)),
+                                ],
+                            ),
+                        ] {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(label);
+                                for (step_label, step) in steps {
+                                    if ui.small_button(step_label).clicked() {
+                                        self.edit(Command::Nudge {
+                                            panel: panel.id.clone(),
+                                            points: vec![k],
+                                            delta_mm: step,
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                        if ui
+                            .button(i18n::tr(ui_lang, "Apply point"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Material coordinates in millimetres; the rest origin is re-based \
+                         without moving the other points",
+                            ))
+                            .clicked()
+                        {
+                            let position = DVec2::new(
+                                authoring::mm_to_m(self.authoring.anchor_x_mm),
+                                authoring::mm_to_m(self.authoring.anchor_y_mm),
+                            );
+                            self.edit(Command::Anchor {
+                                panel: panel.id.clone(),
+                                anchor: k,
+                                position,
+                            });
+                        }
+                    } else {
+                        ui.small(i18n::tr(
+                            ui_lang,
+                            "Click a point on the 2D board to edit its exact position.",
+                        ));
+                    }
+                    self.target_length_properties(ui, &panel, polygon);
+                }
+            },
+        );
         if let Some(polygon) = panel.polygon.as_ref() {
             self.segment_properties(ui, &panel, polygon);
         }
@@ -1670,11 +1673,29 @@ impl Atelier {
                 panel: panel.id.clone(),
                 edge: edge.clone(),
             };
-            egui::CollapsingHeader::new(format!("Point {} · Construction", k+1)).default_open(true).show(ui, |ui| {
-                let controls = construction_controls(ui, &mut self.authoring.construction, &self.project.template, &target);
-                controls.field.on_hover_text(i18n::tr(ui_lang, "Signed millimetres; typing does not change the pattern"));
-                controls.apply.on_hover_text(i18n::tr(ui_lang, "Move this point only; invalid contours and incompatible seams are rejected"));
-                if let Some(command) = controls.command { self.edit(command); }
+            egui::CollapsingHeader::new(super::workspace::section(format!(
+                "Point {} · Construction",
+                k + 1
+            )))
+            .default_open(true)
+            .show(ui, |ui| {
+                let controls = construction_controls(
+                    ui,
+                    &mut self.authoring.construction,
+                    &self.project.template,
+                    &target,
+                );
+                controls.field.on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Signed millimetres; typing does not change the pattern",
+                ));
+                controls.apply.on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Move this point only; invalid contours and incompatible seams are rejected",
+                ));
+                if let Some(command) = controls.command {
+                    self.edit(command);
+                }
             });
         }
         self.drafting_properties(ui, &panel);

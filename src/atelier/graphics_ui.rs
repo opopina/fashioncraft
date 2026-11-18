@@ -625,11 +625,11 @@ impl Atelier {
             .collect();
         let mut command = None;
         let mut add = false;
-        egui::CollapsingHeader::new(format!(
+        egui::CollapsingHeader::new(super::workspace::section(format!(
             "{} ({})",
             i18n::tr(ui_lang, "Graphics"),
             mine.len()
-        ))
+        )))
         .id_salt("piece_graphics")
         .show(ui, |ui| {
             add = ui

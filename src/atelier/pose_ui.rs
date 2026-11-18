@@ -76,7 +76,7 @@ pub(super) struct Transition {
 
 impl Atelier {
     /// The avatar's pose as stored, or its joints at rest when it has none yet.
-    fn current_pose(&self) -> Result<AvatarPose, String> {
+    pub(super) fn current_pose(&self) -> Result<AvatarPose, String> {
         match &self.project.avatar_pose {
             Some(p) => Ok(p.clone()),
             None => AvatarPose::from_sidecar(&self.project.avatar_path),

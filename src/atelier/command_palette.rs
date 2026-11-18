@@ -147,6 +147,12 @@ fn aliases(id: CommandId) -> &'static str {
         ToggleSnapToPattern => "snap pattern points lines edges magnet board",
         SimulationProperties => "simulation properties settings solver inspector",
         StressMap => "stress map tension fit map fabric limit",
+        SaveGarment => "save garment template pattern pieces file",
+        AddGarment => "add garment merge pieces another file template project",
+        SavePoseFile => "save pose file avatar posture",
+        LoadPoseFile => "open load pose file avatar posture",
+        PinBox => "pin box marquee hold cloth",
+        PinLasso => "pin lasso freehand hold cloth",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -912,7 +918,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::StressMap
+            CommandId::PinLasso
         );
         h.key(
             "palette.query",

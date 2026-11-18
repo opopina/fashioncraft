@@ -2260,6 +2260,19 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Pins detached from the avatar" => "Alfileres soltados del avatar",
         "Attach pins to the avatar" => "Sujetar alfileres al avatar",
         "Detach pins from the avatar" => "Soltar alfileres del avatar",
+        "Save the garment as a template…" => "Guardar la prenda como plantilla…",
+        "Add a garment from a file…" => "Añadir una prenda desde un archivo…",
+        "Save the pose to a file…" => "Guardar la pose en un archivo…",
+        "Open a pose file…" => "Abrir un archivo de pose…",
+        "Pin the cloth inside a box" => "Sujetar la tela dentro de un recuadro",
+        "Pin the cloth inside a lasso" => "Sujetar la tela dentro de un lazo",
+        "Pin: draw a lasso around the cloth to pin · Cmd+lasso removes pins" => {
+            "Alfileres: dibuja un lazo sobre la tela para sujetarla · Cmd+lazo quita alfileres"
+        }
+        "Pin: drag a box over the cloth to pin · Cmd+drag removes pins" => {
+            "Alfileres: arrastra un recuadro sobre la tela para sujetarla · Cmd+arrastrar quita alfileres"
+        }
+        "That garment has no pieces" => "Esa prenda no tiene piezas",
         "Import a point cache…" => "Importar una caché de puntos…",
         "Add a spiral at the board centre" => "Añadir una espiral en el centro del tablero",
         "Add an internal rectangle to the selected piece" => {

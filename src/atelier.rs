@@ -56,6 +56,8 @@ mod environment_ui;
 mod fabrics_ui;
 #[path = "atelier/garment_display.rs"]
 mod garment_display;
+#[path = "atelier/garment_files.rs"]
+mod garment_files;
 #[path = "atelier/gizmo.rs"]
 mod gizmo;
 #[path = "atelier/graphics_ui.rs"]
@@ -605,6 +607,23 @@ impl Atelier {
             Id::ToggleSnapToGrid => self.authoring.board.snap = !self.authoring.board.snap,
             Id::ToggleSnapToPattern => {
                 self.authoring.board.snap_pattern = !self.authoring.board.snap_pattern;
+            }
+            Id::SaveGarment => self.save_garment()?,
+            Id::AddGarment => self.add_garment()?,
+            Id::SavePoseFile => self.save_pose_file()?,
+            Id::LoadPoseFile => self.load_pose_file()?,
+            Id::PinBox | Id::PinLasso => {
+                self.set_authoring_tool(authoring_ui::Tool::Grab, false);
+                let pins = &mut self.authoring.pin_tool;
+                pins.enabled = true;
+                pins.tack = false;
+                pins.lasso = id == Id::PinLasso;
+                self.status = if pins.lasso {
+                    "Pin: draw a lasso around the cloth to pin · Cmd+lasso removes pins"
+                } else {
+                    "Pin: drag a box over the cloth to pin · Cmd+drag removes pins"
+                }
+                .into();
             }
             Id::SimulationProperties => {
                 self.prefs.workspace.inspector_open = true;

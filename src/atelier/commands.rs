@@ -139,6 +139,12 @@ pub enum CommandId {
     ToggleSnapToPattern,
     SimulationProperties,
     StressMap,
+    SaveGarment,
+    AddGarment,
+    SavePoseFile,
+    LoadPoseFile,
+    PinBox,
+    PinLasso,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1385,6 +1391,60 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        SaveGarment,
+        "file.save_garment",
+        "Save the garment as a template…",
+        File,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        AddGarment,
+        "file.add_garment",
+        "Add a garment from a file…",
+        File,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
+    entry!(
+        SavePoseFile,
+        "file.save_pose",
+        "Save the pose to a file…",
+        File,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        LoadPoseFile,
+        "file.open_pose",
+        "Open a pose file…",
+        Simulation,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        PinBox,
+        "pins.box",
+        "Pin the cloth inside a box",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PinLasso,
+        "pins.lasso",
+        "Pin the cloth inside a lasso",
+        Workspace,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

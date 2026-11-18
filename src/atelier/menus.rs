@@ -38,25 +38,29 @@ const FILE: &[Item] = &[
     Sub(
         "Open",
         &[
-            Todo("Garment…"),
+            Run("Garment…", C::OpenTemplates),
             Todo("Trim…"),
             Run("Avatar…", C::ImportAvatar),
-            Todo("Pose…"),
+            Run("Pose…", C::LoadPoseFile),
             Run("Scene and props…", C::OpenSceneObjects),
         ],
     ),
     Sub(
         "Add",
-        &[Todo("Project…"), Todo("Garment…"), Todo("Avatar…")],
+        &[
+            Todo("Project…"),
+            Run("Garment…", C::AddGarment),
+            Todo("Avatar…"),
+        ],
     ),
     Run("Save project", C::SaveProject),
     Sub(
         "Save as",
         &[
             Run("Project…", C::SaveProjectAs),
-            Todo("Garment…"),
+            Run("Garment…", C::SaveGarment),
             Todo("Avatar…"),
-            Todo("Pose…"),
+            Run("Pose…", C::SavePoseFile),
         ],
     ),
     S,
@@ -176,8 +180,8 @@ const GARMENT_3D: &[Item] = &[
     Sub(
         "Pins",
         &[
-            Todo("Pin (box)"),
-            Todo("Pin (lasso)"),
+            Run("Pin (box)", C::PinBox),
+            Run("Pin (lasso)", C::PinLasso),
             Run("Attach all pins to avatar", C::AttachPins),
             Run("Detach all pins from avatar", C::DetachPins),
         ],
@@ -475,6 +479,13 @@ impl Atelier {
             C::ToggleSmartGuides => self.authoring.board.smart_guides,
             C::ToggleSnapToGrid => self.authoring.board.snap,
             C::ToggleSnapToPattern => self.authoring.board.snap_pattern,
+            C::PinBox | C::PinLasso => {
+                let pins = &self.authoring.pin_tool;
+                self.authoring.tool == super::authoring_ui::Tool::Grab
+                    && pins.enabled
+                    && !pins.tack
+                    && pins.lasso == (id == C::PinLasso)
+            }
             C::TechnicalView => display.schematic,
             C::RandomPieceColours => display.piece_colors,
             C::IsolateSelection => self.authoring.view3d.isolated.is_some(),
@@ -660,7 +671,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 136, "{done} of {all}");
+        assert!(done >= 143, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

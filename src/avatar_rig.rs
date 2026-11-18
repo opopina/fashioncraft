@@ -124,7 +124,44 @@ pub type PaintedWeights = BTreeMap<usize, Vec<(String, f64)>>;
 #[serde(transparent)]
 pub struct Pose(pub BTreeMap<String, [f64; 3]>);
 
+/// Format tag of a pose saved on its own ([`Pose::to_file`]).
+pub const POSE_FILE_FORMAT: &str = "clothcraft-pose";
+
+#[derive(Serialize, Deserialize)]
+struct PoseFile {
+    format: String,
+    version: u32,
+    pose: Pose,
+}
+
 impl Pose {
+    /// The pose as a file of its own, to use again on another project or avatar.
+    pub fn to_file(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(&PoseFile {
+            format: POSE_FILE_FORMAT.into(),
+            version: 1,
+            pose: self.clone(),
+        })
+        .map_err(|e| e.to_string())
+    }
+    /// A pose read back from [`Pose::to_file`]: the right format, angles in range and bone
+    /// names that can exist. Whether this avatar's skeleton has those bones is checked when
+    /// the pose is put on it.
+    pub fn from_file(text: &str) -> Result<Self, String> {
+        let file: PoseFile =
+            serde_json::from_str(text).map_err(|e| format!("Not a pose file: {e}"))?;
+        if file.format != POSE_FILE_FORMAT {
+            return Err(format!("Not a pose file (format {:?})", file.format));
+        }
+        if file.version != 1 {
+            return Err(format!(
+                "Pose file version {} is not supported",
+                file.version
+            ));
+        }
+        file.pose.validate_angles()?;
+        Ok(file.pose)
+    }
     pub fn rotation(&self, bone: &str) -> DQuat {
         self.0.get(bone).map_or(DQuat::IDENTITY, |[x, y, z]| {
             DQuat::from_euler(

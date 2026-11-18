@@ -314,6 +314,25 @@ fn board_center(panels: &[crate::garment::template::Panel]) -> DVec2 {
 
 /// Middle of the board box the pieces `ids` occupy in `template`, with implicit layouts
 /// resolved as the board draws them.
+/// Lowest and highest corners, on the board, of the pieces `ids` as they are laid out;
+/// `None` when there are none.
+pub fn layout_bounds(template: &GarmentTemplate, ids: &[String]) -> Option<(DVec2, DVec2)> {
+    let mut lo = DVec2::splat(f64::INFINITY);
+    let mut hi = DVec2::splat(f64::NEG_INFINITY);
+    for (i, p) in template.panels.iter().enumerate() {
+        if !ids.contains(&p.id) {
+            continue;
+        }
+        let origin = layout(template, i);
+        for uv in corners(p) {
+            let q = origin + rotate_2d(uv, p.layout_rotation_degrees);
+            lo = lo.min(q);
+            hi = hi.max(q);
+        }
+    }
+    lo.is_finite().then_some((lo, hi))
+}
+
 pub fn layout_center(template: &GarmentTemplate, ids: &[String]) -> DVec2 {
     let panels: Vec<_> = template
         .panels

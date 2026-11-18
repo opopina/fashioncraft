@@ -120,6 +120,45 @@ impl Atelier {
         }
     }
 
+    /// Import a BVH motion onto the avatar: its keys replace the animation's pose keys; its
+    /// markers and wind and gravity keys stay.
+    pub(super) fn import_bvh(&mut self) -> Result<(), String> {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("BVH", &["bvh"])
+            .pick_file()
+        else {
+            return Ok(());
+        };
+        let text =
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let bvh = marvelous_cloth::bvh_import::parse(&text)?;
+        let avatar = self.animated_avatar()?;
+        let rest = SurfaceMesh::load_obj(&self.project.avatar_path)?;
+        let rig = avatar.rig(&rest)?;
+        let imported = marvelous_cloth::bvh_import::retarget(&bvh, &rig)?;
+        let keys = imported.keys.len();
+        let seconds = imported.keys.last().map_or(0., |k| k.time_s);
+        let animation = match self.project.avatar_animation.take() {
+            Some(mut kept) => {
+                kept.keys = imported.keys;
+                kept.fps = imported.fps;
+                kept
+            }
+            None => imported,
+        };
+        animation.validate()?;
+        self.project.avatar_animation = Some(animation);
+        self.document.dirty = true;
+        self.authoring.animation.open = true;
+        self.authoring.animation.time = 0.;
+        self.status = format!(
+            "Motion imported: {keys} keys over {seconds:.1} s from {}",
+            path.file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        );
+        Ok(())
+    }
+
     /// The project's animation, created at the avatar's pose when there is none yet.
     fn animation_or_new(&mut self) -> Result<&mut AvatarAnimation, String> {
         if self.project.avatar_animation.is_none() {

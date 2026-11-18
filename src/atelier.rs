@@ -590,6 +590,7 @@ impl Atelier {
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
             Id::DraftSkirt => self.authoring.skirt_draft.open = !self.authoring.skirt_draft.open,
+            Id::ImportBvh => self.import_bvh()?,
             Id::DraftTrousers => {
                 self.authoring.trousers_draft.open = !self.authoring.trousers_draft.open;
             }

@@ -133,6 +133,10 @@ const STATUS_TEMPLATES: &[(&str, &str)] = &[
         "{}: selecciona una pieza y haz clic en el punto para colocarla",
     ),
     (
+        "Motion imported: {} keys over {} s from {}",
+        "Movimiento importado: {} claves en {} s de {}",
+    ),
+    (
         "{} added · the points stay where they are",
         "{} añadidos · los puntos se quedan donde están",
     ),
@@ -1963,6 +1967,8 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Pone como clave en este instante la gravedad de la escena; al grabar cambia de clave en clave"
         }
         "Wind and gravity keys" => "Claves de viento y gravedad",
+        "Import a BVH motion…" => "Importar un movimiento BVH…",
+        "Motion (BVH)…" => "Movimiento (BVH)…",
         _ => return None,
     })
 }

@@ -119,6 +119,7 @@ pub enum CommandId {
     ToggleObjectBrowser,
     DraftSkirt,
     DraftTrousers,
+    ImportBvh,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1182,6 +1183,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         DraftTrousers,
         "pattern.draft_trousers",
         "Trousers from measurements…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ImportBvh,
+        "animation.import_bvh",
+        "Import a BVH motion…",
         Workspace,
         None,
         NotUndoable,

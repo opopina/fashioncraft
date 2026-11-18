@@ -7,6 +7,7 @@ pub mod avatar_landmarks;
 pub mod avatar_measurements;
 pub mod avatar_rig;
 pub mod avatar_shape;
+pub mod bvh_import;
 pub mod contact;
 pub mod document;
 pub mod energy;

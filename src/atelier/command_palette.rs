@@ -125,6 +125,7 @@ fn aliases(id: CommandId) -> &'static str {
         DraftTrousers => {
             "trousers pants draft pattern measurements waist hip rise inseam length size"
         }
+        ImportBvh => "bvh motion capture mocap import animation walk dance",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -890,7 +891,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::DraftTrousers
+            CommandId::ImportBvh
         );
         h.key(
             "palette.query",

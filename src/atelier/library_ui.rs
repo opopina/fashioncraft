@@ -29,7 +29,7 @@ impl Shelf {
     fn extensions(self) -> &'static [&'static str] {
         match self {
             Self::Garments => &["json"],
-            Self::Avatars => &["obj", "gltf", "glb"],
+            Self::Avatars => &["obj", "gltf", "glb", "stl", "ply", "dae"],
             Self::Images => &["png"],
         }
     }

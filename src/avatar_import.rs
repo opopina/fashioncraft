@@ -67,7 +67,34 @@ impl Candidate {
                 (mesh, vec!["OBJ has no declared units: coordinates are interpreted as metres, Y-up. No rescaling is applied.".into(),
                     "Geometry only: materials, textures, UVs, authored normals and object groups are not retained. Polygon faces use the existing fan triangulation; use triangulated OBJ for unambiguous geometry.".into()])
             }
-            _ => return Err("Choose a static OBJ, glTF or GLB avatar".into()),
+            "stl" | "ply" | "dae" => {
+                let mut bytes = Vec::new();
+                std::fs::File::open(path)
+                    .map_err(|e| e.to_string())?
+                    .take(limits.document_bytes as u64 + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| e.to_string())?;
+                if bytes.len() > limits.document_bytes {
+                    return Err("Avatar document exceeds the byte limit".into());
+                }
+                let imported = match extension.as_str() {
+                    "stl" => crate::mesh_import::stl(&bytes)?,
+                    "ply" => crate::mesh_import::ply(&bytes)?,
+                    _ => crate::mesh_import::dae(
+                        std::str::from_utf8(&bytes)
+                            .map_err(|e| format!("COLLADA must be UTF-8: {e}"))?,
+                    )?,
+                };
+                if imported.mesh.vertices.len() > limits.vertices
+                    || imported.mesh.triangles.len() > limits.triangles
+                {
+                    return Err("Avatar geometry exceeds the import limit".into());
+                }
+                (imported.mesh, imported.warnings)
+            }
+            _ => {
+                return Err("Choose a static OBJ, glTF, GLB, STL, PLY or COLLADA avatar".into());
+            }
         };
         mesh.validate()?;
         warnings.push("Import does not repair intersections, open surfaces or inconsistent winding. Check placement before simulating.".into());

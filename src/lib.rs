@@ -17,6 +17,7 @@ pub mod gltf_export;
 pub mod gpu_vbd;
 pub mod issue_report;
 pub mod math;
+pub mod mesh_import;
 pub mod model;
 pub mod motion;
 pub mod obj_export;

@@ -59,7 +59,7 @@ impl ImportUi {
         egui::ScrollArea::vertical().id_salt("avatar-import-details")
             .auto_shrink([false, false]).max_height(height).min_scrolled_height(height)
             .show(ui, |ui| {
-                ui.label("OBJ · glTF · GLB · metres · Y-up");
+                ui.label("OBJ · glTF · GLB · STL · PLY · COLLADA · metres · Y-up");
                 if let Some(error) = &self.error { ui.colored_label(egui::Color32::LIGHT_RED, error); }
                 if let Some(candidate) = &self.candidate {
                     ui.label(format!("Source: {}", candidate.source.display()));

@@ -169,7 +169,7 @@ impl Atelier {
         ui.collapsing("Files & formats", |ui| {
             ui.label("Import");
             ui.small("ClothCraft project and template JSON");
-            ui.small("Static avatars: OBJ · glTF · GLB");
+            ui.small("Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA");
             ui.small("Pattern outlines: generic ASCII DXF · physical SVG subsets");
             ui.label("Export");
             ui.small("Project and template JSON · garment OBJ · SVG patterns · fiber guides");

@@ -648,7 +648,12 @@ impl Atelier {
     /// Pins as small heads on the cloth, and the box being dragged in pin mode.
     pub(super) fn paint_pins_3d(&mut self, ui: &egui::Ui, rect: egui::Rect) {
         let painter = ui.painter().with_clip_rect(rect);
-        for (_, at) in self.visible_pins(rect) {
+        let heads = if self.prefs.garment_display.pins || self.authoring.pin_tool.enabled {
+            self.visible_pins(rect)
+        } else {
+            vec![]
+        };
+        for (_, at) in heads {
             painter.circle_filled(at, 3.5, Color32::from_rgb(255, 214, 64));
             painter.circle_stroke(at, 3.5, Stroke::new(1., Color32::from_rgb(90, 60, 0)));
         }

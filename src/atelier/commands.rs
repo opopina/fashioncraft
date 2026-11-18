@@ -145,6 +145,11 @@ pub enum CommandId {
     LoadPoseFile,
     PinBox,
     PinLasso,
+    ShowPins,
+    ShowTrims,
+    ShowGraphics,
+    HighResolution,
+    LowResolution,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1443,6 +1448,51 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         "pins.lasso",
         "Pin the cloth inside a lasso",
         Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowPins,
+        "display.pins",
+        "Show pins",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowTrims,
+        "display.trims",
+        "Show trims",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowGraphics,
+        "display.graphics",
+        "Show graphics",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        HighResolution,
+        "simulation.high_resolution",
+        "High-resolution garment (10 mm mesh)",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        LowResolution,
+        "simulation.low_resolution",
+        "Low-resolution garment (30 mm mesh)",
+        Simulation,
         None,
         NotUndoable,
         NativeWorkspace

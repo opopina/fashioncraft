@@ -488,7 +488,7 @@ impl Atelier {
         let (visible_faces, face_colors) = self.display_buffers();
         let flipped_faces = self.flipped_faces();
         // Trims of the pieces on show, lying on their front faces.
-        let trims = if self.prefs.garment_display.garment {
+        let trims = if self.prefs.garment_display.garment && self.prefs.garment_display.trims {
             let zippers = marvelous_cloth::garment::trims::zipper_trims(&self.project.template);
             let shown: Vec<_> = self
                 .project
@@ -508,11 +508,12 @@ impl Atelier {
         } else {
             vec![]
         };
-        let graphic_draws = if self.prefs.garment_display.garment {
-            self.graphic_draws(&ctx)
-        } else {
-            vec![]
-        };
+        let graphic_draws =
+            if self.prefs.garment_display.garment && self.prefs.garment_display.graphics {
+                self.graphic_draws(&ctx)
+            } else {
+                vec![]
+            };
         let fabric_images = self.fabric_images(&ctx, &optics);
         let fabric_images: Vec<_> = fabric_images
             .iter()

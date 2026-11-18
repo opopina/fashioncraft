@@ -612,6 +612,31 @@ impl Atelier {
             Id::AddGarment => self.add_garment()?,
             Id::SavePoseFile => self.save_pose_file()?,
             Id::LoadPoseFile => self.load_pose_file()?,
+            Id::ShowPins => {
+                let display = &mut self.prefs.garment_display;
+                display.pins = !display.pins;
+            }
+            Id::ShowTrims => {
+                let display = &mut self.prefs.garment_display;
+                display.trims = !display.trims;
+            }
+            Id::ShowGraphics => {
+                let display = &mut self.prefs.garment_display;
+                display.graphics = !display.graphics;
+            }
+            Id::HighResolution | Id::LowResolution => {
+                self.mesh_mm = if id == Id::HighResolution {
+                    menus::HIGH_RESOLUTION_MM
+                } else {
+                    menus::LOW_RESOLUTION_MM
+                };
+                self.remesh();
+                self.status = format!(
+                    "Garment remeshed at {:.0} mm: {} vertices · the drape starts again from the arrangement",
+                    self.mesh_mm,
+                    self.scene.state.x.len()
+                );
+            }
             Id::PinBox | Id::PinLasso => {
                 self.set_authoring_tool(authoring_ui::Tool::Grab, false);
                 let pins = &mut self.authoring.pin_tool;

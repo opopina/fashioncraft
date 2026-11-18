@@ -2273,6 +2273,8 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Alfileres: arrastra un recuadro sobre la tela para sujetarla · Cmd+arrastrar quita alfileres"
         }
         "That garment has no pieces" => "Esa prenda no tiene piezas",
+        "High-resolution garment (10 mm mesh)" => "Prenda en alta resolución (malla de 10 mm)",
+        "Low-resolution garment (30 mm mesh)" => "Prenda en baja resolución (malla de 30 mm)",
         "Import a point cache…" => "Importar una caché de puntos…",
         "Add a spiral at the board centre" => "Añadir una espiral en el centro del tablero",
         "Add an internal rectangle to the selected piece" => {

@@ -145,9 +145,9 @@ const GARMENT_3D: &[Item] = &[
     Run("Simulate", C::ToggleSimulation),
     Run("Advance one step", C::StepSimulation),
     S,
-    Todo("High-resolution garment"),
-    Todo("Low-resolution garment"),
-    Todo("Custom resolution…"),
+    Run("High-resolution garment", C::HighResolution),
+    Run("Low-resolution garment", C::LowResolution),
+    Run("Custom resolution…", C::SimulationProperties),
     S,
     Sub(
         "Pieces",
@@ -347,11 +347,11 @@ const DISPLAY: &[Item] = &[
         "3D garment",
         &[
             Run("Show garment", C::ToggleGarment),
-            Todo("Show pins"),
+            Run("Show pins", C::ShowPins),
             Todo("Show piece names"),
             Todo("Show internal lines"),
-            Todo("Show graphics"),
-            Todo("Show trims"),
+            Run("Show graphics", C::ShowGraphics),
+            Run("Show trims", C::ShowTrims),
         ],
     ),
     Sub(
@@ -457,6 +457,11 @@ fn count(items: &[Item], done: &mut usize, all: &mut usize) {
     }
 }
 
+/// Mesh size of 3D Garment › High-resolution garment, in millimetres.
+pub(super) const HIGH_RESOLUTION_MM: f64 = 10.;
+/// Mesh size of 3D Garment › Low-resolution garment, in millimetres.
+pub(super) const LOW_RESOLUTION_MM: f64 = 30.;
+
 /// Menu items that work, out of all the menu items the bar lays out.
 pub(super) fn coverage() -> (usize, usize) {
     let (mut done, mut all) = (0, 0);
@@ -473,6 +478,11 @@ impl Atelier {
         let display = &self.prefs.garment_display;
         match id {
             C::ToggleAvatar => display.avatar,
+            C::ShowPins => display.pins,
+            C::ShowTrims => display.trims,
+            C::ShowGraphics => display.graphics,
+            C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
+            C::LowResolution => (self.mesh_mm - LOW_RESOLUTION_MM).abs() < 1e-9,
             C::ToggleGarment => display.garment,
             C::StrainMap => self.heat && !display.strain_fabric,
             C::StressMap => self.heat && display.strain_fabric,
@@ -671,7 +681,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 143, "{done} of {all}");
+        assert!(done >= 149, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

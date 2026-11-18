@@ -40,6 +40,12 @@ pub(super) struct GarmentDisplay {
     pub(super) reference_tension: f64,
     /// Show where the garment touches the avatar.
     pub(super) contacts: bool,
+    /// Show the pins' heads on the cloth (always shown while pinning).
+    pub(super) pins: bool,
+    /// Show zippers, topstitching and other trims on the garment.
+    pub(super) trims: bool,
+    /// Show the graphics printed on the garment.
+    pub(super) graphics: bool,
     /// Technical-flat rendering (Alt+0).
     pub(super) schematic: bool,
     pub(super) schematic_line_px: f32,
@@ -65,6 +71,9 @@ impl Default for GarmentDisplay {
             strain_fabric: false,
             reference_tension: 20.,
             contacts: false,
+            pins: true,
+            trims: true,
+            graphics: true,
             schematic: false,
             schematic_line_px: 1.5,
             schematic_line_color: [0x1E, 0x1E, 0x22],

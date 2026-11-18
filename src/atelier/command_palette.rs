@@ -153,6 +153,11 @@ fn aliases(id: CommandId) -> &'static str {
         LoadPoseFile => "open load pose file avatar posture",
         PinBox => "pin box marquee hold cloth",
         PinLasso => "pin lasso freehand hold cloth",
+        ShowPins => "show hide pins heads display",
+        ShowTrims => "show hide trims zippers topstitch display",
+        ShowGraphics => "show hide graphics prints logos display",
+        HighResolution => "high resolution fine mesh particle distance remesh final",
+        LowResolution => "low resolution coarse mesh particle distance remesh draft fast",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -918,7 +923,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::PinLasso
+            CommandId::ShowGraphics
         );
         h.key(
             "palette.query",

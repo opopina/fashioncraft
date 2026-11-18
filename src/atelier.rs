@@ -64,6 +64,8 @@ mod keymap;
 mod layers_ui;
 #[path = "atelier/layout.rs"]
 mod layout;
+#[path = "atelier/library_ui.rs"]
+mod library_ui;
 #[path = "atelier/line_springs_ui.rs"]
 mod line_springs_ui;
 #[path = "atelier/measure.rs"]
@@ -538,6 +540,7 @@ impl Atelier {
             Id::TechnicalView => {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
+            Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
             Id::RandomPieceColours => {
                 self.prefs.garment_display.piece_colors = !self.prefs.garment_display.piece_colors;
             }
@@ -1018,6 +1021,7 @@ impl eframe::App for Atelier {
         let mut changed = false;
         if !palette_blocked {
             settings::window(&ctx, &mut self.settings_open, &mut self.prefs, &mut changed);
+            self.library_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

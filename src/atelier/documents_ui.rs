@@ -218,6 +218,10 @@ impl Atelier {
             None => {}
         }
     }
+    /// Put an avatar file in the open importer, as if picked in its dialog.
+    pub(super) fn choose_avatar(&mut self, path: &std::path::Path) {
+        self.document.avatar_import.choose(path);
+    }
     pub(super) fn open_avatar_import(&mut self, ctx: &egui::Context) {
         // Pause controls without changing generation or rewinding the worker.
         // Cancelling the importer is not a document replacement.
@@ -451,7 +455,7 @@ impl Atelier {
             }
         }
     }
-    fn can_replace_document(&mut self, ctx: &egui::Context) -> bool {
+    pub(super) fn can_replace_document(&mut self, ctx: &egui::Context) -> bool {
         self.pause_document(ctx);
         if !self.document.dirty && self.authoring.preview.is_none() && !self.has_document_draft() {
             return true;
@@ -464,7 +468,7 @@ impl Atelier {
             _ => false,
         }
     }
-    fn open_document_path(&mut self, path: PathBuf, recovered: bool) {
+    pub(super) fn open_document_path(&mut self, path: PathBuf, recovered: bool) {
         let result = (|| {
             let mut project = FittingProject::load(&path)?;
             let mut relinked = false;

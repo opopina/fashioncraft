@@ -546,6 +546,11 @@ impl Atelier {
         else {
             return;
         };
+        self.add_graphic_from(panel, path);
+    }
+
+    /// Place the PNG at `path` at the middle of a piece, 12 cm wide.
+    pub(super) fn add_graphic_from(&mut self, panel: &str, path: PathBuf) {
         let (w, h) = match image::image_dimensions(&path) {
             Ok(size) => size,
             Err(e) => {

@@ -85,6 +85,7 @@ pub enum CommandId {
     AddButtonhole,
     FastenButtons,
     AddGraphic,
+    ToggleLibrary,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -846,6 +847,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         None,
         TemplateHistory,
         LocalFilesystem
+    ),
+    entry!(
+        ToggleLibrary,
+        "window.library",
+        "Library",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
     ),
 ];
 

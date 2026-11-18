@@ -43,6 +43,8 @@ pub(super) struct AuthoringUi {
     pub eyedropper: bool,
     /// Selection and drag of the Transform graphic tool.
     pub graphic_tool: super::graphics_ui::GraphicTool,
+    /// The library window.
+    pub library: super::library_ui::LibraryUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,

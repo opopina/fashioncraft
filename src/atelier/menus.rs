@@ -374,7 +374,7 @@ const WINDOW: &[Item] = &[
     Run("3D only", C::GarmentView),
     Run("2D only", C::PatternView),
     Run("Properties inspector", C::ToggleInspector),
-    Todo("Library"),
+    Run("Library", C::ToggleLibrary),
     Todo("Object browser"),
     Todo("History"),
     S,
@@ -446,6 +446,7 @@ impl Atelier {
             C::GarmentView => self.prefs.workspace.mode == layout::ViewMode::Garment,
             C::PatternView => self.prefs.workspace.mode == layout::ViewMode::Patterns,
             C::ToggleInspector => self.prefs.workspace.inspector_open,
+            C::ToggleLibrary => self.authoring.library.open,
             _ => false,
         }
     }
@@ -587,7 +588,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 78, "{done} of {all}");
+        assert!(done >= 79, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

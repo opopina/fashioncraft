@@ -87,6 +87,7 @@ fn aliases(id: CommandId) -> &'static str {
         AddButtonhole => "buttonhole trim hole",
         FastenButtons => "fasten button close",
         AddGraphic => "graphic print logo image png",
+        ToggleLibrary => "library assets folder browse files",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -811,7 +812,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::RandomPieceColours
+            CommandId::ToggleLibrary
         );
         h.key(
             "palette.query",

@@ -80,7 +80,7 @@ const COMPATIBLE: &[Binding] = &[
     bind(K::B, Mods::None, C::ToolSew),
     bind(K::N, Mods::None, C::ToolSew),
     bind(K::T, Mods::None, C::ToolGraphic),
-    bind(K::Y, Mods::None, C::OpenTemplates),
+    bind(K::Y, Mods::None, C::ToggleLibrary),
     bind(K::D, Mods::None, C::ToolInspect),
     bind(K::W, Mods::Shift, C::ToggleGarment),
     bind(K::Num6, Mods::Alt, C::StrainMap),

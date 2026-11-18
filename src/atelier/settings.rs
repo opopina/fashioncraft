@@ -60,6 +60,8 @@ pub(super) struct Preferences {
     pub(super) iterations: usize,
     /// Which keys run tools and piece actions.
     pub(super) keymap: super::keymap::KeymapName,
+    /// Folder the library window shows; none uses `library` in the session folder.
+    pub(super) library_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for Preferences {
@@ -77,6 +79,7 @@ impl Default for Preferences {
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
             keymap: Default::default(),
+            library_dir: None,
         }
     }
 }

@@ -288,6 +288,12 @@ pub enum Command {
     MergeAlongSeam {
         seam: String,
     },
+    /// Remove segment `segment` (from point `segment` to the next) of internal line `line`.
+    TrimLine {
+        panel: String,
+        line: String,
+        segment: usize,
+    },
     /// Make the closed internal shape `line` the outline of `panel`.
     ReplaceOutline {
         panel: String,
@@ -612,6 +618,7 @@ impl Command {
             Self::Unfold { .. } => "Unfold",
             Self::MergeAlongSeam { .. } => "Merge along seam",
             Self::ReplaceOutline { .. } => "Replace outline",
+            Self::TrimLine { .. } => "Trim line",
             Self::SlashSpread { .. } => "Slash and spread",
             Self::RestoreArchived { .. } => "Restore archived",
             Self::DeleteArchived { .. } => "Delete archived",
@@ -4264,6 +4271,14 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
         Command::MergeAlongSeam { seam } => {
             selected = Some(topology::merge_along_seam(&mut template, &seam)?);
+        }
+        Command::TrimLine {
+            panel,
+            line,
+            segment,
+        } => {
+            topology::trim_line(&mut template, &panel, &line, segment)?;
+            selected = Some(panel);
         }
         Command::ReplaceOutline { panel, line } => {
             topology::replace_outline(&mut template, &panel, &line)?;

@@ -413,6 +413,34 @@ impl Atelier {
             .into();
             return;
         }
+        if line.closed && line.points.len() >= 3 {
+            let id = egui::Id::new(("open_shape_segment", &edge.panel, &name));
+            let segments = line.points.len();
+            let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
+            at = at.clamp(1, segments);
+            let mut open = false;
+            ui.horizontal(|ui| {
+                ui.label(i18n::tr(ui_lang, "Open at segment"));
+                ui.add(egui::DragValue::new(&mut at).range(1..=segments));
+                open = ui
+                    .small_button(i18n::tr(ui_lang, "Open"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Remove this segment of the shape, leaving it an open line",
+                    ))
+                    .clicked();
+            });
+            ui.data_mut(|d| d.insert_temp(id, at));
+            if open
+                && self.edit(Command::TrimLine {
+                    panel: edge.panel.clone(),
+                    line: name.clone(),
+                    segment: at - 1,
+                })
+            {
+                return;
+            }
+        }
         if line.closed
             && ui
                 .button(i18n::tr(ui_lang, "Make this the outline"))
@@ -531,6 +559,29 @@ impl Atelier {
                             panel: edge.panel.clone(),
                             line: name.clone(),
                             point: at,
+                        });
+                    }
+                });
+                ui.data_mut(|d| d.insert_temp(id, at));
+                let id = egui::Id::new(("trim_line_segment", &edge.panel, &name));
+                let segments = line.points.len() - 1;
+                let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
+                at = at.clamp(1, segments);
+                ui.horizontal(|ui| {
+                    ui.label(i18n::tr(ui_lang, "Trim segment"));
+                    ui.add(egui::DragValue::new(&mut at).range(1..=segments));
+                    if ui
+                        .small_button(i18n::tr(ui_lang, "Cut away"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Remove this segment of the line; the parts on either side stay",
+                        ))
+                        .clicked()
+                    {
+                        command = Some(Command::TrimLine {
+                            panel: edge.panel.clone(),
+                            line: name.clone(),
+                            segment: at - 1,
                         });
                     }
                 });

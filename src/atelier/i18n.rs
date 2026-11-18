@@ -656,6 +656,15 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Clone as piece" => "Clonar como pieza",
         "Make this the outline" => "Usar como contorno",
+        "Trim segment" => "Recortar tramo",
+        "Cut away" => "Recortar",
+        "Remove this segment of the line; the parts on either side stay" => {
+            "Quita este tramo de la línea; quedan las partes de cada lado"
+        }
+        "Open at segment" => "Abrir en el tramo",
+        "Remove this segment of the shape, leaving it an open line" => {
+            "Quita este tramo de la forma y la deja como línea abierta"
+        }
         "Right" => "Derecha",
         "Both" => "Ambas",
         "Slash the piece along this line and turn the chosen part about where the line leaves the outline past its end, opening a wedge at its start" => {
@@ -1302,6 +1311,11 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Outline replaced by the shape" => "Contorno reemplazado por la forma",
         "Wedge opened along the line" => "Cuña abierta por la línea",
+        "A line with one segment is deleted, not trimmed" => {
+            "Una línea de un solo tramo se borra, no se recorta"
+        }
+        "Pick one of the line's segments" => "Elige uno de los tramos de la línea",
+        "Pick one of the shape's segments" => "Elige uno de los tramos de la forma",
         "Open the wedge by 0.1° to 90°" => "Abre la cuña entre 0,1° y 90°",
         "DXF panels added · move and sew them in the workspace · Undo is available" => {
             "Piezas DXF añadidas · muévelas y cóselas en el espacio de trabajo · se puede deshacer"
@@ -1727,6 +1741,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Cut and sew" => "Cortar y coser",
         "Replace outline" => "Reemplazar contorno",
         "Slash and spread" => "Abrir y separar",
+        "Trim line" => "Recortar línea",
         "Extend line" => "Prolongar línea",
         "Split along line" => "Dividir por la línea",
         "Unfold" => "Desplegar",

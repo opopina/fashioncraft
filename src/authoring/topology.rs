@@ -1385,6 +1385,112 @@ pub(super) fn split_line(
     Ok(())
 }
 
+/// Remove segment `segment` (from point `segment` to the next) of internal line `line` on
+/// `panel`. An open line keeps the parts on either side, the second under a fresh name with the
+/// line's elastic, tape and folds; a closed shape opens there into one line.
+pub(super) fn trim_line(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+    segment: usize,
+) -> Result<(), String> {
+    line_unsewn(template, panel, line)?;
+    let polygon = template
+        .panels
+        .iter_mut()
+        .find(|p| p.id == panel)
+        .ok_or("Panel not found")?
+        .polygon
+        .as_mut()
+        .ok_or("This panel has no editable contour")?;
+    let taken: BTreeSet<String> = polygon
+        .edges
+        .iter()
+        .chain(polygon.lines.iter().map(|l| &l.id))
+        .chain(polygon.holes.iter().flat_map(|h| h.edges.iter()))
+        .cloned()
+        .collect();
+    let index = polygon
+        .lines
+        .iter()
+        .position(|l| l.id == line)
+        .ok_or("Internal line not found")?;
+    let l = polygon.lines[index].clone();
+    let n = l.points.len();
+    if l.closed {
+        if n < 3 || segment >= n {
+            return Err("Pick one of the shape's segments".into());
+        }
+        // The shape opens at the segment: it now runs from the segment's end round to its start.
+        let order: Vec<usize> = (0..n).map(|k| (segment + 1 + k) % n).collect();
+        let mut open = l.clone();
+        open.closed = false;
+        open.points = order.iter().map(|&k| l.points[k]).collect();
+        open.tangents = order.iter().map(|&k| l.tangents[k]).collect();
+        open.samples()?;
+        polygon.lines[index] = open;
+        return Ok(());
+    }
+    if n < 3 {
+        return Err("A line with one segment is deleted, not trimmed".into());
+    }
+    if segment + 1 >= n {
+        return Err("Pick one of the line's segments".into());
+    }
+    let mut first = l.clone();
+    first.points.truncate(segment + 1);
+    first.tangents.truncate(segment + 1);
+    let mut second = l.clone();
+    second.points.drain(..=segment);
+    second.tangents.drain(..=segment);
+    // An end segment leaves one part, which keeps the line's name.
+    let parts: Vec<crate::garment::domain::InternalLine> = [first, second]
+        .into_iter()
+        .filter(|p| p.points.len() >= 2)
+        .collect();
+    for p in &parts {
+        p.samples()?;
+    }
+    if parts.len() == 1 {
+        let mut only = parts.into_iter().next().unwrap();
+        only.id = line.to_string();
+        polygon.lines[index] = only;
+        return Ok(());
+    }
+    let fresh = (2..)
+        .map(|k| format!("{line}_{k}"))
+        .find(|c| !taken.contains(c))
+        .unwrap();
+    let mut parts = parts.into_iter();
+    polygon.lines[index] = parts.next().unwrap();
+    let mut second = parts.next().unwrap();
+    second.id = fresh.clone();
+    polygon.lines.insert(index + 1, second);
+    let springs: Vec<_> = template
+        .line_springs
+        .iter()
+        .filter(|s| s.panel == panel && s.line == line)
+        .map(|s| {
+            let mut copy = s.clone();
+            copy.line = fresh.clone();
+            copy
+        })
+        .collect();
+    template.line_springs.extend(springs);
+    let folds: Vec<_> = template
+        .line_folds
+        .iter()
+        .filter(|f| f.panel == panel && f.line == line)
+        .map(|f| {
+            let mut copy = f.clone();
+            copy.line = fresh.clone();
+            copy
+        })
+        .collect();
+    template.line_folds.extend(folds);
+    Ok(())
+}
+
 /// Add a diamond dart to `panel`: a diamond-shaped hole `width × height` (along the material
 /// axes) centred on `center`, whose two upper legs are sewn together and whose two lower legs
 /// are sewn together, so the hole closes into a dart along its height. Returns the hole's name.

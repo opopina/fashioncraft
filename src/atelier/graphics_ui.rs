@@ -25,8 +25,8 @@ const MAX_GRAPHIC_SIDE: u32 = 2048;
 const NEW_GRAPHIC_WIDTH_M: f64 = 0.12;
 
 /// A decoded image and its 2D board texture.
-struct LoadedGraphic {
-    image: Arc<GraphicImage>,
+pub(super) struct LoadedGraphic {
+    pub image: Arc<GraphicImage>,
     texture: egui::TextureHandle,
 }
 
@@ -367,7 +367,7 @@ impl Atelier {
     }
 
     /// The cached image of an asset, loading it on first use or after its file changed.
-    fn graphic(
+    pub(super) fn graphic(
         &mut self,
         ctx: &egui::Context,
         asset: &str,

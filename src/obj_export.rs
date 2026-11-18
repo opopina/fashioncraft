@@ -78,7 +78,12 @@ pub struct ObjScene<'a> {
     /// Image files of fabric textures, by asset ID.
     pub images: &'a [(String, PathBuf)],
     pub avatar: Option<&'a SurfaceMesh>,
+    /// The garment's look baked into one image: every piece then uses it, at its coordinates.
+    pub atlas: Option<&'a crate::bake::Atlas>,
 }
+
+/// The material of a baked garment.
+const BAKED: &str = "baked";
 
 /// What was written.
 #[derive(Debug, PartialEq)]
@@ -90,46 +95,6 @@ pub struct ObjSummary {
 
 /// Thickness used for a fabric without a look thickness, metres.
 const DEFAULT_THICKNESS_M: f64 = 0.001;
-
-/// Each piece's texture coordinates moved into one unit square, shelf by shelf, all at the
-/// same scale and slightly apart.
-fn pack(boxes: &[(DVec2, DVec2)]) -> Vec<(DVec2, f64)> {
-    let gap = boxes
-        .iter()
-        .map(|(lo, hi)| (*hi - *lo).max_element())
-        .fold(0., f64::max)
-        * 0.02;
-    let area: f64 = boxes
-        .iter()
-        .map(|(lo, hi)| (hi.x - lo.x + gap) * (hi.y - lo.y + gap))
-        .sum();
-    let row = area.sqrt() * 1.2;
-    let mut order: Vec<usize> = (0..boxes.len()).collect();
-    order.sort_by(|a, b| {
-        let h = |k: usize| boxes[k].1.y - boxes[k].0.y;
-        h(*b).total_cmp(&h(*a))
-    });
-    let mut offsets = vec![DVec2::ZERO; boxes.len()];
-    let (mut x, mut y, mut shelf) = (0., 0., 0f64);
-    for k in order {
-        let size = boxes[k].1 - boxes[k].0;
-        if x > 0. && x + size.x > row {
-            x = 0.;
-            y += shelf + gap;
-            shelf = 0.;
-        }
-        offsets[k] = DVec2::new(x, y) - boxes[k].0;
-        x += size.x + gap;
-        shelf = shelf.max(size.y);
-    }
-    let extent = boxes
-        .iter()
-        .zip(&offsets)
-        .map(|((_, hi), o)| (*hi + *o).max_element())
-        .fold(0., f64::max)
-        .max(1e-12);
-    offsets.into_iter().map(|o| (o, 1. / extent)).collect()
-}
 
 fn mtl_color(rgb: [u8; 3]) -> String {
     format!(
@@ -217,10 +182,19 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
                 )
             })
             .collect();
-        for (piece, (offset, s)) in pieces.iter().zip(pack(&boxes)) {
+        for (piece, (offset, s)) in pieces.iter().zip(crate::bake::pack(&boxes)) {
             for q in &mut uv[piece.vertices.clone()] {
                 *q = (*q + offset) * s;
             }
+        }
+    }
+    // A baked look brings its own coordinates (OBJ counts v from the image's bottom).
+    if let Some(atlas) = scene.atlas {
+        if atlas.uv.len() != uv.len() {
+            return Err("The baked image was made for another garment".into());
+        }
+        for (q, a) in uv.iter_mut().zip(&atlas.uv) {
+            *q = DVec2::new(a.x, 1. - a.y);
         }
     }
     let triangles = front_triangles(scene.template, garment);
@@ -237,11 +211,17 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         obj.push_str("o garment\n");
     }
     for piece in &pieces {
-        let fabric = fabric_of
-            .get(&piece.material)
-            .cloned()
-            .unwrap_or_else(|| format!("fabric_{}", piece.material));
-        used.insert(fabric.clone(), appearances[piece.material].clone());
+        let fabric = if scene.atlas.is_some() {
+            BAKED.to_string()
+        } else {
+            fabric_of
+                .get(&piece.material)
+                .cloned()
+                .unwrap_or_else(|| format!("fabric_{}", piece.material))
+        };
+        if scene.atlas.is_none() {
+            used.insert(fabric.clone(), appearances[piece.material].clone());
+        }
         let half = appearances[piece.material]
             .as_ref()
             .map(|a| a.render_thickness_mm / 2000.)
@@ -332,6 +312,20 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
     }
     let mut mtl = String::from("# ClothCraft fabrics\n");
     let mut textures = 0;
+    if let Some(atlas) = scene.atlas {
+        let name = format!("{stem}_{BAKED}.png");
+        std::fs::write(
+            dir.join(&name),
+            crate::bake::png(atlas.size, atlas.size, &atlas.rgba),
+        )
+        .map_err(|e| e.to_string())?;
+        writeln!(
+            mtl,
+            "\nnewmtl {BAKED}\nKd 1 1 1\nKa 0 0 0\nKs 0.04 0.04 0.04\nNs 200\nd 1\nillum 2\nmap_Kd {name}"
+        )
+        .unwrap();
+        textures += 1;
+    }
     for (fabric, appearance) in &used {
         writeln!(mtl, "\nnewmtl {fabric}").unwrap();
         let (color, roughness) = appearance

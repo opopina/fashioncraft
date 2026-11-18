@@ -58,6 +58,7 @@ fn the_garment_is_written_in_the_chosen_units_with_its_material_library() {
         state: &scene.state,
         images: &[],
         avatar: None,
+        atlas: None,
     };
     let summary = obj_export::write(&export, &ObjOptions::default(), &path).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
@@ -112,6 +113,7 @@ fn thick_cloth_has_two_faces_a_rim_and_the_avatar_beside_it() {
         state: &scene.state,
         images: &[],
         avatar: Some(&avatar),
+        atlas: None,
     };
     let options = ObjOptions {
         thick: true,
@@ -183,6 +185,7 @@ fn packed_coordinates_fit_the_unit_square_and_textures_travel_with_real_size_one
         state: &scene.state,
         images: &images,
         avatar: None,
+        atlas: None,
     };
     let path = dir.path().join("out").join("tee.obj");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -261,4 +264,44 @@ fn a_take_is_written_as_an_mdd_point_cache() {
     let float = |at: usize| f32::from_be_bytes(bytes[at..at + 4].try_into().unwrap());
     assert_eq!([float(28), float(32), float(36)], [4., -6., 5.]);
     assert!(Take::default().write_mdd(&path, false).is_err());
+}
+
+#[test]
+fn a_baked_look_is_one_material_with_its_image_and_coordinates() {
+    let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    let scene = project.compile().unwrap();
+    let atlas =
+        marvelous_cloth::bake::bake(&project.template, &scene.garment, &Default::default(), 64)
+            .unwrap();
+    let export = ObjScene {
+        template: &project.template,
+        garment: &scene.garment,
+        state: &scene.state,
+        images: &[],
+        avatar: None,
+        atlas: Some(&atlas),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tee.obj");
+    let summary = obj_export::write(&export, &ObjOptions::default(), &path).unwrap();
+    assert_eq!(summary.textures, 1);
+    let mtl = std::fs::read_to_string(dir.path().join("tee.mtl")).unwrap();
+    assert!(mtl.contains("newmtl baked") && mtl.contains("map_Kd tee_baked.png"));
+    let png = std::fs::read(dir.path().join("tee_baked.png")).unwrap();
+    assert_eq!(&png[1..4], b"PNG");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.lines()
+            .filter(|l| l.starts_with("usemtl"))
+            .all(|l| l == "usemtl baked")
+    );
+    // Texture coordinates are the atlas's, counted from the image's bottom.
+    let vt: Vec<[f64; 2]> = lines(&text, "vt ")
+        .iter()
+        .map(|l| [l[0].parse().unwrap(), l[1].parse().unwrap()])
+        .collect();
+    assert_eq!(vt.len(), atlas.uv.len());
+    for (t, a) in vt.iter().zip(&atlas.uv) {
+        assert!((t[0] - a.x).abs() < 1e-6 && (t[1] - (1. - a.y)).abs() < 1e-6);
+    }
 }

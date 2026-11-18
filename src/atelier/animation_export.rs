@@ -45,6 +45,8 @@ struct ObjDialog {
     selected_only: bool,
     avatar: bool,
     options: marvelous_cloth::obj_export::ObjOptions,
+    /// Bake colours, fabric textures and prints into one image of this many pixels a side.
+    bake: Option<u32>,
 }
 
 /// The ffmpeg program, looked for on the path and where Homebrew installs it.
@@ -303,7 +305,7 @@ impl Atelier {
         Ok(())
     }
 
-    fn export_obj(&mut self) -> Result<(), String> {
+    fn export_obj(&mut self, ctx: &egui::Context) -> Result<(), String> {
         let Some(path) = FileDialog::new()
             .add_filter("OBJ mesh", &["obj"])
             .set_file_name("garment.obj")
@@ -316,20 +318,58 @@ impl Atelier {
         options.pieces = dialog
             .selected_only
             .then(|| self.selected_panels().into_iter().collect());
+        let (bake, avatar) = (dialog.bake, dialog.avatar);
         let images: Vec<(String, PathBuf)> = self
             .project
             .image_assets
             .iter()
             .map(|a| (a.id.clone(), a.path.clone()))
             .collect();
+        // The fabric textures and the prints, decoded, for baking.
+        let atlas = match bake {
+            Some(size) => {
+                let template = &self.project.template;
+                let assets: std::collections::BTreeSet<String> = template
+                    .fabric_appearance
+                    .values()
+                    .filter_map(|a| a.texture.as_ref().map(|t| t.asset_id.clone()))
+                    .chain(template.graphics.iter().map(|g| g.asset_id.clone()))
+                    .collect();
+                let mut decoded = vec![];
+                for asset in assets {
+                    if let Some(Ok(loaded)) = self.graphic(ctx, &asset) {
+                        decoded.push((asset, loaded.image.clone()));
+                    }
+                }
+                let pixels: std::collections::HashMap<String, marvelous_cloth::bake::Image> =
+                    decoded
+                        .iter()
+                        .map(|(id, image)| {
+                            (
+                                id.clone(),
+                                marvelous_cloth::bake::Image {
+                                    size: image.size,
+                                    rgba: &image.rgba,
+                                },
+                            )
+                        })
+                        .collect();
+                Some(marvelous_cloth::bake::bake(
+                    &self.project.template,
+                    &self.scene.garment,
+                    &pixels,
+                    size,
+                )?)
+            }
+            None => None,
+        };
         let scene = marvelous_cloth::obj_export::ObjScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
             images: &images,
-            avatar: dialog
-                .avatar
-                .then_some(self.scene.collider.surface.as_ref()),
+            avatar: avatar.then_some(self.scene.collider.surface.as_ref()),
+            atlas: atlas.as_ref(),
         };
         let summary = marvelous_cloth::obj_export::write(&scene, &options, &path)?;
         self.status = format!(
@@ -364,6 +404,28 @@ impl Atelier {
                 .on_hover_text(i18n::tr(ui_lang, "Both faces of the cloth, apart by the fabric's look thickness (1 mm without one), joined by a rim"));
             ui.checkbox(&mut o.unified_uv, i18n::tr(ui_lang, "Unified UV"))
                 .on_hover_text(i18n::tr(ui_lang, "Pack every piece into the unit square of texture space; fabric textures are left out"));
+            ui.horizontal(|ui| {
+                let mut baking = dialog.bake.is_some();
+                if ui
+                    .checkbox(&mut baking, i18n::tr(ui_lang, "Bake the look"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Colours, fabric textures and prints painted into one image, with every piece packed into it",
+                    ))
+                    .changed()
+                {
+                    dialog.bake = baking.then_some(2048);
+                }
+                if let Some(size) = &mut dialog.bake {
+                    egui::ComboBox::from_id_salt("obj.bake")
+                        .selected_text(format!("{size} px"))
+                        .show_ui(ui, |ui| {
+                            for s in [1024u32, 2048, 4096] {
+                                ui.selectable_value(size, s, format!("{s} px"));
+                            }
+                        });
+                }
+            });
             ui.checkbox(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
             ui.horizontal(|ui| {
@@ -384,7 +446,7 @@ impl Atelier {
         });
         self.authoring.media3d.obj.open &= open;
         if export {
-            match self.export_obj() {
+            match self.export_obj(ctx) {
                 Ok(()) => self.authoring.media3d.obj.open = false,
                 Err(e) => self.status = e,
             }

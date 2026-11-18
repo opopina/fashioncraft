@@ -672,6 +672,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Clone as piece" => "Clonar como pieza",
         "Make this the outline" => "Usar como contorno",
+        "Bake the look" => "Hornear el aspecto",
+        "Colours, fabric textures and prints painted into one image, with every piece packed into it" => {
+            "Colores, texturas de tejido y estampados pintados en una sola imagen, con todas las piezas dentro"
+        }
         "Import static avatar" => "Importar avatar estático",
         "OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metres · Y-up" => {
             "OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metros · Y arriba"

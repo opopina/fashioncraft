@@ -180,6 +180,20 @@ impl AvatarPose {
             joints,
         })
     }
+    /// The avatar's anchors as it stands in this pose.
+    pub fn posed_sidecar(
+        &self,
+        avatar_path: &Path,
+    ) -> Result<Option<crate::garment::arrangement::Sidecar>, String> {
+        let Some(sidecar) = crate::garment::arrangement::load_sidecar(avatar_path)? else {
+            return Ok(None);
+        };
+        if self.pose.is_empty() {
+            return Ok(Some(sidecar));
+        }
+        let rest = SurfaceMesh::load_obj(avatar_path)?;
+        Ok(Some(sidecar.posed(&self.rig(&rest)?, &self.pose)))
+    }
     pub fn rig(&self, surface: &SurfaceMesh) -> Result<crate::avatar_rig::Rig, String> {
         self.pose.validate()?;
         let joints = self

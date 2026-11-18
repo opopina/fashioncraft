@@ -162,7 +162,7 @@ pub fn bone_names() -> impl Iterator<Item = &'static str> {
 }
 
 /// Distance from `p` to the segment `a–b`.
-fn segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
+pub(crate) fn segment_distance(p: DVec3, a: DVec3, b: DVec3) -> f64 {
     let ab = b - a;
     let t = ((p - a).dot(ab) / ab.length_squared().max(1e-18)).clamp(0., 1.);
     p.distance(a + ab * t)

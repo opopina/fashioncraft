@@ -282,6 +282,61 @@ impl Sidecar {
     pub fn frame(&self, id: &str) -> Result<AnchorFrame, String> {
         self.set.evaluate(&self.set.frame, &self.landmarks, id)
     }
+
+    /// The sidecar of the avatar in `pose`: each landmark goes with the bone it lies on (the
+    /// nearest bone), and each anchor's fixed directions turn with the bone nearest its origin,
+    /// so the anchors follow the pose.
+    pub fn posed(&self, rig: &crate::avatar_rig::Rig, pose: &crate::avatar_rig::Pose) -> Sidecar {
+        let t = rig.transforms(|b| pose.rotation(b));
+        let nearest = |p: DVec3| {
+            rig.bones
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    crate::avatar_rig::segment_distance(p, a.head, a.tail)
+                        .total_cmp(&crate::avatar_rig::segment_distance(p, b.head, b.tail))
+                })
+                .map(|(k, _)| k)
+        };
+        let rest: BTreeMap<&str, DVec3> = self
+            .landmarks
+            .iter()
+            .map(|l| (l.id.as_str(), l.position_m))
+            .collect();
+        let landmarks = self
+            .landmarks
+            .iter()
+            .map(|l| Landmark {
+                id: l.id.clone(),
+                position_m: nearest(l.position_m)
+                    .map_or(l.position_m, |k| t[k].transform_point3(l.position_m)),
+            })
+            .collect();
+        let mut set = self.set.clone();
+        for anchor in &mut set.anchors {
+            let origin: DVec3 = anchor
+                .origin
+                .iter()
+                .filter_map(|w| rest.get(w.landmark.as_str()).map(|p| *p * w.weight))
+                .sum();
+            let Some(k) = nearest(origin) else {
+                continue;
+            };
+            let turn = |v: DVec3| t[k].transform_vector3(v);
+            for d in [&mut anchor.outward, &mut anchor.right, &mut anchor.up] {
+                match d {
+                    Direction::Fixed { vector } => *vector = turn(*vector),
+                    Direction::Perpendicular { toward, .. } => *toward = turn(*toward),
+                    Direction::Along { .. } => {}
+                }
+            }
+        }
+        Sidecar {
+            set,
+            landmarks,
+            estimated: self.estimated,
+        }
+    }
 }
 
 /// The bundled MakeHuman anchors, which name only joint landmarks.

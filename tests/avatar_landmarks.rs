@@ -136,3 +136,47 @@ fn an_avatar_without_anchors_can_be_arranged_and_posed() {
     // A shipped sidecar is still preferred.
     assert!(!load_sidecar(&mannequin()).unwrap().unwrap().estimated);
 }
+
+#[test]
+fn anchors_follow_the_pose() {
+    let path = mannequin();
+    let surface = SurfaceMesh::load_obj(&path).unwrap();
+    let sidecar = load_sidecar(&path).unwrap().unwrap();
+    let mut avatar = AvatarPose::from_sidecar(&path).unwrap();
+    avatar.pose = preset("T-pose").unwrap();
+    let posed = avatar.posed_sidecar(&path).unwrap().unwrap();
+    let rig = avatar.rig(&surface).unwrap();
+    let bones = rig.posed_bones(&avatar.pose);
+    let rest_bones = rig.posed_bones(&Default::default());
+    let distance = |p: DVec3, (a, b): (DVec3, DVec3)| {
+        let t = ((p - a).dot(b - a) / (b - a).length_squared()).clamp(0., 1.);
+        p.distance(a + (b - a) * t)
+    };
+    for (anchor, bone) in [
+        ("upper-arm-left-outer", "upper_arm.L"),
+        ("forearm-right-front", "forearm.R"),
+    ] {
+        let k = rig.bone(bone).unwrap();
+        let before = sidecar.frame(anchor).unwrap().origin;
+        let after = posed.frame(anchor).unwrap().origin;
+        assert!(after.distance(before) > 0.05, "{anchor} moved with the arm");
+        // As far from its bone as it was at rest.
+        let (d0, d1) = (distance(before, rest_bones[k]), distance(after, bones[k]));
+        assert!((d0 - d1).abs() < 0.01, "{anchor}: {d0} then {d1}");
+    }
+    // The torso does not move in a T pose.
+    let front = "torso-middle-front";
+    let moved = sidecar
+        .frame(front)
+        .unwrap()
+        .origin
+        .distance(posed.frame(front).unwrap().origin);
+    assert!(moved < 1e-9, "{moved}");
+    // No pose, no change.
+    avatar.pose = Default::default();
+    let rest = avatar.posed_sidecar(&path).unwrap().unwrap();
+    assert_eq!(
+        rest.frame(front).unwrap().origin,
+        sidecar.frame(front).unwrap().origin
+    );
+}

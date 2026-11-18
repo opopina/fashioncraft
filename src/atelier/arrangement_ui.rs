@@ -14,13 +14,17 @@ use marvelous_cloth::{
 };
 use std::sync::Arc;
 
+/// An avatar file and its pose, as JSON.
+type SidecarKey = (PathBuf, String);
+
 #[derive(Default)]
 pub(super) struct ArrangementUi {
     anchor: Option<String>,
     clearance_mm: f64,
     wrap: bool,
     report: Option<Result<String, String>>,
-    loaded: Option<(PathBuf, Result<Option<Sidecar>, String>)>,
+    /// The anchors, by avatar file and pose.
+    loaded: Option<(SidecarKey, Result<Option<Sidecar>, String>)>,
     /// Show the anchors as points on the avatar's skin in the 3D view.
     pub points: bool,
     /// Those points for the avatar surface they were found on.
@@ -83,12 +87,23 @@ fn arrangements(
 }
 
 impl Atelier {
-    /// The current avatar's anchors, loaded once per avatar file.
+    /// The current avatar's anchors as it stands posed, loaded once per avatar file and pose.
     fn arrangement_sidecar(&mut self) -> Option<Sidecar> {
         let path = self.project.avatar_path.clone();
-        if self.authoring.arrangement.loaded.as_ref().map(|(p, _)| p) != Some(&path) {
-            self.authoring.arrangement.loaded =
-                Some((path.clone(), arrangement::load_sidecar(&path)));
+        let pose = self
+            .project
+            .avatar_pose
+            .as_ref()
+            .filter(|p| !p.pose.is_empty())
+            .map(|p| serde_json::to_string(&p.pose).unwrap_or_default())
+            .unwrap_or_default();
+        let key = (path.clone(), pose);
+        if self.authoring.arrangement.loaded.as_ref().map(|(k, _)| k) != Some(&key) {
+            let sidecar = match self.project.avatar_pose.as_ref() {
+                Some(posed) if !posed.pose.is_empty() => posed.posed_sidecar(&path),
+                _ => arrangement::load_sidecar(&path),
+            };
+            self.authoring.arrangement.loaded = Some((key, sidecar));
             self.authoring.arrangement.anchor = None;
             self.authoring.arrangement.skin_points = None;
         }

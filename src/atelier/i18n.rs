@@ -1550,6 +1550,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "flipped" => "invertida",
         "layer" => "capa",
         "pieces" => "piezas",
+        "Drag a box to pin every visible point inside it" => {
+            "Arrastra un recuadro para fijar cada punto visible dentro"
+        }
+        "Draw around the cloth to pin every visible point inside · Cmd+drag removes the pins inside" => {
+            "Dibuja alrededor de la tela para fijar cada punto visible dentro · Cmd+arrastrar quita los alfileres de dentro"
+        }
+        "No visible cloth inside the lasso" => "No hay tela visible dentro del lazo",
         _ => return None,
     })
 }

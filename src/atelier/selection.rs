@@ -101,13 +101,13 @@ pub(super) struct PlacementMarquee {
 }
 
 const MAX_LASSO_POINTS: usize = 128;
-const MAX_LASSO_RAW_POINTS: usize = 512;
+pub(super) const MAX_LASSO_RAW_POINTS: usize = 512;
 const LASSO_SIMPLIFY_TOLERANCE_PX: f32 = 1.0;
 
 /// Simplify the open stroke before the implicit final closing edge is added.
 /// Every discarded sample lies within one pixel of its retained segment.
 /// The explicit work and point bounds prevent an unbounded gesture.
-fn simplify_lasso(points: &[egui::Pos2]) -> Result<Vec<egui::Pos2>, String> {
+pub(super) fn simplify_lasso(points: &[egui::Pos2]) -> Result<Vec<egui::Pos2>, String> {
     if points.len() < 3
         || points.len() > MAX_LASSO_RAW_POINTS
         || points.iter().any(|p| !p.is_finite())

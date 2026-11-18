@@ -1,5 +1,6 @@
-//! Pins on the 3D cloth: click the cloth to pin a point where it is, drag a box to pin every
-//! visible point inside it, click a pin to remove it (Cmd+drag removes the pins in a box).
+//! Pins on the 3D cloth: click the cloth to pin a point where it is, drag a box or draw a lasso
+//! to pin every visible point inside it, click a pin to remove it (Cmd+drag removes the pins
+//! inside the box or lasso).
 //! Pins are authored targets in material coordinates (`pin_targets`), so each action is one
 //! validated undo step; frozen pieces keep their own hold and are skipped.
 use super::*;
@@ -15,6 +16,20 @@ pub(super) struct PinTool {
     pub tack: bool,
     tack_first: Option<usize>,
     drag: Option<(egui::Pos2, egui::Pos2)>,
+    /// Draw a lasso instead of dragging a box.
+    pub lasso: bool,
+    /// The lasso being drawn, in screen points.
+    path: Vec<egui::Pos2>,
+}
+
+/// Least distance between two recorded lasso samples, in points.
+const LASSO_STEP_PX: f32 = 2.;
+
+/// The region a drawn lasso encloses, its stroke simplified and closed.
+pub(super) fn lasso_region(path: &[egui::Pos2]) -> Result<super::selection::Region, String> {
+    Ok(super::selection::Region::Lasso(
+        super::selection::simplify_lasso(path)?,
+    ))
 }
 
 /// How close to a pin a click must land to remove it, in points.
@@ -60,6 +75,26 @@ impl Atelier {
                 tool.enabled = true;
                 tool.tack = true;
                 tool.tack_first = None;
+            }
+            if tool.enabled && !tool.tack {
+                ui.separator();
+                if ui
+                    .selectable_label(!tool.lasso, i18n::tr(ui_lang, "Box"))
+                    .on_hover_text(i18n::tr(ui_lang, "Drag a box to pin every visible point inside it"))
+                    .clicked()
+                {
+                    tool.lasso = false;
+                }
+                if ui
+                    .selectable_label(tool.lasso, i18n::tr(ui_lang, "Lasso"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Draw around the cloth to pin every visible point inside · Cmd+drag removes the pins inside",
+                    ))
+                    .clicked()
+                {
+                    tool.lasso = true;
+                }
             }
             ui.separator();
             ui.label(super::garment_display::counted(count, "pin", "pins"));
@@ -200,7 +235,44 @@ impl Atelier {
             return;
         }
         let removing = response.ctx.input(|i| i.modifiers.command);
-        if response.drag_started_by(egui::PointerButton::Primary)
+        if self.authoring.pin_tool.lasso {
+            let tool = &mut self.authoring.pin_tool;
+            if response.drag_started_by(egui::PointerButton::Primary)
+                && let Some(pos) = response.interact_pointer_pos()
+            {
+                tool.path = vec![pos];
+            }
+            if response.dragged_by(egui::PointerButton::Primary)
+                && let Some(pos) = response.interact_pointer_pos()
+                && tool
+                    .path
+                    .last()
+                    .is_some_and(|last| last.distance(pos) >= LASSO_STEP_PX)
+                && tool.path.len() < super::selection::MAX_LASSO_RAW_POINTS
+            {
+                tool.path.push(pos);
+            }
+            if response.drag_stopped_by(egui::PointerButton::Primary) {
+                let path = std::mem::take(&mut tool.path);
+                if path.len() >= 3 {
+                    match lasso_region(&path) {
+                        Ok(region) => {
+                            let vertices = self.visible_vertices_in(rect, &region);
+                            if vertices.is_empty() {
+                                self.status =
+                                    i18n::tr(ui_lang, "No visible cloth inside the lasso").into();
+                            } else {
+                                self.apply_pins(&vertices, !removing);
+                            }
+                        }
+                        Err(e) => self.status = e,
+                    }
+                    return;
+                }
+            }
+        }
+        if !self.authoring.pin_tool.lasso
+            && response.drag_started_by(egui::PointerButton::Primary)
             && let Some(pos) = response.interact_pointer_pos()
         {
             self.authoring.pin_tool.drag = Some((pos, pos));
@@ -218,7 +290,8 @@ impl Atelier {
         {
             let region = egui::Rect::from_two_pos(start, end);
             if region.width() >= 4. || region.height() >= 4. {
-                let vertices = self.visible_vertices_in(rect, region);
+                let vertices =
+                    self.visible_vertices_in(rect, &super::selection::Region::Box(region));
                 if vertices.is_empty() {
                     self.status = i18n::tr(ui_lang, "No visible cloth inside the box").into();
                 } else {
@@ -337,7 +410,11 @@ impl Atelier {
             .collect()
     }
 
-    fn visible_vertices_in(&mut self, rect: egui::Rect, region: egui::Rect) -> Vec<usize> {
+    fn visible_vertices_in(
+        &mut self,
+        rect: egui::Rect,
+        region: &super::selection::Region,
+    ) -> Vec<usize> {
         let panels = self.pinnable_panels();
         self.visible_vertices(rect, &panels, |_, at| region.contains(at))
             .into_iter()
@@ -429,6 +506,15 @@ impl Atelier {
         for (_, at) in self.visible_pins(rect) {
             painter.circle_filled(at, 3.5, Color32::from_rgb(255, 214, 64));
             painter.circle_stroke(at, 3.5, Stroke::new(1., Color32::from_rgb(90, 60, 0)));
+        }
+        let path = &self.authoring.pin_tool.path;
+        if path.len() >= 2 {
+            let stroke = Stroke::new(1.5, Color32::from_rgb(255, 194, 64));
+            painter.add(egui::Shape::line(path.clone(), stroke));
+            painter.line_segment(
+                [path[path.len() - 1], path[0]],
+                Stroke::new(1., stroke.color.gamma_multiply(0.5)),
+            );
         }
         if let Some((start, end)) = self.authoring.pin_tool.drag {
             let region = egui::Rect::from_two_pos(start, end);
@@ -539,6 +625,35 @@ mod tests {
         )
         .unwrap();
         assert_eq!(released.template.pin_targets.len(), 1);
+    }
+
+    #[test]
+    fn a_lasso_takes_what_it_encloses_and_not_its_bay() {
+        // A U drawn as a stroke: the two arms and the base are inside, the bay between the
+        // arms is not, though a box around the stroke would take it.
+        let mut path = vec![];
+        let mut stroke = |a: egui::Pos2, b: egui::Pos2| {
+            for k in 0..20 {
+                path.push(a + (b - a) * (k as f32 / 20.));
+            }
+        };
+        let p = egui::pos2;
+        stroke(p(0., 0.), p(0., 100.));
+        stroke(p(0., 100.), p(100., 100.));
+        stroke(p(100., 100.), p(100., 0.));
+        stroke(p(100., 0.), p(70., 0.));
+        stroke(p(70., 0.), p(70., 70.));
+        stroke(p(70., 70.), p(30., 70.));
+        stroke(p(30., 70.), p(30., 0.));
+        let region = lasso_region(&path).unwrap();
+        for inside in [p(15., 20.), p(85., 20.), p(50., 85.)] {
+            assert!(region.contains(inside), "{inside:?}");
+        }
+        for outside in [p(50., 30.), p(150., 50.), p(-5., 50.)] {
+            assert!(!region.contains(outside), "{outside:?}");
+        }
+        // Too few points is not a lasso.
+        assert!(lasso_region(&[p(0., 0.), p(10., 0.)]).is_err());
     }
 
     #[test]

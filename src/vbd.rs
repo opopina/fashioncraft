@@ -381,6 +381,23 @@ impl VbdSolver {
         self.world.set_fixed(x, &obstacle.vertices)
     }
 
+    /// Go on with `garment`, the same mesh as the solver's with other rest shapes or pressure
+    /// (a fabric key's): elements read it from the next step on.
+    pub fn set_garment(&mut self, garment: Arc<CompiledGarment>) -> Result<(), String> {
+        let (a, b) = (&self.garment.mesh, &garment.mesh);
+        if a.uv.len() != b.uv.len()
+            || a.triangles.len() != b.triangles.len()
+            || a.triangles
+                .iter()
+                .zip(&b.triangles)
+                .any(|(s, t)| s.vertices != t.vertices)
+        {
+            return Err("The new garment is another mesh".into());
+        }
+        self.garment = garment;
+        Ok(())
+    }
+
     pub fn new(
         garment: Arc<CompiledGarment>,
         avatar: Option<&SurfaceMesh>,

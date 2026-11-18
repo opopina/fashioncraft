@@ -27,4 +27,4 @@ pub mod template;
 pub mod transfer;
 pub mod trims;
 
-pub use template::{CompiledGarment, GarmentTemplate};
+pub use template::{CompiledGarment, FabricValues, GarmentTemplate};

@@ -10,13 +10,18 @@ use crate::{
     avatar::SurfaceMesh,
     avatar_rig::{Pose, Rig, euler_degrees},
     fitting::FittingProject,
-    garment::CompiledGarment,
+    garment::{CompiledGarment, GarmentTemplate},
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, io::Write, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Write,
+    path::Path,
+    sync::Arc,
+};
 
 /// Longest animation, in seconds.
 pub const MAX_DURATION_S: f64 = 600.;
@@ -66,6 +71,39 @@ pub struct AvatarAnimation {
     /// Gravity (m/s²) at times of the animation; without keys the scene's gravity pulls.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gravity_keys: Vec<VectorKey>,
+    /// Pieces' fabric at times of the animation, by piece; a piece without keys keeps the
+    /// template's pressure and shrinkage.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fabric_keys: BTreeMap<String, Vec<FabricKey>>,
+}
+
+/// A piece's pressure (Pa) and shrinkage along the warp and the weft (percent of the cut
+/// size) at one time of the animation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FabricKey {
+    pub time_s: f64,
+    pub pressure_pa: f64,
+    pub shrink_percent: [f64; 2],
+}
+
+/// Put a fabric key at `time` among `keys`, replacing a key already there.
+pub fn set_fabric_key(
+    keys: &mut Vec<FabricKey>,
+    time: f64,
+    pressure_pa: f64,
+    shrink_percent: [f64; 2],
+) {
+    keys.retain(|k| (k.time_s - time).abs() > 1e-6);
+    let at = keys.partition_point(|k| k.time_s < time);
+    keys.insert(
+        at,
+        FabricKey {
+            time_s: time,
+            pressure_pa,
+            shrink_percent,
+        },
+    );
 }
 
 /// A vector at one time of the animation: the wind's velocity or gravity.
@@ -116,6 +154,7 @@ impl Default for AvatarAnimation {
             fps: default_fps(),
             wind_keys: Vec::new(),
             gravity_keys: Vec::new(),
+            fabric_keys: BTreeMap::new(),
         }
     }
 }
@@ -139,7 +178,58 @@ impl AvatarAnimation {
         vector_at(&self.gravity_keys, t)
     }
 
+    /// Every keyed piece's fabric at time `t`: straight between keys, held before the first
+    /// and after the last.
+    pub fn fabric_at(&self, t: f64) -> BTreeMap<String, crate::garment::FabricValues> {
+        self.fabric_keys
+            .iter()
+            .filter(|(_, keys)| !keys.is_empty())
+            .map(|(piece, keys)| {
+                let value = |k: &FabricKey| (k.pressure_pa, DVec2::from_array(k.shrink_percent));
+                let (pressure, shrink) = match keys.as_slice() {
+                    [first, ..] if t <= first.time_s => value(first),
+                    [.., last] if t >= last.time_s => value(last),
+                    _ => {
+                        let k = keys.partition_point(|k| k.time_s <= t);
+                        let (a, b) = (&keys[k - 1], &keys[k]);
+                        let f = (t - a.time_s) / (b.time_s - a.time_s);
+                        let (pa, sa) = value(a);
+                        let (pb, sb) = value(b);
+                        (pa + (pb - pa) * f, sa.lerp(sb, f))
+                    }
+                };
+                (
+                    piece.clone(),
+                    crate::garment::FabricValues {
+                        pressure,
+                        shrink: shrink.to_array(),
+                    },
+                )
+            })
+            .collect()
+    }
+
     pub fn validate(&self) -> Result<(), String> {
+        for keys in self.fabric_keys.values() {
+            let mut previous = f64::NEG_INFINITY;
+            for key in keys {
+                if !key.time_s.is_finite()
+                    || !(0.0..=MAX_DURATION_S).contains(&key.time_s)
+                    || key.time_s <= previous + 1e-6
+                    || !key.pressure_pa.is_finite()
+                    || key.pressure_pa.abs() > crate::garment::template::MAX_PRESSURE
+                    || key
+                        .shrink_percent
+                        .iter()
+                        .any(|s| !crate::garment::template::SHRINK_RANGE.contains(s))
+                {
+                    return Err(format!(
+                        "Fabric keys must be in time order within {MAX_DURATION_S:.0} s, with pressure and shrinkage in range"
+                    ));
+                }
+                previous = key.time_s;
+            }
+        }
         for (keys, what, most) in [
             (&self.wind_keys, "Wind", 50.),
             (&self.gravity_keys, "Gravity", 100.),
@@ -657,6 +747,11 @@ pub struct Recorder {
     pins_planned: Vec<(usize, DVec3)>,
     frame_count: usize,
     take: Take,
+    /// The template fabric keys change, and the fabric last given to the solver.
+    fabric: Option<(
+        GarmentTemplate,
+        BTreeMap<String, crate::garment::FabricValues>,
+    )>,
 }
 
 impl Recorder {
@@ -721,7 +816,28 @@ impl Recorder {
                 fps: animation.fps,
                 frames: Vec::new(),
             },
+            fabric: (!animation.fabric_keys.is_empty())
+                .then(|| (project.template.clone(), BTreeMap::new())),
         })
+    }
+
+    /// The garment for the planned step when fabric keys change it: `base` (compiled from the
+    /// template) with the keyed pieces' fabric at the step's end; none when it is as before.
+    pub fn step_garment(
+        &mut self,
+        base: &Arc<CompiledGarment>,
+    ) -> Result<Option<Arc<CompiledGarment>>, String> {
+        let t = self.planned.as_ref().map_or(self.time, |p| p.0);
+        let fabric = self.animation.fabric_at(t);
+        let Some((template, last)) = &mut self.fabric else {
+            return Ok(None);
+        };
+        if *last == fabric {
+            return Ok(None);
+        }
+        let garment = base.with_fabric(template, &fabric)?;
+        *last = fabric;
+        Ok(Some(Arc::new(garment)))
     }
 
     /// Start from the settled cloth: frame zero, unless the body first moves into the pose.
@@ -955,10 +1071,15 @@ pub fn run_stepping(
         Some(height) => surface.with_floor(height),
         None => surface.clone(),
     };
+    let base = garment.clone();
     let mut solver = VbdSolver::new(garment, Some(&floored(surface)), &state)?;
     recorder.begin(&state.x);
     while !recorder.finished() {
         let (dt, obstacle) = recorder.plan(settings.dt);
+        // Fabric keys reshape the pieces they name as the take goes on.
+        if let Some(keyed) = recorder.step_garment(&base)? {
+            solver.set_garment(keyed)?;
+        }
         // Pins held on to the avatar go with it.
         for &(v, p) in recorder.pin_positions() {
             state.x[v] = p;

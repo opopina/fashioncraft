@@ -153,3 +153,61 @@ fn a_recording_on_the_gpu_carries_the_cloth_like_the_cpu_one() {
         "GPU {gpu_rise} vs CPU {cpu_rise}"
     );
 }
+
+/// The largest distance between two points of the cloth.
+fn span(x: &[DVec3]) -> f64 {
+    x.iter()
+        .flat_map(|a| x.iter().map(move |b| a.distance(*b)))
+        .fold(0., f64::max)
+}
+
+#[test]
+#[ignore = "uses a hardware GPU; run explicitly with --ignored"]
+fn fabric_keys_shrink_the_cloth_on_the_gpu_as_on_the_cpu() {
+    use marvelous_cloth::avatar_animation::set_fabric_key;
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        ..Default::default()
+    }))
+    .unwrap();
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+    let gpu = GpuVbd::new(device, queue);
+    let (project, rest, g, state, mut animation) = scene();
+    // The square, drawn in to 70 % both ways over the half second.
+    let piece = g.panels[0].id.clone();
+    let keys = animation.fabric_keys.entry(piece).or_default();
+    set_fabric_key(keys, 0., 0., [100., 100.]);
+    set_fabric_key(keys, 0.5, 0., [70., 70.]);
+    let settings = VbdSettings {
+        dt: 1. / 60.,
+        iterations: 16,
+        gravity: DVec3::ZERO,
+        friction: 0.3,
+        ..Default::default()
+    };
+    let before = span(&state.x);
+    let cpu = run(
+        g.clone(),
+        &rest,
+        state.clone(),
+        Recorder::new(&project, &animation).unwrap(),
+        &settings,
+        |_, _| true,
+    )
+    .unwrap();
+    let on_gpu = run_stepping(
+        g,
+        &rest,
+        state,
+        Recorder::new(&project, &animation).unwrap(),
+        &settings,
+        |solver, state, step| gpu.step(solver, state, step, None).map(|_| ()),
+        |_, _| true,
+    )
+    .unwrap();
+    let (on_cpu, on_gpu) = (span(&cpu.1.x) / before, span(&on_gpu.1.x) / before);
+    assert!(on_cpu < 0.85 && on_gpu < 0.85, "CPU {on_cpu}, GPU {on_gpu}");
+    assert!((on_cpu - on_gpu).abs() < 0.1, "CPU {on_cpu}, GPU {on_gpu}");
+}

@@ -633,7 +633,7 @@ pub const SHRINK_RANGE: std::ops::RangeInclusive<f64> = 50.0..=150.0;
 /// Scale a panel's rest shape by `warp` and `weft` along its grain: rest coordinates X become
 /// S·X with S = R·diag(warp, weft)·Rᵀ, so a warp fibre's rest length is `warp` times its cut
 /// length. Masses are left as cut.
-fn shrink(out: &mut CompiledGarment, range: &PanelRange, warp: f64, weft: f64) {
+pub(crate) fn shrink(out: &mut CompiledGarment, range: &PanelRange, warp: f64, weft: f64) {
     let (s, c) = out.materials[range.material]
         .grain_degrees
         .to_radians()
@@ -1520,7 +1520,61 @@ impl GarmentTemplate {
     }
 }
 
+/// A piece's fabric as a key sets it: pressure (Pa) and shrinkage along the warp and the
+/// weft (percent of the cut size).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FabricValues {
+    pub pressure: f64,
+    pub shrink: [f64; 2],
+}
+
 impl CompiledGarment {
+    /// This garment, compiled from `template`, with the pieces in `fabric` given those
+    /// pressures and shrinkages instead of the template's: the same mesh, its rest shapes and
+    /// pressure changed, its masses kept.
+    pub fn with_fabric(
+        &self,
+        template: &GarmentTemplate,
+        fabric: &BTreeMap<String, FabricValues>,
+    ) -> Result<Self, String> {
+        let mut out = self.clone();
+        for (id, values) in fabric {
+            let range = out
+                .panels
+                .iter()
+                .find(|p| &p.id == id)
+                .cloned()
+                .ok_or_else(|| format!("Fabric keys name a missing piece: {id}"))?;
+            if !values.pressure.is_finite() || values.pressure.abs() > MAX_PRESSURE {
+                return Err(format!("Pressure must be within ±{MAX_PRESSURE} Pa"));
+            }
+            if values.shrink.iter().any(|s| !SHRINK_RANGE.contains(s)) {
+                return Err(format!(
+                    "Shrinkage must be {}–{} % of the cut size",
+                    SHRINK_RANGE.start(),
+                    SHRINK_RANGE.end()
+                ));
+            }
+            if values.pressure != 0. && out.pressure.is_empty() {
+                out.pressure = vec![0.; out.mesh.triangles.len()];
+            }
+            if !out.pressure.is_empty() {
+                out.pressure[range.triangles.clone()].fill(values.pressure);
+            }
+            // The compiled shape already holds the template's shrinkage: scale by the change.
+            let [warp, weft] = template
+                .panel_shrink
+                .get(id)
+                .copied()
+                .unwrap_or([100., 100.]);
+            let (a, b) = (values.shrink[0] / warp, values.shrink[1] / weft);
+            if a != 1. || b != 1. {
+                shrink(&mut out, &range, a, b);
+            }
+        }
+        Ok(out)
+    }
+
     pub fn max_seam_gap(&self, x: &[DVec3]) -> f64 {
         self.seams.iter().map(|s| s.max_gap(x)).fold(0.0, f64::max)
     }

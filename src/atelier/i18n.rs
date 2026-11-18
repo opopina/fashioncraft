@@ -2033,6 +2033,12 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
         "Export Alembic…" => "Exportar Alembic…",
+        "Key fabric" => "Clave de tela",
+        "Fabric keys" => "Claves de tela",
+        "Key the selected pieces' pressure and shrinkage, as set in their Piece tab, at this time; recording changes them from key to key" => {
+            "Pone una clave con la presión y el encogimiento de las piezas seleccionadas, tal como están en su pestaña Pieza, en este instante; al grabar cambian de clave en clave"
+        }
+        "Select the pieces to key first" => "Selecciona primero las piezas que quieres animar",
         "Save the 2D patterns at 1:1…" => "Guardar los patrones 2D a 1:1…",
         "2D patterns at 1:1" => "Patrones 2D a 1:1",
         "Paper" => "Papel",

@@ -720,6 +720,60 @@ impl Atelier {
                         self.document.dirty = true;
                     }
                 }
+                // The selected pieces' pressure and shrinkage as they are set now, at this time.
+                if ui
+                    .button(t("Key fabric"))
+                    .on_hover_text(t(
+                        "Key the selected pieces' pressure and shrinkage, as set in their Piece tab, at this time; recording changes them from key to key",
+                    ))
+                    .clicked()
+                {
+                    action = Some(|s, _| {
+                        let time = s.authoring.animation.time;
+                        let pieces = s.selected_panels();
+                        if pieces.is_empty() {
+                            return Err("Select the pieces to key first".into());
+                        }
+                        let template = &s.project.template;
+                        let values: Vec<(String, f64, [f64; 2])> = pieces
+                            .into_iter()
+                            .map(|id| {
+                                let pressure = template.panel_pressure.get(&id).copied().unwrap_or(0.);
+                                let shrink = template
+                                    .panel_shrink
+                                    .get(&id)
+                                    .copied()
+                                    .unwrap_or([100., 100.]);
+                                (id, pressure, shrink)
+                            })
+                            .collect();
+                        let a = s.animation_or_new()?;
+                        for (id, pressure, shrink) in values {
+                            avatar_animation::set_fabric_key(
+                                a.fabric_keys.entry(id).or_default(),
+                                time,
+                                pressure,
+                                shrink,
+                            );
+                        }
+                        s.status = format!("Key set at {time:.2} s");
+                        Ok(())
+                    });
+                }
+                let fabric = self
+                    .project
+                    .avatar_animation
+                    .as_ref()
+                    .map_or(0, |a| a.fabric_keys.values().map(Vec::len).sum::<usize>());
+                if fabric > 0 {
+                    ui.small(format!("{}: {fabric}", t("Fabric keys")));
+                    if ui.small_button(t("Clear")).clicked()
+                        && let Some(a) = self.project.avatar_animation.as_mut()
+                    {
+                        a.fabric_keys.clear();
+                        self.document.dirty = true;
+                    }
+                }
                 egui::ComboBox::from_id_salt("animation.motion")
                     .width(110.)
                     .selected_text(t(avatar_animation::MOTIONS[self.authoring.animation.motion]))

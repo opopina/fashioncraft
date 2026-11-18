@@ -506,3 +506,126 @@ fn pins_attached_to_the_avatar_go_with_it_while_recording() {
     bare.pins_attached = false;
     assert!(authoring::apply(&bare, Command::AttachPins { attached: true }).is_err());
 }
+
+#[test]
+fn fabric_keys_reshape_and_press_pieces_as_the_take_goes_on() {
+    use marvelous_cloth::{
+        avatar_animation::{FabricKey, run_stepping, set_fabric_key},
+        garment::FabricValues,
+    };
+    use std::collections::BTreeMap;
+    let mut animation = keyed(&[(0., 0.), (0.2, 0.)]);
+    let keys = animation.fabric_keys.entry("front".into()).or_default();
+    set_fabric_key(keys, 0.2, 400., [72., 100.]);
+    set_fabric_key(keys, 0., 0., [90., 100.]);
+    animation.validate().unwrap();
+    // Straight between keys, held outside them; pieces without keys are left out.
+    let middle = animation.fabric_at(0.1);
+    assert!((middle["front"].pressure - 200.).abs() < 1e-9);
+    assert!((middle["front"].shrink[0] - 81.).abs() < 1e-9);
+    assert!(!middle.contains_key("back"));
+    assert_eq!(animation.fabric_at(5.)["front"].shrink, [72., 100.]);
+
+    // The template shrinks the front to 90 % along the warp; keys replace that value.
+    let mut project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    project
+        .template
+        .panel_shrink
+        .insert("front".into(), [90., 100.]);
+    let scene = project.compile().unwrap();
+    let base = scene.garment.clone();
+    let front = base
+        .panels
+        .iter()
+        .find(|p| p.id == "front")
+        .unwrap()
+        .clone();
+    let area = |g: &marvelous_cloth::garment::CompiledGarment| -> f64 {
+        g.mesh.triangles[front.triangles.clone()]
+            .iter()
+            .map(|t| t.area)
+            .sum()
+    };
+    let at = |pressure: f64, shrink: [f64; 2]| {
+        let fabric = BTreeMap::from([("front".to_string(), FabricValues { pressure, shrink })]);
+        base.with_fabric(&project.template, &fabric).unwrap()
+    };
+    let same = at(300., [90., 100.]);
+    assert!((area(&same) - area(&base)).abs() < 1e-12);
+    assert!(
+        same.pressure[front.triangles.clone()]
+            .iter()
+            .all(|p| *p == 300.)
+    );
+    let tighter = at(0., [72., 100.]);
+    assert!((area(&tighter) / area(&base) - 0.8).abs() < 1e-12);
+    assert_eq!(tighter.mesh.masses, base.mesh.masses);
+    // The same rest shape as a template asking for 72 % directly.
+    let mut direct = project.template.clone();
+    direct.panel_shrink.insert("front".into(), [72., 100.]);
+    let direct = direct.compile().unwrap();
+    for (a, b) in tighter.mesh.triangles.iter().zip(&direct.mesh.triangles) {
+        assert!((a.area - b.area).abs() < 1e-15);
+        assert!(a.inv_dm.abs_diff_eq(b.inv_dm, 1e-9));
+    }
+    assert!(
+        base.with_fabric(
+            &project.template,
+            &BTreeMap::from([(
+                "front".to_string(),
+                FabricValues {
+                    pressure: 0.,
+                    shrink: [40., 100.]
+                }
+            )])
+        )
+        .is_err()
+    );
+
+    // Recording: each step's solver sees the front as keyed at the step's end.
+    let recorder = Recorder::new(&project, &animation).unwrap();
+    let mut seen: Vec<(f64, f64)> = vec![];
+    let settings = VbdSettings {
+        dt: 1. / 60.,
+        iterations: 4,
+        ..Default::default()
+    };
+    run_stepping(
+        base.clone(),
+        &scene.collider.surface,
+        scene.state.clone(),
+        recorder,
+        &settings,
+        |solver, state, step| {
+            let g = &solver.garment;
+            let p = g.pressure.get(front.triangles.start).copied().unwrap_or(0.);
+            seen.push((area(g) / area(&base), p));
+            solver.step(state, step, None).map(|_| ())
+        },
+        |_, _| true,
+    )
+    .unwrap();
+    assert!(seen.len() >= 10);
+    assert!(
+        seen.windows(2)
+            .all(|w| w[1].0 <= w[0].0 + 1e-12 && w[1].1 >= w[0].1)
+    );
+    let last = seen.last().unwrap();
+    assert!((last.0 - 0.8).abs() < 1e-9 && (last.1 - 400.).abs() < 1e-9);
+    // Keys out of order or out of range are refused.
+    let mut bad = animation.clone();
+    bad.fabric_keys.get_mut("front").unwrap().push(FabricKey {
+        time_s: 0.1,
+        pressure_pa: 0.,
+        shrink_percent: [100., 100.],
+    });
+    assert!(bad.validate().is_err());
+    let mut strong = animation;
+    set_fabric_key(
+        strong.fabric_keys.get_mut("front").unwrap(),
+        1.,
+        5000.,
+        [100., 100.],
+    );
+    assert!(strong.validate().is_err());
+}

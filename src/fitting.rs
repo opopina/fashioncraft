@@ -763,11 +763,11 @@ impl FittingProject {
         // Images no graphic or fabric uses any more are left out of the saved document.
         let used = |id: &str| {
             copy.template.graphics.iter().any(|g| g.asset_id == id)
-                || copy
-                    .template
-                    .fabric_appearance
-                    .values()
-                    .any(|a| a.texture.as_ref().is_some_and(|t| t.asset_id == id))
+                || copy.template.fabric_appearance.values().any(|a| {
+                    a.texture
+                        .as_ref()
+                        .is_some_and(|t| t.asset_ids().any(|used| used == id))
+                })
         };
         copy.image_assets.retain(|asset| used(&asset.id));
         for asset in &mut copy.image_assets {

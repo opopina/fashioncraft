@@ -1969,6 +1969,24 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Wind and gravity keys" => "Claves de viento y gravedad",
         "Import a BVH motion…" => "Importar un movimiento BVH…",
         "Motion (BVH)…" => "Movimiento (BVH)…",
+        "Relief (mm)" => "Relieve (mm)",
+        "Bright parts of the image stand out by this much; 0 is flat" => {
+            "Las partes claras de la imagen sobresalen esto; 0 es plano"
+        }
+        "The colours tint the image: white shows it as it is." => {
+            "Los colores tiñen la imagen: el blanco la muestra tal cual."
+        }
+        "Normal map" => "Mapa de normales",
+        "Roughness map" => "Mapa de rugosidad",
+        "An image of the surface's normals over one repeat: red along it, green up it, blue out of the cloth" => {
+            "Una imagen de las normales de la superficie en una repetición: rojo a lo largo, verde hacia arriba, azul hacia fuera de la tela"
+        }
+        "A grey image of the roughness over one repeat: black glossy, white matt" => {
+            "Una imagen gris de la rugosidad en una repetición: negro brillante, blanco mate"
+        }
+        "Map staged · Apply appearance to show it" => {
+            "Mapa preparado · Aplicar apariencia para mostrarlo"
+        }
         _ => return None,
     })
 }

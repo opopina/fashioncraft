@@ -493,7 +493,10 @@ impl Atelier {
             vec![]
         };
         let fabric_images = self.fabric_images(&ctx, &optics);
-        let fabric_images: Vec<_> = fabric_images.iter().map(Option::as_deref).collect();
+        let fabric_images: Vec<_> = fabric_images
+            .iter()
+            .map(|maps| maps.each_ref().map(Option::as_deref))
+            .collect();
         let graphics: Vec<marvelous_cloth::render::GraphicDraw> = graphic_draws
             .iter()
             .map(

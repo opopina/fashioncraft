@@ -21,15 +21,18 @@ struct VertexOut {
     @location(7) weave: vec3f,
     // Texture coordinates (one repeat spans [0,1]), layer, relief height in metres.
     @location(8) map: vec4f,
+    // Layers of the normal map and the roughness map (-1 for none).
+    @location(9) detail: vec2f,
 };
 
 @vertex
 fn vs_main(@location(0) clip: vec4<f32>, @location(1) normal: vec3<f32>,
            @location(2) color: vec4<f32>, @location(3) bary: vec3<f32>, @location(4) roughness: f32,
            @location(5) back: vec3f, @location(6) uv: vec2f, @location(7) weave: vec3f,
-           @location(8) map: vec4f) -> VertexOut {
+           @location(8) map: vec4f, @location(9) detail: vec2f) -> VertexOut {
     var out: VertexOut;
     out.map = map;
+    out.detail = detail;
     out.back = back;
     out.uv = uv;
     out.weave = weave;
@@ -106,6 +109,9 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
     let image_v = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(0.0, texel.y), layer).rgb;
     let dmap_dx = dpdx(in.map.xy);
     let dmap_dy = dpdy(in.map.xy);
+    // The normal and roughness maps, stored so that sampling returns their values.
+    let normal_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.x, 0.0))).rgb;
+    let rough_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.y, 0.0))).r;
     if in.weave.x > 0.5 {
         let w = weave_height(threads, in.weave.x);
         // Threads finer than about a pixel fade to their mean, instead of shimmering.
@@ -131,6 +137,15 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
             let grad_u = (r1 * dmap_dx.x + r2 * dmap_dy.x) / det;
             let grad_v = (r1 * dmap_dx.y + r2 * dmap_dy.y) / det;
             n = normalize(n - in.map.w * (slope.x * grad_u + slope.y * grad_v));
+            // A normal map in the repeat's frame: red along it, green up it (against the
+            // image's rows), blue out of the cloth.
+            if in.detail.x > -0.5 {
+                let t = grad_u / max(length(grad_u), 1e-12);
+                let b0 = -grad_v / max(length(grad_v), 1e-12);
+                let b = normalize(b0 - n * dot(b0, n));
+                let m = normal_texel * 2.0 - vec3f(1.0);
+                n = normalize(t * m.x + b * m.y + n * max(m.z, 0.05));
+            }
         }
     }
     let lighting = 0.35 * view.ambient.x + 0.65 * view.light.w * abs(dot(n, normalize(view.light.xyz)));
@@ -145,7 +160,8 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
     let nv = clamp(dot(n, v), 0.0001, 1.0);
     let nh = clamp(dot(n, h), 0.0, 1.0);
     let vh = clamp(dot(v, h), 0.0, 1.0);
-    let alpha = max(in.roughness * in.roughness, 0.02);
+    let roughness = select(in.roughness, rough_texel, in.map.z > -0.5 && in.detail.y > -0.5);
+    let alpha = max(roughness * roughness, 0.02);
     let a2 = alpha * alpha;
     let denom = nh * nh * (a2 - 1.0) + 1.0;
     let distribution = a2 / (3.14159265 * denom * denom);

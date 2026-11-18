@@ -122,6 +122,8 @@ fn fabrics_become_materials_and_textures_are_embedded() {
                 height_mm: 50.,
                 rotation_degrees: 0.,
                 relief_mm: 0.,
+                normal_asset_id: None,
+                roughness_asset_id: None,
             }),
             ..Default::default()
         },

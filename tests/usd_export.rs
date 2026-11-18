@@ -144,6 +144,8 @@ fn a_usdz_package_stores_the_layer_first_and_its_textures_on_64_byte_boundaries(
                 height_mm: 80.,
                 rotation_degrees: 0.,
                 relief_mm: 0.,
+                normal_asset_id: None,
+                roughness_asset_id: None,
             }),
             ..Default::default()
         },

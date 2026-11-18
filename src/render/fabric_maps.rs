@@ -1,6 +1,7 @@
 //! Fabric textures for the cloth shader: every fabric image resized into one layer of a
 //! mipmapped sRGB texture array, so the single cloth draw shows them all. With no textures
-//! the array holds one white layer that no vertex uses.
+//! the array holds one white layer that no vertex uses. Normal and roughness maps are data,
+//! not colours: their layers are stored sRGB-encoded so that sampling returns their values.
 use super::graphics::{GraphicImage, mip_chain};
 use super::*;
 
@@ -8,14 +9,25 @@ use super::*;
 const LAYER_SIDE: u32 = 1024;
 
 pub(super) struct FabricMaps {
-    /// Keys of the images in layer order.
-    keys: Vec<u64>,
+    /// Keys of the images in layer order, and whether each holds data rather than colour.
+    keys: Vec<(u64, bool)>,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
     pub bind: wgpu::BindGroup,
 }
 
-fn layer_pixels(image: &GraphicImage) -> Option<GraphicImage> {
+/// The byte that an sRGB texture decodes to `value`/255.
+fn srgb_encoded(value: u8) -> u8 {
+    let v = value as f64 / 255.;
+    let e = if v <= 0.0031308 {
+        12.92 * v
+    } else {
+        1.055 * v.powf(1. / 2.4) - 0.055
+    };
+    (e * 255.).round().clamp(0., 255.) as u8
+}
+
+fn layer_pixels(image: &GraphicImage, data: bool) -> Option<GraphicImage> {
     let [w, h] = image.size;
     let buffer = image::RgbaImage::from_raw(w, h, image.rgba.clone())?;
     let resized = if [w, h] == [LAYER_SIDE; 2] {
@@ -28,10 +40,18 @@ fn layer_pixels(image: &GraphicImage) -> Option<GraphicImage> {
             image::imageops::FilterType::Triangle,
         )
     };
+    let mut rgba = resized.into_raw();
+    if data {
+        for (k, byte) in rgba.iter_mut().enumerate() {
+            if k % 4 != 3 {
+                *byte = srgb_encoded(*byte);
+            }
+        }
+    }
     Some(GraphicImage {
         key: image.key,
         size: [LAYER_SIDE; 2],
-        rgba: resized.into_raw(),
+        rgba,
     })
 }
 
@@ -145,37 +165,48 @@ impl FabricMaps {
         self.bind = bind_group(device, layout, &self.view, &self.sampler);
     }
 
-    /// The layer of each material's image (`None` without one), rebuilding the array when the
-    /// set of images changed.
+    /// The layers of each material's colour image, normal map and roughness map (`None`
+    /// where it has none), rebuilding the array when the set of images changed.
     pub fn update(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
-        images: &[Option<&GraphicImage>],
-    ) -> Vec<Option<u32>> {
-        let mut distinct: Vec<&GraphicImage> = vec![];
+        images: &[[Option<&GraphicImage>; 3]],
+    ) -> Vec<[Option<u32>; 3]> {
+        let mut distinct: Vec<(&GraphicImage, bool)> = vec![];
         let layers = images
             .iter()
-            .map(|image| {
-                let image = (*image)?;
-                let at = distinct.iter().position(|d| d.key == image.key);
-                Some(at.unwrap_or_else(|| {
-                    distinct.push(image);
-                    distinct.len() - 1
-                }) as u32)
+            .map(|maps| {
+                let mut out = [None; 3];
+                for (k, image) in maps.iter().enumerate() {
+                    let Some(image) = *image else {
+                        continue;
+                    };
+                    let data = k > 0;
+                    let at = distinct
+                        .iter()
+                        .position(|(d, is_data)| d.key == image.key && *is_data == data);
+                    out[k] = Some(at.unwrap_or_else(|| {
+                        distinct.push((image, data));
+                        distinct.len() - 1
+                    }) as u32);
+                }
+                out
             })
             .collect();
-        let keys: Vec<u64> = distinct.iter().map(|d| d.key).collect();
+        let keys: Vec<(u64, bool)> = distinct.iter().map(|(d, data)| (d.key, *data)).collect();
         if keys != self.keys {
-            let pixels: Vec<GraphicImage> =
-                distinct.iter().filter_map(|d| layer_pixels(d)).collect();
+            let pixels: Vec<GraphicImage> = distinct
+                .iter()
+                .filter_map(|(d, data)| layer_pixels(d, *data))
+                .collect();
             if pixels.len() == distinct.len() {
                 self.view = array(device, queue, &pixels);
                 self.bind = bind_group(device, layout, &self.view, &self.sampler);
                 self.keys = keys;
             } else {
-                return vec![None; images.len()];
+                return vec![[None; 3]; images.len()];
             }
         }
         layers

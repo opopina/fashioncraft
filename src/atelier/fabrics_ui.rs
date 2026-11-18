@@ -72,6 +72,7 @@ impl Atelier {
         let mut extras = AppearanceExtras {
             texture_name,
             pick_texture: false,
+            pick_map: None,
             palette: Some(&mut self.project.color_palette),
             eyedropper: self.authoring.eyedropper,
             language: ui_lang,
@@ -82,7 +83,8 @@ impl Atelier {
             &mut appearance_targets,
             &mut extras,
         );
-        let (pick_texture, eyedropper) = (extras.pick_texture, extras.eyedropper);
+        let (pick_texture, pick_map, eyedropper) =
+            (extras.pick_texture, extras.pick_map, extras.eyedropper);
         if eyedropper != self.authoring.eyedropper {
             self.authoring.eyedropper = eyedropper;
             self.status = if eyedropper {
@@ -93,6 +95,9 @@ impl Atelier {
         }
         if pick_texture {
             self.pick_fabric_texture();
+        }
+        if let Some(k) = pick_map {
+            self.pick_fabric_map(k);
         }
         for (name, rect) in appearance_targets {
             if let Some(smoke) = &mut self.authoring_smoke {
@@ -233,6 +238,37 @@ impl Atelier {
     }
 }
 impl Atelier {
+    /// Stage a PNG as the drafted fabric texture's normal map (1) or roughness map (2).
+    fn pick_fabric_map(&mut self, which: usize) {
+        let ui_lang = self.prefs.language;
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG image", &["png"])
+            .pick_file()
+        else {
+            return;
+        };
+        if let Err(e) = image::image_dimensions(&path) {
+            self.status = format!("Cannot open {}: {e}", path.display());
+            return;
+        }
+        let asset_id = self.asset_for(path);
+        let Some(texture) = self
+            .authoring
+            .fabric_draft
+            .as_mut()
+            .and_then(|d| d.appearance.as_mut())
+            .and_then(|a| a.texture.as_mut())
+        else {
+            return;
+        };
+        if which == 1 {
+            texture.normal_asset_id = Some(asset_id);
+        } else {
+            texture.roughness_asset_id = Some(asset_id);
+        }
+        self.status = i18n::tr(ui_lang, "Map staged · Apply appearance to show it").into();
+    }
+
     /// Stage a PNG as the drafted fabric's texture; its height follows the image's aspect.
     fn pick_fabric_texture(&mut self) {
         let ui_lang = self.prefs.language;
@@ -266,6 +302,8 @@ impl Atelier {
             height_mm: (width_mm * f64::from(h) / f64::from(w.max(1))).clamp(1., 5000.),
             rotation_degrees: previous.as_ref().map_or(0., |t| t.rotation_degrees),
             relief_mm: previous.as_ref().map_or(0., |t| t.relief_mm),
+            normal_asset_id: previous.as_ref().and_then(|t| t.normal_asset_id.clone()),
+            roughness_asset_id: previous.as_ref().and_then(|t| t.roughness_asset_id.clone()),
         });
         self.status = i18n::tr(ui_lang, "Texture staged · Apply appearance to show it").into();
     }
@@ -300,6 +338,8 @@ struct AppearanceExtras<'a> {
     texture_name: Option<String>,
     /// Set when a new texture image was asked for.
     pick_texture: bool,
+    /// Set when a normal map (1) or a roughness map (2) was asked for.
+    pick_map: Option<usize>,
     palette: Option<&'a mut Vec<[u8; 3]>>,
     /// Whether the eyedropper is waiting for a click on the 3D view; the controls toggle it.
     eyedropper: bool,
@@ -495,10 +535,44 @@ fn appearance_controls(
                     &mut t.relief_mm,
                     0.0..=marvelous_cloth::garment::appearance::MAX_TEXTURE_RELIEF_MM,
                 )
-                .text("Relief (mm)"),
+                .text(tr("Relief (mm)")),
             )
-            .on_hover_text("Bright parts of the image stand out by this much; 0 is flat");
-            ui.small("The colours tint the image: white shows it as it is.");
+            .on_hover_text(tr(
+                "Bright parts of the image stand out by this much; 0 is flat",
+            ));
+            ui.small(tr("The colours tint the image: white shows it as it is."));
+            for (k, label, hover) in [
+                (
+                    1,
+                    "Normal map",
+                    "An image of the surface's normals over one repeat: red along it, green up it, blue out of the cloth",
+                ),
+                (
+                    2,
+                    "Roughness map",
+                    "A grey image of the roughness over one repeat: black glossy, white matt",
+                ),
+            ] {
+                let id = if k == 1 {
+                    &mut t.normal_asset_id
+                } else {
+                    &mut t.roughness_asset_id
+                };
+                ui.horizontal(|ui| {
+                    ui.label(tr(label));
+                    let pick = if id.is_some() {
+                        tr("Replace…")
+                    } else {
+                        tr("Image…")
+                    };
+                    if ui.small_button(pick).on_hover_text(tr(hover)).clicked() {
+                        extras.pick_map = Some(k);
+                    }
+                    if id.is_some() && ui.small_button(tr("Remove")).clicked() {
+                        *id = None;
+                    }
+                });
+            }
         }
     }
     let apply = ui.button(tr("Apply appearance"));

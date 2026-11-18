@@ -172,6 +172,8 @@ fn fabric_textures_are_validated_and_turn_with_their_angle() {
         height_mm: 20.,
         rotation_degrees: 90.,
         relief_mm: 1.,
+        normal_asset_id: None,
+        roughness_asset_id: None,
     };
     let mut a = FabricAppearance {
         texture: Some(texture.clone()),

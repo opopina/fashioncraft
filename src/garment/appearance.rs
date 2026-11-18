@@ -43,6 +43,25 @@ pub struct FabricTexture {
     /// its darkest, mm. Zero is flat.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub relief_mm: f64,
+    /// Image of the surface's normals over one repeat, as normal maps are usually made: red
+    /// along the repeat's width, green up it, blue out of the cloth. None keeps the surface
+    /// smooth, or as the brightness relief draws it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normal_asset_id: Option<String>,
+    /// Grey image of the roughness over one repeat (black glossy, white matt), in place of
+    /// the fabric's single roughness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roughness_asset_id: Option<String>,
+}
+
+impl FabricTexture {
+    /// Every image asset the texture draws on: its colours, then its normal and roughness
+    /// maps when it has them.
+    pub fn asset_ids(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.asset_id.as_str())
+            .chain(self.normal_asset_id.as_deref())
+            .chain(self.roughness_asset_id.as_deref())
+    }
 }
 
 fn is_zero(value: &f64) -> bool {
@@ -144,11 +163,13 @@ impl FabricAppearance {
             ));
         }
         if let Some(t) = &self.texture {
-            let id_ok = !t.asset_id.is_empty()
-                && t.asset_id.len() <= 80
-                && t.asset_id
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+            let id_ok = t.asset_ids().all(|id| {
+                !id.is_empty()
+                    && id.len() <= 80
+                    && id
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            });
             if !id_ok {
                 return Err("A fabric texture needs an image asset ID".into());
             }

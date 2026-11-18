@@ -210,6 +210,8 @@ fn images_used_by_fabric_textures_are_kept_with_the_project() {
                 height_mm: 30.,
                 rotation_degrees: 0.,
                 relief_mm: 0.,
+                normal_asset_id: None,
+                roughness_asset_id: None,
             }),
             ..Default::default()
         },
@@ -223,6 +225,69 @@ fn images_used_by_fabric_textures_are_kept_with_the_project() {
     let loaded = FittingProject::load(&file).unwrap();
     assert_eq!(loaded.image_assets.len(), 1);
     assert!(loaded.image_assets[0].path.exists());
+}
+
+#[test]
+fn a_fabric_textures_normal_and_roughness_maps_travel_with_it() {
+    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
+    let dir = tempfile::tempdir().unwrap();
+    let mut assets = vec![];
+    for (id, bytes) in [
+        ("image_1", b"colours".as_slice()),
+        ("image_2", b"normals"),
+        ("image_3", b"roughness"),
+        ("image_4", b"unused"),
+    ] {
+        let path = dir.path().join(format!("{id}.png"));
+        std::fs::write(&path, bytes).unwrap();
+        assets.push(ImageAsset {
+            id: id.into(),
+            path,
+        });
+    }
+    let mut project = project();
+    let fabric = project.template.fabrics[0].id.clone();
+    let texture = FabricTexture {
+        asset_id: "image_1".into(),
+        width_mm: 30.,
+        height_mm: 30.,
+        rotation_degrees: 0.,
+        relief_mm: 0.,
+        normal_asset_id: Some("image_2".into()),
+        roughness_asset_id: Some("image_3".into()),
+    };
+    let appearance = FabricAppearance {
+        texture: Some(texture.clone()),
+        ..Default::default()
+    };
+    appearance.validate().unwrap();
+    project
+        .template
+        .fabric_appearance
+        .insert(fabric.clone(), appearance);
+    project.image_assets = assets;
+    let file = dir.path().join("p.json");
+    project.save(&file).unwrap();
+    let loaded = FittingProject::load(&file).unwrap();
+    let kept: Vec<_> = loaded.image_assets.iter().map(|a| a.id.as_str()).collect();
+    assert_eq!(
+        kept,
+        ["image_1", "image_2", "image_3"],
+        "the unused image is dropped"
+    );
+    assert_eq!(
+        loaded.template.fabric_appearance[&fabric].texture,
+        Some(texture.clone())
+    );
+    // A map's asset id is checked like the image's.
+    let bad = FabricAppearance {
+        texture: Some(FabricTexture {
+            normal_asset_id: Some("bad id!".into()),
+            ..texture
+        }),
+        ..Default::default()
+    };
+    assert!(bad.validate().is_err());
 }
 
 #[test]

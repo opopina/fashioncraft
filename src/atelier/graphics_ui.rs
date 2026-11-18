@@ -495,20 +495,30 @@ impl Atelier {
         }
     }
 
-    /// The image of each material's fabric texture, by material index.
+    /// The images of each material's fabric texture, by material index: its colours, its
+    /// normal map and its roughness map.
     pub(super) fn fabric_images(
         &mut self,
         ctx: &egui::Context,
         optics: &[Option<marvelous_cloth::garment::appearance::FabricAppearance>],
-    ) -> Vec<Option<Arc<GraphicImage>>> {
+    ) -> Vec<[Option<Arc<GraphicImage>>; 3]> {
         optics
             .iter()
             .map(|appearance| {
-                let asset = &appearance.as_ref()?.texture.as_ref()?.asset_id;
-                match self.graphic(ctx, asset)? {
-                    Ok(loaded) => Some(loaded.image.clone()),
-                    Err(_) => None,
-                }
+                let Some(texture) = appearance.as_ref().and_then(|a| a.texture.as_ref()) else {
+                    return [None, None, None];
+                };
+                let mut load = |asset: Option<&String>| -> Option<Arc<GraphicImage>> {
+                    match self.graphic(ctx, asset?)? {
+                        Ok(loaded) => Some(loaded.image.clone()),
+                        Err(_) => None,
+                    }
+                };
+                [
+                    load(Some(&texture.asset_id)),
+                    load(texture.normal_asset_id.as_ref()),
+                    load(texture.roughness_asset_id.as_ref()),
+                ]
             })
             .collect()
     }

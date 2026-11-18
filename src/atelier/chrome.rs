@@ -171,6 +171,7 @@ impl Atelier {
             self.show_view_bar(ui);
             self.camera_controls(ui);
         });
+        self.window_tools(ui, true);
     }
 
     pub(super) fn inspector(&mut self, ui: &mut egui::Ui) {

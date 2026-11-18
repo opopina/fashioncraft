@@ -105,6 +105,8 @@ mod trims_ui;
 mod ui_preview;
 #[path = "atelier/view_controls.rs"]
 mod view_controls;
+#[path = "atelier/window_tools.rs"]
+mod window_tools;
 #[path = "atelier/worker.rs"]
 mod worker;
 #[path = "atelier/workspace.rs"]

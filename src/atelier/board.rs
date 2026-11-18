@@ -1518,6 +1518,7 @@ impl Atelier {
             super::view_controls::board_bar(ui, &mut self.authoring.board);
                 });
         });
+        self.window_tools(ui, false);
         ui.horizontal(|ui| {
             self.primitive_menu(ui);
             if ui.selectable_label(self.authoring.board.freehand.enabled, "Freehand").on_hover_text("Drag a new panel outline, release to preview, then Create panel").clicked() {

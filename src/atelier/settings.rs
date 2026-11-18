@@ -67,7 +67,7 @@ impl Default for Preferences {
         Self {
             workspace: Default::default(),
             viewport: Default::default(),
-            theme: ThemeChoice::Light,
+            theme: ThemeChoice::Dark,
             snap_mm: DEFAULT_SNAP_MM,
             seam_links: true,
             wireframe: false,

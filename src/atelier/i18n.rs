@@ -1932,6 +1932,19 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Avatar replaced · drape reset · save to keep the imported asset" => {
             "Avatar sustituido · drapeado reiniciado · guarda para conservar el recurso importado"
         }
+        "My poses" => "Mis poses",
+        "Use this pose · right-click to delete it" => {
+            "Usar esta pose · clic derecho para borrarla"
+        }
+        "Pose name" => "Nombre de la pose",
+        "Save pose" => "Guardar pose",
+        "Keep this pose under its name for every project" => {
+            "Guarda esta pose con su nombre para todos los proyectos"
+        }
+        "Arms down" => "Brazos abajo",
+        "T-pose" => "Pose en T",
+        "Arms forward" => "Brazos al frente",
+        "Step" => "Paso",
         _ => return None,
     })
 }

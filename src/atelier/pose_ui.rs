@@ -23,6 +23,8 @@ pub(super) struct PoseUi {
     transition: Option<Transition>,
     /// The limb whose end is being dragged, and the camera-facing plane it moves in.
     reaching: Option<(usize, glam::DVec3, glam::DVec3)>,
+    /// Name for the pose being saved to the user's poses.
+    new_name: String,
 }
 
 impl PoseUi {
@@ -207,11 +209,59 @@ impl Atelier {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(i18n::tr(ui_lang, "Preset"));
                     for name in avatar_rig::PRESETS {
-                        if ui.small_button(name).clicked()
+                        if ui.small_button(i18n::tr(ui_lang, name)).clicked()
                             && let Some(p) = avatar_rig::preset(name)
                         {
                             draft.pose = p;
                         }
+                    }
+                });
+                // The user's own poses: click to use, right-click to forget.
+                let user_poses = &mut self.prefs.user_poses;
+                if !user_poses.is_empty() {
+                    let mut forget = None;
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(i18n::tr(ui_lang, "My poses"));
+                        for (name, pose) in user_poses.iter() {
+                            let button = ui.small_button(name).on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Use this pose · right-click to delete it",
+                            ));
+                            if button.clicked() {
+                                draft.pose = pose.clone();
+                            }
+                            if button.secondary_clicked() {
+                                forget = Some(name.clone());
+                            }
+                        }
+                    });
+                    if let Some(name) = forget {
+                        user_poses.remove(&name);
+                    }
+                }
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut state.new_name)
+                            .hint_text(i18n::tr(ui_lang, "Pose name"))
+                            .char_limit(super::settings::POSE_NAME_MAX)
+                            .desired_width(150.),
+                    );
+                    let name = state.new_name.trim().to_string();
+                    let room = user_poses.len() < super::settings::USER_POSES_MAX
+                        || user_poses.contains_key(&name);
+                    if ui
+                        .add_enabled(
+                            !name.is_empty() && room,
+                            egui::Button::new(i18n::tr(ui_lang, "Save pose")),
+                        )
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Keep this pose under its name for every project",
+                        ))
+                        .clicked()
+                    {
+                        user_poses.insert(name, draft.pose.clone());
+                        state.new_name.clear();
                     }
                 });
                 ui.separator();

@@ -64,7 +64,13 @@ pub(super) struct Preferences {
     pub(super) library_dir: Option<std::path::PathBuf>,
     /// Language of the menus and tool rows.
     pub(super) language: super::i18n::Language,
+    /// Poses the user saved, by name, offered in the pose window on every project.
+    pub(super) user_poses: std::collections::BTreeMap<String, marvelous_cloth::avatar_rig::Pose>,
 }
+
+/// Most poses the user can keep, and the longest name one may have.
+pub(super) const USER_POSES_MAX: usize = 200;
+pub(super) const POSE_NAME_MAX: usize = 60;
 
 impl Default for Preferences {
     fn default() -> Self {
@@ -83,6 +89,7 @@ impl Default for Preferences {
             keymap: Default::default(),
             library_dir: None,
             language: Default::default(),
+            user_poses: Default::default(),
         }
     }
 }
@@ -103,6 +110,18 @@ impl Preferences {
         self.snap_mm = finite_or(self.snap_mm, DEFAULT_SNAP_MM).clamp(SNAP_MM_MIN, SNAP_MM_MAX);
         self.dt = finite_or(self.dt, DEFAULT_DT).clamp(DT_MIN, DT_MAX);
         self.iterations = self.iterations.clamp(ITERATIONS_MIN, ITERATIONS_MAX);
+        // Poses a hand-edited file broke, or nameless ones, are dropped.
+        self.user_poses.retain(|name, pose| {
+            !name.trim().is_empty()
+                && name.chars().count() <= POSE_NAME_MAX
+                && pose.validate().is_ok()
+        });
+        while self.user_poses.len() > USER_POSES_MAX {
+            let last = self.user_poses.keys().next_back().cloned();
+            if let Some(last) = last {
+                self.user_poses.remove(&last);
+            }
+        }
     }
 }
 
@@ -279,8 +298,29 @@ mod tests {
             },
             dt: 1.0 / 120.0,
             iterations: 24,
+            user_poses: [(
+                "Waving".to_string(),
+                marvelous_cloth::avatar_rig::preset("T-pose").unwrap(),
+            )]
+            .into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn broken_or_nameless_user_poses_are_dropped_on_load() {
+        let path = scratch_path("user-poses");
+        let mut prefs = sample();
+        let mut bad = marvelous_cloth::avatar_rig::Pose::default();
+        bad.0.insert("no-such-bone".into(), [10., 0., 0.]);
+        prefs.user_poses.insert("Broken".into(), bad);
+        prefs.user_poses.insert("  ".into(), Default::default());
+        save(&path, &prefs).unwrap();
+        let loaded = load(&path);
+        let names: Vec<_> = loaded.user_poses.keys().cloned().collect();
+        assert_eq!(names, ["Waving"]);
+        assert_eq!(loaded.user_poses["Waving"], sample().user_poses["Waving"]);
+        let _ = std::fs::remove_file(path);
     }
 
     /// Scratch file under `target/`, which the test sandbox can always write.

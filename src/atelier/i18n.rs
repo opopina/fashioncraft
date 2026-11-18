@@ -264,6 +264,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "ClothCraft classic" => "ClothCraft clásico",
         "Not built yet" => "Aún no está hecho",
         "Cut and sew along line" => "Cortar y coser por la línea",
+        "Merge pieces along seam" => "Fusionar las piezas por la costura",
         "Commands…" => "Órdenes…",
         "⏸ Pause" => "⏸ Pausa",
         "▶ Sew and simulate" => "▶ Coser y simular",

@@ -543,6 +543,16 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::MergeAlongSeam => {
+                let seam = self
+                    .edge_seams()
+                    .into_iter()
+                    .next()
+                    .ok_or("Select a sewn boundary first")?;
+                if !self.merge_along_seam(seam) {
+                    return Err(self.status.clone());
+                }
+            }
             Id::CutAndSew => {
                 if !self.cut_and_sew_selected_line() {
                     return Err(self.status.clone());

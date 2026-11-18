@@ -88,6 +88,7 @@ pub enum CommandId {
     ToggleLibrary,
     ArchivePieces,
     CutAndSew,
+    MergeAlongSeam,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -872,6 +873,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         CutAndSew,
         "pattern.cut_and_sew",
         "Cut and sew along the selected line",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        MergeAlongSeam,
+        "pattern.merge",
+        "Merge the pieces of the selected seam",
         Pattern,
         None,
         TemplateHistory,

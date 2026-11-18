@@ -470,6 +470,266 @@ pub(super) fn cut_and_sew(
     Ok(b_id)
 }
 
+/// Signed area of a closed polygon (positive counter-clockwise).
+fn signed_area(points: &[DVec2]) -> f64 {
+    let n = points.len();
+    (0..n)
+        .map(|k| points[k].perp_dot(points[(k + 1) % n]))
+        .sum::<f64>()
+        / 2.
+}
+
+/// Merge the two pieces joined edge to edge by seam `seam_id` into one: the second piece is
+/// laid against the first along the seam, the seam disappears and everything that pointed
+/// into the second piece now points into the first. Returns the kept piece's id.
+pub(super) fn merge_along_seam(
+    template: &mut GarmentTemplate,
+    seam_id: &str,
+) -> Result<String, String> {
+    let seam = template
+        .seams
+        .iter()
+        .find(|s| s.id == seam_id)
+        .ok_or("Seam not found")?
+        .clone();
+    let (a_id, b_id) = (seam.a.panel.clone(), seam.b.panel.clone());
+    if a_id == b_id {
+        return Err("This seam joins a piece to itself".into());
+    }
+    let whole = |r: &BoundaryRef| r.range == [0., 1.] && !r.reversed && r.edge.is_some();
+    if !seam.a_tail.is_empty()
+        || !seam.b_tail.is_empty()
+        || !seam.notches.is_empty()
+        || seam.allow_ease
+        || !whole(&seam.a)
+        || !whole(&seam.b)
+    {
+        return Err(
+            "Merging needs a seam that joins two whole boundaries edge to edge, without ease"
+                .into(),
+        );
+    }
+    if !seam.reverse_b {
+        return Err(
+            "The pieces face opposite ways along this seam; flip one before merging".into(),
+        );
+    }
+    for id in [&a_id, &b_id] {
+        let held = template.pin_targets.iter().any(|p| &p.panel == id)
+            || template.frozen_panels.iter().any(|p| &p.panel == id)
+            || template.solidified_panels.iter().any(|p| &p.panel == id)
+            || template.deactivated_panels.iter().any(|p| &p.panel == id);
+        if held {
+            return Err("Release pins, unfreeze and activate both pieces before merging".into());
+        }
+        if template
+            .mirror_links
+            .iter()
+            .any(|l| &l.a == id || &l.b == id)
+        {
+            return Err("Unlink mirrored pieces before merging".into());
+        }
+    }
+    if template.graphics.iter().any(|g| g.panel_id == b_id)
+        || template.trims.iter().any(|t| t.panel_id == b_id)
+        || template
+            .tacks
+            .iter()
+            .any(|t| t.a.panel == b_id || t.b.panel == b_id)
+    {
+        return Err(
+            "Move the graphics, trims and tacks off the second piece before merging".into(),
+        );
+    }
+    let same = |a: Option<String>, b: Option<String>| a == b;
+    let fmt = |v: Option<&[f64; 2]>| v.map(|v| format!("{v:?}"));
+    if !same(
+        template.panel_layers.get(&a_id).map(|v| v.to_string()),
+        template.panel_layers.get(&b_id).map(|v| v.to_string()),
+    ) || !same(
+        template.panel_pressure.get(&a_id).map(|v| v.to_string()),
+        template.panel_pressure.get(&b_id).map(|v| v.to_string()),
+    ) || !same(
+        fmt(template.panel_shrink.get(&a_id)),
+        fmt(template.panel_shrink.get(&b_id)),
+    ) || template.flipped_panels.contains(&a_id) != template.flipped_panels.contains(&b_id)
+        || template.strengthened_panels.contains(&a_id)
+            != template.strengthened_panels.contains(&b_id)
+    {
+        return Err("The pieces have different simulation settings; match them first".into());
+    }
+    let a = template
+        .panels
+        .iter()
+        .find(|p| p.id == a_id)
+        .ok_or("Panel not found")?
+        .clone();
+    let b = template
+        .panels
+        .iter()
+        .find(|p| p.id == b_id)
+        .ok_or("Panel not found")?
+        .clone();
+    if a.fabric != b.fabric {
+        return Err("The pieces are of different fabrics".into());
+    }
+    let (pa, pb) = (
+        a.polygon
+            .as_ref()
+            .ok_or("Merging needs editable contours")?,
+        b.polygon
+            .as_ref()
+            .ok_or("Merging needs editable contours")?,
+    );
+    if !pa.holes.is_empty() || !pb.holes.is_empty() {
+        return Err("Pieces with holes cannot be merged yet".into());
+    }
+    let (ea, eb) = (seam.a.edge.clone().unwrap(), seam.b.edge.clone().unwrap());
+    let ia = pa
+        .edges
+        .iter()
+        .position(|e| e == &ea)
+        .ok_or("Seam boundary not found")?;
+    let ib = pb
+        .edges
+        .iter()
+        .position(|e| e == &eb)
+        .ok_or("Seam boundary not found")?;
+    for (poly, e) in [(pa, &ea), (pb, &eb)] {
+        if poly.curves.contains_key(e)
+            || poly.target_lengths.contains_key(e)
+            || poly.notches.contains_key(e)
+        {
+            return Err(format!(
+                "Boundary {e} is curved or has a target length or notches; merging needs a plain straight seam"
+            ));
+        }
+    }
+    let others = template.seams.iter().any(|s| {
+        s.id != seam.id
+            && s.references().any(|r| {
+                (r.panel == a_id && r.edge.as_deref() == Some(&ea))
+                    || (r.panel == b_id && r.edge.as_deref() == Some(&eb))
+            })
+    });
+    if others {
+        return Err("Another seam uses the merged boundaries; delete it first".into());
+    }
+    let (na, nb) = (pa.points.len(), pb.points.len());
+    if signed_area(&pa.points).signum() != signed_area(&pb.points).signum() {
+        return Err("The pieces wind opposite ways; flip one before merging".into());
+    }
+    let (a0, a1) = (pa.points[ia], pa.points[(ia + 1) % na]);
+    let (b0, b1) = (pb.points[ib], pb.points[(ib + 1) % nb]);
+    if ((a1 - a0).length() - (b1 - b0).length()).abs() > 5e-4 {
+        return Err("The sewn boundaries differ in length by more than 0.5 mm".into());
+    }
+    // B's edge start meets A's edge end and the other way round.
+    let angle = (a0 - a1).to_angle() - (b1 - b0).to_angle();
+    let rot = DVec2::from_angle(angle);
+    let place = |x: DVec2| a1 + rot.rotate(x - b0);
+    let grain = |d: f64| d.rem_euclid(360.);
+    if (grain(b.grain_degrees + angle.to_degrees()) - grain(a.grain_degrees)).abs() > 0.5
+        && (grain(b.grain_degrees + angle.to_degrees()) - grain(a.grain_degrees)).abs() < 359.5
+    {
+        return Err("The grain lines would not match once merged".into());
+    }
+    // B's names that clash with A's get a suffix.
+    let mut rename: BTreeMap<String, String> = BTreeMap::new();
+    let mut taken: BTreeSet<String> = pa.edges.iter().cloned().collect();
+    taken.extend(pa.lines.iter().map(|l| l.id.clone()));
+    for name in pb.edges.iter().chain(pb.lines.iter().map(|l| &l.id)) {
+        if name == &eb {
+            continue;
+        }
+        let fresh = if taken.contains(name) {
+            (2..)
+                .map(|k| format!("{name}_{k}"))
+                .find(|c| !taken.contains(c))
+                .unwrap()
+        } else {
+            name.clone()
+        };
+        taken.insert(fresh.clone());
+        rename.insert(name.clone(), fresh);
+    }
+    let mut merged = pa.clone();
+    merged.points = (0..na).map(|k| pa.points[(ia + 1 + k) % na]).collect();
+    merged.edges = (0..na - 1)
+        .map(|k| pa.edges[(ia + 1 + k) % na].clone())
+        .collect();
+    for k in 0..nb - 2 {
+        merged.points.push(place(pb.points[(ib + 2 + k) % nb]));
+    }
+    for k in 0..nb - 1 {
+        merged
+            .edges
+            .push(rename[&pb.edges[(ib + 1 + k) % nb]].clone());
+    }
+    merged.curves.remove(&ea);
+    merged.target_lengths.remove(&ea);
+    merged.seam_allowances.remove(&ea);
+    merged.notches.remove(&ea);
+    for (e, c) in &pb.curves {
+        merged.curves.insert(rename[e].clone(), c.map(place));
+    }
+    for (e, v) in &pb.target_lengths {
+        merged.target_lengths.insert(rename[e].clone(), *v);
+    }
+    for (e, v) in &pb.seam_allowances {
+        if e != &eb {
+            merged.seam_allowances.insert(rename[e].clone(), *v);
+        }
+    }
+    for (e, v) in &pb.notches {
+        merged.notches.insert(rename[e].clone(), v.clone());
+    }
+    for l in &pb.lines {
+        let mut l = l.clone();
+        l.id = rename[&l.id].clone();
+        l.points = l.points.iter().map(|p| place(*p)).collect();
+        l.tangents = l.tangents.iter().map(|t| rot.rotate(*t)).collect();
+        merged.lines.push(l);
+    }
+    let mut kept = a.clone();
+    kept.polygon = Some(merged);
+    normalize(&mut kept);
+    let index = template.panels.iter().position(|p| p.id == a_id).unwrap();
+    template.panels[index] = kept;
+    template.panels.retain(|p| p.id != b_id);
+    template.seams.retain(|s| s.id != seam.id);
+    for s in &mut template.seams {
+        for r in s.references_mut() {
+            if r.panel == b_id {
+                r.panel = a_id.clone();
+                if let Some(e) = r.edge.as_mut() {
+                    *e = rename.get(e).cloned().unwrap_or(e.clone());
+                }
+            }
+        }
+    }
+    for s in &mut template.line_springs {
+        if s.panel == b_id {
+            s.panel = a_id.clone();
+            s.line = rename.get(&s.line).cloned().unwrap_or(s.line.clone());
+        }
+    }
+    for f in &mut template.line_folds {
+        if f.panel == b_id {
+            f.panel = a_id.clone();
+            f.line = rename.get(&f.line).cloned().unwrap_or(f.line.clone());
+        }
+    }
+    template.panel_layers.remove(&b_id);
+    template.panel_pressure.remove(&b_id);
+    template.panel_shrink.remove(&b_id);
+    template.panel_wraps.remove(&b_id);
+    template.flipped_panels.remove(&b_id);
+    template.strengthened_panels.remove(&b_id);
+    template.locked_panels.remove(&b_id);
+    Ok(a_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,14 +761,17 @@ mod tests {
             edge: Some("e".into()),
             range: [0.2, 0.6],
         };
-        assert_eq!(crossing(&r, 0.4), Some(0.5));
+        let close = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 1e-12);
+        assert!(close(crossing(&r, 0.4), 0.5));
         assert_eq!(crossing(&r, 0.7), None);
-        assert_eq!(sub_range(&r, 0., 0.5).range, [0.2, 0.4]);
+        let part = sub_range(&r, 0., 0.5).range;
+        assert!((part[0] - 0.2).abs() < 1e-12 && (part[1] - 0.4).abs() < 1e-12);
         let back = BoundaryRef {
             reversed: true,
             ..r.clone()
         };
-        assert_eq!(crossing(&back, 0.5), Some(0.25));
-        assert_eq!(sub_range(&back, 0., 0.25).range, [0.5, 0.6]);
+        assert!(close(crossing(&back, 0.5), 0.25));
+        let part = sub_range(&back, 0., 0.25).range;
+        assert!((part[0] - 0.5).abs() < 1e-12 && (part[1] - 0.6).abs() < 1e-12);
     }
 }

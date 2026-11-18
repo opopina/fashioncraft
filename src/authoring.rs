@@ -249,6 +249,10 @@ pub enum Command {
         panel: String,
         line: String,
     },
+    /// Merge the two pieces a seam joins edge to edge into one; the seam disappears.
+    MergeAlongSeam {
+        seam: String,
+    },
     /// Bring archived pieces back where they were.
     RestoreArchived {
         id: String,
@@ -3932,6 +3936,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         Command::CutAndSew { panel, line } => {
             topology::cut_and_sew(&mut template, &panel, &line)?;
             selected = Some(panel);
+        }
+        Command::MergeAlongSeam { seam } => {
+            selected = Some(topology::merge_along_seam(&mut template, &seam)?);
         }
         Command::RestoreArchived { id } => {
             let k = template

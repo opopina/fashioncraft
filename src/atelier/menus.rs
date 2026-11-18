@@ -194,6 +194,7 @@ const PATTERN_2D: &[Item] = &[
             Run("Transform pattern", C::ToolEdit),
             Run("Duplicate piece", C::DuplicatePiece),
             Run("Cut and sew along line", C::CutAndSew),
+            Run("Merge pieces along seam", C::MergeAlongSeam),
             Todo("Add point / split line"),
             Todo("Smooth curve"),
             Todo("Cut and extend"),
@@ -615,7 +616,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 81, "{done} of {all}");
+        assert!(done >= 82, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

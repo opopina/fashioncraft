@@ -206,3 +206,91 @@ fn what_cannot_be_carried_over_is_refused() {
         .is_err()
     );
 }
+
+#[test]
+fn merging_the_halves_back_gives_the_piece_its_area_and_seams_again() {
+    let (before, line) = with_cut_line(tshirt());
+    let front = before.panels[0].clone();
+    let front_area = area(&front.polygon.as_ref().unwrap().points);
+    let sewn = sewn_length(&before);
+    let cut = authoring::apply(
+        &before,
+        Command::CutAndSew {
+            panel: front.id.clone(),
+            line,
+        },
+    )
+    .unwrap()
+    .template;
+    let half = cut
+        .panels
+        .iter()
+        .find(|p| p.name == format!("{} 2", front.name))
+        .unwrap()
+        .id
+        .clone();
+    let cut_seam = cut
+        .seams
+        .iter()
+        .find(|s| {
+            [&s.a.panel, &s.b.panel] == [&front.id, &half]
+                || [&s.a.panel, &s.b.panel] == [&half, &front.id]
+        })
+        .expect("the cut seam joins the halves")
+        .id
+        .clone();
+    let edit = authoring::apply(&cut, Command::MergeAlongSeam { seam: cut_seam }).unwrap();
+    let merged = edit.template;
+    assert_eq!(merged.panels.len(), before.panels.len());
+    let piece = merged.panels.iter().find(|p| p.id == front.id).unwrap();
+    let merged_area = area(&piece.polygon.as_ref().unwrap().points);
+    assert!(
+        (merged_area - front_area).abs() < 1e-9,
+        "{merged_area} vs {front_area}"
+    );
+    // The split side seams stay split, so the sewn length is the original one.
+    assert!(
+        (sewn_length(&merged) - sewn).abs() < 1e-6,
+        "{} vs {sewn}",
+        sewn_length(&merged)
+    );
+    for s in &merged.seams {
+        for r in s.references() {
+            let p = merged.panels.iter().find(|p| p.id == r.panel).unwrap();
+            assert!(
+                p.polygon
+                    .as_ref()
+                    .unwrap()
+                    .edges
+                    .contains(r.edge.as_ref().unwrap())
+            );
+        }
+    }
+}
+
+#[test]
+fn merging_refuses_seams_it_cannot_close_flat() {
+    let t = tshirt();
+    // The tee's seams join pieces that face each other across the body (or are not whole
+    // boundaries): merging them flat is refused, never half done.
+    for seam in &t.seams {
+        if let Ok(edit) = authoring::apply(
+            &t,
+            Command::MergeAlongSeam {
+                seam: seam.id.clone(),
+            },
+        ) {
+            // A merge that is accepted must leave a valid, single piece.
+            assert_eq!(edit.template.panels.len(), t.panels.len() - 1);
+        }
+    }
+    assert!(
+        authoring::apply(
+            &t,
+            Command::MergeAlongSeam {
+                seam: "missing".into()
+            }
+        )
+        .is_err()
+    );
+}

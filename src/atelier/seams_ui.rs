@@ -42,6 +42,7 @@ impl Atelier {
         let selected = self.edge_seams();
         let mut remove = None;
         let mut edit = None;
+        let mut merge = None;
         for id in &selected {
             ui.colored_label(super::seam_links::seam_color(id), format!("Seam: {id}"));
             let button = ui.button("Edit ranges / chain…");
@@ -55,6 +56,15 @@ impl Atelier {
             self.smoke_target("remove_seam", button.rect.center());
             if button.clicked() {
                 remove = Some(id.clone());
+            }
+            if ui
+                .button("Merge the two pieces here")
+                .on_hover_text(
+                    "Join the pieces this seam sews edge to edge into one piece; the seam goes away",
+                )
+                .clicked()
+            {
+                merge = Some(id.clone());
             }
             self.seam_fold_controls(ui, id);
         }
@@ -120,6 +130,9 @@ impl Atelier {
         if let Some(seam) = remove {
             self.remove_seam(seam);
         }
+        if let Some(seam) = merge {
+            self.merge_along_seam(seam);
+        }
         if let Some(id) = edit {
             self.begin_seam_edit(&id);
         }
@@ -128,6 +141,17 @@ impl Atelier {
 }
 
 impl Atelier {
+    /// Merge the pieces a seam joins into one, as one undo step.
+    pub(super) fn merge_along_seam(&mut self, seam: String) -> bool {
+        if self.edit(marvelous_cloth::authoring::Command::MergeAlongSeam { seam }) {
+            self.authoring.edge = None;
+            self.authoring.selection.seam = None;
+            self.status = "Pieces merged along the seam".into();
+            return true;
+        }
+        false
+    }
+
     /// The angle at which the selected seam's pieces meet (180° flat) and its strength.
     fn seam_fold_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
         use marvelous_cloth::garment::template::SeamFold;

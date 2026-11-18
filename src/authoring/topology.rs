@@ -275,13 +275,34 @@ fn split_crossing_seams(
     Err("The cut splits too many seams".into())
 }
 
-/// Cut piece `panel` along its straight internal line `line`, carried on to the outline, into
-/// two pieces sewn together along the cut. Returns the new piece's id.
-pub(super) fn cut_and_sew(
+/// A piece split in two along a straight internal line carried on to the outline: each half's
+/// outline, markings, lines and holes, with seams, elastic and folds already moved to their half
+/// (the second half being piece `b_id`) and what lies on the piece sorted by half.
+struct Split {
+    source: Panel,
+    a_points: Vec<DVec2>,
+    a_edges: Vec<String>,
+    b_points: Vec<DVec2>,
+    b_edges: Vec<String>,
+    cut_edge: String,
+    a_poly: crate::garment::polygon::PolygonPattern,
+    b_poly: crate::garment::polygon::PolygonPattern,
+    a_pins: Vec<DVec2>,
+    b_pins: Vec<DVec2>,
+    /// Each item on the piece and whether it lies on the second half.
+    moving: Vec<(Carried, bool)>,
+}
+
+/// Split piece `panel` along its straight internal line `line`, carried on to the outline. A
+/// runs P → … → Q and B runs Q → … → P, where P is where the line leaves the outline behind its
+/// first point and Q beyond its second; both close along the cut, named `cut_edge`.
+fn split_along(
     template: &mut GarmentTemplate,
     panel: &str,
     line: &str,
-) -> Result<String, String> {
+    b_id: &str,
+) -> Result<Split, String> {
+    let b_id = b_id.to_string();
     let held = template.pin_targets.iter().any(|p| p.panel == panel)
         || template.frozen_panels.iter().any(|p| p.panel == panel)
         || template.solidified_panels.iter().any(|p| p.panel == panel)
@@ -407,7 +428,6 @@ pub(super) fn cut_and_sew(
     b_points.push(p);
     b_edges.push(cut_edge.clone());
 
-    let b_id = unused_id("panel", template.panels.iter().map(|p| p.id.clone()));
     // Holes go with the half they lie in; one across the cut is refused.
     let (mut a_holes, mut b_holes) = (vec![], vec![]);
     for hole in &polygon.holes {
@@ -549,14 +569,48 @@ pub(super) fn cut_and_sew(
             .copied()
             .collect()
     };
+    let (a_pins, b_pins) = (pinned_on(&a_points), pinned_on(&b_points));
+    Ok(Split {
+        source: source.clone(),
+        a_points,
+        a_edges,
+        b_points,
+        b_edges,
+        cut_edge,
+        a_poly,
+        b_poly,
+        a_pins,
+        b_pins,
+        moving,
+    })
+}
+
+/// Cut piece `panel` along its straight internal line `line`, carried on to the outline, into
+/// two pieces sewn together along the cut. Returns the new piece's id.
+pub(super) fn cut_and_sew(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+) -> Result<String, String> {
+    let b_id = unused_id("panel", template.panels.iter().map(|p| p.id.clone()));
+    let Split {
+        source,
+        a_poly,
+        b_poly,
+        a_pins,
+        b_pins,
+        cut_edge,
+        moving,
+        ..
+    } = split_along(template, panel, line, &b_id)?;
     let mut a_panel = source.clone();
     a_panel.polygon = Some(a_poly);
-    a_panel.pin_points = pinned_on(&a_points);
+    a_panel.pin_points = a_pins;
     let mut b_panel = source.clone();
     b_panel.id = b_id.clone();
     b_panel.name = format!("{} 2", source.name);
     b_panel.polygon = Some(b_poly);
-    b_panel.pin_points = pinned_on(&b_points);
+    b_panel.pin_points = b_pins;
     let (lo_a, lo_b) = (outline_low(&a_panel), outline_low(&b_panel));
     normalize(&mut a_panel);
     normalize(&mut b_panel);
@@ -617,6 +671,138 @@ pub(super) fn cut_and_sew(
         }
     }
     Ok(b_id)
+}
+
+/// Slash piece `panel` along its straight internal line `line`, carried on to the outline, and
+/// turn one part (or both, by half each) about the hinge where the line leaves the outline
+/// beyond its second point, so a wedge of `degrees` opens where it leaves behind its first
+/// point. The parts turn apart rather than overlap. Everything on each part turns with it;
+/// seams keep their boundaries, and the wedge's mouth is a new boundary.
+pub(super) fn slash_spread(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+    degrees: f64,
+    side: super::SpreadSide,
+) -> Result<(), String> {
+    if !degrees.is_finite() || !(0.1..=90.).contains(&degrees.abs()) {
+        return Err("Open the wedge by 0.1° to 90°".into());
+    }
+    let (first, second) = {
+        let l = template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.as_ref())
+            .and_then(|poly| poly.lines.iter().find(|l| l.id == line))
+            .ok_or("Internal line not found")?;
+        (l.points[0], *l.points.last().unwrap())
+    };
+    let Split {
+        source,
+        a_points,
+        a_edges,
+        b_points,
+        b_edges,
+        cut_edge,
+        a_poly,
+        b_poly,
+        a_pins,
+        b_pins,
+        moving,
+    } = split_along(template, panel, line, panel)?;
+    let hinge = *a_points.last().unwrap();
+    // How far each part turns, by which side of the line it lies on as seen on the board,
+    // which shows material y downwards.
+    let centre = a_points.iter().copied().sum::<DVec2>() / a_points.len() as f64;
+    let a_left = (second - first).perp_dot(centre - first) < 0.;
+    let half = degrees.abs().to_radians() / 2.;
+    let (left, right) = match side {
+        super::SpreadSide::Left => (2. * half, 0.),
+        super::SpreadSide::Right => (0., 2. * half),
+        super::SpreadSide::Both => (half, half),
+    };
+    let (turn_a, turn_b) = if a_left { (left, right) } else { (right, left) };
+    let turned = |x: DVec2, angle: f64| hinge + DVec2::from_angle(angle).rotate(x - hinge);
+    // The parts turn apart, opening the piece: of the two senses, the one with more area.
+    let outline_for = |sign: f64| -> Vec<DVec2> {
+        let (ra, rb) = (-sign * turn_a, sign * turn_b);
+        a_points
+            .iter()
+            .map(|x| turned(*x, ra))
+            .chain(b_points[1..].iter().map(|x| turned(*x, rb)))
+            .collect()
+    };
+    let sign = if signed_area(&outline_for(1.)).abs() >= signed_area(&outline_for(-1.)).abs() {
+        1.
+    } else {
+        -1.
+    };
+    let (ra, rb) = (-sign * turn_a, sign * turn_b);
+    let mut poly = a_poly.clone();
+    poly.points = outline_for(sign);
+    poly.edges = a_edges[..a_edges.len() - 1]
+        .iter()
+        .chain(&b_edges[..b_edges.len() - 1])
+        .cloned()
+        .chain(std::iter::once(cut_edge))
+        .collect();
+    poly.curves = BTreeMap::new();
+    for (part, angle) in [(&a_poly, ra), (&b_poly, rb)] {
+        for (e, c) in &part.curves {
+            poly.curves.insert(e.clone(), c.map(|x| turned(x, angle)));
+        }
+    }
+    // Per-boundary markings of both parts (the first part's are there already).
+    poly.target_lengths.extend(b_poly.target_lengths.clone());
+    poly.notches.extend(b_poly.notches.clone());
+    poly.seam_allowances.extend(b_poly.seam_allowances.clone());
+    let rotation = |angle: f64| DVec2::from_angle(angle);
+    poly.lines = vec![];
+    poly.holes = vec![];
+    for (part, angle) in [(&a_poly, ra), (&b_poly, rb)] {
+        for l in &part.lines {
+            let mut l = l.clone();
+            l.points = l.points.iter().map(|x| turned(*x, angle)).collect();
+            l.tangents = l
+                .tangents
+                .iter()
+                .map(|v| rotation(angle).rotate(*v))
+                .collect();
+            poly.lines.push(l);
+        }
+        for h in &part.holes {
+            let mut h = h.clone();
+            h.points = h.points.iter().map(|x| turned(*x, angle)).collect();
+            poly.holes.push(h);
+        }
+    }
+    let mut piece = source.clone();
+    piece.polygon = Some(poly);
+    piece.pin_points = a_pins
+        .iter()
+        .map(|x| turned(*x, ra))
+        .chain(b_pins.iter().map(|x| turned(*x, rb)))
+        .collect();
+    let lo = outline_low(&piece);
+    normalize(&mut piece);
+    let index = template
+        .panels
+        .iter()
+        .position(|p| p.id == panel)
+        .expect("panel found above");
+    template.panels[index] = piece;
+    for (item, on_b) in moving {
+        let angle = if on_b { rb } else { ra };
+        carry(
+            template,
+            item,
+            panel,
+            |x| turned(x, angle) - lo,
+            angle.to_degrees(),
+        );
+    }
+    Ok(())
 }
 
 /// Signed area of a closed polygon (positive counter-clockwise).
@@ -1275,6 +1461,139 @@ pub(super) fn diamond_dart(
         });
     }
     Ok(base)
+}
+
+/// Replace piece `panel`'s outline with its closed internal shape `line`. Internal lines,
+/// holes, graphics, trims, tack ends and pinned corners inside the new outline stay where they
+/// are on the board; anything that would end up outside it, or a seam, elastic or fold on the
+/// old outline or the shape, is refused rather than dropped.
+pub(super) fn replace_outline(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    line: &str,
+) -> Result<(), String> {
+    let held = template.pin_targets.iter().any(|p| p.panel == panel)
+        || template.frozen_panels.iter().any(|p| p.panel == panel)
+        || template.solidified_panels.iter().any(|p| p.panel == panel)
+        || template.deactivated_panels.iter().any(|p| p.panel == panel);
+    if held {
+        return Err(
+            "Release pins, unfreeze and activate the piece before replacing its outline".into(),
+        );
+    }
+    if template
+        .mirror_links
+        .iter()
+        .any(|l| l.a == panel || l.b == panel)
+    {
+        return Err("Unlink the mirrored pair before replacing the outline".into());
+    }
+    let index = template
+        .panels
+        .iter()
+        .position(|p| p.id == panel)
+        .ok_or("Panel not found")?;
+    let source = template.panels[index].clone();
+    let polygon = source
+        .polygon
+        .as_ref()
+        .ok_or("Replacing the outline needs an editable contour")?;
+    let shape = polygon
+        .lines
+        .iter()
+        .find(|l| l.id == line)
+        .ok_or("Internal shape not found")?;
+    if !shape.closed {
+        return Err("Only a closed internal shape can become the outline".into());
+    }
+    let gone = |name: &str| name == line || polygon.edges.iter().any(|e| e == name);
+    if template.seams.iter().any(|s| {
+        s.references()
+            .any(|r| r.panel == panel && r.edge.as_deref().is_some_and(gone))
+    }) {
+        return Err("Delete the seams on the outline and on the shape first".into());
+    }
+    if template
+        .line_springs
+        .iter()
+        .any(|s| s.panel == panel && gone(&s.line))
+        || template
+            .line_folds
+            .iter()
+            .any(|f| f.panel == panel && gone(&f.line))
+    {
+        return Err(
+            "Clear the elastic, tape or folds on the outline and on the shape first".into(),
+        );
+    }
+    let mut outline =
+        crate::garment::shapes2d::shape_outline_polygon(shape, polygon.meshing_settings())?;
+    let ring = shape.samples()?;
+    // What lies inside the shape stays; anything else would be lost, so it is refused.
+    let mut lines = vec![];
+    for l in polygon.lines.iter().filter(|l| l.id != line) {
+        if !l.samples()?.iter().all(|p| inside(&ring, *p)) {
+            return Err(format!(
+                "Internal line {} lies outside the new outline; delete it first",
+                l.id
+            ));
+        }
+        lines.push(l.clone());
+    }
+    for hole in &polygon.holes {
+        if !hole.points.iter().all(|p| inside(&ring, *p)) {
+            return Err("A hole lies outside the new outline; delete it first".into());
+        }
+    }
+    let items = carried(template, panel);
+    for (item, points) in &items {
+        if !points.iter().any(|p| inside(&ring, *p)) {
+            return Err(format!(
+                "{} lies outside the new outline; move it first",
+                carried_name(template, *item)
+            ));
+        }
+    }
+    if source
+        .pin_points
+        .iter()
+        .any(|pin| !outline.points.iter().any(|p| p.distance(*pin) < 1e-9))
+    {
+        return Err("Remove the pins that are not on the new outline's corners first".into());
+    }
+    // The new boundaries take names the kept lines and holes do not use.
+    let mut taken: BTreeSet<String> = lines.iter().map(|l| l.id.clone()).collect();
+    taken.extend(polygon.holes.iter().flat_map(|h| h.edges.iter().cloned()));
+    let mut curves = BTreeMap::new();
+    for edge in &mut outline.edges {
+        let fresh = if taken.contains(edge) {
+            (1..)
+                .map(|k| format!("{edge}_{k}"))
+                .find(|c| !taken.contains(c))
+                .unwrap()
+        } else {
+            edge.clone()
+        };
+        if let Some(c) = outline.curves.remove(edge) {
+            curves.insert(fresh.clone(), c);
+        }
+        taken.insert(fresh.clone());
+        *edge = fresh;
+    }
+    outline.curves = curves;
+    outline.lines = lines;
+    outline.holes = polygon.holes.clone();
+    outline.subdivisions = polygon.subdivisions;
+    outline.meshing = polygon.meshing.clone();
+    let mut piece = source.clone();
+    piece.polygon = Some(outline);
+    let lo = outline_low(&piece);
+    normalize(&mut piece);
+    template.panels[index] = piece;
+    for (item, _) in items {
+        carry(template, item, panel, |p| p - lo, 0.);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

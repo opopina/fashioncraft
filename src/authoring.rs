@@ -38,6 +38,16 @@ pub enum PointConstruction {
     Intersection(ConstructionRef),
 }
 
+/// Which part of a slashed piece turns to open the wedge, looking along the slash line from its
+/// first point to its second.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpreadSide {
+    Left,
+    #[default]
+    Right,
+    Both,
+}
+
 pub enum Command {
     ConstructPoint {
         target: ConstructionRef,
@@ -277,6 +287,20 @@ pub enum Command {
     /// Merge the two pieces a seam joins edge to edge into one; the seam disappears.
     MergeAlongSeam {
         seam: String,
+    },
+    /// Make the closed internal shape `line` the outline of `panel`.
+    ReplaceOutline {
+        panel: String,
+        line: String,
+    },
+    /// Slash `panel` along its straight internal line `line` and turn one part, or both by
+    /// half, about where the line leaves the outline beyond its second point, opening a wedge
+    /// of `degrees` at its first point.
+    SlashSpread {
+        panel: String,
+        line: String,
+        degrees: f64,
+        side: SpreadSide,
     },
     /// Bring archived pieces back where they were.
     RestoreArchived {
@@ -587,6 +611,8 @@ impl Command {
             Self::SplitLine { .. } => "Split along line",
             Self::Unfold { .. } => "Unfold",
             Self::MergeAlongSeam { .. } => "Merge along seam",
+            Self::ReplaceOutline { .. } => "Replace outline",
+            Self::SlashSpread { .. } => "Slash and spread",
             Self::RestoreArchived { .. } => "Restore archived",
             Self::DeleteArchived { .. } => "Delete archived",
             Self::Sew { .. } => "Sew",
@@ -2107,6 +2133,8 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             | Command::SplitLine { .. }
             | Command::Unfold { .. }
             | Command::MergeAlongSeam { .. }
+            | Command::ReplaceOutline { .. }
+            | Command::SlashSpread { .. }
     );
     let unsupported_graphic_mirror = match &command {
         Command::Mirror { panel, .. } | Command::LinkedMirror { panel, .. } => {
@@ -4236,6 +4264,19 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
         Command::MergeAlongSeam { seam } => {
             selected = Some(topology::merge_along_seam(&mut template, &seam)?);
+        }
+        Command::ReplaceOutline { panel, line } => {
+            topology::replace_outline(&mut template, &panel, &line)?;
+            selected = Some(panel);
+        }
+        Command::SlashSpread {
+            panel,
+            line,
+            degrees,
+            side,
+        } => {
+            topology::slash_spread(&mut template, &panel, &line, degrees, side)?;
+            selected = Some(panel);
         }
         Command::RestoreArchived { id } => {
             let k = template

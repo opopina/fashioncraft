@@ -88,6 +88,8 @@ pub enum CommandId {
     ToggleLibrary,
     ArchivePieces,
     CutAndSew,
+    SlashSpread,
+    ReplaceOutline,
     MergeAlongSeam,
     UnfoldPiece,
     ExtendLineEnds,
@@ -906,6 +908,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         CutAndSew,
         "pattern.cut_and_sew",
         "Cut and sew along the selected line",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SlashSpread,
+        "pattern.slash_spread",
+        "Slash and spread along the selected line",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ReplaceOutline,
+        "pattern.replace_outline",
+        "Replace the outline with the selected shape",
         Pattern,
         None,
         TemplateHistory,

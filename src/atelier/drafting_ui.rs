@@ -2,7 +2,7 @@
 use super::{authoring_ui::Tool, *};
 use glam::DVec2;
 use marvelous_cloth::{
-    authoring::{self, Command},
+    authoring::{self, Command, SpreadSide},
     garment::{
         meshing::MeshingSettings,
         shapes::{BooleanOp, MirrorAxis, Primitive},
@@ -19,6 +19,9 @@ pub(super) struct DraftingUi {
     width_mm: f64,
     ratio: f64,
     pub line_panel: Option<String>,
+    /// Slash and spread: the wedge's angle and which part turns.
+    spread_degrees: f64,
+    spread_side: SpreadSide,
 }
 impl Default for DraftingUi {
     fn default() -> Self {
@@ -31,6 +34,8 @@ impl Default for DraftingUi {
             width_mm: 80.,
             ratio: 1.5,
             line_panel: None,
+            spread_degrees: 10.,
+            spread_side: SpreadSide::Right,
         }
     }
 }
@@ -288,6 +293,54 @@ impl Atelier {
                 "Internal line created · Sew to a boundary or add a ruffle in the inspector".into();
         }
     }
+    /// Slash and spread along the selected straight internal line, with the inspector's angle
+    /// and side, as one undo step.
+    pub(super) fn slash_spread_selected_line(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
+        let Some((panel, line)) = self
+            .authoring
+            .edge
+            .as_ref()
+            .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
+        else {
+            self.status = i18n::tr(ui_lang, "Select a straight internal line first").into();
+            return false;
+        };
+        let d = &self.authoring.drafting;
+        let command = Command::SlashSpread {
+            panel,
+            line,
+            degrees: d.spread_degrees,
+            side: d.spread_side,
+        };
+        if self.edit(command) {
+            self.authoring.edge = None;
+            self.status = i18n::tr(ui_lang, "Wedge opened along the line").into();
+            return true;
+        }
+        false
+    }
+
+    /// Make the selected closed internal shape its piece's outline, as one undo step.
+    pub(super) fn replace_outline_with_selected_shape(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
+        let Some((panel, line)) = self
+            .authoring
+            .edge
+            .as_ref()
+            .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
+        else {
+            self.status = i18n::tr(ui_lang, "Select a closed internal shape first").into();
+            return false;
+        };
+        if self.edit(Command::ReplaceOutline { panel, line }) {
+            self.authoring.edge = None;
+            self.status = i18n::tr(ui_lang, "Outline replaced by the shape").into();
+            return true;
+        }
+        false
+    }
+
     /// Cut and sew along the selected internal line, as one undo step.
     pub(super) fn cut_and_sew_selected_line(&mut self) -> bool {
         let ui_lang = self.prefs.language;
@@ -362,6 +415,18 @@ impl Atelier {
         }
         if line.closed
             && ui
+                .button(i18n::tr(ui_lang, "Make this the outline"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Replace the piece's outline with this shape; what lies inside keeps its place",
+                ))
+                .clicked()
+        {
+            self.replace_outline_with_selected_shape();
+            return;
+        }
+        if line.closed
+            && ui
                 .button(i18n::tr(ui_lang, "Clone as piece"))
                 .on_hover_text(i18n::tr(
                     ui_lang,
@@ -397,6 +462,37 @@ impl Atelier {
         {
             self.cut_and_sew_selected_line();
             return;
+        }
+        if straight {
+            let d = &mut self.authoring.drafting;
+            let mut open = false;
+            ui.horizontal_wrapped(|ui| {
+                ui.label(i18n::tr(ui_lang, "Slash and spread"));
+                ui.add(
+                    egui::DragValue::new(&mut d.spread_degrees)
+                        .range(0.1..=90.)
+                        .fixed_decimals(1)
+                        .suffix("°"),
+                );
+                for (label, side) in [
+                    ("Left", SpreadSide::Left),
+                    ("Right", SpreadSide::Right),
+                    ("Both", SpreadSide::Both),
+                ] {
+                    ui.selectable_value(&mut d.spread_side, side, i18n::tr(ui_lang, label));
+                }
+                open = ui
+                    .button(i18n::tr(ui_lang, "Open"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Slash the piece along this line and turn the chosen part about where the \
+                         line leaves the outline past its end, opening a wedge at its start",
+                    ))
+                    .clicked();
+            });
+            if open && self.slash_spread_selected_line() {
+                return;
+            }
         }
         if !line.closed {
             let mut command = None;

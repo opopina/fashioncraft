@@ -46,6 +46,34 @@ const STATUS_TEMPLATES: &[(&str, &str)] = &[
         "Avatar hecho a {} / {} / {} / {} / {} / {} cm · confirma para sustituir el actual",
     ),
     (
+        "Graphic {} lies across the cut; move it first",
+        "El gráfico {} queda sobre el corte; muévelo antes",
+    ),
+    (
+        "Trim {} lies across the cut; move it first",
+        "El avío {} queda sobre el corte; muévelo antes",
+    ),
+    (
+        "Tack {} lies across the cut; move it first",
+        "El hilván {} queda sobre el corte; muévelo antes",
+    ),
+    (
+        "Graphic {} lies outside the new outline; move it first",
+        "El gráfico {} queda fuera del contorno nuevo; muévelo antes",
+    ),
+    (
+        "Trim {} lies outside the new outline; move it first",
+        "El avío {} queda fuera del contorno nuevo; muévelo antes",
+    ),
+    (
+        "Tack {} lies outside the new outline; move it first",
+        "El hilván {} queda fuera del contorno nuevo; muévelo antes",
+    ),
+    (
+        "Internal line {} lies outside the new outline; delete it first",
+        "La línea interna {} queda fuera del contorno nuevo; bórrala antes",
+    ),
+    (
         "Capturing the take… frame {} of {}",
         "Capturando la toma… fotograma {} de {}",
     ),
@@ -482,6 +510,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "ClothCraft classic" => "ClothCraft clásico",
         "Not built yet" => "Aún no está hecho",
         "Cut and sew along line" => "Cortar y coser por la línea",
+        "Replace outline with shape" => "Reemplazar contorno por la forma",
+        "Slash and spread along line" => "Abrir y separar por la línea",
         "Merge pieces along seam" => "Fusionar las piezas por la costura",
         "Unfold across segment" => "Desdoblar por el segmento",
         "Extend line to outline" => "Prolongar la línea hasta el contorno",
@@ -625,6 +655,15 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Los clics y las cajas en el tablero solo llegan a las piezas"
         }
         "Clone as piece" => "Clonar como pieza",
+        "Make this the outline" => "Usar como contorno",
+        "Right" => "Derecha",
+        "Both" => "Ambas",
+        "Slash the piece along this line and turn the chosen part about where the line leaves the outline past its end, opening a wedge at its start" => {
+            "Corta la pieza por esta línea y gira la parte elegida alrededor de donde la línea sale del contorno tras su final, abriendo una cuña en su inicio"
+        }
+        "Replace the piece's outline with this shape; what lies inside keeps its place" => {
+            "Reemplaza el contorno de la pieza por esta forma; lo que queda dentro conserva su sitio"
+        }
         "Closed internal shapes following the whole outline" => {
             "Formas internas cerradas que siguen todo el contorno"
         }
@@ -1234,6 +1273,36 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Crea o cancela la pieza a mano alzada antes de simular"
         }
         "Cut in two and sewn along the cut" => "Cortada en dos y cosida por el corte",
+        "A hole lies across the cut; move the cut line" => {
+            "Un agujero queda sobre el corte; mueve la línea de corte"
+        }
+        "Delete the seams on the outline and on the shape first" => {
+            "Borra antes las costuras del contorno y de la forma"
+        }
+        "Clear the elastic, tape or folds on the outline and on the shape first" => {
+            "Quita antes el elástico, la cinta o los pliegues del contorno y de la forma"
+        }
+        "Only a closed internal shape can become the outline" => {
+            "Solo una forma interna cerrada puede ser el contorno"
+        }
+        "A hole lies outside the new outline; delete it first" => {
+            "Un agujero queda fuera del contorno nuevo; bórralo antes"
+        }
+        "Remove the pins that are not on the new outline's corners first" => {
+            "Quita antes los alfileres que no están en las esquinas del contorno nuevo"
+        }
+        "Release pins, unfreeze and activate the piece before replacing its outline" => {
+            "Suelta los alfileres, descongela y activa la pieza antes de reemplazar su contorno"
+        }
+        "Unlink the mirrored pair before replacing the outline" => {
+            "Separa la pareja enlazada antes de reemplazar el contorno"
+        }
+        "Replacing the outline needs an editable contour" => {
+            "Reemplazar el contorno requiere un contorno editable"
+        }
+        "Outline replaced by the shape" => "Contorno reemplazado por la forma",
+        "Wedge opened along the line" => "Cuña abierta por la línea",
+        "Open the wedge by 0.1° to 90°" => "Abre la cuña entre 0,1° y 90°",
         "DXF panels added · move and sew them in the workspace · Undo is available" => {
             "Piezas DXF añadidas · muévelas y cóselas en el espacio de trabajo · se puede deshacer"
         }
@@ -1400,6 +1469,7 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Selecciona antes un segmento recto del contorno"
         }
         "Select a straight internal line first" => "Selecciona antes una línea interna recta",
+        "Select a closed internal shape first" => "Selecciona antes una forma interna cerrada",
         "Select the pieces first" => "Selecciona antes las piezas",
         "Select the pieces to reset" => "Selecciona las piezas que restablecer",
         "Selected pieces can no longer be picked or box-selected on the board" => {
@@ -1655,6 +1725,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Delete pieces" => "Borrar piezas",
         "Archive pieces" => "Archivar piezas",
         "Cut and sew" => "Cortar y coser",
+        "Replace outline" => "Reemplazar contorno",
+        "Slash and spread" => "Abrir y separar",
         "Extend line" => "Prolongar línea",
         "Split along line" => "Dividir por la línea",
         "Unfold" => "Desplegar",
@@ -1820,6 +1892,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Add a buttonhole" => "Añadir un ojal",
         "Add a graphic…" => "Añadir un gráfico…",
         "Cut and sew along the selected line" => "Cortar y coser por la línea seleccionada",
+        "Replace the outline with the selected shape" => {
+            "Reemplazar el contorno por la forma seleccionada"
+        }
+        "Slash and spread along the selected line" => "Abrir y separar por la línea seleccionada",
         "Merge the pieces of the selected seam" => "Unir las piezas de la costura seleccionada",
         "Unfold the piece across the selected segment" => {
             "Desplegar la pieza sobre el segmento seleccionado"
@@ -2048,6 +2124,13 @@ mod tests {
         );
         // Exact messages first; unknown ones and English stay as they are.
         assert_eq!(status(Language::Spanish, "Pressure"), "Presión");
+        assert_eq!(
+            status(
+                Language::Spanish,
+                "Graphic logo lies outside the new outline; move it first"
+            ),
+            "El gráfico logo queda fuera del contorno nuevo; muévelo antes"
+        );
         assert_eq!(status(Language::Spanish, "Something new"), "Something new");
         assert_eq!(
             status(Language::English, "Capturing the take… frame 3 of 40"),

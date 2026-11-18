@@ -92,6 +92,8 @@ fn aliases(id: CommandId) -> &'static str {
         ToggleLibrary => "library assets folder browse files",
         ArchivePieces => "archive shelve put away hide pieces",
         CutAndSew => "cut sew split slash divide piece line",
+        ReplaceOutline => "replace outline contour shape boundary reemplazar contorno",
+        SlashSpread => "slash spread open wedge pivot dart abrir separar cuna",
         MergeAlongSeam => "merge join combine pieces seam",
         UnfoldPiece => "unfold mirror half symmetric fold open",
         ExtendLineEnds => "extend prolong internal line outline",

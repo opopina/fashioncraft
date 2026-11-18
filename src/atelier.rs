@@ -695,6 +695,16 @@ impl Atelier {
                     return Err(self.status.clone());
                 }
             }
+            Id::SlashSpread => {
+                if !self.slash_spread_selected_line() {
+                    return Err(self.status.clone());
+                }
+            }
+            Id::ReplaceOutline => {
+                if !self.replace_outline_with_selected_shape() {
+                    return Err(self.status.clone());
+                }
+            }
             Id::ArchivePieces => {
                 let panels = self.selected_panels();
                 self.edit(marvelous_cloth::authoring::Command::ArchivePanels { panels });

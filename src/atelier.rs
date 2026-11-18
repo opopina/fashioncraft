@@ -22,6 +22,8 @@ mod arrangement_ui;
 mod authoring_smoke;
 #[path = "atelier/authoring_ui.rs"]
 mod authoring_ui;
+#[path = "atelier/avatar_shape_ui.rs"]
+mod avatar_shape_ui;
 #[path = "atelier/board.rs"]
 mod board;
 #[path = "atelier/board_display.rs"]
@@ -580,6 +582,9 @@ impl Atelier {
             Id::ExportMddZUp => self.export_mdd(true)?,
             Id::ExportUsd => self.export_usd()?,
             Id::ExportFbx => self.export_fbx()?,
+            Id::OpenAvatarEditor => {
+                self.authoring.avatar_shape.open = !self.authoring.avatar_shape.open;
+            }
             Id::ToggleArrangementPoints => {
                 self.authoring.arrangement.points = !self.authoring.arrangement.points;
             }
@@ -1164,6 +1169,7 @@ impl eframe::App for Atelier {
             self.pose_window(&ctx);
             self.scene_window(&ctx);
             self.obj_export_window(&ctx);
+            self.avatar_shape_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

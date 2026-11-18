@@ -53,6 +53,8 @@ pub(super) struct AuthoringUi {
     pub animation: super::animation_ui::AnimationUi,
     /// Point caches, OBJ sequences and captures of the 3D view.
     pub media3d: super::animation_export::Media3d,
+    /// The avatar editor: measurements and a reshaped avatar.
+    pub avatar_shape: super::avatar_shape_ui::AvatarShapeUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,

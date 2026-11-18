@@ -113,6 +113,7 @@ pub enum CommandId {
     ExportUsd,
     ExportFbx,
     ToggleArrangementPoints,
+    OpenAvatarEditor,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1125,6 +1126,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenAvatarEditor,
+        "avatar.editor",
+        "Avatar editor…",
+        Workspace,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

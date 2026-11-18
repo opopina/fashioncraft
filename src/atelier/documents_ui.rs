@@ -126,6 +126,15 @@ fn install_template(
     document.browser = Default::default();
 }
 impl Atelier {
+    /// Offer `path` in the avatar import confirmation, as if it had been chosen there.
+    pub(super) fn offer_avatar(&mut self, path: &std::path::Path) {
+        let import = &mut self.document.avatar_import;
+        import.open = true;
+        import.choose(path);
+    }
+}
+
+impl Atelier {
     pub(super) fn svg_dialog_status(&self) -> (bool, bool, usize, bool) {
         self.document.svg_import.smoke_status()
     }

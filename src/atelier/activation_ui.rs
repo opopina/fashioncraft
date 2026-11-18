@@ -152,7 +152,10 @@ impl Atelier {
         });
         match result {
             Ok(edit) => {
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring.history.record_named(
+                    self.project.template.clone(),
+                    if solidify { "Solidify" } else { "Unsolidify" },
+                );
                 self.install_edit(edit);
                 let what = super::garment_display::counted(ids.len(), "piece", "pieces");
                 self.status = if solidify {
@@ -198,7 +201,10 @@ impl Atelier {
         });
         match result {
             Ok(edit) => {
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring.history.record_named(
+                    self.project.template.clone(),
+                    if deactivate { "Deactivate" } else { "Activate" },
+                );
                 self.install_edit(edit);
                 let what = super::garment_display::counted(ids.len(), "piece", "pieces");
                 self.status = match (deactivate, sewing) {

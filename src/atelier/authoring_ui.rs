@@ -57,6 +57,7 @@ pub(super) struct AuthoringUi {
     pub avatar_shape: super::avatar_shape_ui::AvatarShapeUi,
     /// Drafting a T-shirt from measurements.
     pub shirt_draft: super::avatar_shape_ui::DraftUi,
+    pub history_ui: super::history_ui::HistoryUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,
@@ -903,6 +904,7 @@ impl Atelier {
         self.editor_transition().install(edit);
     }
     pub(super) fn edit(&mut self, command: Command) -> bool {
+        let name = command.name();
         match authoring::apply(&self.project.template, command) {
             Ok(edit) => {
                 if edit.reset_simulation
@@ -920,7 +922,9 @@ impl Atelier {
                     self.status = error;
                     return false;
                 }
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring
+                    .history
+                    .record_named(self.project.template.clone(), name);
                 self.install_edit(edit);
                 true
             }
@@ -932,6 +936,10 @@ impl Atelier {
         }
     }
     pub(super) fn undo_edit(&mut self, redo: bool) {
+        self.undo_steps(redo, 1);
+    }
+    /// Undo (or redo) several edits at once, as picking a step in the history does.
+    pub(super) fn undo_steps(&mut self, redo: bool, steps: usize) {
         self.cancel_preview();
         self.authoring.board.clear_preview();
         self.authoring.replace = false;
@@ -942,10 +950,11 @@ impl Atelier {
         let avatar = &self.scene.collider.surface;
         let had_holds = !self.project.template.pin_targets.is_empty()
             || !self.project.template.frozen_panels.is_empty();
-        match self
-            .authoring
-            .history
-            .restore_checked(&self.project.template, redo, |edit| {
+        match self.authoring.history.restore_steps_checked(
+            &self.project.template,
+            redo,
+            steps,
+            |edit| {
                 if edit.reset_simulation
                     && (had_holds
                         || !edit.template.pin_targets.is_empty()
@@ -958,7 +967,8 @@ impl Atelier {
                     )?;
                 }
                 Ok(())
-            }) {
+            },
+        ) {
             Ok(edit) => self.install_edit(edit),
             Err(e) => self.status = e,
         }

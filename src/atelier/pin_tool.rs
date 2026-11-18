@@ -117,7 +117,14 @@ impl Atelier {
             fasten,
         ) {
             Ok(edit) => {
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring.history.record_named(
+                    self.project.template.clone(),
+                    if fasten {
+                        "Fasten buttons"
+                    } else {
+                        "Unfasten buttons"
+                    },
+                );
                 self.install_edit(edit);
                 self.status = if fasten {
                     "Buttons fastened to their buttonholes".into()
@@ -388,7 +395,10 @@ impl Atelier {
         });
         match result {
             Ok(edit) => {
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring.history.record_named(
+                    self.project.template.clone(),
+                    if hold { "Pin" } else { "Unpin" },
+                );
                 self.install_edit(edit);
                 let what = super::garment_display::counted(count, "pin", "pins");
                 self.status = if hold {

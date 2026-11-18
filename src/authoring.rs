@@ -537,6 +537,98 @@ pub enum Command {
     },
 }
 
+impl Command {
+    /// The edit's name, as the history lists it.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::ConstructPoint { .. } => "Construct point",
+            Self::Freehand { .. } => "Freehand piece",
+            Self::Paste { .. } => "Paste",
+            Self::LayoutGroup { .. } => "Lay out pieces",
+            Self::Primitive { .. } => "Add shape",
+            Self::Mirror { .. } => "Mirror",
+            Self::LinkedMirror { .. } => "Linked mirror",
+            Self::UnlinkMirror { .. } => "Unlink mirror",
+            Self::Boolean { .. } => "Boolean",
+            Self::InternalLine { .. } => "Internal line",
+            Self::RemoveLine { .. } => "Remove line",
+            Self::Ruffle { .. } => "Ruffle",
+            Self::Polygon { .. } => "Draw piece",
+            Self::Place { .. } => "Place piece",
+            Self::Arrange { .. } => "Arrange pieces",
+            Self::PlaceGroup { .. } => "Move pieces in 3D",
+            Self::Shape { .. } => "Edit outline",
+            Self::Dimensions { .. } => "Resize piece",
+            Self::Anchor { .. } => "Anchor piece",
+            Self::MovePoints { .. } => "Move points",
+            Self::MovePointGroups { .. } => "Move point groups",
+            Self::Nudge { .. } => "Nudge",
+            Self::SplitBoundary { .. } => "Add point",
+            Self::DartCutSew { .. } => "Dart",
+            Self::RemovePoint { .. } => "Delete point",
+            Self::CurvePoint { .. } => "Curve point",
+            Self::TargetLength { .. } => "Target length",
+            Self::SeamAllowance { .. } => "Seam allowance",
+            Self::SetNotch { .. } => "Notch",
+            Self::RemoveNotch { .. } => "Remove notch",
+            Self::Layout { .. } => "Move piece in 2D",
+            Self::BoardTransform { .. } => "Transform on the board",
+            Self::Duplicate { .. } => "Duplicate",
+            Self::RemovePanel { .. } => "Delete piece",
+            Self::RemovePanels { .. } => "Delete pieces",
+            Self::ArchivePanels { .. } => "Archive pieces",
+            Self::CutAndSew { .. } => "Cut and sew",
+            Self::DiamondDart { .. } => "Diamond dart",
+            Self::ExtendLine { .. } => "Extend line",
+            Self::SplitLine { .. } => "Split along line",
+            Self::Unfold { .. } => "Unfold",
+            Self::MergeAlongSeam { .. } => "Merge along seam",
+            Self::RestoreArchived { .. } => "Restore archived",
+            Self::DeleteArchived { .. } => "Delete archived",
+            Self::Sew { .. } => "Sew",
+            Self::SewChain { .. } => "Sew segments",
+            Self::RemoveSeam { .. } => "Remove seam",
+            Self::FabricAppearance { .. } => "Fabric appearance",
+            Self::InternalShape { .. } => "Internal shape",
+            Self::ConvertToHole { .. } => "Cut hole",
+            Self::ConvertToInternalShape { .. } => "Fill hole",
+            Self::Spiral { .. } => "Spiral",
+            Self::TransformPointGroups { .. } => "Transform points",
+            Self::AlignPointGroups { .. } => "Align points",
+            Self::ScalePanel { .. } => "Scale piece",
+            Self::AlignPanels { .. } => "Align pieces",
+            Self::DistributePanels { .. } => "Distribute pieces",
+            Self::SetLength { .. } => "Set length",
+            Self::MatchUp { .. } => "Match up",
+            Self::CloneShapeAsPanel { .. } => "Clone shape as piece",
+            Self::ClonePanelAsShape { .. } => "Clone outline as shape",
+            Self::OffsetAsLines { .. } => "Offset as lines",
+            Self::PerpendicularLine { .. } => "Perpendicular line",
+            Self::CleanUpPoints { .. } => "Clean up points",
+            Self::GroupLines { .. } => "Group lines",
+            Self::UngroupLines { .. } => "Ungroup lines",
+            Self::OptimizeCurvePoints { .. } => "Optimize curve points",
+            Self::SetBoardLocks { .. } => "Lock on the board",
+            Self::FlipNormals { .. } => "Flip faces",
+            Self::SetSeamFold { .. } => "Seam fold",
+            Self::AddTack { .. } => "Tack",
+            Self::RemoveTacks { .. } => "Remove tacks",
+            Self::SetLineFold { .. } => "Line fold",
+            Self::SetLineSpring { .. } => "Line elastic",
+            Self::SetShrink { .. } => "Shrink",
+            Self::SetPressure { .. } => "Pressure",
+            Self::Strengthen { .. } => "Strengthen",
+            Self::SetLayer { .. } => "Layer",
+            Self::SetGraphic { .. } => "Graphic",
+            Self::RemoveGraphic { .. } => "Remove graphic",
+            Self::SetTrim { .. } => "Trim",
+            Self::RemoveTrim { .. } => "Remove trim",
+            Self::RepeatTrim { .. } => "Repeat trim",
+            Self::Fabric { .. } => "Fabric",
+        }
+    }
+}
+
 pub struct Edit {
     pub template: GarmentTemplate,
     pub garment: CompiledGarment,
@@ -4318,18 +4410,29 @@ pub fn transform_placement(
     Ok(result)
 }
 
-/// History stores editable templates, never GPU resources or transient indices.
+/// History stores editable templates, never GPU resources or transient indices. Each entry
+/// keeps the name of the edit it undoes, so the steps can be listed and jumped to.
 #[derive(Default)]
 pub struct History {
-    undo: Vec<GarmentTemplate>,
-    redo: Vec<GarmentTemplate>,
+    /// Templates before each edit, oldest first, with the edit's name.
+    undo: Vec<(GarmentTemplate, String)>,
+    /// Templates after each undone edit, the next one to redo last, with the edit's name.
+    redo: Vec<(GarmentTemplate, String)>,
 }
+
+/// Edits kept for undo.
+pub const HISTORY_STEPS: usize = 32;
+
 impl History {
     pub fn record(&mut self, old: GarmentTemplate) {
-        if self.undo.len() == 32 {
+        self.record_named(old, "Edit");
+    }
+    /// Remember `old`, the template before an edit called `name`.
+    pub fn record_named(&mut self, old: GarmentTemplate, name: impl Into<String>) {
+        if self.undo.len() == HISTORY_STEPS {
             self.undo.remove(0);
         }
-        self.undo.push(old);
+        self.undo.push((old, name.into()));
         self.redo.clear();
     }
     pub fn can_undo(&self) -> bool {
@@ -4337,6 +4440,14 @@ impl History {
     }
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
+    }
+    /// Names of the edits that can be undone, oldest first.
+    pub fn done(&self) -> impl Iterator<Item = &str> {
+        self.undo.iter().map(|(_, name)| name.as_str())
+    }
+    /// Names of the edits that can be redone, the next one first.
+    pub fn undone(&self) -> impl Iterator<Item = &str> {
+        self.redo.iter().rev().map(|(_, name)| name.as_str())
     }
     pub fn restore(&mut self, current: &GarmentTemplate, redo: bool) -> Result<Edit, String> {
         self.restore_checked(current, redo, |_| Ok(()))
@@ -4349,12 +4460,29 @@ impl History {
         redo: bool,
         validate: impl FnOnce(&Edit) -> Result<(), String>,
     ) -> Result<Edit, String> {
+        self.restore_steps_checked(current, redo, 1, validate)
+    }
+    /// Undo (or redo) `steps` edits at once: only the template reached is compiled and
+    /// validated, and nothing moves between the stacks unless it is accepted.
+    pub fn restore_steps_checked(
+        &mut self,
+        current: &GarmentTemplate,
+        redo: bool,
+        steps: usize,
+        validate: impl FnOnce(&Edit) -> Result<(), String>,
+    ) -> Result<Edit, String> {
         let (from, to) = if redo {
             (&mut self.redo, &mut self.undo)
         } else {
             (&mut self.undo, &mut self.redo)
         };
-        let template = from.last().ok_or("History is empty")?;
+        if from.is_empty() {
+            return Err("History is empty".into());
+        }
+        if steps == 0 || steps > from.len() {
+            return Err("History has no such step".into());
+        }
+        let template = &from[from.len() - steps].0;
         let garment = template.compile()?;
         let edit = Edit {
             reset_simulation: !same_physics(current, template),
@@ -4364,8 +4492,12 @@ impl History {
             new_point: None,
         };
         validate(&edit)?;
-        from.pop();
-        to.push(current.clone());
+        let mut carried = current.clone();
+        for _ in 0..steps {
+            let (template, name) = from.pop().expect("checked above");
+            to.push((carried, name));
+            carried = template;
+        }
         Ok(edit)
     }
 }

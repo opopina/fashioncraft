@@ -29,6 +29,15 @@ pub(super) fn tr(language: Language, text: &'static str) -> &'static str {
     }
 }
 
+/// `text` in `language` for text known only at run time, such as an edit's name; English
+/// text when there is no translation.
+pub(super) fn tr_any(language: Language, text: &str) -> &str {
+    match language {
+        Language::English => text,
+        Language::Spanish => spanish(text).unwrap_or(text),
+    }
+}
+
 fn spanish(text: &str) -> Option<&'static str> {
     Some(match text {
         "File" => "Archivo",
@@ -1440,6 +1449,87 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Points" => "Puntos",
         "points" => "puntos",
         "panels" => "piezas",
+        // Edits, as the history lists them.
+        "Construct point" => "Construir punto",
+        "Freehand piece" => "Pieza a mano alzada",
+        "Lay out pieces" => "Distribuir piezas",
+        "Add shape" => "Añadir forma",
+        "Mirror" => "Simetría",
+        "Linked mirror" => "Simetría enlazada",
+        "Boolean" => "Booleana",
+        "Internal line" => "Línea interna",
+        "Remove line" => "Quitar línea",
+        "Ruffle" => "Volante",
+        "Draw piece" => "Dibujar pieza",
+        "Place piece" => "Colocar pieza",
+        "Arrange pieces" => "Colocar piezas",
+        "Move pieces in 3D" => "Mover piezas en 3D",
+        "Edit outline" => "Editar contorno",
+        "Resize piece" => "Cambiar tamaño de la pieza",
+        "Anchor piece" => "Anclar pieza",
+        "Move points" => "Mover puntos",
+        "Move point groups" => "Mover grupos de puntos",
+        "Nudge" => "Desplazar",
+        "Add point" => "Añadir punto",
+        "Curve point" => "Punto de curva",
+        "Target length" => "Longitud objetivo",
+        "Seam allowance" => "Margen de costura",
+        "Notch" => "Piquete",
+        "Remove notch" => "Quitar piquete",
+        "Move piece in 2D" => "Mover pieza en 2D",
+        "Transform on the board" => "Transformar en el tablero",
+        "Delete piece" => "Borrar pieza",
+        "Delete pieces" => "Borrar piezas",
+        "Archive pieces" => "Archivar piezas",
+        "Cut and sew" => "Cortar y coser",
+        "Extend line" => "Prolongar línea",
+        "Split along line" => "Dividir por la línea",
+        "Unfold" => "Desplegar",
+        "Merge along seam" => "Unir por la costura",
+        "Restore archived" => "Recuperar archivadas",
+        "Delete archived" => "Borrar archivadas",
+        "Sew segments" => "Coser segmentos",
+        "Remove seam" => "Quitar costura",
+        "Fabric appearance" => "Apariencia del tejido",
+        "Internal shape" => "Forma interna",
+        "Cut hole" => "Recortar hueco",
+        "Fill hole" => "Rellenar hueco",
+        "Transform points" => "Transformar puntos",
+        "Align points" => "Alinear puntos",
+        "Align pieces" => "Alinear piezas",
+        "Distribute pieces" => "Distribuir piezas",
+        "Set length" => "Fijar longitud",
+        "Match up" => "Emparejar",
+        "Clone shape as piece" => "Clonar forma como pieza",
+        "Clone outline as shape" => "Clonar contorno como forma",
+        "Offset as lines" => "Desfase como líneas",
+        "Perpendicular line" => "Línea perpendicular",
+        "Clean up points" => "Limpiar puntos",
+        "Group lines" => "Agrupar líneas",
+        "Ungroup lines" => "Desagrupar líneas",
+        "Optimize curve points" => "Optimizar puntos de curva",
+        "Lock on the board" => "Bloquear en el tablero",
+        "Flip faces" => "Invertir caras",
+        "Seam fold" => "Pliegue de costura",
+        "Line fold" => "Pliegue de línea",
+        "Line elastic" => "Elástico de línea",
+        "Shrink" => "Encogimiento",
+        "Graphic" => "Gráfico",
+        "Remove graphic" => "Quitar gráfico",
+        "Trim" => "Avío",
+        "Remove trim" => "Quitar avío",
+        "Repeat trim" => "Repetir avío",
+        "Unpin" => "Quitar alfiler",
+        "Unsolidify" => "Quitar solidificar",
+        "Load" => "Cargar",
+        "Unfasten buttons" => "Desabrochar botones",
+        "Start" => "Inicio",
+        "edits are kept · pick one to go back to it" => {
+            "ediciones se conservan · elige una para volver a ella"
+        }
+        "Undone · pick it to redo up to here" => "Deshecha · elígela para rehacer hasta aquí",
+        "Shrink warp" => "Encogimiento urdimbre",
+        "Shrink weft" => "Encogimiento trama",
         _ => return None,
     })
 }

@@ -60,6 +60,8 @@ mod garment_display;
 mod gizmo;
 #[path = "atelier/graphics_ui.rs"]
 mod graphics_ui;
+#[path = "atelier/history_ui.rs"]
+mod history_ui;
 #[path = "atelier/i18n.rs"]
 mod i18n;
 #[path = "atelier/icons.rs"]
@@ -584,6 +586,7 @@ impl Atelier {
             Id::ExportUsd => self.export_usd()?,
             Id::ExportFbx => self.export_fbx()?,
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
+            Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
             Id::OpenAvatarEditor => {
                 self.authoring.avatar_shape.open = !self.authoring.avatar_shape.open;
             }
@@ -828,7 +831,9 @@ impl Atelier {
                     self.anisotropy = m.anisotropy;
                     self.mesh_axis = m.axis_degrees;
                 }
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring
+                    .history
+                    .record_named(self.project.template.clone(), "Load");
                 self.authoring.board.fitted = false;
                 self.authoring.replace = false;
                 self.authoring.draft.clear();
@@ -1175,6 +1180,7 @@ impl eframe::App for Atelier {
             self.obj_export_window(&ctx);
             self.avatar_shape_window(&ctx);
             self.draft_window(&ctx);
+            self.history_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

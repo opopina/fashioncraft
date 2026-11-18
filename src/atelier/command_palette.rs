@@ -117,6 +117,7 @@ fn aliases(id: CommandId) -> &'static str {
         ToggleArrangementPoints => "arrangement points anchors place avatar show",
         OpenAvatarEditor => "avatar editor measurements height bust waist hip size body",
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",
+        ToggleHistory => "history undo redo edits list go back",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -841,7 +842,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::DraftTshirt
+            CommandId::ToggleHistory
         );
         h.key(
             "palette.query",

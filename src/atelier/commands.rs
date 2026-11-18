@@ -115,6 +115,7 @@ pub enum CommandId {
     ToggleArrangementPoints,
     OpenAvatarEditor,
     DraftTshirt,
+    ToggleHistory,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1145,6 +1146,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleHistory,
+        "window.history",
+        "History",
+        Workspace,
+        None,
+        Preference,
         NativeWorkspace
     ),
 ];

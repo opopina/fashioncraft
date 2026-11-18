@@ -123,7 +123,7 @@ impl Atelier {
                 ("shrink", panel, k),
                 value,
                 Field {
-                    label: name,
+                    label: i18n::tr(ui_lang, name),
                     hover: i18n::tr(
                         ui_lang,
                         "Size the piece draws in to along this grain direction, in percent \

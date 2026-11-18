@@ -300,7 +300,10 @@ impl Atelier {
             (&first, &empty, &selected, action),
         ) {
             Ok(edit) if edit.reset_simulation => {
-                self.authoring.history.record(self.project.template.clone());
+                self.authoring.history.record_named(
+                    self.project.template.clone(),
+                    if freeze { "Freeze" } else { "Unfreeze" },
+                );
                 self.install_edit(edit);
                 self.status = if freeze { "Frozen" } else { "Unfrozen" }.into();
             }

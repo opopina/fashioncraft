@@ -295,6 +295,28 @@ impl AvatarPose {
             joints,
         })
     }
+    /// The skeleton with joint `id` moved to `at` (avatar metres, at rest). Refused when the
+    /// joint is unknown, the place is not finite, or a bone would shrink below 5 mm.
+    pub fn with_joint(&self, id: &str, at: glam::DVec3) -> Result<Self, String> {
+        if !self.joints.contains_key(id) {
+            return Err(format!("The skeleton has no joint {id}"));
+        }
+        if !at.is_finite() {
+            return Err("A joint needs a finite place".into());
+        }
+        let mut moved = self.clone();
+        moved.joints.insert(id.to_string(), at.to_array());
+        let empty = SurfaceMesh {
+            vertices: vec![],
+            triangles: vec![],
+        };
+        let rig = moved.rig(&empty)?;
+        if let Some(bone) = rig.bones.iter().find(|b| b.head.distance(b.tail) < 0.005) {
+            return Err(format!("The {} bone would be too short", bone.name));
+        }
+        Ok(moved)
+    }
+
     /// The avatar's anchors as it stands in this pose.
     pub fn posed_sidecar(
         &self,

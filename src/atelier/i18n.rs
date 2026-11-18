@@ -1998,6 +1998,16 @@ fn spanish(text: &str) -> Option<&'static str> {
         "There are no pins to attach; pin points with the Pin tool first" => {
             "No hay alfileres que sujetar; fija antes puntos con la herramienta Alfiler"
         }
+        "Move joints" => "Mover articulaciones",
+        "Drag the skeleton's joints to fit the body; Apply and restart uses them" => {
+            "Arrastra las articulaciones del esqueleto para ajustarlo al cuerpo; Aplicar y reiniciar las usa"
+        }
+        "Put the avatar at rest to move its joints" => {
+            "Pon el avatar en reposo para mover sus articulaciones"
+        }
+        "joint moved · Apply and restart to use the new skeleton" => {
+            "articulación movida · Aplicar y reiniciar para usar el esqueleto nuevo"
+        }
         _ => return None,
     })
 }

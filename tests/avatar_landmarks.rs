@@ -180,3 +180,31 @@ fn anchors_follow_the_pose() {
         sidecar.frame(front).unwrap().origin
     );
 }
+
+#[test]
+fn a_joint_moved_reshapes_the_skeleton_and_bad_moves_are_refused() {
+    let avatar = AvatarPose::from_sidecar(&mannequin()).unwrap();
+    let elbow = DVec3::from_array(avatar.joints["joint-l-elbow"]);
+    let moved = avatar
+        .with_joint("joint-l-elbow", elbow + DVec3::new(0.02, 0.03, 0.))
+        .unwrap();
+    let surface = SurfaceMesh::load_obj(&mannequin()).unwrap();
+    let rig = moved.rig(&surface).unwrap();
+    let upper = &rig.bones[rig.bone("upper_arm.L").unwrap()];
+    assert!((upper.tail - (elbow + DVec3::new(0.02, 0.03, 0.))).length() < 1e-12);
+    // Only that joint moves.
+    for (id, p) in &avatar.joints {
+        if id != "joint-l-elbow" {
+            assert_eq!(moved.joints[id], *p);
+        }
+    }
+    // Onto the shoulder the upper arm would vanish; unknown joints and NaN are refused.
+    let shoulder = DVec3::from_array(avatar.joints["joint-l-shoulder"]);
+    assert!(avatar.with_joint("joint-l-elbow", shoulder).is_err());
+    assert!(avatar.with_joint("joint-tail", elbow).is_err());
+    assert!(
+        avatar
+            .with_joint("joint-l-elbow", DVec3::new(f64::NAN, 0., 0.))
+            .is_err()
+    );
+}

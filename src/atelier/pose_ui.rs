@@ -25,6 +25,10 @@ pub(super) struct PoseUi {
     reaching: Option<(usize, glam::DVec3, glam::DVec3)>,
     /// Name for the pose being saved to the user's poses.
     new_name: String,
+    /// Drag joints instead of hands and feet: the skeleton's fit, edited at rest.
+    pub move_joints: bool,
+    /// The joint being dragged and the camera-facing plane it moves in.
+    joint_drag: Option<(String, glam::DVec3, glam::DVec3)>,
 }
 
 impl PoseUi {
@@ -338,6 +342,23 @@ impl Atelier {
                     &mut state.skeleton,
                     i18n::tr(ui_lang, "Show skeleton (X-ray)"),
                 );
+                if state.skeleton {
+                    let at_rest = draft.pose.is_empty();
+                    ui.add_enabled_ui(at_rest, |ui| {
+                        ui.checkbox(&mut state.move_joints, i18n::tr(ui_lang, "Move joints"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Drag the skeleton's joints to fit the body; Apply and restart uses them",
+                            ))
+                            .on_disabled_hover_text(i18n::tr(
+                                ui_lang,
+                                "Put the avatar at rest to move its joints",
+                            ));
+                    });
+                    if !at_rest {
+                        state.move_joints = false;
+                    }
+                }
             });
         self.authoring.pose.open &= open;
         if !self.authoring.pose.open {
@@ -402,6 +423,33 @@ impl Atelier {
             painter.circle_filled(a, 4., colour);
             painter.circle_stroke(b, 3., Stroke::new(1.5, colour));
         }
+        // Joints can be dragged while fitting the skeleton.
+        if self.authoring.pose.move_joints {
+            for (id, p) in &pose.joints {
+                if let Some(at) = self
+                    .camera
+                    .project(glam::DVec3::from_array(*p).as_vec3(), rect)
+                {
+                    let dragged = self
+                        .authoring
+                        .pose
+                        .joint_drag
+                        .as_ref()
+                        .is_some_and(|(d, _, _)| d == id);
+                    let side = if dragged { 5. } else { 3.5 };
+                    painter.rect_filled(
+                        egui::Rect::from_center_size(at, egui::vec2(side, side) * 2.),
+                        1.,
+                        if dragged {
+                            Color32::YELLOW
+                        } else {
+                            Color32::WHITE
+                        },
+                    );
+                }
+            }
+            return;
+        }
         // Hands and feet can be dragged while the pose window is open.
         if self.authoring.pose.draft.is_some() {
             for (_, _, lower) in avatar_rig::LIMBS {
@@ -412,6 +460,62 @@ impl Atelier {
                 }
             }
         }
+    }
+
+    /// Drag a joint of the skeleton (at rest) in the plane facing the camera.
+    fn joint_interaction(
+        &mut self,
+        response: &egui::Response,
+        rect: egui::Rect,
+        draft: AvatarPose,
+    ) -> bool {
+        let ui_lang = self.prefs.language;
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && let Some(pos) = response.ctx.input(|i| i.pointer.press_origin())
+        {
+            let hit = draft
+                .joints
+                .iter()
+                .filter_map(|(id, p)| {
+                    let p = glam::DVec3::from_array(*p);
+                    let at = self.camera.project(p.as_vec3(), rect)?;
+                    Some((id.clone(), p, at.distance(pos)))
+                })
+                .filter(|(_, _, d)| *d <= GRAB_PX)
+                .min_by(|a, b| a.2.total_cmp(&b.2));
+            if let Some((id, p, _)) = hit {
+                self.authoring.pose.joint_drag = Some((id, p, self.camera.forward().as_dvec3()));
+            }
+        }
+        let Some((id, point, normal)) = self.authoring.pose.joint_drag.clone() else {
+            return false;
+        };
+        if response.dragged_by(egui::PointerButton::Primary)
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let (origin, dir) = self.camera.ray(pos, rect);
+            if let Some(target) = picking::ray_plane(origin, dir, point, normal) {
+                match draft.with_joint(&id, target) {
+                    Ok(moved) => {
+                        self.authoring.pose.draft = Some(moved);
+                        self.authoring.pose.bones = None;
+                    }
+                    Err(e) => self.status = e,
+                }
+            }
+        }
+        if response.drag_stopped() {
+            self.authoring.pose.joint_drag = None;
+            self.status = format!(
+                "{} · {}",
+                id,
+                i18n::tr(
+                    ui_lang,
+                    "joint moved · Apply and restart to use the new skeleton"
+                )
+            );
+        }
+        true
     }
 
     /// Drag a hand or foot of the pose being edited; the limb follows by inverse kinematics.
@@ -425,6 +529,9 @@ impl Atelier {
         let (Some(draft), Some((_, rig))) = (state.draft.clone(), state.bones.clone()) else {
             return false;
         };
+        if state.move_joints {
+            return self.joint_interaction(response, rect, draft);
+        }
         if response.drag_started_by(egui::PointerButton::Primary)
             && let Some(pos) = response.ctx.input(|i| i.pointer.press_origin())
         {

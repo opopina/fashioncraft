@@ -22,7 +22,7 @@ impl Atelier {
     }
 
     /// The middle of a piece in its material coordinates.
-    fn piece_centre(&self, panel: &str) -> Option<DVec2> {
+    pub(super) fn piece_centre(&self, panel: &str) -> Option<DVec2> {
         let g = &self.scene.garment;
         let r = g.panels.iter().find(|r| r.id == panel)?;
         let uv = &g.mesh.uv[r.vertices.clone()];

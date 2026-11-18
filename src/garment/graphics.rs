@@ -1,8 +1,7 @@
-//! CPU material-space placement math for future artwork integration.
-//!
-//! This module does not load assets, store them in a project, render artwork,
-//! or establish that the artwork rectangle lies inside a panel contour.
-use glam::DVec2;
+//! Graphics (prints and logos) placed on a piece: material-space placement math, clipping
+//! to the image rectangle and the 3D triangles a renderer draws. Image files live in the
+//! fitting project (see `fitting::GraphicAsset`); this module never loads pixels.
+use glam::{DVec2, DVec3};
 use serde::{Deserialize, Serialize};
 
 /// A face of the authored panel, not an instruction to mirror image pixels.
@@ -185,5 +184,121 @@ impl GraphicPlacement {
             return Err("Graphic inverse transform exceeds finite coordinates".into());
         }
         Ok(result)
+    }
+}
+
+/// How far a graphic floats off the cloth surface, so it never fights the fabric for depth
+/// (trims sit higher, on top of graphics).
+pub const GRAPHIC_LIFT_M: f64 = 0.0008;
+
+/// One triangle of a graphic on the 3D cloth: lifted points, the normals of the side it lies
+/// on, and normalized image coordinates inside [0,1].
+#[derive(Clone, Debug, PartialEq)]
+pub struct GraphicTriangle {
+    pub points: [DVec3; 3],
+    pub normals: [DVec3; 3],
+    pub uv: [DVec2; 3],
+}
+
+/// The parts of a triangle with image coordinates `uv` that lie inside the image square
+/// [0,1]², as triangles of barycentric weights over the original corners. Empty when the
+/// triangle misses the image; the original triangle when it lies wholly inside.
+pub fn clip_to_image(uv: [DVec2; 3]) -> Vec<[DVec3; 3]> {
+    let inside = |p: DVec2| (0.0..=1.0).contains(&p.x) && (0.0..=1.0).contains(&p.y);
+    if uv.iter().all(|p| inside(*p)) {
+        return vec![[DVec3::X, DVec3::Y, DVec3::Z]];
+    }
+    let (lo, hi) = (uv[0].min(uv[1]).min(uv[2]), uv[0].max(uv[1]).max(uv[2]));
+    if hi.x < 0. || hi.y < 0. || lo.x > 1. || lo.y > 1. {
+        return vec![];
+    }
+    // Sutherland–Hodgman against the four sides, carrying barycentric weights.
+    let mut polygon: Vec<(DVec2, DVec3)> =
+        uv.into_iter().zip([DVec3::X, DVec3::Y, DVec3::Z]).collect();
+    for (axis, keep_above, bound) in [(0, true, 0.), (0, false, 1.), (1, true, 0.), (1, false, 1.)]
+    {
+        let distance = |p: DVec2| {
+            let d = p[axis] - bound;
+            if keep_above { d } else { -d }
+        };
+        let mut next = Vec::with_capacity(polygon.len() + 2);
+        for k in 0..polygon.len() {
+            let (a, wa) = polygon[k];
+            let (b, wb) = polygon[(k + 1) % polygon.len()];
+            let (da, db) = (distance(a), distance(b));
+            if da >= 0. {
+                next.push((a, wa));
+            }
+            if (da >= 0.) != (db >= 0.) {
+                let t = da / (da - db);
+                next.push((a + (b - a) * t, wa + (wb - wa) * t));
+            }
+        }
+        polygon = next;
+        if polygon.len() < 3 {
+            return vec![];
+        }
+    }
+    (1..polygon.len() - 1)
+        .map(|k| [polygon[0].1, polygon[k].1, polygon[k + 1].1])
+        .collect()
+}
+
+impl GraphicPlacement {
+    /// The 3D triangles of this graphic on the cloth at positions `x`, clipped to the image
+    /// and lifted [`GRAPHIC_LIFT_M`] off the side it is printed on. `flipped` says whether
+    /// the piece's normals are flipped, which swaps its front and back.
+    pub fn graphic_triangles(
+        &self,
+        garment: &super::CompiledGarment,
+        x: &[DVec3],
+        flipped: bool,
+    ) -> Result<Vec<GraphicTriangle>, String> {
+        let triangles = self.triangle_uvs(garment)?;
+        if x.len() != garment.mesh.uv.len() {
+            return Err("Graphic positions do not match the compiled mesh".into());
+        }
+        let panel = garment
+            .panels
+            .iter()
+            .find(|panel| panel.id == self.panel_id)
+            .ok_or("Graphic references a missing compiled panel")?;
+        // Smooth winding normals of the piece; its front faces away from them (towards them
+        // when flipped), and a back print sits on the other side.
+        let mut normals = vec![DVec3::ZERO; panel.vertices.len()];
+        for t in &triangles {
+            let [a, b, c] = t.vertices.map(|v| x[v]);
+            let n = (b - a).cross(c - a);
+            for v in t.vertices {
+                normals[v - panel.vertices.start] += n;
+            }
+        }
+        let front = if flipped { 1. } else { -1. };
+        let side = match self.side {
+            GraphicSide::Front => front,
+            GraphicSide::Back => -front,
+        };
+        let normal = |v: usize| normals[v - panel.vertices.start].normalize_or_zero() * side;
+        let mut out = Vec::new();
+        for t in &triangles {
+            let corners = t
+                .vertices
+                .map(|v| (x[v] + normal(v) * GRAPHIC_LIFT_M, normal(v)));
+            for weights in clip_to_image(t.image_uv) {
+                let blend = |w: DVec3| {
+                    let p = corners[0].0 * w.x + corners[1].0 * w.y + corners[2].0 * w.z;
+                    let n = corners[0].1 * w.x + corners[1].1 * w.y + corners[2].1 * w.z;
+                    let uv = t.image_uv[0] * w.x + t.image_uv[1] * w.y + t.image_uv[2] * w.z;
+                    (p, n.normalize_or_zero(), uv.clamp(DVec2::ZERO, DVec2::ONE))
+                };
+                let [a, b, c] = weights.map(blend);
+                out.push(GraphicTriangle {
+                    points: [a.0, b.0, c.0],
+                    normals: [a.1, b.1, c.1],
+                    uv: [a.2, b.2, c.2],
+                });
+            }
+        }
+        Ok(out)
     }
 }

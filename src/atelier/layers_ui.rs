@@ -95,7 +95,7 @@ impl Atelier {
                 speed: 0.5,
                 decimals: 1,
                 suffix: " Pa",
-                reset: 0.,
+                reset: Some(0.),
             },
         ) {
             command = Some(Command::SetPressure {
@@ -116,7 +116,7 @@ impl Atelier {
                     speed: 0.2,
                     decimals: 1,
                     suffix: " %",
-                    reset: 100.,
+                    reset: Some(100.),
                 },
             ) {
                 let [w, f] = if k == 0 { [v, weft] } else { [warp, v] };
@@ -159,19 +159,20 @@ impl Atelier {
     }
 }
 
-struct Field<'a> {
-    label: &'a str,
-    hover: &'a str,
-    range: std::ops::RangeInclusive<f64>,
-    speed: f64,
-    decimals: usize,
-    suffix: &'a str,
-    reset: f64,
+pub(super) struct Field<'a> {
+    pub label: &'a str,
+    pub hover: &'a str,
+    pub range: std::ops::RangeInclusive<f64>,
+    pub speed: f64,
+    pub decimals: usize,
+    pub suffix: &'a str,
+    /// Value of the small reset button shown next to the field, when there is one.
+    pub reset: Option<f64>,
 }
 
 /// A number field whose new value is returned once, when a drag ends, a value is typed or
 /// the reset button is clicked; the in-progress value lives in egui's temporary memory.
-fn committed_value(
+pub(super) fn committed_value(
     ui: &mut egui::Ui,
     key: impl std::hash::Hash + std::fmt::Debug,
     current: f64,
@@ -190,13 +191,14 @@ fn committed_value(
                 .suffix(field.suffix),
         );
         commit = response.drag_stopped() || (response.changed() && !response.dragged());
-        if current != field.reset
+        if let Some(reset) = field.reset
+            && current != reset
             && ui
-                .small_button(format!("{}", field.reset))
+                .small_button(format!("{reset}"))
                 .on_hover_text("Back to none")
                 .clicked()
         {
-            draft = field.reset;
+            draft = reset;
             commit = true;
         }
     });

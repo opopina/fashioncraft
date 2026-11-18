@@ -52,6 +52,8 @@ mod fabrics_ui;
 mod garment_display;
 #[path = "atelier/gizmo.rs"]
 mod gizmo;
+#[path = "atelier/graphics_ui.rs"]
+mod graphics_ui;
 #[path = "atelier/icons.rs"]
 mod icons;
 #[path = "atelier/issue_ui.rs"]

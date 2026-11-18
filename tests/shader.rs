@@ -49,3 +49,29 @@ fn environment_shader_and_uniform_layout_validate_without_gpu() {
         [0, 64, 128, 144, 160, 176, 192]
     );
 }
+
+#[test]
+fn graphic_shader_shares_the_view_uniform_and_validates_without_gpu() {
+    let module = naga::front::wgsl::parse_str(include_str!("../src/render/graphic.wgsl")).unwrap();
+    let view = module
+        .types
+        .iter()
+        .find(|(_, ty)| ty.name.as_deref() == Some("View"))
+        .unwrap()
+        .1;
+    let naga::TypeInner::Struct { span, ref members } = view.inner else {
+        panic!("View uniform must be a struct")
+    };
+    // The graphics pipeline binds the viewport's camera buffer as is.
+    assert_eq!(span, 112);
+    assert_eq!(
+        members.iter().map(|m| m.offset).collect::<Vec<_>>(),
+        [0, 64, 80, 96]
+    );
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+    .unwrap();
+}

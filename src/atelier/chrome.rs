@@ -444,6 +444,15 @@ impl Atelier {
         } else {
             vec![]
         };
+        let graphic_draws = if self.prefs.garment_display.garment {
+            self.graphic_draws(&ctx)
+        } else {
+            vec![]
+        };
+        let graphics: Vec<marvelous_cloth::render::GraphicDraw> = graphic_draws
+            .iter()
+            .map(|(image, triangles)| marvelous_cloth::render::GraphicDraw { image, triangles })
+            .collect();
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
@@ -472,6 +481,7 @@ impl Atelier {
                     &[]
                 },
                 trims: &trims,
+                graphics: &graphics,
                 display: marvelous_cloth::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),

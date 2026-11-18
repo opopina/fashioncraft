@@ -35,6 +35,8 @@ pub(super) enum Tool {
 #[derive(Default)]
 pub(super) struct AuthoringUi {
     pub dart: Option<DartDraft>,
+    /// Decoded images of the graphics on pieces.
+    pub graphic_images: super::graphics_ui::GraphicImages,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,
@@ -1383,6 +1385,7 @@ impl Atelier {
         }
         self.layer_properties(ui, &panel.id);
         self.piece_trims(ui, &panel.id);
+        self.piece_graphics(ui, &panel.id);
         self.arrangement_properties(ui, &panel);
         self.pin_properties(ui, &panel);
         self.activation_properties(ui, &panel);

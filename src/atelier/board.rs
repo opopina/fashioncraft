@@ -2902,6 +2902,7 @@ impl Atelier {
             self.paint_silhouette(&painter, rect);
         }
         self.paint_background(&painter, rect, ui.ctx());
+        let graphic_textures = self.graphic_textures(ui.ctx());
         let board = &self.authoring.board;
         let display = self.prefs.pattern_display;
         let spacing = if board.scale < 140. { 0.25 } else { 0.05 };
@@ -2977,6 +2978,20 @@ impl Atelier {
                     }
                 }
                 painter.add(egui::Shape::mesh(mesh));
+                let graphics: Vec<_> = self
+                    .project
+                    .template
+                    .graphics
+                    .iter()
+                    .filter(|g| g.panel_id == panel.id)
+                    .collect();
+                super::graphics_ui::paint_board_graphics(
+                    &painter,
+                    &graphics,
+                    &graphic_textures,
+                    &self.scene.garment,
+                    &point,
+                );
                 for face in self.issue.faces.range(range.triangles.clone()) {
                     let triangle = &self.scene.garment.mesh.triangles[*face];
                     painter.add(egui::Shape::convex_polygon(

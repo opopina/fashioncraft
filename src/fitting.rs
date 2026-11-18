@@ -47,6 +47,37 @@ pub struct FittingProject {
     /// Ruler origin and guidelines of the 2D board. Absent in older documents.
     #[serde(default, skip_serializing_if = "BoardGuides::is_empty")]
     pub board_guides: BoardGuides,
+    /// Image files of the graphics placed on pieces, by asset ID. Absent in older documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graphic_assets: Vec<GraphicAsset>,
+}
+
+/// An image a graphic placement refers to by `id`. Relative paths resolve against the
+/// project JSON directory; saving copies the image into the project's `.assets` folder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphicAsset {
+    pub id: String,
+    pub path: PathBuf,
+}
+
+/// Asset IDs must be unique and well formed, like the placements that use them.
+fn validate_graphic_assets(assets: &[GraphicAsset]) -> Result<(), String> {
+    for (k, asset) in assets.iter().enumerate() {
+        let well_formed = !asset.id.is_empty()
+            && asset.id.len() <= 80
+            && asset
+                .id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+        if !well_formed {
+            return Err("Graphic asset IDs must use 1–80 ASCII letters, digits, '_' or '-'".into());
+        }
+        if assets[..k].iter().any(|other| other.id == asset.id) {
+            return Err(format!("Duplicate graphic asset ID {}", asset.id));
+        }
+    }
+    Ok(())
 }
 
 /// Direction of a 2D board guideline.
@@ -289,6 +320,7 @@ impl FittingProject {
             board_background: None,
             saved_views: Vec::new(),
             board_guides: BoardGuides::default(),
+            graphic_assets: Vec::new(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -305,6 +337,12 @@ impl FittingProject {
             background.validate()?;
             if background.path.is_relative() {
                 background.path = directory.join(&background.path);
+            }
+        }
+        validate_graphic_assets(&project.graphic_assets)?;
+        for asset in &mut project.graphic_assets {
+            if asset.path.is_relative() {
+                asset.path = directory.join(&asset.path);
             }
         }
         Ok(project)
@@ -425,6 +463,13 @@ impl FittingProject {
         if let Some(background) = copy.board_background.as_mut() {
             background.validate()?;
             background.path = crate::document::portable_image(&background.path, path)?;
+        }
+        validate_graphic_assets(&copy.graphic_assets)?;
+        // Images no graphic uses any more are left out of the saved document.
+        let used = |id: &str| copy.template.graphics.iter().any(|g| g.asset_id == id);
+        copy.graphic_assets.retain(|asset| used(&asset.id));
+        for asset in &mut copy.graphic_assets {
+            asset.path = crate::document::portable_image(&asset.path, path)?;
         }
         let bytes = serde_json::to_vec_pretty(&copy).map_err(|e| e.to_string())?;
         crate::document::atomic_write(path, &bytes)

@@ -12,6 +12,8 @@ use glam::{Mat4, Vec3};
 
 pub mod appearance;
 mod environment;
+mod graphics;
+pub use graphics::{GraphicDraw, GraphicImage};
 
 pub struct DrawModel<'a> {
     pub marked_faces: Option<&'a std::collections::BTreeSet<usize>>,
@@ -25,6 +27,8 @@ pub struct DrawModel<'a> {
     pub seams: &'a [CompiledSeam],
     /// Trims (buttons, buttonholes, zippers, topstitching) as coloured triangles.
     pub trims: &'a [crate::garment::trims::TrimTriangle],
+    /// Prints and logos lying on the cloth, drawn over it with their images.
+    pub graphics: &'a [GraphicDraw<'a>],
     pub display: DisplayOptions<'a>,
 }
 
@@ -708,6 +712,7 @@ pub struct Viewport {
     avatar_buffer: Option<wgpu::Buffer>,
     avatar_key: (usize, usize, [u32; 3]),
     avatar_count: u32,
+    graphics: graphics::GraphicLayer,
 }
 impl Viewport {
     fn target(device: &wgpu::Device, size: [u32; 2], depth: bool, samples: u32) -> wgpu::Texture {
@@ -829,6 +834,7 @@ impl Viewport {
             &color,
             wgpu::FilterMode::Linear,
         );
+        let graphics = graphics::GraphicLayer::new(device, samples, &view_uniform);
         let capacity = 1024;
         let vertices = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("viewport-vertices"),
@@ -857,6 +863,7 @@ impl Viewport {
             avatar_buffer: None,
             avatar_key: (0, 0, [0; 3]),
             avatar_count: 0,
+            graphics,
         }
     }
     #[allow(clippy::too_many_arguments)]
@@ -885,6 +892,7 @@ impl Viewport {
                 collider: p.sphere.as_ref().map(|s| s as &dyn Collider),
                 seams: &[],
                 trims: &[],
+                graphics: &[],
                 display: DisplayOptions::default(),
             },
             wire,
@@ -912,6 +920,7 @@ impl Viewport {
             collider,
             seams,
             trims,
+            graphics,
             display,
         } = model;
         let device = &self.render_state.device;
@@ -930,6 +939,7 @@ impl Viewport {
                 }],
             });
             self.environment = environment::Environment::new(device, samples);
+            self.graphics = graphics::GraphicLayer::new(device, samples, &self.view_uniform);
         }
         if size != self.size || samples != self.samples {
             self.color_texture = Self::target(device, size, false, 1);
@@ -1255,6 +1265,8 @@ impl Viewport {
         self.render_state
             .queue
             .write_buffer(&self.vertices, 0, bytes);
+        self.graphics
+            .prepare(device, &self.render_state.queue, graphics);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("cloth-viewport"),
         });
@@ -1299,6 +1311,7 @@ impl Viewport {
                 pass.set_vertex_buffer(0, body.slice(..));
                 pass.draw(0..self.avatar_count, 0..1);
             }
+            self.graphics.draw(&mut pass);
         }
         if let Some(t) = &self.timers {
             encoder.resolve_query_set(&t.query, 0..2, &t.resolve, 0);

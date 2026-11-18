@@ -30,6 +30,12 @@ pub fn portable_avatar(source: &Path, project: &Path) -> Result<PathBuf, String>
     portable_asset(source, project, "avatar", "obj")
 }
 
+/// Content-addressed scene object (an OBJ prop) next to the project. Same rules as
+/// [`portable_avatar`].
+pub fn portable_object(source: &Path, project: &Path) -> Result<PathBuf, String> {
+    portable_asset(source, project, "object", "obj")
+}
+
 /// Content-addressed reference image next to the project, keeping the source's lowercase
 /// extension (PNG when it has none). Same rules as [`portable_avatar`].
 pub fn portable_image(source: &Path, project: &Path) -> Result<PathBuf, String> {

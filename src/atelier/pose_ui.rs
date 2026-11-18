@@ -36,6 +36,8 @@ const POSE_STEP_M: f64 = 0.0015;
 pub(super) struct Transition {
     rig: Arc<Rig>,
     rest: Arc<marvelous_cloth::avatar::SurfaceMesh>,
+    /// Scene objects, added after the body as part of the same obstacle.
+    props: Option<Arc<marvelous_cloth::avatar::SurfaceMesh>>,
     from: avatar_rig::Pose,
     to: AvatarPose,
     step: usize,
@@ -100,9 +102,12 @@ impl Atelier {
                 .map(|(p, q)| p.distance(*q))
                 .fold(0., f64::max);
             let steps = ((farthest / POSE_STEP_M).ceil() as usize).clamp(5, 900);
+            let props = marvelous_cloth::fitting::scene_objects_mesh(&self.project.scene_objects)?
+                .map(Arc::new);
             Ok(Transition {
                 rig: Arc::new(rig),
                 rest: Arc::new(rest),
+                props,
                 from,
                 to: pose.clone(),
                 step: 0,
@@ -134,7 +139,11 @@ impl Atelier {
         let transforms = t
             .rig
             .transforms(|bone| blend.get(bone).copied().unwrap_or_default());
-        let surface = Arc::new(t.rig.skin(&t.rest, &transforms));
+        let mut body = t.rig.skin(&t.rest, &transforms);
+        if let Some(props) = &t.props {
+            body = body.merged(props);
+        }
+        let surface = Arc::new(body);
         match marvelous_cloth::avatar::MeshCollider::with_clearance(
             surface,
             self.project.contact_stiffness,

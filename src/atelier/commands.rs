@@ -95,6 +95,8 @@ pub enum CommandId {
     OpenPose,
     ToggleSkeleton,
     RestPose,
+    OpenSceneObjects,
+    ClearSceneObjects,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -942,6 +944,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         RestPose,
         "avatar.rest_pose",
         "Put the avatar at rest",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenSceneObjects,
+        "avatar.scene_objects",
+        "Scene and props…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ClearSceneObjects,
+        "avatar.clear_scene_objects",
+        "Delete the scene objects",
         Simulation,
         None,
         NotUndoable,

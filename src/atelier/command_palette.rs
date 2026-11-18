@@ -97,6 +97,8 @@ fn aliases(id: CommandId) -> &'static str {
         OpenPose => "pose avatar body arms legs posture",
         ToggleSkeleton => "skeleton bones joints x-ray",
         RestPose => "rest pose reset avatar a-pose",
+        OpenSceneObjects => "scene props objects obj chair table",
+        ClearSceneObjects => "delete clear scene props objects",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -821,7 +823,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ToggleSkeleton
+            CommandId::OpenSceneObjects
         );
         h.key(
             "palette.query",

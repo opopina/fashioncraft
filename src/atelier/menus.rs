@@ -42,7 +42,7 @@ const FILE: &[Item] = &[
             Todo("Trim…"),
             Run("Avatar…", C::ImportAvatar),
             Todo("Pose…"),
-            Todo("Scene and props…"),
+            Run("Scene and props…", C::OpenSceneObjects),
         ],
     ),
     Sub(
@@ -279,7 +279,7 @@ const MATERIALS: &[Item] = &[
 
 const AVATAR: &[Item] = &[
     Todo("Delete avatar"),
-    Todo("Delete scene and props"),
+    Run("Delete scene and props", C::ClearSceneObjects),
     S,
     Sub(
         "Avatar measurements",
@@ -622,7 +622,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 88, "{done} of {all}");
+        assert!(done >= 90, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

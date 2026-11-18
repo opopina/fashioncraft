@@ -57,6 +57,74 @@ pub struct FittingProject {
     /// The avatar's pose and the joints its skeleton was built from. Absent: at rest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_pose: Option<AvatarPose>,
+    /// Props the cloth also collides with (a chair, a table…). Absent in older documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scene_objects: Vec<SceneObject>,
+}
+
+/// A static OBJ prop placed in the scene. Relative paths resolve against the project JSON
+/// directory; saving copies the file into the project's `.assets` folder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SceneObject {
+    pub id: String,
+    pub name: String,
+    pub path: PathBuf,
+    /// Where the OBJ's origin goes, metres.
+    pub translation: [f64; 3],
+    /// Turn about the world X, Y and Z axes, degrees.
+    #[serde(default)]
+    pub rotation_degrees: [f64; 3],
+    /// Uniform scale from the OBJ's units to metres.
+    pub scale: f64,
+}
+
+impl SceneObject {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.is_empty() || self.id.len() > 80 {
+            return Err("A scene object needs an id".into());
+        }
+        if self
+            .translation
+            .iter()
+            .chain(&self.rotation_degrees)
+            .any(|v| !v.is_finite())
+            || !(1e-4..=1e3).contains(&self.scale)
+        {
+            return Err(format!(
+                "Scene object {} needs a finite position and angles and a scale of 0.0001 to 1000",
+                self.name
+            ));
+        }
+        Ok(())
+    }
+
+    /// The prop's mesh, placed in the scene.
+    pub fn mesh(&self) -> Result<SurfaceMesh, String> {
+        self.validate()?;
+        let mut mesh = SurfaceMesh::load_obj(&self.path)?;
+        let [x, y, z] = self.rotation_degrees.map(f64::to_radians);
+        let rotation = glam::DQuat::from_euler(glam::EulerRot::XYZ, x, y, z);
+        let offset = glam::DVec3::from_array(self.translation);
+        for v in &mut mesh.vertices {
+            *v = offset + rotation * (*v * self.scale);
+        }
+        mesh.validate()?;
+        Ok(mesh)
+    }
+}
+
+/// Every scene object's mesh as one obstacle, or `None` when there are none.
+pub fn scene_objects_mesh(objects: &[SceneObject]) -> Result<Option<SurfaceMesh>, String> {
+    let mut out: Option<SurfaceMesh> = None;
+    for object in objects {
+        let mesh = object.mesh()?;
+        out = Some(match out {
+            Some(all) => all.merged(&mesh),
+            None => mesh,
+        });
+    }
+    Ok(out)
 }
 
 /// A posed avatar: bone rotations and the joint positions (avatar metres) of its skeleton,
@@ -370,6 +438,7 @@ impl FittingProject {
             image_assets: Vec::new(),
             color_palette: Vec::new(),
             avatar_pose: None,
+            scene_objects: Vec::new(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -394,6 +463,12 @@ impl FittingProject {
                 asset.path = directory.join(&asset.path);
             }
         }
+        for object in &mut project.scene_objects {
+            object.validate()?;
+            if object.path.is_relative() {
+                object.path = directory.join(&object.path);
+            }
+        }
         Ok(project)
     }
     pub fn compile(&self) -> Result<FittingScene, String> {
@@ -413,6 +488,9 @@ impl FittingProject {
         let mut surface = SurfaceMesh::load_obj(&self.avatar_path)?;
         if let Some(posed) = self.avatar_pose.as_ref().filter(|p| !p.pose.is_empty()) {
             surface = posed.rig(&surface)?.posed(&surface, &posed.pose);
+        }
+        if let Some(props) = scene_objects_mesh(&self.scene_objects)? {
+            surface = surface.merged(&props);
         }
         let surface = Arc::new(surface);
         let collider = Arc::new(MeshCollider::with_clearance(
@@ -530,6 +608,10 @@ impl FittingProject {
         copy.image_assets.retain(|asset| used(&asset.id));
         for asset in &mut copy.image_assets {
             asset.path = crate::document::portable_image(&asset.path, path)?;
+        }
+        for object in &mut copy.scene_objects {
+            object.validate()?;
+            object.path = crate::document::portable_object(&object.path, path)?;
         }
         let bytes = serde_json::to_vec_pretty(&copy).map_err(|e| e.to_string())?;
         crate::document::atomic_write(path, &bytes)

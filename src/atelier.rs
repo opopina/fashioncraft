@@ -88,6 +88,8 @@ mod pose_ui;
 mod quick_actions;
 #[path = "atelier/radial.rs"]
 mod radial;
+#[path = "atelier/scene_ui.rs"]
+mod scene_ui;
 #[path = "atelier/seam_links.rs"]
 mod seam_links;
 #[path = "atelier/seams_ui.rs"]
@@ -546,6 +548,15 @@ impl Atelier {
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
             Id::OpenPose => self.authoring.pose.open = !self.authoring.pose.open,
+            Id::OpenSceneObjects => self.authoring.scene.open = !self.authoring.scene.open,
+            Id::ClearSceneObjects => {
+                if self.project.scene_objects.is_empty() {
+                    return Err("The scene has no objects".into());
+                }
+                if !self.apply_scene_objects(vec![]) {
+                    return Err(self.status.clone());
+                }
+            }
             Id::ToggleSkeleton => {
                 self.authoring.pose.skeleton = !self.authoring.pose.skeleton;
             }
@@ -1114,6 +1125,7 @@ impl eframe::App for Atelier {
             settings::window(&ctx, &mut self.settings_open, &mut self.prefs, &mut changed);
             self.library_window(&ctx);
             self.pose_window(&ctx);
+            self.scene_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

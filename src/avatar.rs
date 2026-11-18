@@ -83,6 +83,16 @@ impl SurfaceMesh {
     /// for the solver: a single large triangle centred under the surface. One face, so cloth
     /// sliding on it never meets an interior edge (two coplanar faces would add edge contacts
     /// along their shared diagonal that resist sliding across it).
+    /// This mesh with `other` added as more triangles of the same obstacle.
+    pub fn merged(&self, other: &SurfaceMesh) -> Self {
+        let n = self.vertices.len();
+        let mut out = self.clone();
+        out.vertices.extend_from_slice(&other.vertices);
+        out.triangles
+            .extend(other.triangles.iter().map(|t| t.map(|i| i + n)));
+        out
+    }
+
     pub fn with_floor(&self, height: f64) -> Self {
         let (lo, hi) = self.vertices.iter().fold(
             (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),

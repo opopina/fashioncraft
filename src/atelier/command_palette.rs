@@ -112,6 +112,7 @@ fn aliases(id: CommandId) -> &'static str {
         ExportObjSelected => "export obj selected pieces mesh",
         ExportMdd => "export mdd point cache take animation lightwave",
         ExportMddZUp => "export mdd point cache maya 3ds max z up",
+        ExportUsd => "export usd usdz usda pixar apple ar quick look",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

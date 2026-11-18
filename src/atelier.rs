@@ -578,6 +578,7 @@ impl Atelier {
             Id::ExportObjSelected => self.open_obj_export(true)?,
             Id::ExportMdd => self.export_mdd(false)?,
             Id::ExportMddZUp => self.export_mdd(true)?,
+            Id::ExportUsd => self.export_usd()?,
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());

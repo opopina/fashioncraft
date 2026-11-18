@@ -69,7 +69,7 @@ const FILE: &[Item] = &[
             Todo("FBX…"),
             Todo("glTF…"),
             Todo("Alembic…"),
-            Todo("USD…"),
+            Run("USD…", C::ExportUsd),
             Todo("Point cache…"),
             Todo("Python script…"),
         ],
@@ -642,7 +642,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 103, "{done} of {all}");
+        assert!(done >= 104, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

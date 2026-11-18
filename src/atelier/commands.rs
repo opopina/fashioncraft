@@ -110,6 +110,7 @@ pub enum CommandId {
     ExportObjSelected,
     ExportMdd,
     ExportMddZUp,
+    ExportUsd,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1092,6 +1093,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportMddZUp,
         "animation.export_mdd_z_up",
         "Export the take as an MDD cache for Maya or 3ds Max…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportUsd,
+        "export.usd",
+        "Export USD / USDZ…",
         Simulation,
         None,
         NotUndoable,

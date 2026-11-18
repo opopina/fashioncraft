@@ -192,6 +192,55 @@ impl Atelier {
         Ok(())
     }
 
+    /// The garment, the avatar when shown, and the take when there is one, as a USDZ package
+    /// or a USDA layer.
+    pub(super) fn export_usd(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .add_filter("USDZ package", &["usdz"])
+            .add_filter("USD text layer", &["usda"])
+            .set_file_name("garment.usdz")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let take = self.current_take();
+        let bodies = match (take, &self.project.avatar_animation) {
+            (Some(take), Some(animation)) => Some(
+                avatar_animation::body_frames(&self.project, animation, take.frames.len())?
+                    .into_iter()
+                    .map(|b| b.vertices)
+                    .collect(),
+            ),
+            _ => None,
+        };
+        let avatar = self.scene.collider.surface.as_ref().clone();
+        let images: Vec<(String, PathBuf)> = self
+            .project
+            .image_assets
+            .iter()
+            .map(|a| (a.id.clone(), a.path.clone()))
+            .collect();
+        let scene = marvelous_cloth::usd_export::UsdScene {
+            template: &self.project.template,
+            garment: &self.scene.garment,
+            state: &self.scene.state,
+            images: &images,
+            avatar: self.prefs.garment_display.avatar.then_some(&avatar),
+            take: take.map(|t| (t, bodies)),
+        };
+        marvelous_cloth::usd_export::write(&scene, &path)?;
+        self.status = format!(
+            "Exported {}{}",
+            path.display(),
+            if take.is_some() {
+                " with the take as an animation"
+            } else {
+                ""
+            }
+        );
+        Ok(())
+    }
+
     /// Open the OBJ export options, for every piece or only the selected ones.
     pub(super) fn open_obj_export(&mut self, selected_only: bool) -> Result<(), String> {
         if selected_only && self.selected_panels().is_empty() {

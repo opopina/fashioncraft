@@ -191,10 +191,27 @@ impl Atelier {
             .iter()
             .map(|p| p.id.clone())
             .collect();
+        // On the board, to the right of the pieces already there.
+        let template = &self.project.template;
+        let (mut right, mut top) = (0f64, f64::INFINITY);
+        for (i, panel) in template.panels.iter().enumerate() {
+            let origin = marvelous_cloth::authoring::layout(template, i);
+            right = right.max(origin.x + panel.pattern.width);
+            top = top.min(origin.y);
+        }
+        let at = DVec2::new(
+            if template.panels.is_empty() {
+                0.
+            } else {
+                right + 0.1
+            },
+            if top.is_finite() { top } else { 0. },
+        );
+        let points: Vec<DVec2> = outline.iter().map(|p| *p - shift + at).collect();
         self.playing = false;
         let command = Command::Polygon {
-            tangents: vec![DVec2::ZERO; outline.len()],
-            points: outline,
+            tangents: vec![DVec2::ZERO; points.len()],
+            points,
             meshing: MeshingSettings {
                 target_edge_m: self.mesh_mm * 0.001,
                 anisotropy: self.anisotropy,

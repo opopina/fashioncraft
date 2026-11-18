@@ -305,3 +305,64 @@ fn a_baked_look_is_one_material_with_its_image_and_coordinates() {
         assert!((t[0] - a.x).abs() < 1e-6 && (t[1] - (1. - a.y)).abs() < 1e-6);
     }
 }
+
+#[test]
+fn quads_join_triangle_pairs_without_losing_or_turning_any() {
+    let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    let scene = project.compile().unwrap();
+    let triangles =
+        marvelous_cloth::gltf_export::front_triangles(&project.template, &scene.garment);
+    let x = &scene.state.x;
+    let piece = &scene.garment.panels[0];
+    let tris = &triangles[piece.triangles.clone()];
+    let faces = obj_export::quads(x, tris);
+    let area = |a: usize, b: usize, c: usize| (x[b] - x[a]).cross(x[c] - x[a]);
+    let quads = faces.iter().filter(|f| f.len() == 4).count();
+    let singles = faces.iter().filter(|f| f.len() == 3).count();
+    // Every triangle once: in a quad or on its own.
+    assert_eq!(2 * quads + singles, tris.len());
+    let joined = 2. * quads as f64 / tris.len() as f64;
+    assert!(
+        joined > 0.7,
+        "only {joined:.2} of the triangles are in quads"
+    );
+    // The same surface, facing the same way.
+    let total: DVec3 = tris.iter().map(|t| area(t[0], t[1], t[2])).sum();
+    let mut covered = DVec3::ZERO;
+    for f in &faces {
+        let n = area(f[0], f[1], f[2])
+            + if f.len() == 4 {
+                area(f[0], f[2], f[3])
+            } else {
+                DVec3::ZERO
+            };
+        covered += n;
+        if f.len() == 4 {
+            let mut distinct = f.clone();
+            distinct.sort();
+            distinct.dedup();
+            assert_eq!(distinct.len(), 4);
+            assert!(area(f[0], f[1], f[2]).dot(area(f[0], f[2], f[3])) > 0.);
+        }
+    }
+    assert!((covered - total).length() < 1e-12 * total.length().max(1.));
+    // Written as faces of four corners.
+    let export = ObjScene {
+        template: &project.template,
+        garment: &scene.garment,
+        state: &scene.state,
+        images: &[],
+        avatar: None,
+        atlas: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tee.obj");
+    let options = ObjOptions {
+        quads: true,
+        ..Default::default()
+    };
+    let summary = obj_export::write(&export, &options, &path).unwrap();
+    assert!(summary.faces < triangles.len());
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(lines(&text, "f ").iter().any(|f| f.len() == 4));
+}

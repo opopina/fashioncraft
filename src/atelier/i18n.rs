@@ -673,6 +673,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Clone as piece" => "Clonar como pieza",
         "Make this the outline" => "Usar como contorno",
         "Bake the look" => "Hornear el aspecto",
+        "Quads" => "Cuadriláteros",
+        "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one" => {
+            "Triángulos vecinos unidos en cuadriláteros donde forman uno plano, convexo y casi rectangular"
+        }
         "Colours, fabric textures and prints painted into one image, with every piece packed into it" => {
             "Colores, texturas de tejido y estampados pintados en una sola imagen, con todas las piezas dentro"
         }

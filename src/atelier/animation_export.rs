@@ -427,6 +427,8 @@ impl Atelier {
                 }
             });
             ui.checkbox(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece"));
+            ui.checkbox(&mut o.quads, i18n::tr(ui_lang, "Quads"))
+                .on_hover_text(i18n::tr(ui_lang, "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
             ui.horizontal(|ui| {
                 ui.label(i18n::tr(ui_lang, "Units"));

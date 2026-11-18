@@ -66,6 +66,8 @@ pub struct ObjOptions {
     pub z_up: bool,
     /// One object per piece instead of one object with a group per piece.
     pub per_piece: bool,
+    /// Neighbouring triangles joined into quads where they make a flat, convex one.
+    pub quads: bool,
     /// Only these pieces; all of them when absent.
     pub pieces: Option<BTreeSet<String>>,
 }
@@ -95,6 +97,75 @@ pub struct ObjSummary {
 
 /// Thickness used for a fabric without a look thickness, metres.
 const DEFAULT_THICKNESS_M: f64 = 0.001;
+
+/// `triangles` (wound alike) as faces, neighbouring pairs joined into quads where the two make
+/// a convex, nearly flat quad with every corner between 45° and 135°. The most nearly
+/// rectangular quads are taken first; triangles left over stay triangles.
+/// Every face keeps the triangles' winding.
+pub fn quads(x: &[DVec3], triangles: &[[usize; 3]]) -> Vec<Vec<usize>> {
+    let mut edges: HashMap<(usize, usize), Vec<(usize, usize)>> = HashMap::new();
+    for (t, tri) in triangles.iter().enumerate() {
+        for k in 0..3 {
+            let (a, b) = (tri[k], tri[(k + 1) % 3]);
+            edges.entry((a.min(b), a.max(b))).or_default().push((t, k));
+        }
+    }
+    let normal = |tri: &[usize; 3]| {
+        (x[tri[1]] - x[tri[0]])
+            .cross(x[tri[2]] - x[tri[0]])
+            .normalize_or_zero()
+    };
+    let mut candidates = vec![];
+    for pair in edges.values() {
+        let [(t1, k1), (t2, k2)] = pair[..] else {
+            continue;
+        };
+        let (a, b) = (&triangles[t1], &triangles[t2]);
+        // Wound alike: the shared edge runs opposite ways in the two.
+        if a[k1] != b[(k2 + 1) % 3] {
+            continue;
+        }
+        if normal(a).dot(normal(b)) < 30f64.to_radians().cos() {
+            continue;
+        }
+        let (p, q, r) = (a[k1], a[(k1 + 1) % 3], a[(k1 + 2) % 3]);
+        let s = b[(k2 + 2) % 3];
+        let quad = [p, s, q, r];
+        // Convex: every corner turns the same way about the mean normal; score by how far its
+        // corners are from right angles.
+        let n = normal(a) + normal(b);
+        let mut convex = true;
+        let mut score = 0.;
+        for i in 0..4 {
+            let (o, prev, next) = (x[quad[i]], x[quad[(i + 3) % 4]], x[quad[(i + 1) % 4]]);
+            let (u, v) = (next - o, prev - o);
+            let off = (u.angle_between(v) - std::f64::consts::FRAC_PI_2).abs();
+            // Convex, and no corner sharper than 45° or flatter than 135°.
+            convex &= u.cross(v).dot(n) > 0. && off <= std::f64::consts::FRAC_PI_4;
+            score += off;
+        }
+        if convex {
+            candidates.push((score, t1, t2, quad));
+        }
+    }
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut used = vec![false; triangles.len()];
+    let mut faces = vec![];
+    for (_, t1, t2, quad) in candidates {
+        if used[t1] || used[t2] {
+            continue;
+        }
+        used[t1] = true;
+        used[t2] = true;
+        faces.push(quad.to_vec());
+    }
+    for (t, tri) in triangles.iter().enumerate() {
+        if !used[t] {
+            faces.push(tri.to_vec());
+        }
+    }
+    faces
+}
 
 fn mtl_color(rgb: [u8; 3]) -> String {
     format!(
@@ -259,19 +330,23 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
                 vn_count + s * count + k + 1
             )
         };
+        let piece_faces: Vec<Vec<usize>> = if options.quads {
+            quads(x, &triangles[piece.triangles.clone()])
+        } else {
+            triangles[piece.triangles.clone()]
+                .iter()
+                .map(|t| t.to_vec())
+                .collect()
+        };
         for s in 0..sides.len() {
-            for t in &triangles[piece.triangles.clone()] {
-                let k = t.map(|i| index[&i]);
+            for face in &piece_faces {
+                let mut k: Vec<usize> = face.iter().map(|i| index[i]).collect();
                 // The back copy faces the other way.
-                let k = if s == 1 { [k[0], k[2], k[1]] } else { k };
-                writeln!(
-                    obj,
-                    "f {} {} {}",
-                    corner(s, k[0]),
-                    corner(s, k[1]),
-                    corner(s, k[2])
-                )
-                .unwrap();
+                if s == 1 {
+                    k[1..].reverse();
+                }
+                let corners: Vec<String> = k.iter().map(|k| corner(s, *k)).collect();
+                writeln!(obj, "f {}", corners.join(" ")).unwrap();
                 faces += 1;
             }
         }

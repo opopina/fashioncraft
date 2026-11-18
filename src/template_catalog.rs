@@ -206,6 +206,7 @@ impl Selection {
             saved_views: current.saved_views.clone(),
             board_guides: current.board_guides.clone(),
             image_assets: current.image_assets.clone(),
+            color_palette: current.color_palette.clone(),
         };
         let scene = project.compile()?;
         Ok(Prepared { project, scene })

@@ -206,3 +206,19 @@ fn fabric_textures_are_validated_and_turn_with_their_angle() {
     let text = serde_json::to_string(&FabricAppearance::default()).unwrap();
     assert!(!text.contains("texture"));
 }
+
+#[test]
+fn look_thickness_is_bounded_and_absent_by_default() {
+    use marvelous_cloth::garment::appearance::{FabricAppearance, MAX_RENDER_THICKNESS_MM};
+    let mut a = FabricAppearance {
+        render_thickness_mm: 3.,
+        ..Default::default()
+    };
+    a.validate().unwrap();
+    for broken in [-0.1, MAX_RENDER_THICKNESS_MM + 0.1, f64::NAN] {
+        a.render_thickness_mm = broken;
+        assert!(a.validate().is_err(), "{broken}");
+    }
+    let text = serde_json::to_string(&FabricAppearance::default()).unwrap();
+    assert!(!text.contains("render_thickness"));
+}

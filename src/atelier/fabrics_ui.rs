@@ -13,7 +13,7 @@ pub(super) struct FabricDraft {
     extension: [f64; 2],
     preset: Option<usize>,
     all_panels: bool,
-    appearance: Option<marvelous_cloth::garment::appearance::FabricAppearance>,
+    pub(super) appearance: Option<marvelous_cloth::garment::appearance::FabricAppearance>,
 }
 impl Atelier {
     pub(super) fn fabric_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
@@ -55,29 +55,41 @@ impl Atelier {
             });
         }
         let mut appearance_targets = Vec::new();
-        let mut texture = TextureRequest {
-            name: self
-                .authoring
-                .fabric_draft
-                .as_ref()
-                .and_then(|d| d.appearance.as_ref()?.texture.as_ref())
-                .and_then(|t| {
-                    self.project
-                        .image_assets
-                        .iter()
-                        .find(|a| a.id == t.asset_id)
-                })
-                .and_then(|a| a.path.file_stem())
-                .map(|s| s.to_string_lossy().into_owned()),
-            pick: false,
+        let texture_name = self
+            .authoring
+            .fabric_draft
+            .as_ref()
+            .and_then(|d| d.appearance.as_ref()?.texture.as_ref())
+            .and_then(|t| {
+                self.project
+                    .image_assets
+                    .iter()
+                    .find(|a| a.id == t.asset_id)
+            })
+            .and_then(|a| a.path.file_stem())
+            .map(|s| s.to_string_lossy().into_owned());
+        let mut extras = AppearanceExtras {
+            texture_name,
+            pick_texture: false,
+            palette: Some(&mut self.project.color_palette),
+            eyedropper: self.authoring.eyedropper,
         };
         let appearance_action = appearance_controls(
             ui,
             &mut self.authoring.fabric_draft.as_mut().unwrap().appearance,
             &mut appearance_targets,
-            &mut texture,
+            &mut extras,
         );
-        if texture.pick {
+        let (pick_texture, eyedropper) = (extras.pick_texture, extras.eyedropper);
+        if eyedropper != self.authoring.eyedropper {
+            self.authoring.eyedropper = eyedropper;
+            self.status = if eyedropper {
+                "Eyedropper: click a piece in the 3D view".into()
+            } else {
+                String::new()
+            };
+        }
+        if pick_texture {
             self.pick_fabric_texture();
         }
         for (name, rect) in appearance_targets {
@@ -276,18 +288,23 @@ fn value(
     .inner
 }
 
-/// The fabric texture's image name for the controls, and whether a new image was asked for.
+/// What the appearance controls need beyond the draft: the texture's image name, the
+/// project palette and whether the eyedropper is on; and what they ask for in return.
 #[derive(Default)]
-struct TextureRequest {
-    name: Option<String>,
-    pick: bool,
+struct AppearanceExtras<'a> {
+    texture_name: Option<String>,
+    /// Set when a new texture image was asked for.
+    pick_texture: bool,
+    palette: Option<&'a mut Vec<[u8; 3]>>,
+    /// Whether the eyedropper is waiting for a click on the 3D view; the controls toggle it.
+    eyedropper: bool,
 }
 
 fn appearance_controls(
     ui: &mut egui::Ui,
     draft: &mut Option<marvelous_cloth::garment::appearance::FabricAppearance>,
     targets: &mut Vec<(&'static str, egui::Rect)>,
-    texture: &mut TextureRequest,
+    extras: &mut AppearanceExtras,
 ) -> Option<Option<marvelous_cloth::garment::appearance::FabricAppearance>> {
     ui.strong("Fabric appearance");
     ui.small("Shared by panels using this fabric. Does not change its mechanics.");
@@ -306,7 +323,17 @@ fn appearance_controls(
             #[cfg(test)]
             super::authoring_smoke::widget_harness::named(ui, &swatch, "appearance.color");
             targets.push(("appearance.color", swatch.rect));
+            if ui
+                .selectable_label(extras.eyedropper, "Pick")
+                .on_hover_text("Eyedropper: click a piece in the 3D view to take its colour")
+                .clicked()
+            {
+                extras.eyedropper = !extras.eyedropper;
+            }
         });
+        if let Some(palette) = extras.palette.as_deref_mut() {
+            super::palette_ui::palette_row(ui, palette, &mut value.color_srgb);
+        }
         ui.horizontal(|ui| {
             for (channel, label, key) in [
                 (0, "R", "appearance.color.red"),
@@ -385,16 +412,29 @@ fn appearance_controls(
             let _: &Weave = w;
         }
         ui.horizontal(|ui| {
+            ui.label("Look thickness");
+            ui.add(
+                egui::DragValue::new(&mut value.render_thickness_mm)
+                    .range(0.0..=marvelous_cloth::garment::appearance::MAX_RENDER_THICKNESS_MM)
+                    .speed(0.05)
+                    .fixed_decimals(2)
+                    .suffix(" mm"),
+            )
+            .on_hover_text(
+                "Draw the cloth this thick, with a rim along its outline; the simulation is unchanged",
+            );
+        });
+        ui.horizontal(|ui| {
             ui.label("Texture");
             if value.texture.is_some() {
-                ui.label(texture.name.as_deref().unwrap_or("image"));
+                ui.label(extras.texture_name.as_deref().unwrap_or("image"));
             }
             let pick = if value.texture.is_some() {
                 "Replace…"
             } else {
                 "Image…"
             };
-            texture.pick = ui
+            extras.pick_texture = ui
                 .button(pick)
                 .on_hover_text("Repeat a PNG image over the fabric along its grain")
                 .clicked();

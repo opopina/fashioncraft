@@ -174,6 +174,43 @@ impl Atelier {
         textures
     }
 
+    /// Cloth positions moved onto one face of the fabric: half its look thickness towards the
+    /// front (or the back). `None` when no fabric looks thick, so the simulated surface is it.
+    pub(super) fn face_positions(&self, front: bool) -> Option<Vec<glam::DVec3>> {
+        let template = &self.project.template;
+        let garment = &self.scene.garment;
+        let half = |panel: &str| {
+            let fabric = &template.panels.iter().find(|p| p.id == panel)?.fabric;
+            let mm = template.fabric_appearance.get(fabric)?.render_thickness_mm;
+            (mm > 0.).then_some(mm / 2000.)
+        };
+        if !garment.panels.iter().any(|p| half(&p.id).is_some()) {
+            return None;
+        }
+        let x = &self.scene.state.x;
+        let mut normals = vec![glam::DVec3::ZERO; x.len()];
+        for t in &garment.mesh.triangles {
+            let [a, b, c] = t.vertices.map(|v| x[v]);
+            let n = (b - a).cross(c - a);
+            for v in t.vertices {
+                normals[v] += n;
+            }
+        }
+        let mut moved = x.clone();
+        for panel in &garment.panels {
+            let Some(half) = half(&panel.id) else {
+                continue;
+            };
+            // The front faces away from the winding normal, towards it on a flipped piece.
+            let flipped = template.flipped_panels.contains(&panel.id);
+            let sign = if flipped == front { 1. } else { -1. };
+            for v in panel.vertices.clone() {
+                moved[v] += normals[v].normalize_or_zero() * (sign * half);
+            }
+        }
+        Some(moved)
+    }
+
     /// Images and lifted cloth triangles of the graphics on the pieces on show.
     pub(super) fn graphic_draws(
         &mut self,
@@ -187,6 +224,8 @@ impl Atelier {
             .filter(|g| self.panel_shown(&g.panel_id))
             .cloned()
             .collect();
+        let front = self.face_positions(true);
+        let back = self.face_positions(false);
         let mut draws = vec![];
         for placement in placements {
             let Some(Ok(loaded)) = self.graphic(ctx, &placement.asset_id) else {
@@ -198,13 +237,28 @@ impl Atelier {
                 .template
                 .flipped_panels
                 .contains(&placement.panel_id);
-            if let Ok(triangles) =
-                placement.graphic_triangles(&self.scene.garment, &self.scene.state.x, flipped)
-            {
+            let x = match placement.side {
+                GraphicSide::Front => front.as_ref(),
+                GraphicSide::Back => back.as_ref(),
+            }
+            .unwrap_or(&self.scene.state.x);
+            if let Ok(triangles) = placement.graphic_triangles(&self.scene.garment, x, flipped) {
                 draws.push((image, triangles));
             }
         }
         draws
+    }
+
+    /// The decoded image of an asset, when it loads.
+    pub(super) fn image_of(
+        &mut self,
+        ctx: &egui::Context,
+        asset: &str,
+    ) -> Option<Arc<GraphicImage>> {
+        match self.graphic(ctx, asset)? {
+            Ok(loaded) => Some(loaded.image.clone()),
+            Err(_) => None,
+        }
     }
 
     /// The image of each material's fabric texture, by material index.

@@ -223,3 +223,22 @@ fn images_used_by_fabric_textures_are_kept_with_the_project() {
     assert_eq!(loaded.image_assets.len(), 1);
     assert!(loaded.image_assets[0].path.exists());
 }
+
+#[test]
+fn the_colour_palette_travels_with_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut project = project();
+    let file = dir.path().join("p.json");
+    project.save(&file).unwrap();
+    assert!(
+        !std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("color_palette")
+    );
+    project.color_palette = vec![[10, 20, 30], [250, 240, 230]];
+    project.save(&file).unwrap();
+    assert_eq!(
+        FittingProject::load(&file).unwrap().color_palette,
+        vec![[10, 20, 30], [250, 240, 230]]
+    );
+}

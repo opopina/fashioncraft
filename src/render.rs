@@ -249,6 +249,17 @@ struct Surface {
     map: [f32; 2],
 }
 
+/// A face of a fabric that looks thick, kept to draw the rim along its free edges.
+#[derive(Clone, Copy)]
+struct ThickFace {
+    face: usize,
+    /// Offset of the front face from the simulated surface along the smooth normal, m.
+    towards_front: f32,
+    color: [f32; 3],
+    roughness: f32,
+    look: Option<Surface>,
+}
+
 /// The vertex floats of a surface without a fabric texture.
 const NO_MAP: [f32; 4] = [0., 0., -1., 0.];
 
@@ -1069,6 +1080,7 @@ impl Viewport {
                 data.extend_from_slice(&surface.map);
             }
         };
+        let mut rims: Vec<ThickFace> = vec![];
         for (face, t) in mesh.triangles.iter().enumerate() {
             if display
                 .visible_faces
@@ -1111,24 +1123,114 @@ impl Viewport {
             );
             // A fabric's own look (not a diagnostic colour): its back face, flipped pieces
             // swapping the two, and its weave along the grain.
+            let flipped = display
+                .flipped_faces
+                .is_some_and(|f| f.get(face).copied().unwrap_or(false));
             let surface = (roughness >= 0.).then(|| {
                 face_surface(
                     appearance.expect("custom optics have an appearance"),
                     material.grain_degrees,
                     t.vertices.map(|i| mesh.uv[i]),
-                    display
-                        .flipped_faces
-                        .is_some_and(|f| f.get(face).copied().unwrap_or(false)),
+                    flipped,
                     layers.get(t.material).copied().flatten(),
                 )
             });
-            triangle(
-                t.vertices.map(|i| state.x[i].as_vec3()),
-                surface.map_or(color, |(front, _)| front),
-                wire,
-                Some(t.vertices.map(|i| smooth[i])),
+            let points = t.vertices.map(|i| state.x[i].as_vec3());
+            let normals = t.vertices.map(|i| smooth[i]);
+            let front_color = surface.map_or(color, |(front, _)| front);
+            // A fabric that looks thick: its faces sit half the thickness either side of the
+            // simulated surface, the front one towards the front.
+            let half = surface
+                .and(appearance)
+                .map_or(0., |a| (a.render_thickness_mm / 2000.) as f32);
+            if half > 0. {
+                let towards_front = if flipped { half } else { -half };
+                for side in [1., -1.] {
+                    triangle(
+                        [0, 1, 2].map(|k| points[k] + normals[k] * (towards_front * side)),
+                        front_color,
+                        wire,
+                        Some(normals),
+                        roughness,
+                        surface.map(|(_, s)| s),
+                    );
+                }
+                rims.push(ThickFace {
+                    face,
+                    towards_front,
+                    color: front_color,
+                    roughness,
+                    look: surface.map(|(_, s)| s),
+                });
+            } else {
+                triangle(
+                    points,
+                    front_color,
+                    wire,
+                    Some(normals),
+                    roughness,
+                    surface.map(|(_, s)| s),
+                );
+            }
+        }
+        // The rim of thick fabrics: a band joining their two faces along each free edge.
+        let mut edges = std::collections::HashMap::<(usize, usize), (u32, usize)>::new();
+        for (k, thick) in rims.iter().enumerate() {
+            let v = mesh.triangles[thick.face].vertices;
+            for e in 0..3 {
+                let (a, b) = (v[e], v[(e + 1) % 3]);
+                edges.entry((a.min(b), a.max(b))).or_insert((0, k)).0 += 1;
+            }
+        }
+        for (&(a, b), &(count, k)) in &edges {
+            if count != 1 {
+                continue;
+            }
+            let ThickFace {
+                face,
+                towards_front,
+                color: rim_color,
                 roughness,
-                surface.map(|(_, s)| s),
+                look,
+            } = rims[k];
+            let v = mesh.triangles[face].vertices;
+            let corner = |i: usize| v.iter().position(|&c| c == i).unwrap_or(0);
+            let (ca, cb) = (corner(a), corner(b));
+            let third = v.into_iter().find(|&i| i != a && i != b).unwrap_or(a);
+            let (pa, pb) = (state.x[a].as_vec3(), state.x[b].as_vec3());
+            let along = pb - pa;
+            let mut outward = along.cross(smooth[a] + smooth[b]).normalize_or_zero();
+            if outward.dot(state.x[third].as_vec3() - pa) > 0. {
+                outward = -outward;
+            }
+            let shift =
+                |i: usize, side: f32| state.x[i].as_vec3() + smooth[i] * (towards_front * side);
+            // The rim shows the fabric's front colour, weave and texture, stretched across
+            // its width: each corner takes the material coordinates of its outline point.
+            let rim = |corners: [usize; 3]| {
+                look.map(|s| Surface {
+                    back: rim_color,
+                    uv: corners.map(|c| s.uv[c]),
+                    map_uv: corners.map(|c| s.map_uv[c]),
+                    ..s
+                })
+            };
+            let n = Some([outward; 3]);
+            triangle(
+                [shift(a, 1.), shift(b, 1.), shift(b, -1.)],
+                rim_color,
+                false,
+                n,
+                roughness,
+                rim([ca, cb, cb]),
+            );
+            triangle(
+                [shift(a, 1.), shift(b, -1.), shift(a, -1.)],
+                rim_color,
+                false,
+                n,
+                roughness,
+                rim([ca, cb, ca]),
             );
         }
         if let Some(schematic) = display.schematic {

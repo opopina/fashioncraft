@@ -386,15 +386,20 @@ impl Atelier {
             {
                 self.authoring.radial.open(&ctx, at);
             }
-            if self.authoring.tool == Tool::Grab {
-                if self.authoring.pin_tool.enabled {
-                    self.pin_interaction(&response, rect);
-                } else {
-                    self.pick_and_drag(&response, rect);
+            if self.authoring.eyedropper {
+                // The eyedropper takes the next click; nothing else reacts meanwhile.
+                self.eyedropper_interaction(&ctx, &response, rect);
+            } else {
+                if self.authoring.tool == Tool::Grab {
+                    if self.authoring.pin_tool.enabled {
+                        self.pin_interaction(&response, rect);
+                    } else {
+                        self.pick_and_drag(&response, rect);
+                    }
                 }
+                self.place_interaction(&response, rect);
+                self.edge_interaction(&response, rect);
             }
-            self.place_interaction(&response, rect);
-            self.edge_interaction(&response, rect);
         }
         self.smoke_grabbed |= self.grab.is_some();
         if self.drag_test && self.smoke_point.is_none() {
@@ -436,10 +441,11 @@ impl Atelier {
                 .filter(|t| self.panel_shown(&t.panel_id))
                 .cloned()
                 .collect();
+            let front = self.face_positions(true);
             marvelous_cloth::garment::trims::trim_triangles(
                 &shown,
                 &self.scene.garment,
-                &self.scene.state.x,
+                front.as_ref().unwrap_or(&self.scene.state.x),
             )
         } else {
             vec![]

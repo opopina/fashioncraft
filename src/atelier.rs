@@ -66,6 +66,8 @@ mod layout;
 mod line_springs_ui;
 #[path = "atelier/measure.rs"]
 mod measure;
+#[path = "atelier/palette_ui.rs"]
+mod palette_ui;
 #[path = "atelier/perf.rs"]
 mod perf;
 #[path = "atelier/pin_tool.rs"]

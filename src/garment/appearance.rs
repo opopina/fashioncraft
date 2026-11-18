@@ -18,7 +18,14 @@ pub struct FabricAppearance {
     /// An image repeated over both faces along the grain, tinted by their colours.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub texture: Option<FabricTexture>,
+    /// How thick the cloth looks, mm: its two faces are drawn this far apart with a rim along
+    /// the outline. Zero draws one surface. Never changes the simulation.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub render_thickness_mm: f64,
 }
+
+/// Thickest a fabric may look, mm.
+pub const MAX_RENDER_THICKNESS_MM: f64 = 20.;
 
 /// An image tiled over a fabric. Its pixels live in the project's image assets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -115,6 +122,7 @@ impl Default for FabricAppearance {
             back_color_srgb: None,
             weave: None,
             texture: None,
+            render_thickness_mm: 0.,
         }
     }
 }
@@ -129,6 +137,11 @@ impl FabricAppearance {
             return Err(
                 "A weave needs a thread spacing of 0.05 to 20 mm and a contrast of 0 to 1".into(),
             );
+        }
+        if !(0.0..=MAX_RENDER_THICKNESS_MM).contains(&self.render_thickness_mm) {
+            return Err(format!(
+                "A fabric's look thickness must be 0 to {MAX_RENDER_THICKNESS_MM} mm"
+            ));
         }
         if let Some(t) = &self.texture {
             let id_ok = !t.asset_id.is_empty()

@@ -51,6 +51,9 @@ pub struct FittingProject {
     /// older documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub image_assets: Vec<ImageAsset>,
+    /// Colours saved for reuse on fabrics, as sRGB bytes. Absent in older documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub color_palette: Vec<[u8; 3]>,
 }
 
 /// An image a graphic placement or a fabric texture refers to by `id`. Relative paths resolve against the
@@ -322,6 +325,7 @@ impl FittingProject {
             saved_views: Vec::new(),
             board_guides: BoardGuides::default(),
             image_assets: Vec::new(),
+            color_palette: Vec::new(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {

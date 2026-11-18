@@ -37,6 +37,8 @@ pub(super) struct AuthoringUi {
     pub dart: Option<DartDraft>,
     /// Decoded images of the graphics on pieces.
     pub graphic_images: super::graphics_ui::GraphicImages,
+    /// The fabric eyedropper waits for a click on the 3D view.
+    pub eyedropper: bool,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,

@@ -273,6 +273,8 @@ pub fn placement_for(
 pub struct Sidecar {
     pub set: ArrangementSet,
     pub landmarks: Vec<Landmark>,
+    /// The landmarks were estimated from the avatar's shape, not shipped with it.
+    pub estimated: bool,
 }
 
 impl Sidecar {
@@ -282,12 +284,36 @@ impl Sidecar {
     }
 }
 
-/// Load the sidecar for an avatar; `Ok(None)` when the avatar ships no anchors.
+/// The bundled MakeHuman anchors, which name only joint landmarks.
+const TEMPLATE_ANCHORS: &str = include_str!("../../assets/makehuman/arrangement.json");
+
+/// Anchors for an avatar that ships none: the bundled anchors on joints estimated from its
+/// shape. `None` when the avatar does not look like a standing body.
+pub fn estimated_sidecar(surface: &crate::avatar::SurfaceMesh) -> Option<Sidecar> {
+    let landmarks: Vec<Landmark> = crate::avatar_landmarks::estimate(surface)
+        .ok()?
+        .into_iter()
+        .map(|(id, position_m)| Landmark { id, position_m })
+        .collect();
+    let set = ArrangementSet::from_json(TEMPLATE_ANCHORS).ok()?;
+    set.validate(&set.frame.clone(), &landmarks).ok()?;
+    Some(Sidecar {
+        set,
+        landmarks,
+        estimated: true,
+    })
+}
+
+/// Load the sidecar for an avatar: the anchors and landmarks shipped next to it, or else
+/// anchors on joints estimated from its shape. `Ok(None)` when it ships none and its shape
+/// does not allow an estimate.
 pub fn load_sidecar(avatar_path: &std::path::Path) -> Result<Option<Sidecar>, String> {
     let dir = avatar_path.parent().unwrap_or(std::path::Path::new("."));
     let anchors = dir.join("arrangement.json");
     if !anchors.exists() {
-        return Ok(None);
+        return Ok(crate::avatar::SurfaceMesh::load_obj(avatar_path)
+            .ok()
+            .and_then(|surface| estimated_sidecar(&surface)));
     }
     let set = ArrangementSet::from_json(
         &std::fs::read_to_string(&anchors).map_err(|e| format!("{}: {e}", anchors.display()))?,
@@ -310,7 +336,11 @@ pub fn load_sidecar(avatar_path: &std::path::Path) -> Result<Option<Sidecar>, St
         })
         .collect();
     set.validate(&set.frame.clone(), &landmarks)?;
-    Ok(Some(Sidecar { set, landmarks }))
+    Ok(Some(Sidecar {
+        set,
+        landmarks,
+        estimated: false,
+    }))
 }
 
 /// Rest outline of a panel in material coordinates: its polygon, or its rectangle.

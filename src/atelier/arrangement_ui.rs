@@ -46,7 +46,7 @@ impl Atelier {
                 let sidecar = match &self.authoring.arrangement.loaded {
                     Some((_, Ok(Some(s)))) => s.clone(),
                     Some((_, Ok(None))) => {
-                        ui.small("This avatar ships no arrangement anchors (arrangement.json next to its OBJ).");
+                        ui.small("This avatar ships no arrangement anchors (arrangement.json next to its OBJ), and its shape does not allow estimating them: it should stand Y up, facing +Z, arms away from the body.");
                         return;
                     }
                     Some((_, Err(e))) => {
@@ -55,6 +55,9 @@ impl Atelier {
                     }
                     None => return,
                 };
+                if sidecar.estimated {
+                    ui.small("Anchors on joints estimated from the avatar's shape.");
+                }
                 let anchors: Vec<AnchorChoice> = sidecar
                     .set
                     .anchors

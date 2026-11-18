@@ -390,6 +390,8 @@ impl Atelier {
             if self.authoring.eyedropper {
                 // The eyedropper takes the next click; nothing else reacts meanwhile.
                 self.eyedropper_interaction(&ctx, &response, rect);
+            } else if self.ik_interaction(&response, rect) {
+                // A hand or foot of the pose being edited is being dragged.
             } else {
                 if self.authoring.tool == Tool::Grab {
                     if self.authoring.pin_tool.enabled {

@@ -309,6 +309,89 @@ impl Rig {
     }
 }
 
+/// Limbs inverse kinematics can move: the two bones, the end they bring to a target.
+pub const LIMBS: [(&str, &str, &str); 4] = [
+    ("Left hand", "upper_arm.L", "forearm.L"),
+    ("Right hand", "upper_arm.R", "forearm.R"),
+    ("Left foot", "thigh.L", "shin.L"),
+    ("Right foot", "thigh.R", "shin.R"),
+];
+
+fn euler_degrees(q: DQuat) -> [f64; 3] {
+    let (x, y, z) = q.to_euler(EulerRot::XYZ);
+    [x.to_degrees(), y.to_degrees(), z.to_degrees()]
+}
+
+impl Rig {
+    /// Where the end of the two-bone limb `upper → lower` is in `pose`.
+    pub fn limb_end(&self, pose: &Pose, lower: &str) -> Option<DVec3> {
+        let i = self.bone(lower)?;
+        let t = self.transforms(|b| pose.rotation(b));
+        Some(t[i].transform_point3(self.bones[i].tail))
+    }
+
+    /// `pose` with the limb `upper → lower` turned so its end reaches `target`, or points at
+    /// it when it is out of reach. The limb keeps the plane it bends in.
+    pub fn reach(
+        &self,
+        pose: &Pose,
+        upper: &str,
+        lower: &str,
+        target: DVec3,
+    ) -> Result<Pose, String> {
+        let (u, l) = (
+            self.bone(upper).ok_or("Unknown bone")?,
+            self.bone(lower).ok_or("Unknown bone")?,
+        );
+        if self.bones[l].parent != Some(u) || !target.is_finite() {
+            return Err("Reach needs a bone, its child and a finite target".into());
+        }
+        let t = self.transforms(|b| pose.rotation(b));
+        let rot = |m: &DAffine3| DQuat::from_mat3(&m.matrix3).normalize();
+        let shoulder = t[u].transform_point3(self.bones[u].head);
+        let elbow = t[l].transform_point3(self.bones[l].head);
+        let wrist = t[l].transform_point3(self.bones[l].tail);
+        let (a, b) = (shoulder.distance(elbow), elbow.distance(wrist));
+        let to = target - shoulder;
+        let d = to.length().clamp((a - b).abs() + 1e-6, a + b - 1e-6);
+        let dir = to.normalize_or_zero();
+        if dir == DVec3::ZERO {
+            return Err("The target is at the limb's root".into());
+        }
+        // The plane the limb bends in, and the side the joint bends to.
+        let mut normal = (elbow - shoulder).cross(wrist - elbow);
+        if normal.length_squared() < 1e-12 {
+            normal = (wrist - shoulder).cross(DVec3::Z);
+        }
+        let side = normal.cross(dir).normalize_or_zero();
+        let cos = ((a * a + d * d - b * b) / (2. * a * d)).clamp(-1., 1.);
+        let new_elbow = shoulder + dir * (a * cos) + side * (a * (1. - cos * cos).sqrt());
+        let new_wrist = shoulder + dir * d;
+        // Turn the upper bone (in world space) so the elbow lands, then the lower one.
+        let parent_rot = self.bones[u].parent.map_or(DQuat::IDENTITY, |p| rot(&t[p]));
+        let delta = DQuat::from_rotation_arc(
+            (elbow - shoulder).normalize(),
+            (new_elbow - shoulder).normalize(),
+        );
+        let upper_local =
+            (parent_rot.inverse() * delta * parent_rot * pose.rotation(upper)).normalize();
+        let mut next = pose.clone();
+        next.0.insert(upper.to_string(), euler_degrees(upper_local));
+        let t2 = self.transforms(|b| next.rotation(b));
+        let moved_wrist = t2[l].transform_point3(self.bones[l].tail);
+        let moved_elbow = t2[l].transform_point3(self.bones[l].head);
+        let upper_rot = rot(&t2[u]);
+        let delta = DQuat::from_rotation_arc(
+            (moved_wrist - moved_elbow).normalize(),
+            (new_wrist - moved_elbow).normalize(),
+        );
+        let lower_local =
+            (upper_rot.inverse() * delta * upper_rot * pose.rotation(lower)).normalize();
+        next.0.insert(lower.to_string(), euler_degrees(lower_local));
+        Ok(next)
+    }
+}
+
 /// Ready-made poses: rotations that bring the arms down or out, or bend the knees a little.
 pub fn preset(name: &str) -> Option<Pose> {
     let p = |entries: &[(&str, [f64; 3])]| {

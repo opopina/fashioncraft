@@ -21,7 +21,12 @@ pub(super) struct PoseUi {
     error: Option<String>,
     /// A pose change in progress while the cloth stays on the body.
     transition: Option<Transition>,
+    /// The limb whose end is being dragged, and the camera-facing plane it moves in.
+    reaching: Option<(usize, glam::DVec3, glam::DVec3)>,
 }
+
+/// How near (points) a press must land to a hand or foot to drag it.
+const GRAB_PX: f32 = 14.;
 
 /// Largest distance any avatar vertex moves in one simulation step of a pose change: below
 /// the contact radius, so the body pushes the cloth instead of passing through it.
@@ -277,7 +282,14 @@ impl Atelier {
         if !self.authoring.pose.skeleton {
             return;
         }
-        let Ok(pose) = self.current_pose() else {
+        // The pose being edited shows while the window is open.
+        let Ok(pose) = self
+            .authoring
+            .pose
+            .draft
+            .clone()
+            .map_or_else(|| self.current_pose(), Ok)
+        else {
             return;
         };
         let key = format!("{:?}", pose.joints);
@@ -312,5 +324,67 @@ impl Atelier {
             painter.circle_filled(a, 4., colour);
             painter.circle_stroke(b, 3., Stroke::new(1.5, colour));
         }
+        // Hands and feet can be dragged while the pose window is open.
+        if self.authoring.pose.draft.is_some() {
+            for (_, _, lower) in avatar_rig::LIMBS {
+                if let Some(end) = rig.limb_end(&pose.pose, lower)
+                    && let Some(at) = self.camera.project(end.as_vec3(), rect)
+                {
+                    painter.circle_stroke(at, GRAB_PX * 0.6, Stroke::new(2., Color32::WHITE));
+                }
+            }
+        }
+    }
+
+    /// Drag a hand or foot of the pose being edited; the limb follows by inverse kinematics.
+    /// Returns whether the 3D view's pointer belongs to this drag.
+    pub(super) fn ik_interaction(&mut self, response: &egui::Response, rect: egui::Rect) -> bool {
+        let state = &self.authoring.pose;
+        if !state.open || !state.skeleton || state.transition.is_some() {
+            return false;
+        }
+        let (Some(draft), Some((_, rig))) = (state.draft.clone(), state.bones.clone()) else {
+            return false;
+        };
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && let Some(pos) = response.ctx.input(|i| i.pointer.press_origin())
+        {
+            let hit = avatar_rig::LIMBS
+                .iter()
+                .enumerate()
+                .find_map(|(k, (_, _, lower))| {
+                    let end = rig.limb_end(&draft.pose, lower)?;
+                    let at = self.camera.project(end.as_vec3(), rect)?;
+                    (at.distance(pos) <= GRAB_PX).then_some((k, end))
+                });
+            if let Some((k, end)) = hit {
+                self.authoring.pose.reaching = Some((k, end, self.camera.forward().as_dvec3()));
+                self.status = format!(
+                    "Reaching with the {}",
+                    avatar_rig::LIMBS[k].0.to_lowercase()
+                );
+            }
+        }
+        let Some((k, point, normal)) = self.authoring.pose.reaching else {
+            return false;
+        };
+        if response.dragged_by(egui::PointerButton::Primary)
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let (origin, dir) = self.camera.ray(pos, rect);
+            if let Some(target) = picking::ray_plane(origin, dir, point, normal) {
+                let (_, upper, lower) = avatar_rig::LIMBS[k];
+                if let Ok(next) = rig.reach(&draft.pose, upper, lower, target)
+                    && let Some(d) = self.authoring.pose.draft.as_mut()
+                {
+                    d.pose = next;
+                }
+            }
+        }
+        if response.drag_stopped() {
+            self.authoring.pose.reaching = None;
+            self.status = "Limb placed · Move into pose to bring the avatar there".into();
+        }
+        true
     }
 }

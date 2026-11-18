@@ -42,6 +42,10 @@ pub(super) fn tr_any(language: Language, text: &str) -> &str {
 /// is in the translation, in the same order.
 const STATUS_TEMPLATES: &[(&str, &str)] = &[
     (
+        "Alembic saved: {} frames in {}",
+        "Alembic guardado: {} fotogramas en {}",
+    ),
+    (
         "Avatar made to {} / {} / {} / {} / {} / {} cm · confirm to replace the current one",
         "Avatar hecho a {} / {} / {} / {} / {} / {} cm · confirma para sustituir el actual",
     ),
@@ -1056,6 +1060,12 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Project and template JSON · garment OBJ · SVG patterns · fiber guides" => {
             "Proyecto y plantilla JSON · OBJ de la prenda · patrones SVG · guías del hilo"
         }
+        "Project and template JSON · garment OBJ (welded, quads, retopology, baked look) · glTF · GLB · FBX · USD · USDZ · Alembic · MDD and PC2 caches · SVG patterns · fiber guides" => {
+            "Proyecto y plantilla JSON · OBJ de la prenda (soldado, cuadriláteros, retopología, aspecto horneado) · glTF · GLB · FBX · USD · USDZ · Alembic · cachés MDD y PC2 · patrones SVG · guías del hilo"
+        }
+        "Industrial DXF and PDF are not yet supported." => {
+            "El DXF industrial y el PDF aún no se admiten."
+        }
         "Put the first shape in the middle of the piece" => {
             "Poner la primera forma en el centro de la pieza"
         }
@@ -2018,6 +2028,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
+        "Export Alembic…" => "Exportar Alembic…",
         "Commands" => "Órdenes",
         "Search actions · arrow keys / Page Up Down navigate · Enter run · Esc close" => {
             "Busca acciones · flechas / Re Pág Av Pág para moverse · Intro ejecuta · Esc cierra"

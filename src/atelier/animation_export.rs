@@ -294,6 +294,46 @@ impl Atelier {
         Ok(())
     }
 
+    /// Save the garment as Alembic: animated over the take when one is recorded, with the
+    /// avatar when it is shown.
+    pub(super) fn export_alembic(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .add_filter("Alembic", &["abc"])
+            .set_file_name("garment.abc")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let take = self.current_take();
+        let bodies = match (take, &self.project.avatar_animation) {
+            (Some(take), Some(animation)) => Some(
+                avatar_animation::body_frames(&self.project, animation, take.frames.len())?
+                    .into_iter()
+                    .map(|b| b.vertices)
+                    .collect(),
+            ),
+            _ => None,
+        };
+        let scene = marvelous_cloth::abc_export::AbcScene {
+            template: &self.project.template,
+            garment: &self.scene.garment,
+            state: &self.scene.state,
+            avatar: self
+                .prefs
+                .garment_display
+                .avatar
+                .then_some(self.scene.collider.surface.as_ref()),
+            take: take.map(|t| (t, bodies)),
+        };
+        let summary = marvelous_cloth::abc_export::write(&scene, &path)?;
+        self.status = format!(
+            "Alembic saved: {} frames in {}",
+            summary.frames,
+            path.display()
+        );
+        Ok(())
+    }
+
     /// Open the OBJ export options, for every piece or only the selected ones.
     pub(super) fn open_obj_export(&mut self, selected_only: bool) -> Result<(), String> {
         if selected_only && self.selected_panels().is_empty() {

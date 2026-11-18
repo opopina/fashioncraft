@@ -1,4 +1,5 @@
 //! SI units throughout: metres, kilograms, seconds, Newtons.
+pub mod abc_export;
 pub mod authoring;
 pub mod avatar;
 pub mod avatar_animation;

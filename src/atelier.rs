@@ -592,6 +592,7 @@ impl Atelier {
             Id::ExportMddZUp => self.export_mdd(true)?,
             Id::ExportUsd => self.export_usd()?,
             Id::ExportFbx => self.export_fbx()?,
+            Id::ExportAlembic => self.export_alembic()?,
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
             Id::DraftSkirt => self.authoring.skirt_draft.open = !self.authoring.skirt_draft.open,

@@ -118,6 +118,7 @@ fn aliases(id: CommandId) -> &'static str {
         ExportMddZUp => "export mdd point cache maya 3ds max z up",
         ExportUsd => "export usd usdz usda pixar apple ar quick look",
         ExportFbx => "export fbx autodesk maya 3ds max blender unity unreal",
+        ExportAlembic => "export alembic abc cache take animation houdini maya blender",
         ToggleArrangementPoints => "arrangement points anchors place avatar show",
         OpenAvatarEditor => "avatar editor measurements height bust waist hip size body",
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",

@@ -114,6 +114,7 @@ pub enum CommandId {
     ExportMddZUp,
     ExportUsd,
     ExportFbx,
+    ExportAlembic,
     ToggleArrangementPoints,
     OpenAvatarEditor,
     DraftTshirt,
@@ -1142,6 +1143,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportFbx,
         "export.fbx",
         "Export FBX…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportAlembic,
+        "export.alembic",
+        "Export Alembic…",
         Simulation,
         None,
         NotUndoable,

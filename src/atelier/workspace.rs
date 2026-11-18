@@ -178,8 +178,8 @@ impl Atelier {
             ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX"));
             ui.small(i18n::tr(ui_lang, "Pattern outlines: generic ASCII DXF · physical SVG subsets"));
             ui.label(i18n::tr(ui_lang, "Export"));
-            ui.small(i18n::tr(ui_lang, "Project and template JSON · garment OBJ · SVG patterns · fiber guides"));
-            ui.small(i18n::tr(ui_lang, "Industrial DXF, GLB export, animated avatars, USD, Alembic, FBX and PDF are not yet supported."));
+            ui.small(i18n::tr(ui_lang, "Project and template JSON · garment OBJ (welded, quads, retopology, baked look) · glTF · GLB · FBX · USD · USDZ · Alembic · MDD and PC2 caches · SVG patterns · fiber guides"));
+            ui.small(i18n::tr(ui_lang, "Industrial DXF and PDF are not yet supported."));
             ui.separator();
             ui.small(i18n::tr(ui_lang, "Export folder (files replaced on every export):"));
             ui.label(egui::RichText::new(self.output.display().to_string()).small());

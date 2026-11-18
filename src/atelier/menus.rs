@@ -83,7 +83,7 @@ const FILE: &[Item] = &[
             Run("OBJ (selected)…", C::ExportObjSelected),
             Run("FBX…", C::ExportFbx),
             Run("glTF / GLB…", C::ExportGltf),
-            Todo("Alembic…"),
+            Run("Alembic…", C::ExportAlembic),
             Todo("USD…"),
             Run("Point cache…", C::ExportPointCache),
             Run("MDD cache…", C::ExportMdd),
@@ -656,7 +656,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 116, "{done} of {all}");
+        assert!(done >= 117, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

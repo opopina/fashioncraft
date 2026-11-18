@@ -54,6 +54,49 @@ pub struct FittingProject {
     /// Colours saved for reuse on fabrics, as sRGB bytes. Absent in older documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub color_palette: Vec<[u8; 3]>,
+    /// The avatar's pose and the joints its skeleton was built from. Absent: at rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_pose: Option<AvatarPose>,
+}
+
+/// A posed avatar: bone rotations and the joint positions (avatar metres) of its skeleton,
+/// kept with the document so it does not depend on files next to the avatar.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AvatarPose {
+    pub pose: crate::avatar_rig::Pose,
+    pub joints: std::collections::BTreeMap<String, [f64; 3]>,
+}
+
+impl AvatarPose {
+    /// The avatar's joints from the landmarks shipped next to it, with no rotation yet.
+    pub fn from_sidecar(avatar_path: &Path) -> Result<Self, String> {
+        let sidecar = crate::garment::arrangement::load_sidecar(avatar_path)?
+            .ok_or("This avatar ships no joint landmarks, so it cannot be posed")?;
+        let wanted = crate::avatar_rig::joint_ids();
+        let joints: std::collections::BTreeMap<String, [f64; 3]> = sidecar
+            .landmarks
+            .into_iter()
+            .filter(|l| wanted.contains(l.id.as_str()))
+            .map(|l| (l.id, l.position_m.to_array()))
+            .collect();
+        if joints.len() != wanted.len() {
+            return Err("This avatar lacks some joint landmarks, so it cannot be posed".into());
+        }
+        Ok(Self {
+            pose: Default::default(),
+            joints,
+        })
+    }
+    pub fn rig(&self, surface: &SurfaceMesh) -> Result<crate::avatar_rig::Rig, String> {
+        self.pose.validate()?;
+        let joints = self
+            .joints
+            .iter()
+            .map(|(id, p)| (id.clone(), glam::DVec3::from_array(*p)))
+            .collect();
+        crate::avatar_rig::Rig::new(&joints, surface)
+    }
 }
 
 /// An image a graphic placement or a fabric texture refers to by `id`. Relative paths resolve against the
@@ -326,6 +369,7 @@ impl FittingProject {
             board_guides: BoardGuides::default(),
             image_assets: Vec::new(),
             color_palette: Vec::new(),
+            avatar_pose: None,
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -366,7 +410,11 @@ impl FittingProject {
         {
             return Err("Stale fitting cache: clear state and mesh_signature, then rebuild".into());
         }
-        let surface = Arc::new(SurfaceMesh::load_obj(&self.avatar_path)?);
+        let mut surface = SurfaceMesh::load_obj(&self.avatar_path)?;
+        if let Some(posed) = self.avatar_pose.as_ref().filter(|p| !p.pose.is_empty()) {
+            surface = posed.rig(&surface)?.posed(&surface, &posed.pose);
+        }
+        let surface = Arc::new(surface);
         let collider = Arc::new(MeshCollider::with_clearance(
             surface,
             self.contact_stiffness,

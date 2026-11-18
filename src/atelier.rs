@@ -82,6 +82,8 @@ mod perf;
 mod pin_tool;
 #[path = "atelier/pins_ui.rs"]
 mod pins_ui;
+#[path = "atelier/pose_ui.rs"]
+mod pose_ui;
 #[path = "atelier/quick_actions.rs"]
 mod quick_actions;
 #[path = "atelier/radial.rs"]
@@ -543,6 +545,21 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::OpenPose => self.authoring.pose.open = !self.authoring.pose.open,
+            Id::ToggleSkeleton => {
+                self.authoring.pose.skeleton = !self.authoring.pose.skeleton;
+            }
+            Id::RestPose => {
+                let mut pose = self
+                    .project
+                    .avatar_pose
+                    .clone()
+                    .ok_or("The avatar is already at rest")?;
+                pose.pose = Default::default();
+                if !self.apply_pose(pose) {
+                    return Err(self.status.clone());
+                }
+            }
             Id::AddDiamondDart => {
                 let panel = self
                     .authoring
@@ -1095,6 +1112,7 @@ impl eframe::App for Atelier {
         if !palette_blocked {
             settings::window(&ctx, &mut self.settings_open, &mut self.prefs, &mut changed);
             self.library_window(&ctx);
+            self.pose_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

@@ -538,6 +538,7 @@ impl Atelier {
                 self.paint_sewing_ranges(ui, rect, true);
             }
             self.paint_gizmo(ui, rect);
+            self.paint_skeleton(ui, rect);
             self.paint_selected_points_3d(ui, rect);
             self.paint_pins_3d(ui, rect);
             if self.authoring.tool == Tool::Grab

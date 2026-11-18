@@ -92,6 +92,9 @@ pub enum CommandId {
     UnfoldPiece,
     ExtendLineEnds,
     AddDiamondDart,
+    OpenPose,
+    ToggleSkeleton,
+    RestPose,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -915,6 +918,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenPose,
+        "avatar.pose",
+        "Avatar pose…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleSkeleton,
+        "display.skeleton",
+        "Show the avatar's skeleton",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        RestPose,
+        "avatar.rest_pose",
+        "Put the avatar at rest",
+        Simulation,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

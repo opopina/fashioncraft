@@ -289,6 +289,8 @@ const AVATAR: &[Item] = &[
             Todo("Circumference measure"),
         ],
     ),
+    Run("Pose…", C::OpenPose),
+    Run("Rest pose", C::RestPose),
     Todo("Play animation"),
     Todo("Avatar editor…"),
 ];
@@ -330,7 +332,7 @@ const DISPLAY: &[Item] = &[
         &[
             Run("Show avatar", C::ToggleAvatar),
             Todo("Show arrangement points"),
-            Todo("Show joints"),
+            Run("Show joints", C::ToggleSkeleton),
         ],
     ),
     Sub(
@@ -453,6 +455,8 @@ impl Atelier {
             C::PatternView => self.prefs.workspace.mode == layout::ViewMode::Patterns,
             C::ToggleInspector => self.prefs.workspace.inspector_open,
             C::ToggleLibrary => self.authoring.library.open,
+            C::ToggleSkeleton => self.authoring.pose.skeleton,
+            C::OpenPose => self.authoring.pose.open,
             _ => false,
         }
     }
@@ -618,7 +622,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 85, "{done} of {all}");
+        assert!(done >= 88, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -45,6 +45,8 @@ pub(super) struct AuthoringUi {
     pub graphic_tool: super::graphics_ui::GraphicTool,
     /// The library window.
     pub library: super::library_ui::LibraryUi,
+    /// The avatar pose window and skeleton view.
+    pub pose: super::pose_ui::PoseUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,

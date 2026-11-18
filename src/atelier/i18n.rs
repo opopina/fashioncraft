@@ -268,6 +268,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Unfold across segment" => "Desdoblar por el segmento",
         "Extend line to outline" => "Prolongar la línea hasta el contorno",
         "Diamond dart" => "Pinza rombo",
+        "Rest pose" => "Pose de reposo",
         "Commands…" => "Órdenes…",
         "⏸ Pause" => "⏸ Pausa",
         "▶ Sew and simulate" => "▶ Coser y simular",

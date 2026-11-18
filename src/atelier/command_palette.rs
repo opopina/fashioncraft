@@ -94,6 +94,9 @@ fn aliases(id: CommandId) -> &'static str {
         UnfoldPiece => "unfold mirror half symmetric fold open",
         ExtendLineEnds => "extend prolong internal line outline",
         AddDiamondDart => "diamond dart fish eye waist shaping",
+        OpenPose => "pose avatar body arms legs posture",
+        ToggleSkeleton => "skeleton bones joints x-ray",
+        RestPose => "rest pose reset avatar a-pose",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -818,7 +821,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ToggleLibrary
+            CommandId::ToggleSkeleton
         );
         h.key(
             "palette.query",

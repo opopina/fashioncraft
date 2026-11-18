@@ -3,6 +3,7 @@ pub mod authoring;
 pub mod avatar;
 pub mod avatar_import;
 pub mod avatar_measurements;
+pub mod avatar_rig;
 pub mod contact;
 pub mod document;
 pub mod energy;

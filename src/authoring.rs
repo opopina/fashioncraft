@@ -895,6 +895,64 @@ pub fn prepare_pin_group_edit(
     Ok((edit, next))
 }
 
+/// Move authored pins: the targets of `selections` (per panel, exact material points that are
+/// pinned already) shift by `translation`. The pinned points go with them at once; the rest
+/// of the cloth keeps its drape and follows them when simulated. One transaction, validated
+/// like [`prepare_pin_group_edit`]; the caller checks the resulting state before installing.
+pub fn prepare_pin_move_edit(
+    source: &GarmentTemplate,
+    compiled: &CompiledGarment,
+    state: &State,
+    selections: &std::collections::BTreeMap<String, Vec<DVec2>>,
+    translation: DVec3,
+) -> Result<(Edit, State), String> {
+    if !translation.is_finite() || translation.length() > 10. {
+        return Err("Move pins by a finite distance of at most 10 m".into());
+    }
+    let count = selections
+        .values()
+        .try_fold(0usize, |n, points| n.checked_add(points.len()));
+    if selections.is_empty()
+        || selections.values().any(Vec::is_empty)
+        || !count.is_some_and(|n| (1..=65_536).contains(&n))
+    {
+        return Err("Select 1..65536 pinned points to move".into());
+    }
+    validate_pin_source(source, compiled, state)?;
+    let mut keys = std::collections::BTreeMap::new();
+    for (panel, points) in selections {
+        let set: std::collections::BTreeSet<_> = points.iter().map(|uv| pin_uv_key(*uv)).collect();
+        if set.len() != points.len() {
+            return Err("Pin selection contains duplicate coordinates".into());
+        }
+        keys.insert(panel.as_str(), set);
+    }
+    let mut template = source.clone();
+    let mut moved = 0;
+    for target in &mut template.pin_targets {
+        if keys
+            .get(target.panel.as_str())
+            .is_some_and(|set| set.contains(&pin_uv_key(target.uv)))
+        {
+            target.world += translation;
+            moved += 1;
+        }
+    }
+    if moved != count.unwrap_or(0) {
+        return Err("Only pinned points can be moved".into());
+    }
+    let garment = template.compile()?;
+    let edit = Edit {
+        reset_simulation: !same_physics(source, &template),
+        template,
+        garment,
+        selected: selections.keys().next().cloned(),
+        new_point: None,
+    };
+    let next = edit.state_after(compiled, state);
+    Ok((edit, next))
+}
+
 /// Freeze/release a complete sampled panel without consuming history or
 /// installing it. Existing individual/legacy pins survive panel release.
 pub fn prepare_freeze_edit(

@@ -20,6 +20,17 @@ pub(super) struct PinTool {
     pub lasso: bool,
     /// The lasso being drawn, in screen points.
     path: Vec<egui::Pos2>,
+    /// A pinned area being dragged to a new place.
+    moving: Option<PinMove>,
+}
+
+/// A pinned area being dragged: its points, where they were, and the plane they move in.
+struct PinMove {
+    vertices: Vec<usize>,
+    start: Vec<DVec3>,
+    anchor: DVec3,
+    normal: DVec3,
+    translation: DVec3,
 }
 
 /// Least distance between two recorded lasso samples, in points.
@@ -57,7 +68,8 @@ impl Atelier {
                 .on_hover_text(i18n::tr(
                     ui_lang,
                     "Click the cloth to pin a point where it is · drag a box to pin an area · \
-                 click a pin to remove it · Cmd+drag removes the pins in a box",
+                 click a pin to remove it · Cmd+drag removes the pins in a box · \
+                 drag a pin to move its pinned area",
                 ))
                 .clicked()
             {
@@ -235,6 +247,48 @@ impl Atelier {
             return;
         }
         let removing = response.ctx.input(|i| i.modifiers.command);
+        // Dragging a pin moves the whole pinned area it belongs to.
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && !removing
+            && let Some(origin) = response.ctx.input(|i| i.pointer.press_origin())
+        {
+            let nearest = self
+                .visible_pins(rect)
+                .into_iter()
+                .map(|(v, at)| (v, at.distance(origin)))
+                .filter(|(_, d)| *d <= PIN_PICK_PX)
+                .min_by(|a, b| a.1.total_cmp(&b.1));
+            if let Some((v, _)) = nearest {
+                self.start_pin_move(v, origin, rect);
+            }
+        }
+        if let Some(moving) = self.authoring.pin_tool.moving.as_mut() {
+            if response.dragged_by(egui::PointerButton::Primary)
+                && let Some(pos) = response.interact_pointer_pos()
+            {
+                let (origin, direction) = self.camera.ray(pos, rect);
+                if let Some(hit) =
+                    picking::ray_plane(origin, direction, moving.anchor, moving.normal)
+                {
+                    moving.translation = hit - moving.anchor;
+                    for (k, v) in moving.vertices.iter().enumerate() {
+                        self.scene.state.x[*v] = moving.start[k] + moving.translation;
+                        self.scene.state.v[*v] = DVec3::ZERO;
+                    }
+                }
+            }
+            if response.drag_stopped_by(egui::PointerButton::Primary)
+                && let Some(moving) = self.authoring.pin_tool.moving.take()
+            {
+                for (k, v) in moving.vertices.iter().enumerate() {
+                    self.scene.state.x[*v] = moving.start[k];
+                }
+                if moving.translation.length() > 1e-4 {
+                    self.apply_pin_move(&moving.vertices, moving.translation);
+                }
+            }
+            return;
+        }
         if self.authoring.pin_tool.lasso {
             let tool = &mut self.authoring.pin_tool;
             if response.drag_started_by(egui::PointerButton::Primary)
@@ -431,6 +485,97 @@ impl Atelier {
         let panels = self.pinnable_panels();
         let holds = self.scene.garment.authored_holds.clone();
         self.visible_vertices(rect, &panels, |v, _| holds.get(v).copied().unwrap_or(false))
+    }
+
+    /// Begin dragging the pinned area around pin `v`: the pinned points joined to it through
+    /// the mesh, moving in the plane through it that faces the camera.
+    fn start_pin_move(&mut self, v: usize, origin: egui::Pos2, rect: egui::Rect) {
+        let garment = &self.scene.garment;
+        let held = |i: usize| garment.authored_holds.get(i).copied().unwrap_or(false);
+        let mut next: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for t in &garment.mesh.triangles {
+            let [a, b, c] = t.vertices;
+            for (p, q) in [(a, b), (b, c), (c, a)] {
+                if held(p) && held(q) {
+                    next.entry(p).or_default().push(q);
+                    next.entry(q).or_default().push(p);
+                }
+            }
+        }
+        let mut area = BTreeSet::from([v]);
+        let mut stack = vec![v];
+        while let Some(i) = stack.pop() {
+            for j in next.get(&i).into_iter().flatten() {
+                if area.insert(*j) {
+                    stack.push(*j);
+                }
+            }
+        }
+        let vertices: Vec<usize> = area.into_iter().collect();
+        let (_, direction) = self.camera.ray(origin, rect);
+        self.playing = false;
+        self.authoring.pin_tool.moving = Some(PinMove {
+            start: vertices.iter().map(|i| self.scene.state.x[*i]).collect(),
+            vertices,
+            anchor: self.scene.state.x[v],
+            normal: direction.normalize_or_zero(),
+            translation: DVec3::ZERO,
+        });
+    }
+
+    /// Move the pins at `vertices` by `translation` as one validated undo step.
+    fn apply_pin_move(&mut self, vertices: &[usize], translation: DVec3) {
+        let ui_lang = self.prefs.language;
+        if self.pending {
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
+            return;
+        }
+        let garment = self.scene.garment.clone();
+        let mut selections: BTreeMap<String, Vec<DVec2>> = BTreeMap::new();
+        for &v in vertices {
+            if !garment.authored_holds.get(v).copied().unwrap_or(false) {
+                continue;
+            }
+            if let Some(panel) = garment.panels.iter().find(|p| p.vertices.contains(&v)) {
+                selections
+                    .entry(panel.id.clone())
+                    .or_default()
+                    .push(garment.mesh.uv[v]);
+            }
+        }
+        let count: usize = selections.values().map(Vec::len).sum();
+        let result = authoring::prepare_pin_move_edit(
+            &self.project.template,
+            &garment,
+            &self.scene.state,
+            &selections,
+            translation,
+        )
+        .and_then(|(edit, next)| {
+            super::pins_ui::validate(&edit, &next, Some(&self.scene.collider.surface))?;
+            Ok(edit)
+        });
+        match result {
+            Ok(edit) => {
+                self.authoring
+                    .history
+                    .record_named(self.project.template.clone(), "Move pins");
+                self.install_edit(edit);
+                self.status = format!(
+                    "{} {}",
+                    super::garment_display::counted(count, "pin", "pins"),
+                    i18n::tr(ui_lang, "moved · the cloth follows them when simulated")
+                );
+            }
+            Err(error) => {
+                self.status = error.clone();
+                self.authoring.error = Some(error);
+            }
+        }
     }
 
     /// Pin (`hold`) or release the given cloth vertices as one validated undo step.

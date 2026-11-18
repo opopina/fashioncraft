@@ -704,3 +704,63 @@ fn grouped_holds_reject_invalid_or_frozen_member_atomically() {
     assert!(frozen.template.pin_targets.is_empty());
     assert_eq!(frozen.template.frozen_panels.len(), 1);
 }
+
+#[test]
+fn moving_pins_moves_their_targets_and_points_and_nothing_else() {
+    use marvelous_cloth::authoring::{prepare_pin_group_edit, prepare_pin_move_edit};
+    use std::collections::BTreeMap;
+    let t = editable();
+    let g = t.compile().unwrap();
+    let mut state = g.initial_state.clone();
+    for (k, x) in state.x.iter_mut().enumerate() {
+        x.z += 0.01 * ((k as f64) * 0.7).sin();
+    }
+    state.v.fill(DVec3::ZERO);
+    let panel = &g.panels[0];
+    let picked: Vec<usize> = panel.vertices.clone().take(3).collect();
+    let selections = BTreeMap::from([(
+        panel.id.clone(),
+        picked.iter().map(|v| g.mesh.uv[*v]).collect::<Vec<_>>(),
+    )]);
+    let (pinned, state) = prepare_pin_group_edit(&t, &g, &state, &selections, true).unwrap();
+    let shift = DVec3::new(0.05, -0.02, 0.1);
+    let (moved, next) = prepare_pin_move_edit(
+        &pinned.template,
+        &pinned.garment,
+        &state,
+        &selections,
+        shift,
+    )
+    .unwrap();
+    for (before, after) in pinned
+        .template
+        .pin_targets
+        .iter()
+        .zip(&moved.template.pin_targets)
+    {
+        assert_eq!(after.world, before.world + shift);
+    }
+    for v in 0..state.x.len() {
+        if picked.contains(&v) {
+            assert!((next.x[v] - (state.x[v] + shift)).length() < 1e-12);
+            assert_eq!(next.v[v], DVec3::ZERO);
+        } else {
+            assert_eq!(next.x[v], state.x[v], "{v} stays where it was");
+        }
+    }
+    // Only pinned points move, by a finite distance.
+    let loose = BTreeMap::from([(panel.id.clone(), vec![g.mesh.uv[panel.vertices.end - 1]])]);
+    assert!(
+        prepare_pin_move_edit(&pinned.template, &pinned.garment, &state, &loose, shift).is_err()
+    );
+    assert!(
+        prepare_pin_move_edit(
+            &pinned.template,
+            &pinned.garment,
+            &state,
+            &selections,
+            DVec3::new(f64::NAN, 0., 0.)
+        )
+        .is_err()
+    );
+}

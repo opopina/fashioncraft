@@ -1560,6 +1560,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "selected · Shift-click: toggle · Shift-drag: add\nHold L + drag: lasso · Ctrl/Cmd: subtract · Alt: through\nMoved pieces keep their drape" => {
             "seleccionadas · Mayús+clic: alternar · Mayús+arrastrar: añadir\nMantén L + arrastrar: lazo · Ctrl/Cmd: restar · Alt: a través\nLas piezas movidas conservan su drapeado"
         }
+        "Click the cloth to pin a point where it is · drag a box to pin an area · click a pin to remove it · Cmd+drag removes the pins in a box · drag a pin to move its pinned area" => {
+            "Haz clic en la tela para fijar un punto donde está · arrastra un recuadro para fijar una zona · haz clic en un alfiler para quitarlo · Cmd+arrastrar quita los alfileres de un recuadro · arrastra un alfiler para mover su zona fijada"
+        }
+        "moved · the cloth follows them when simulated" => {
+            "movidos · la tela los sigue al simular"
+        }
+        "Move pins" => "Mover alfileres",
         _ => return None,
     })
 }

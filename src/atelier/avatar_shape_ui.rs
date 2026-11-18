@@ -159,3 +159,159 @@ impl Atelier {
         Ok(())
     }
 }
+
+/// The T-shirt drafting window: measurements in centimetres, filled from the avatar on asking.
+pub(super) struct DraftUi {
+    pub open: bool,
+    values: [f64; 8],
+    error: Option<String>,
+}
+
+impl Default for DraftUi {
+    fn default() -> Self {
+        let m = marvelous_cloth::garment::presets::TshirtMeasurements::default();
+        Self {
+            open: false,
+            values: [
+                m.bust_m,
+                m.hip_m,
+                m.ease_m,
+                m.length_m,
+                m.shoulder_m,
+                m.sleeve_m,
+                m.cuff_m,
+                m.top_m,
+            ]
+            .map(|v| (v * 1000.).round() / 10.),
+            error: None,
+        }
+    }
+}
+
+impl Atelier {
+    /// The measurements of the current avatar a shirt should fit, centimetres.
+    fn avatar_shirt_values(&self) -> Result<[f64; 8], String> {
+        let path = &self.project.avatar_path;
+        let measured = measure(path)?;
+        let joint = |id: &str| {
+            measured
+                .joints
+                .get(id)
+                .copied()
+                .ok_or_else(|| format!("The avatar lacks the joint {id}"))
+        };
+        let (l, r) = (joint("joint-l-shoulder")?, joint("joint-r-shoulder")?);
+        let now = measured.now;
+        let mut v = self.authoring.shirt_draft.values;
+        v[0] = now.bust_m * 100.;
+        v[1] = now.hip_m * 100.;
+        v[3] = 66. * now.height_m / 1.75;
+        v[4] = (l.distance(r) + 0.08) * 100.;
+        v[7] = (l.y.max(r.y) + 0.09) * 100.;
+        Ok(v.map(|x| (x * 10.).round() / 10.))
+    }
+
+    pub(super) fn draft_window(&mut self, ctx: &egui::Context) {
+        if !self.authoring.shirt_draft.open {
+            return;
+        }
+        let mut open = true;
+        let (mut from_avatar, mut create) = (false, false);
+        let state = &mut self.authoring.shirt_draft;
+        egui::Window::new("T-shirt from measurements")
+            .open(&mut open)
+            .resizable(false)
+            .default_width(300.)
+            .show(ctx, |ui| {
+                egui::Grid::new("draft.tshirt")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        for (k, name) in [
+                            "Bust",
+                            "Hip",
+                            "Ease",
+                            "Length",
+                            "Shoulders",
+                            "Sleeve",
+                            "Sleeve opening",
+                            "Shoulder height",
+                        ]
+                        .iter()
+                        .enumerate()
+                        {
+                            ui.label(*name);
+                            ui.add(
+                                egui::DragValue::new(&mut state.values[k])
+                                    .range(0.0..=250.0)
+                                    .speed(0.5)
+                                    .suffix(" cm"),
+                            );
+                            ui.end_row();
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("From the avatar")
+                        .on_hover_text(
+                            "Bust, hip, shoulders, length and placement from the current avatar",
+                        )
+                        .clicked()
+                    {
+                        from_avatar = true;
+                    }
+                    if ui
+                        .button("Create")
+                        .on_hover_text("Replace the garment with this T-shirt")
+                        .clicked()
+                    {
+                        create = true;
+                    }
+                });
+                if let Some(e) = &state.error {
+                    ui.colored_label(Color32::LIGHT_RED, e);
+                }
+            });
+        self.authoring.shirt_draft.open &= open;
+        if from_avatar {
+            match self.avatar_shirt_values() {
+                Ok(v) => {
+                    self.authoring.shirt_draft.values = v;
+                    self.authoring.shirt_draft.error = None;
+                }
+                Err(e) => self.authoring.shirt_draft.error = Some(e),
+            }
+        }
+        if create {
+            let v = self.authoring.shirt_draft.values.map(|x| x / 100.);
+            let m = marvelous_cloth::garment::presets::TshirtMeasurements {
+                bust_m: v[0],
+                hip_m: v[1],
+                ease_m: v[2],
+                length_m: v[3],
+                shoulder_m: v[4],
+                sleeve_m: v[5],
+                cuff_m: v[6],
+                top_m: v[7],
+            };
+            match marvelous_cloth::garment::presets::tshirt(&m, 2) {
+                Ok(template) => {
+                    let mut project = FittingProject::basic(
+                        GarmentKind::Tshirt,
+                        2,
+                        self.project.avatar_path.clone(),
+                    );
+                    project.template = template;
+                    project.avatar_pose = self.project.avatar_pose.clone();
+                    project.scene_objects = self.project.scene_objects.clone();
+                    if self.load(project) {
+                        self.authoring.shirt_draft.error = None;
+                        self.status = "T-shirt drafted from the measurements".into();
+                    } else {
+                        self.authoring.shirt_draft.error = Some(self.status.clone());
+                    }
+                }
+                Err(e) => self.authoring.shirt_draft.error = Some(e),
+            }
+        }
+    }
+}

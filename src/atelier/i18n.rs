@@ -71,6 +71,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Take" => "Toma",
         "Clear take" => "Borrar toma",
+        "T-shirt from measurements…" => "Camiseta por medidas…",
         "MDD cache…" => "Caché MDD…",
         "MDD cache (Maya/3ds Max)…" => "Caché MDD (Maya/3ds Max)…",
         "Render" => "Render",

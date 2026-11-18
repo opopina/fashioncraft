@@ -582,6 +582,7 @@ impl Atelier {
             Id::ExportMddZUp => self.export_mdd(true)?,
             Id::ExportUsd => self.export_usd()?,
             Id::ExportFbx => self.export_fbx()?,
+            Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::OpenAvatarEditor => {
                 self.authoring.avatar_shape.open = !self.authoring.avatar_shape.open;
             }
@@ -1170,6 +1171,7 @@ impl eframe::App for Atelier {
             self.scene_window(&ctx);
             self.obj_export_window(&ctx);
             self.avatar_shape_window(&ctx);
+            self.draft_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

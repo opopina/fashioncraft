@@ -101,6 +101,7 @@ const FILE: &[Item] = &[
     S,
     Run("Recover snapshot…", C::RecoverSnapshot),
     Run("Garment templates…", C::OpenTemplates),
+    Run("T-shirt from measurements…", C::DraftTshirt),
     Sub(
         "Examples",
         &[Run("T-shirt", C::LoadTshirt), Run("Dress", C::LoadDress)],
@@ -476,6 +477,7 @@ impl Atelier {
             C::ToggleSkeleton => self.authoring.pose.skeleton,
             C::ToggleArrangementPoints => self.authoring.arrangement.points,
             C::OpenAvatarEditor => self.authoring.avatar_shape.open,
+            C::DraftTshirt => self.authoring.shirt_draft.open,
             C::OpenPose => self.authoring.pose.open,
             C::OpenAnimation => self.authoring.animation.open,
             C::RecordAnimation => self.authoring.animation.recording(),
@@ -644,7 +646,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 107, "{done} of {all}");
+        assert!(done >= 108, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

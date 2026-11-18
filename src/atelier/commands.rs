@@ -114,6 +114,7 @@ pub enum CommandId {
     ExportFbx,
     ToggleArrangementPoints,
     OpenAvatarEditor,
+    DraftTshirt,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1132,6 +1133,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         OpenAvatarEditor,
         "avatar.editor",
         "Avatar editor…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        DraftTshirt,
+        "pattern.draft_tshirt",
+        "T-shirt from measurements…",
         Workspace,
         None,
         NotUndoable,

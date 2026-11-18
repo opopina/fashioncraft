@@ -19,6 +19,22 @@ pub(super) struct PoseUi {
     /// Bones of the current avatar, for the X-ray view, keyed by the joints they came from.
     bones: Option<(String, Arc<Rig>)>,
     error: Option<String>,
+    /// A pose change in progress while the cloth stays on the body.
+    transition: Option<Transition>,
+}
+
+/// Largest distance any avatar vertex moves in one simulation step of a pose change: below
+/// the contact radius, so the body pushes the cloth instead of passing through it.
+const POSE_STEP_M: f64 = 0.0015;
+
+/// The avatar moving from one pose to another, one simulation step at a time.
+pub(super) struct Transition {
+    rig: Arc<Rig>,
+    rest: Arc<marvelous_cloth::avatar::SurfaceMesh>,
+    from: avatar_rig::Pose,
+    to: AvatarPose,
+    step: usize,
+    steps: usize,
 }
 
 impl Atelier {
@@ -56,6 +72,83 @@ impl Atelier {
                 self.status = e;
                 false
             }
+        }
+    }
+
+    /// Move the avatar into `pose` over many simulation steps, the cloth following it.
+    pub(super) fn begin_pose_transition(&mut self, pose: AvatarPose) -> bool {
+        let start = || -> Result<Transition, String> {
+            let rest = marvelous_cloth::avatar::SurfaceMesh::load_obj(&self.project.avatar_path)?;
+            let rig = pose.rig(&rest)?;
+            let from = self
+                .project
+                .avatar_pose
+                .as_ref()
+                .map(|p| p.pose.clone())
+                .unwrap_or_default();
+            let a = rig.posed(&rest, &from);
+            let b = rig.posed(&rest, &pose.pose);
+            let farthest = a
+                .vertices
+                .iter()
+                .zip(&b.vertices)
+                .map(|(p, q)| p.distance(*q))
+                .fold(0., f64::max);
+            let steps = ((farthest / POSE_STEP_M).ceil() as usize).clamp(5, 900);
+            Ok(Transition {
+                rig: Arc::new(rig),
+                rest: Arc::new(rest),
+                from,
+                to: pose.clone(),
+                step: 0,
+                steps,
+            })
+        };
+        match start() {
+            Ok(t) => {
+                self.status = format!("Moving into the pose over {} steps…", t.steps);
+                self.authoring.pose.transition = Some(t);
+                self.playing = true;
+                true
+            }
+            Err(e) => {
+                self.status = e;
+                false
+            }
+        }
+    }
+
+    /// After each accepted simulation step, move the avatar one step further into its new pose.
+    pub(super) fn advance_pose_transition(&mut self) {
+        let Some(t) = self.authoring.pose.transition.as_mut() else {
+            return;
+        };
+        t.step += 1;
+        let fraction = t.step as f64 / t.steps as f64;
+        let blend = t.from.blend(&t.to.pose, fraction.min(1.));
+        let transforms = t
+            .rig
+            .transforms(|bone| blend.get(bone).copied().unwrap_or_default());
+        let surface = Arc::new(t.rig.skin(&t.rest, &transforms));
+        match marvelous_cloth::avatar::MeshCollider::with_clearance(
+            surface,
+            self.project.contact_stiffness,
+            self.project.contact_clearance,
+        ) {
+            Ok(collider) => self.scene.collider = Arc::new(collider),
+            Err(e) => {
+                self.status = e;
+                self.authoring.pose.transition = None;
+                return;
+            }
+        }
+        if t.step >= t.steps {
+            let done = self.authoring.pose.transition.take().unwrap();
+            self.project.avatar_pose = Some(done.to);
+            self.document.dirty = true;
+            self.status = "In the new pose · the drape followed the body".into();
+        } else {
+            self.status = format!("Moving into the pose… {:.0} %", fraction * 100.);
         }
     }
 
@@ -131,17 +224,35 @@ impl Atelier {
                     }
                 }
                 ui.separator();
-                ui.horizontal(|ui| {
-                    if ui
-                        .button("Apply pose")
-                        .on_hover_text("Rebuild the avatar in this pose; the drape starts again")
-                        .clicked()
-                    {
-                        apply = Some(draft.clone());
-                    }
-                    if ui.button("Rest").clicked() {
-                        draft.pose = Default::default();
-                    }
+                let moving = state.transition.as_ref().map(|t| t.step * 100 / t.steps);
+                if let Some(percent) = moving {
+                    ui.label(format!("Moving into the pose… {percent} %"));
+                }
+                ui.add_enabled_ui(moving.is_none(), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button("Move into pose")
+                            .on_hover_text(
+                                "Move the avatar into this pose while simulating: the drape \
+                                 follows the body",
+                            )
+                            .clicked()
+                        {
+                            apply = Some((draft.clone(), true));
+                        }
+                        if ui
+                            .button("Apply and restart")
+                            .on_hover_text(
+                                "Rebuild the avatar in this pose at once; the drape starts again",
+                            )
+                            .clicked()
+                        {
+                            apply = Some((draft.clone(), false));
+                        }
+                        if ui.button("Rest").clicked() {
+                            draft.pose = Default::default();
+                        }
+                    });
                 });
                 ui.checkbox(&mut state.skeleton, "Show skeleton (X-ray)");
             });
@@ -150,8 +261,14 @@ impl Atelier {
             self.authoring.pose.draft = None;
             self.authoring.pose.error = None;
         }
-        if let Some(pose) = apply {
-            self.apply_pose(pose);
+        match apply {
+            Some((pose, true)) => {
+                self.begin_pose_transition(pose);
+            }
+            Some((pose, false)) => {
+                self.apply_pose(pose);
+            }
+            None => {}
         }
     }
 

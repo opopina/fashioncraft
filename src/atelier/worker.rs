@@ -177,7 +177,8 @@ fn start_inner(
         .stack_size(8 * 1024 * 1024)
         .spawn(move || {
             let gpu = backend.map(|(device, queue)| GpuVbd::new(device, queue));
-            let mut cache: Option<((u64, Option<u64>), VbdSolver)> = None;
+            // Solver for (generation, floor), and the avatar surface it was last given.
+            let mut cache: Option<((u64, Option<u64>), VbdSolver, usize)> = None;
             let mut active: Option<Work> = None;
             let mut deadline = Instant::now();
             loop {
@@ -234,21 +235,31 @@ fn start_inner(
                     }
                     // The floor is part of the solver's fixed geometry: changing it rebuilds.
                     let key = (w.generation, w.settings.floor.map(f64::to_bits));
-                    if cache.as_ref().is_none_or(|(k, _)| *k != key) {
-                        let floored;
-                        let surface = match w.settings.floor {
-                            Some(height) => {
-                                floored = w.scene.collider.surface.with_floor(height);
-                                &floored
-                            }
-                            None => &w.scene.collider.surface,
-                        };
+                    let avatar = Arc::as_ptr(&w.scene.collider.surface) as usize;
+                    let surface = || match w.settings.floor {
+                        Some(height) => {
+                            std::borrow::Cow::Owned(w.scene.collider.surface.with_floor(height))
+                        }
+                        None => std::borrow::Cow::Borrowed(&*w.scene.collider.surface),
+                    };
+                    if cache.as_ref().is_none_or(|(k, _, _)| *k != key) {
                         cache = Some((
                             key,
-                            VbdSolver::new(w.scene.garment.clone(), Some(surface), &w.scene.state)?,
+                            VbdSolver::new(
+                                w.scene.garment.clone(),
+                                Some(&surface()),
+                                &w.scene.state,
+                            )?,
+                            avatar,
                         ));
                         // A sample belongs to the solver generation that made it.
                         clear_final_diagnostics();
+                    } else if let Some((_, solver, last)) = cache.as_mut()
+                        && *last != avatar
+                    {
+                        // The same body moved (a pose change in progress): move it in place.
+                        solver.set_obstacle(&w.scene.state.x, &surface())?;
+                        *last = avatar;
                     }
                     let solver = &mut cache.as_mut().unwrap().1;
                     let metrics = if w.gpu {

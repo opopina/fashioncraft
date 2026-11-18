@@ -1049,6 +1049,7 @@ impl eframe::App for Atelier {
                     self.scene.state = state;
                     self.status = "Dynamic simulation · OGC contacts".into();
                     self.metrics = Some(m);
+                    self.advance_pose_transition();
                 }
                 Err(e) => {
                     self.playing = false;

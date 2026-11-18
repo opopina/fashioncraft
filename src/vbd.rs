@@ -373,6 +373,14 @@ pub struct VbdSolver {
     collision: Vec<Option<f64>>,
 }
 impl VbdSolver {
+    /// Move the obstacle (the avatar, with the floor when it has one) to `obstacle`, the same
+    /// mesh in a new position, while the cloth is at `x`. Small moves are pushed through the
+    /// contact barrier like any other motion of the cloth relative to the body.
+    pub fn set_obstacle(&mut self, x: &[DVec3], obstacle: &SurfaceMesh) -> Result<(), String> {
+        obstacle.validate()?;
+        self.world.set_fixed(x, &obstacle.vertices)
+    }
+
     pub fn new(
         garment: Arc<CompiledGarment>,
         avatar: Option<&SurfaceMesh>,

@@ -225,7 +225,47 @@ pub struct OgcWorld {
     /// contact uses the settings' radius.
     cloth_radius: Vec<f64>,
 }
+/// A fresh identity for fixed geometry, so caches keyed by it never mix two arrangements.
+fn next_spatial_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 impl OgcWorld {
+    /// Move the fixed geometry (the avatar) to `fixed`, its topology unchanged, with the
+    /// moving vertices at `moving`. Every bound is refitted and cached contact candidates are
+    /// dropped; the fixed geometry gets a new identity for caches keyed by it. Move it in
+    /// steps smaller than the contact radius so cloth is pushed rather than crossed.
+    pub fn set_fixed(&mut self, moving: &[DVec3], fixed: &[DVec3]) -> Result<(), String> {
+        if moving.len() != self.moving
+            || fixed.len() != self.fixed.len()
+            || fixed.iter().chain(moving).any(|p| !p.is_finite())
+        {
+            return Err("New fixed geometry does not match the contact world".into());
+        }
+        self.fixed = fixed.to_vec();
+        let x = self.positions(moving);
+        let tb: Vec<_> = self
+            .topology
+            .triangles
+            .iter()
+            .map(|t| Bounds::points(t.map(|i| x[i])))
+            .collect();
+        let eb: Vec<_> = self
+            .topology
+            .edges
+            .iter()
+            .map(|e| Bounds::points(e.map(|i| x[i])))
+            .collect();
+        let pb: Vec<_> = x.iter().map(|p| Bounds::points([*p])).collect();
+        self.triangles.refit(&tb);
+        self.edges.refit(&eb);
+        self.points.refit(&pb);
+        self.candidates = None;
+        self.spatial_id = next_spatial_id();
+        Ok(())
+    }
+
     pub fn new(
         x: &[DVec3],
         triangles: Vec<[usize; 3]>,
@@ -303,10 +343,7 @@ impl OgcWorld {
             directional_bounds: false,
             experimental_interior_edges: false,
             experimental_primitive_distances: false,
-            spatial_id: {
-                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            },
+            spatial_id: next_spatial_id(),
             excluded_neighbors,
             topology,
             moving,

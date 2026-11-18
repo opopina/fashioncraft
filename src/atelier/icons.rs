@@ -84,10 +84,12 @@ pub(super) enum Icon {
     Subtract,
     Intersect,
     Measure,
+    /// A framed picture: the tool that moves, scales and turns graphics.
+    Graphic,
 }
 
 #[cfg(test)]
-const ALL: [Icon; 40] = [
+const ALL: [Icon; 41] = [
     Icon::Select,
     Icon::Edit,
     Icon::Pen,
@@ -128,6 +130,7 @@ const ALL: [Icon; 40] = [
     Icon::Subtract,
     Icon::Intersect,
     Icon::Measure,
+    Icon::Graphic,
 ];
 
 // ---------------------------------------------------------------------------
@@ -241,6 +244,17 @@ pub(super) fn geometry(icon: Icon) -> Vec<Prim> {
             seg([0.40, 0.30], [0.40, 0.58]),
             seg([0.55, 0.30], [0.55, 0.50]),
             seg([0.70, 0.30], [0.70, 0.58]),
+        ],
+        Icon::Graphic => vec![
+            stroke_rect([0.12, 0.18], [0.88, 0.82]),
+            path(&[
+                [0.18, 0.74],
+                [0.42, 0.46],
+                [0.58, 0.62],
+                [0.68, 0.52],
+                [0.82, 0.74],
+            ]),
+            circle([0.66, 0.34], 0.07),
         ],
         Icon::Ellipse => vec![circle([0.5, 0.5], 0.34)],
         Icon::Arc => vec![
@@ -808,7 +822,7 @@ mod tests {
         // Recorded per icon. If a glyph silently loses its geometry (or gains a
         // stray primitive), the count changes and this fails instead of the
         // blank button reaching the user.
-        let expected: [(Icon, usize); 40] = [
+        let expected: [(Icon, usize); 41] = [
             (Icon::Select, 1),
             (Icon::Edit, 3),
             (Icon::Pen, 3),
@@ -849,6 +863,7 @@ mod tests {
             (Icon::Subtract, 2),
             (Icon::Intersect, 4),
             (Icon::Measure, 5),
+            (Icon::Graphic, 3),
         ];
         // A new variant without a recorded count is itself a regression.
         assert_eq!(expected.len(), ALL.len());

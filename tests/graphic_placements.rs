@@ -10,6 +10,7 @@ fn placement() -> GraphicPlacement {
         size_m: DVec2::new(0.1, 0.2),
         rotation_degrees: 90.,
         side: GraphicSide::Front,
+        opacity: 1.,
     }
 }
 
@@ -686,4 +687,55 @@ fn triangle_uv_conversion_preserves_detail_before_f32_cast() {
     let premature = (100_f32 - graphic.center_m.x as f32) / graphic.size_m.x as f32 + 0.5;
     assert!((actual - expected).abs() < 1e-6);
     assert!((premature - expected).abs() > 0.002);
+}
+
+#[test]
+fn opacity_defaults_to_opaque_and_stays_out_of_old_documents() {
+    let p = placement();
+    let json = serde_json::to_value(&p).unwrap();
+    assert!(json.get("opacity").is_none());
+    let mut half = p.clone();
+    half.opacity = 0.5;
+    half.validate().unwrap();
+    let back: GraphicPlacement =
+        serde_json::from_value(serde_json::to_value(&half).unwrap()).unwrap();
+    assert_eq!(back.opacity, 0.5);
+    let old: GraphicPlacement = serde_json::from_value(json).unwrap();
+    assert_eq!(old.opacity, 1.);
+    half.opacity = 1.5;
+    assert!(half.validate().is_err());
+}
+
+#[test]
+fn handles_move_scale_and_turn_a_graphic_about_its_centre() {
+    let p = GraphicPlacement {
+        center_m: DVec2::new(0.1, 0.1),
+        size_m: DVec2::new(0.04, 0.02),
+        rotation_degrees: 0.,
+        ..placement()
+    };
+    assert!(p.contains(DVec2::new(0.11, 0.105)));
+    assert!(!p.contains(DVec2::new(0.13, 0.1)));
+    let moved = p.moved(DVec2::new(0.02, -0.01));
+    assert!(moved.center_m.distance(DVec2::new(0.12, 0.09)) < 1e-15);
+    // A corner dragged to twice its distance doubles both sides.
+    let corner = p.corners().unwrap()[2];
+    let bigger = p.scaled_towards(corner, p.center_m + (corner - p.center_m) * 2.);
+    assert!((bigger.size_m - DVec2::new(0.08, 0.04)).length() < 1e-12);
+    // Never collapses below a millimetre.
+    let tiny = p.scaled_towards(corner, p.center_m);
+    assert!((tiny.size_m.min_element() - 0.001).abs() < 1e-12);
+    // A handle swept a quarter turn turns it a quarter turn; snapping rounds to 15°.
+    let turned = p.turned_towards(DVec2::new(0.12, 0.1), DVec2::new(0.1, 0.12), None);
+    assert!((turned.rotation_degrees - 90.).abs() < 1e-9);
+    let snapped = p.turned_towards(
+        DVec2::new(0.12, 0.1),
+        p.center_m + DVec2::from_angle(0.2) * 0.02,
+        Some(15.),
+    );
+    assert!(
+        (snapped.rotation_degrees - 15.).abs() < 1e-9,
+        "{}",
+        snapped.rotation_degrees
+    );
 }

@@ -41,6 +41,7 @@ fn aliases(id: CommandId) -> &'static str {
         ToolGrab => "pull drag cloth",
         ToolMeasure => "ruler tape distance",
         ToolInspect => "debug report paint faces",
+        ToolGraphic => "print logo image move scale rotate graphic",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -68,6 +69,7 @@ pub(super) fn tool_for_command(id: CommandId) -> Option<(Tool, bool)> {
         ToolGrab => (Tool::Grab, false),
         ToolMeasure => (Tool::Measure, false),
         ToolInspect => (Tool::Inspect, false),
+        ToolGraphic => (Tool::Graphic, false),
         _ => return None,
     })
 }
@@ -499,6 +501,8 @@ mod tests {
         frames(&mut h, &mut c);
         h.replace_text("palette.query", "tool.", &mut c, &mut draw)
             .unwrap();
+        // The list scrolls back to the top with egui's scroll animation.
+        frames(&mut h, &mut c);
         frames(&mut h, &mut c);
         h.click("palette.command.tool.edit", &mut c, &mut draw)
             .unwrap();
@@ -762,7 +766,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ToolInspect
+            CommandId::ToolGraphic
         );
         h.key(
             "palette.query",
@@ -925,6 +929,7 @@ mod tests {
             (CommandId::ToolGrab, Tool::Grab, false),
             (CommandId::ToolMeasure, Tool::Measure, false),
             (CommandId::ToolInspect, Tool::Inspect, false),
+            (CommandId::ToolGraphic, Tool::Graphic, false),
         ];
         for (id, tool, rotate) in expected {
             assert!(tool_for_command(id).is_some_and(|actual| actual == (tool, rotate)));

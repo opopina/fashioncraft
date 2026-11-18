@@ -1549,6 +1549,7 @@ impl Atelier {
                 Tool::InternalLine => "Click a boundary to choose its panel, then draw inside · Enter: finish",
                 Tool::Sew => "Choose two boundaries in 2D or 3D, then create the seam in Properties",
                 Tool::Edit => "Drag points to edit · Shift+click to add · drag empty space to box select · Ctrl+C / Ctrl+V",
+                Tool::Graphic => "Drag a graphic to move it · its corners scale it · its top handle turns it (Shift: 15°) · Delete removes it",
                 _ => "Right-click for tools · middle-drag to pan · wheel to zoom",
             });
         });
@@ -1699,12 +1700,17 @@ impl Atelier {
         } else {
             None
         };
-        if !matches!(self.authoring.tool, Tool::Inspect | Tool::Measure)
+        if self.authoring.tool == Tool::Graphic {
+            self.graphic_tool_events(&response, rect);
+        } else if !matches!(self.authoring.tool, Tool::Inspect | Tool::Measure)
             && !self.sewing_canvas_confirm(&response)
         {
             self.board_events(&response, rect);
         }
         self.paint_board(ui, rect, &response);
+        if self.authoring.tool == Tool::Graphic {
+            self.paint_graphic_handles(ui, rect);
+        }
         if self.authoring.tool == Tool::Measure {
             self.measure_board(ui, rect, &response);
         }
@@ -2978,13 +2984,8 @@ impl Atelier {
                     }
                 }
                 painter.add(egui::Shape::mesh(mesh));
-                let graphics: Vec<_> = self
-                    .project
-                    .template
-                    .graphics
-                    .iter()
-                    .filter(|g| g.panel_id == panel.id)
-                    .collect();
+                let graphics = self.shown_graphics(&panel.id);
+                let graphics: Vec<_> = graphics.iter().collect();
                 super::graphics_ui::paint_board_graphics(
                     &painter,
                     &graphics,

@@ -5,8 +5,8 @@ use super::*;
 use crate::garment::graphics::GraphicTriangle;
 use std::collections::HashMap;
 
-/// Floats per graphic vertex: position, normal, image coordinates.
-const GRAPHIC_FLOATS: usize = 8;
+/// Floats per graphic vertex: position, normal, image coordinates, opacity.
+const GRAPHIC_FLOATS: usize = 9;
 
 /// Decoded straight-alpha RGBA8 pixels of a graphic's image, in sRGB. `key` identifies the
 /// pixels: equal keys must mean equal pixels, as the uploaded texture is reused.
@@ -22,6 +22,8 @@ pub struct GraphicImage {
 pub struct GraphicDraw<'a> {
     pub image: &'a GraphicImage,
     pub triangles: &'a [GraphicTriangle],
+    /// Multiplies the image's alpha.
+    pub opacity: f32,
 }
 
 pub(super) struct GraphicLayer {
@@ -67,7 +69,7 @@ impl GraphicLayer {
             label: Some("cloth graphics"),
             source: wgpu::ShaderSource::Wgsl(include_str!("graphic.wgsl").into()),
         });
-        let attrs = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x3,2=>Float32x2];
+        let attrs = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x3,2=>Float32x2,3=>Float32];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("cloth graphics"),
             layout: None,
@@ -229,6 +231,7 @@ impl GraphicLayer {
                     data.extend_from_slice(&t.points[k].as_vec3().to_array());
                     data.extend_from_slice(&t.normals[k].as_vec3().to_array());
                     data.extend_from_slice(&t.uv[k].as_vec2().to_array());
+                    data.push(draw.opacity.clamp(0., 1.));
                 }
             }
             let end = (data.len() / GRAPHIC_FLOATS) as u32;

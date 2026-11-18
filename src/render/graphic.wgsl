@@ -16,11 +16,14 @@ struct VertexOut {
     @location(0) normal: vec3f,
     @location(1) world: vec3f,
     @location(2) uv: vec2f,
+    @location(3) opacity: f32,
 };
 
 @vertex
-fn vs_main(@location(0) world: vec3f, @location(1) normal: vec3f, @location(2) uv: vec2f) -> VertexOut {
+fn vs_main(@location(0) world: vec3f, @location(1) normal: vec3f, @location(2) uv: vec2f,
+           @location(3) opacity: f32) -> VertexOut {
     var out: VertexOut;
+    out.opacity = opacity;
     out.position = view.projection * vec4f(world, 1.0);
     out.normal = normal;
     out.world = world;
@@ -36,7 +39,8 @@ fn encode_srgb(linear: vec3f) -> vec3f {
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let texel = textureSample(image, image_sampler, in.uv);
-    if texel.a < 0.004 {
+    let alpha = texel.a * in.opacity;
+    if alpha < 0.004 {
         discard;
     }
     let to_eye = view.eye.xyz - in.world * view.eye.w;
@@ -47,5 +51,5 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     }
     let nl = clamp(dot(n, normalize(view.light.xyz)), 0.0, 1.0);
     let rgb = texel.rgb * (0.25 * view.ambient.x + 0.7 * view.light.w * nl);
-    return vec4f(encode_srgb(rgb), texel.a);
+    return vec4f(encode_srgb(rgb), alpha);
 }

@@ -27,7 +27,21 @@ pub struct GraphicPlacement {
     pub size_m: DVec2,
     pub rotation_degrees: f64,
     pub side: GraphicSide,
+    /// 1 is opaque, 0 invisible; the image's own alpha multiplies it.
+    #[serde(default = "opaque", skip_serializing_if = "is_opaque")]
+    pub opacity: f64,
 }
+
+fn opaque() -> f64 {
+    1.
+}
+
+fn is_opaque(value: &f64) -> bool {
+    *value == 1.
+}
+
+/// Smallest side a graphic can be scaled down to, metres.
+pub const MIN_GRAPHIC_SIZE_M: f64 = 0.001;
 
 /// Transient image coordinates for one compiled triangle. Vertex IDs belong
 /// only to that compiled mesh: discard and rebuild these records on remeshing.
@@ -68,6 +82,9 @@ impl GraphicPlacement {
             || !self.rotation_degrees.is_finite()
         {
             return Err("Graphic placement requires finite metre coordinates, positive size and finite rotation".into());
+        }
+        if !(0.0..=1.0).contains(&self.opacity) {
+            return Err("Graphic opacity must be between 0 and 1".into());
         }
         let scale = self
             .center_m
@@ -146,6 +163,64 @@ impl GraphicPlacement {
             });
         }
         Ok(result)
+    }
+
+    /// Whether a point of the piece (material metres) lies on the image rectangle.
+    pub fn contains(&self, point_m: DVec2) -> bool {
+        self.material_to_uv(point_m)
+            .is_ok_and(|uv| (0.0..=1.0).contains(&uv.x) && (0.0..=1.0).contains(&uv.y))
+    }
+
+    /// The image's corners on the piece: (0,0), (1,0), (1,1), (0,1) in image coordinates.
+    pub fn corners(&self) -> Option<[DVec2; 4]> {
+        let mut out = [DVec2::ZERO; 4];
+        for (k, uv) in [DVec2::ZERO, DVec2::X, DVec2::ONE, DVec2::Y]
+            .into_iter()
+            .enumerate()
+        {
+            out[k] = self.uv_to_material(uv).ok()?;
+        }
+        Some(out)
+    }
+
+    /// Moved by `delta` metres across its piece.
+    pub fn moved(&self, delta: DVec2) -> Self {
+        Self {
+            center_m: self.center_m + delta,
+            ..self.clone()
+        }
+    }
+
+    /// Scaled about its centre, keeping its proportions, as a handle dragged from `from` to
+    /// `to` (piece metres) would; never below [`MIN_GRAPHIC_SIZE_M`] a side.
+    pub fn scaled_towards(&self, from: DVec2, to: DVec2) -> Self {
+        let before = (from - self.center_m).length();
+        if before < 1e-9 {
+            return self.clone();
+        }
+        let factor = (to - self.center_m).length() / before;
+        let floor = MIN_GRAPHIC_SIZE_M / self.size_m.min_element();
+        Self {
+            size_m: self.size_m * factor.max(floor),
+            ..self.clone()
+        }
+    }
+
+    /// Turned about its centre by the angle a handle sweeps from `from` to `to` (piece
+    /// metres), rounded to multiples of `snap_degrees` when given.
+    pub fn turned_towards(&self, from: DVec2, to: DVec2, snap_degrees: Option<f64>) -> Self {
+        let (a, b) = (from - self.center_m, to - self.center_m);
+        if a.length() < 1e-9 || b.length() < 1e-9 {
+            return self.clone();
+        }
+        let mut angle = self.rotation_degrees + a.angle_to(b).to_degrees();
+        if let Some(step) = snap_degrees.filter(|s| *s > 0.) {
+            angle = (angle / step).round() * step;
+        }
+        Self {
+            rotation_degrees: angle.rem_euclid(360.),
+            ..self.clone()
+        }
     }
 
     /// Convert normalized image coordinates to panel-local material metres.

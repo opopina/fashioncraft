@@ -32,6 +32,7 @@ pub enum CommandId {
     ToolGrab,
     ToolMeasure,
     ToolInspect,
+    ToolGraphic,
     LockSelectedPieces,
     LockAllPieces,
     UnlockAllPieces,
@@ -319,6 +320,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ToolInspect,
         "tool.inspect",
         "Mark simulation issue",
+        Tool,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ToolGraphic,
+        "tool.graphic",
+        "Transform graphic",
         Tool,
         None,
         NotUndoable,

@@ -459,7 +459,13 @@ impl Atelier {
         let fabric_images: Vec<_> = fabric_images.iter().map(Option::as_deref).collect();
         let graphics: Vec<marvelous_cloth::render::GraphicDraw> = graphic_draws
             .iter()
-            .map(|(image, triangles)| marvelous_cloth::render::GraphicDraw { image, triangles })
+            .map(
+                |(image, triangles, opacity)| marvelous_cloth::render::GraphicDraw {
+                    image,
+                    triangles,
+                    opacity: *opacity,
+                },
+            )
             .collect();
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.

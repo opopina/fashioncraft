@@ -475,7 +475,8 @@ impl Atelier {
             | Id::ToolRotate
             | Id::ToolGrab
             | Id::ToolMeasure
-            | Id::ToolInspect => {
+            | Id::ToolInspect
+            | Id::ToolGraphic => {
                 let (tool, rotate) =
                     command_palette::tool_for_command(id).ok_or("Unknown authoring tool")?;
                 self.set_authoring_tool(tool, rotate);

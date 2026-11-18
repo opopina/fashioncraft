@@ -171,7 +171,8 @@ pub(super) struct Field<'a> {
 }
 
 /// A number field whose new value is returned once, when a drag ends, a value is typed or
-/// the reset button is clicked; the in-progress value lives in egui's temporary memory.
+/// the reset button is clicked; the in-progress value lives in egui's temporary memory,
+/// beside the value it started from, so a change made elsewhere (undo, a tool) shows at once.
 pub(super) fn committed_value(
     ui: &mut egui::Ui,
     key: impl std::hash::Hash + std::fmt::Debug,
@@ -179,7 +180,10 @@ pub(super) fn committed_value(
     field: Field,
 ) -> Option<f64> {
     let id = egui::Id::new(key);
-    let mut draft = ui.data_mut(|d| *d.get_temp_mut_or(id, current));
+    let (mut draft, base) = ui.data_mut(|d| *d.get_temp_mut_or(id, (current, current)));
+    if base != current {
+        draft = current;
+    }
     let mut commit = false;
     ui.horizontal(|ui| {
         ui.label(field.label).on_hover_text(field.hover);
@@ -203,10 +207,10 @@ pub(super) fn committed_value(
         }
     });
     if commit {
-        ui.data_mut(|d| d.remove::<f64>(id));
+        ui.data_mut(|d| d.remove::<(f64, f64)>(id));
         (draft != current).then_some(draft)
     } else {
-        ui.data_mut(|d| d.insert_temp(id, draft));
+        ui.data_mut(|d| d.insert_temp(id, (draft, current)));
         None
     }
 }

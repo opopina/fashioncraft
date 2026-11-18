@@ -56,6 +56,9 @@ pub(super) fn hint_3d(tool: Tool) -> &'static str {
         Tool::Grab => {
             "Left: grab the fabric · right drag: orbit · middle drag: pan · wheel: zoom toward the cursor"
         }
+        Tool::Graphic => {
+            "Graphics are moved on the 2D board · right drag: orbit · middle drag: pan · wheel: zoom toward the cursor"
+        }
         Tool::Edit
         | Tool::Draw
         | Tool::Rectangle

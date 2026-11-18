@@ -74,6 +74,7 @@ fn placement(panel: &str, side: GraphicSide) -> GraphicPlacement {
         size_m: DVec2::new(0.08, 0.04),
         rotation_degrees: 20.,
         side,
+        opacity: 1.,
     }
 }
 

@@ -112,10 +112,11 @@ pub(super) fn paint_board_graphics(
         };
         let mut mesh = egui::Mesh::with_texture(texture);
         // A back print shows through the cloth on the board, faintly.
-        let tint = match placement.side {
-            GraphicSide::Front => egui::Color32::WHITE,
-            GraphicSide::Back => egui::Color32::from_white_alpha(90),
-        };
+        let alpha = match placement.side {
+            GraphicSide::Front => 255.,
+            GraphicSide::Back => 90.,
+        } * placement.opacity.clamp(0., 1.);
+        let tint = egui::Color32::from_white_alpha(alpha.round() as u8);
         for triangle in board_triangles(placement, garment, point) {
             let base = mesh.vertices.len() as u32;
             for (pos, uv) in triangle {
@@ -131,7 +132,240 @@ pub(super) fn paint_board_graphics(
     }
 }
 
+/// Screen size of the corner and turn handles, points.
+const HANDLE_PX: f32 = 7.;
+/// How far the turn handle stands off the graphic's top edge, points.
+const TURN_OFFSET_PX: f32 = 22.;
+
+/// Which part of a graphic a drag holds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Handle {
+    Body,
+    Corner,
+    Turn,
+}
+
+struct GraphicDrag {
+    original: GraphicPlacement,
+    handle: Handle,
+    /// Where the press landed on the piece, metres.
+    start_m: DVec2,
+    preview: GraphicPlacement,
+}
+
+/// The Transform graphic tool's selection and drag in progress.
+#[derive(Default)]
+pub(super) struct GraphicTool {
+    selected: Option<String>,
+    drag: Option<GraphicDrag>,
+}
+
+/// Screen corners of a graphic and its turn handle, given the piece-to-screen map.
+fn handle_points(
+    placement: &GraphicPlacement,
+    point: &dyn Fn(DVec2) -> egui::Pos2,
+) -> Option<([egui::Pos2; 4], egui::Pos2, egui::Pos2)> {
+    let corners = placement.corners()?.map(point);
+    let centre = point(placement.center_m);
+    let top = corners[0] + (corners[1] - corners[0]) * 0.5;
+    let out = (top - centre).normalized();
+    Some((corners, top, top + out * TURN_OFFSET_PX))
+}
+
 impl Atelier {
+    /// The piece-to-screen map of the board for piece `panel`, and its inverse.
+    fn piece_maps(
+        &self,
+        panel: &str,
+        rect: egui::Rect,
+    ) -> Option<(
+        impl Fn(DVec2) -> egui::Pos2 + '_,
+        impl Fn(egui::Pos2) -> DVec2 + '_,
+    )> {
+        let i = self
+            .project
+            .template
+            .panels
+            .iter()
+            .position(|p| p.id == panel)?;
+        let (origin, angle) = (self.board_origin(i), self.board_angle(i));
+        let board = &self.authoring.board;
+        Some((
+            move |uv: DVec2| {
+                board.screen(
+                    rect,
+                    origin + marvelous_cloth::authoring::rotate_2d(uv, angle),
+                )
+            },
+            move |pos: egui::Pos2| {
+                marvelous_cloth::authoring::rotate_2d(board.world(rect, pos) - origin, -angle)
+            },
+        ))
+    }
+
+    /// The graphics of a piece as the board shows them, with a drag's preview in place.
+    pub(super) fn shown_graphics(&self, panel: &str) -> Vec<GraphicPlacement> {
+        let preview = self
+            .authoring
+            .graphic_tool
+            .drag
+            .as_ref()
+            .map(|d| &d.preview);
+        self.project
+            .template
+            .graphics
+            .iter()
+            .filter(|g| g.panel_id == panel)
+            .map(|g| match preview {
+                Some(p) if p.id == g.id => p.clone(),
+                _ => g.clone(),
+            })
+            .collect()
+    }
+
+    /// The graphic and handle under `pos`: the selected graphic's handles first, then the
+    /// topmost graphic whose image covers the point.
+    fn graphic_hit(&self, rect: egui::Rect, pos: egui::Pos2) -> Option<(String, Handle)> {
+        let graphics = &self.project.template.graphics;
+        if let Some(selected) = &self.authoring.graphic_tool.selected
+            && let Some(g) = graphics.iter().find(|g| &g.id == selected)
+            && let Some((to_screen, _)) = self.piece_maps(&g.panel_id, rect)
+            && let Some((corners, _, turn)) = handle_points(g, &to_screen)
+        {
+            let near = |p: egui::Pos2| p.distance(pos) <= HANDLE_PX + 3.;
+            if near(turn) {
+                return Some((g.id.clone(), Handle::Turn));
+            }
+            if corners.into_iter().any(near) {
+                return Some((g.id.clone(), Handle::Corner));
+            }
+        }
+        graphics.iter().rev().find_map(|g| {
+            let (_, to_piece) = self.piece_maps(&g.panel_id, rect)?;
+            g.contains(to_piece(pos))
+                .then(|| (g.id.clone(), Handle::Body))
+        })
+    }
+
+    /// Press, drag and release of the Transform graphic tool on the 2D board. A release
+    /// commits the change as one command; Escape cancels a drag; Delete removes the selection.
+    pub(super) fn graphic_tool_events(&mut self, response: &egui::Response, rect: egui::Rect) {
+        let ctx = response.ctx.clone();
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && let Some(start) = ctx.input(|i| i.pointer.press_origin())
+        {
+            let hit = self.graphic_hit(rect, start);
+            self.authoring.graphic_tool.selected = hit.as_ref().map(|(id, _)| id.clone());
+            self.authoring.graphic_tool.drag = hit.and_then(|(id, handle)| {
+                let g = self
+                    .project
+                    .template
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == id)?
+                    .clone();
+                let (_, to_piece) = self.piece_maps(&g.panel_id, rect)?;
+                let start_m = to_piece(start);
+                Some(GraphicDrag {
+                    preview: g.clone(),
+                    original: g,
+                    handle,
+                    start_m,
+                })
+            });
+        }
+        if response.dragged_by(egui::PointerButton::Primary)
+            && let Some(pos) = response.interact_pointer_pos()
+            && let Some(drag) = self.authoring.graphic_tool.drag.as_ref()
+        {
+            let snap = ctx.input(|i| i.modifiers.shift).then_some(15.);
+            let preview = self
+                .piece_maps(&drag.original.panel_id, rect)
+                .map(|(_, to_piece)| {
+                    let now = to_piece(pos);
+                    match drag.handle {
+                        Handle::Body => drag.original.moved(now - drag.start_m),
+                        Handle::Corner => drag.original.scaled_towards(drag.start_m, now),
+                        Handle::Turn => drag.original.turned_towards(drag.start_m, now, snap),
+                    }
+                });
+            if let (Some(preview), Some(drag)) =
+                (preview, self.authoring.graphic_tool.drag.as_mut())
+                && preview.validate().is_ok()
+            {
+                drag.preview = preview;
+            }
+        }
+        if response.drag_stopped()
+            && let Some(drag) = self.authoring.graphic_tool.drag.take()
+            && drag.preview != drag.original
+        {
+            self.edit(Command::SetGraphic {
+                placement: drag.preview,
+            });
+        }
+        if response.clicked()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            self.authoring.graphic_tool.selected = self.graphic_hit(rect, pos).map(|(id, _)| id);
+        }
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.authoring.graphic_tool.drag = None;
+        }
+        if self.authoring.graphic_tool.drag.is_none()
+            && ctx
+                .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+            && let Some(id) = self.authoring.graphic_tool.selected.take()
+            && self.project.template.graphics.iter().any(|g| g.id == id)
+        {
+            self.edit(Command::RemoveGraphic { id });
+        }
+    }
+
+    /// Outline, corner handles and turn handle of the selected graphic on the board.
+    pub(super) fn paint_graphic_handles(&self, ui: &egui::Ui, rect: egui::Rect) {
+        let Some(id) = &self.authoring.graphic_tool.selected else {
+            return;
+        };
+        let Some(g) = self.authoring.graphic_tool.drag.as_ref().map_or_else(
+            || {
+                self.project
+                    .template
+                    .graphics
+                    .iter()
+                    .find(|g| &g.id == id)
+                    .cloned()
+            },
+            |d| Some(d.preview.clone()),
+        ) else {
+            return;
+        };
+        let Some((to_screen, _)) = self.piece_maps(&g.panel_id, rect) else {
+            return;
+        };
+        let Some((corners, top, turn)) = handle_points(&g, &to_screen) else {
+            return;
+        };
+        let painter = ui.painter().with_clip_rect(rect);
+        let color = ui.visuals().selection.bg_fill;
+        let stroke = egui::Stroke::new(1.5, color);
+        painter.add(egui::Shape::closed_line(corners.to_vec(), stroke));
+        for c in corners {
+            painter.rect(
+                egui::Rect::from_center_size(c, egui::vec2(HANDLE_PX, HANDLE_PX)),
+                1.,
+                egui::Color32::WHITE,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+        }
+        painter.line_segment([top, turn], stroke);
+        painter.circle(turn, HANDLE_PX * 0.6, egui::Color32::WHITE, stroke);
+    }
+
     /// The cached image of an asset, loading it on first use or after its file changed.
     fn graphic(
         &mut self,
@@ -215,7 +449,7 @@ impl Atelier {
     pub(super) fn graphic_draws(
         &mut self,
         ctx: &egui::Context,
-    ) -> Vec<(Arc<GraphicImage>, Vec<GraphicTriangle>)> {
+    ) -> Vec<(Arc<GraphicImage>, Vec<GraphicTriangle>, f32)> {
         let placements: Vec<GraphicPlacement> = self
             .project
             .template
@@ -243,7 +477,7 @@ impl Atelier {
             }
             .unwrap_or(&self.scene.state.x);
             if let Ok(triangles) = placement.graphic_triangles(&self.scene.garment, x, flipped) {
-                draws.push((image, triangles));
+                draws.push((image, triangles, placement.opacity as f32));
             }
         }
         draws
@@ -334,6 +568,7 @@ impl Atelier {
                 size_m: DVec2::new(width, height),
                 rotation_degrees: 0.,
                 side: GraphicSide::Front,
+                opacity: 1.,
             },
         });
     }
@@ -472,6 +707,22 @@ impl Atelier {
                             };
                         }
                     });
+                    if let Some(percent) = committed_value(
+                        ui,
+                        ("graphic_opacity", &g.id),
+                        g.opacity * 100.,
+                        Field {
+                            label: "Opacity",
+                            hover: "How solid the print looks; the image's own transparency adds to it",
+                            range: 0.0..=100.,
+                            speed: 0.5,
+                            decimals: 0,
+                            suffix: " %",
+                            reset: Some(100.),
+                        },
+                    ) {
+                        edited.opacity = percent / 100.;
+                    }
                     if edited != *g && edited.validate().is_ok() {
                         command = Some(Command::SetGraphic { placement: edited });
                     }
@@ -505,6 +756,7 @@ mod tests {
             size_m: DVec2::new(0.1, 0.05),
             rotation_degrees: 30.,
             side: GraphicSide::Front,
+            opacity: 1.,
         };
         let triangles = board_triangles(&placement, &garment, &|p| {
             egui::pos2(p.x as f32, p.y as f32)

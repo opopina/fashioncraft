@@ -31,6 +31,8 @@ pub(super) enum Tool {
     Inspect,
     Ellipse,
     Sector,
+    /// Move, scale and turn graphics on the 2D board.
+    Graphic,
 }
 #[derive(Default)]
 pub(super) struct AuthoringUi {
@@ -39,6 +41,8 @@ pub(super) struct AuthoringUi {
     pub graphic_images: super::graphics_ui::GraphicImages,
     /// The fabric eyedropper waits for a click on the 3D view.
     pub eyedropper: bool,
+    /// Selection and drag of the Transform graphic tool.
+    pub graphic_tool: super::graphics_ui::GraphicTool,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,
     pub camera_views: super::camera_views::CameraViewsUi,
@@ -1075,6 +1079,13 @@ impl Atelier {
                     "M · click two points on the 2D board · Esc: clear",
                 ),
                 (
+                    Tool::Graphic,
+                    "graphic",
+                    "Transform graphic",
+                    false,
+                    "K · drag a graphic to move it, its corners to scale, its top handle to turn",
+                ),
+                (
                     Tool::Place,
                     "Move 3D",
                     "Move 3D",
@@ -1120,6 +1131,7 @@ impl Atelier {
                     Tool::Grab => super::icons::Icon::Grab,
                     Tool::Inspect => super::icons::Icon::Warning,
                     Tool::Measure => super::icons::Icon::Measure,
+                    Tool::Graphic => super::icons::Icon::Graphic,
                 };
                 let button =
                     super::icons::icon_only(ui, icon, 36., active, &format!("{label}\n{help}"));
@@ -1242,6 +1254,9 @@ impl Atelier {
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::M)) {
             self.set_authoring_tool(Tool::Measure, false);
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::K)) {
+            self.set_authoring_tool(Tool::Graphic, false);
         }
         if ctx.input(|i| !i.modifiers.command && !i.modifiers.alt && i.key_pressed(egui::Key::R)) {
             self.set_authoring_tool(Tool::Place, true);
@@ -2605,6 +2620,7 @@ mod transition_tests {
             size_m: DVec2::new(0.05, 0.05),
             rotation_degrees: 0.,
             side: marvelous_cloth::garment::graphics::GraphicSide::Front,
+            opacity: 1.,
         };
         let mut updated = placement.clone();
         updated.center_m += glam::DVec2::new(0.02, -0.01);

@@ -108,6 +108,25 @@ fn end_label(end: SegmentEnd) -> &'static str {
 }
 
 impl Atelier {
+    /// Unfold the selected piece across its selected contour segment, as one undo step.
+    pub(super) fn unfold_selected_segment(&mut self) -> bool {
+        let Some((panel, edge)) = self
+            .authoring
+            .edge
+            .as_ref()
+            .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
+        else {
+            self.status = "Select a straight contour segment first".into();
+            return false;
+        };
+        if self.edit(Command::Unfold { panel, edge }) {
+            self.authoring.edge = None;
+            self.status = "Unfolded into the whole piece".into();
+            return true;
+        }
+        false
+    }
+
     /// Segment section of the inspector for the selected contour boundary.
     pub(super) fn segment_properties(
         &mut self,
@@ -335,6 +354,19 @@ impl Atelier {
             ui.indent("segment-elastic", |ui| {
                 self.line_spring_controls(ui, &panel.id, &name);
                 self.segment_trims(ui, &panel.id, &name);
+                if ui
+                    .button("Unfold across this segment")
+                    .on_hover_text(
+                        "Mirror the piece across this straight segment into the whole piece; the \
+                         segment ends up inside it",
+                    )
+                    .clicked()
+                {
+                    command = Some(Command::Unfold {
+                        panel: panel.id.clone(),
+                        edge: name.clone(),
+                    });
+                }
             });
         }
         if let Some(pick) = &self.authoring.segments.pick {

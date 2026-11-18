@@ -89,6 +89,7 @@ pub enum CommandId {
     ArchivePieces,
     CutAndSew,
     MergeAlongSeam,
+    UnfoldPiece,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -882,6 +883,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         MergeAlongSeam,
         "pattern.merge",
         "Merge the pieces of the selected seam",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        UnfoldPiece,
+        "pattern.unfold",
+        "Unfold the piece across the selected segment",
         Pattern,
         None,
         TemplateHistory,

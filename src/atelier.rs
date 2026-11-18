@@ -543,6 +543,11 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::UnfoldPiece => {
+                if !self.unfold_selected_segment() {
+                    return Err(self.status.clone());
+                }
+            }
             Id::MergeAlongSeam => {
                 let seam = self
                     .edge_seams()

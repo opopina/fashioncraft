@@ -265,6 +265,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Not built yet" => "Aún no está hecho",
         "Cut and sew along line" => "Cortar y coser por la línea",
         "Merge pieces along seam" => "Fusionar las piezas por la costura",
+        "Unfold across segment" => "Desdoblar por el segmento",
         "Commands…" => "Órdenes…",
         "⏸ Pause" => "⏸ Pausa",
         "▶ Sew and simulate" => "▶ Coser y simular",

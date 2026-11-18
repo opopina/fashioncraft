@@ -730,6 +730,179 @@ pub(super) fn merge_along_seam(
     Ok(a_id)
 }
 
+/// Unfold a half piece across its straight boundary `edge`: the piece gains its mirror image
+/// on the other side of that boundary, which disappears inside the whole piece. Boundaries,
+/// curves, markings and internal lines are mirrored with `_mirror` names; elastic, tape and
+/// folds on mirrored lines are copied. Seams on the fold, or pieces it cannot carry over, are
+/// refused.
+pub(super) fn unfold(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    edge: &str,
+) -> Result<(), String> {
+    let held = template.pin_targets.iter().any(|p| p.panel == panel)
+        || template.frozen_panels.iter().any(|p| p.panel == panel)
+        || template.solidified_panels.iter().any(|p| p.panel == panel)
+        || template.deactivated_panels.iter().any(|p| p.panel == panel);
+    if held {
+        return Err("Release pins, unfreeze and activate the piece before unfolding it".into());
+    }
+    if template
+        .mirror_links
+        .iter()
+        .any(|l| l.a == panel || l.b == panel)
+    {
+        return Err("Unlink the mirrored pair before unfolding".into());
+    }
+    if template
+        .tacks
+        .iter()
+        .any(|t| t.a.panel == panel || t.b.panel == panel)
+    {
+        return Err("Remove the piece's tacks before unfolding it".into());
+    }
+    if template.seams.iter().any(|s| {
+        s.references()
+            .any(|r| r.panel == panel && r.edge.as_deref() == Some(edge))
+    }) {
+        return Err("The fold boundary is sewn; delete its seam before unfolding".into());
+    }
+    let index = template
+        .panels
+        .iter()
+        .position(|p| p.id == panel)
+        .ok_or("Panel not found")?;
+    let source = template.panels[index].clone();
+    let polygon = source
+        .polygon
+        .as_ref()
+        .ok_or("Unfolding needs an editable contour")?;
+    if !polygon.holes.is_empty() {
+        return Err("Pieces with holes cannot be unfolded yet".into());
+    }
+    let n = polygon.points.len();
+    let i = polygon
+        .edges
+        .iter()
+        .position(|e| e == edge)
+        .ok_or("Boundary not found")?;
+    if polygon.curves.contains_key(edge) {
+        return Err("Unfold across a straight boundary".into());
+    }
+    if polygon.target_lengths.contains_key(edge) || polygon.notches.contains_key(edge) {
+        return Err("The fold boundary has a target length or notches; clear them first".into());
+    }
+    if template
+        .line_springs
+        .iter()
+        .any(|s| s.panel == panel && s.line == edge)
+    {
+        return Err("Clear the elastic or tape on the fold boundary first".into());
+    }
+    let (p0, p1) = (polygon.points[i], polygon.points[(i + 1) % n]);
+    let d = (p1 - p0).normalize_or_zero();
+    if d == DVec2::ZERO {
+        return Err("The fold boundary has no length".into());
+    }
+    let reflect_v = |v: DVec2| 2. * v.dot(d) * d - v;
+    let reflect = |x: DVec2| p0 + reflect_v(x - p0);
+    let mut taken: BTreeSet<String> = polygon.edges.iter().cloned().collect();
+    taken.extend(polygon.lines.iter().map(|l| l.id.clone()));
+    let mut mirror_name = BTreeMap::new();
+    for name in polygon
+        .edges
+        .iter()
+        .chain(polygon.lines.iter().map(|l| &l.id))
+    {
+        let base = format!("{name}_mirror");
+        let fresh = if taken.contains(&base) {
+            (2..)
+                .map(|k| format!("{base}_{k}"))
+                .find(|c| !taken.contains(c))
+                .unwrap()
+        } else {
+            base
+        };
+        taken.insert(fresh.clone());
+        mirror_name.insert(name.clone(), fresh);
+    }
+    let mut whole = polygon.clone();
+    whole.points = (0..n).map(|k| polygon.points[(i + 1 + k) % n]).collect();
+    whole.edges = (0..n - 1)
+        .map(|k| polygon.edges[(i + 1 + k) % n].clone())
+        .collect();
+    // Walk the mirror image backwards from the fold's start to its end.
+    for k in 1..n - 1 {
+        whole.points.push(reflect(polygon.points[(i + n - k) % n]));
+    }
+    for k in 1..n {
+        let original = &polygon.edges[(i + n - k) % n];
+        whole.edges.push(mirror_name[original].clone());
+    }
+    whole.seam_allowances.remove(edge);
+    for (e, c) in &polygon.curves {
+        whole
+            .curves
+            .insert(mirror_name[e].clone(), [reflect(c[1]), reflect(c[0])]);
+    }
+    for (e, v) in &polygon.target_lengths {
+        whole.target_lengths.insert(mirror_name[e].clone(), *v);
+    }
+    for (e, v) in &polygon.seam_allowances {
+        if e != edge {
+            whole.seam_allowances.insert(mirror_name[e].clone(), *v);
+        }
+    }
+    for (e, notches) in &polygon.notches {
+        let flipped = notches
+            .iter()
+            .map(|notch| {
+                let mut notch = *notch;
+                notch.at = 1. - notch.at;
+                notch
+            })
+            .collect();
+        whole.notches.insert(mirror_name[e].clone(), flipped);
+    }
+    for l in &polygon.lines {
+        let mut m = l.clone();
+        m.id = mirror_name[&l.id].clone();
+        m.points = l.points.iter().map(|p| reflect(*p)).collect();
+        m.tangents = l.tangents.iter().map(|t| reflect_v(*t)).collect();
+        if let Some(group) = &l.group {
+            m.group = Some(format!("{group}_mirror"));
+        }
+        whole.lines.push(m);
+    }
+    let springs: Vec<_> = template
+        .line_springs
+        .iter()
+        .filter(|s| s.panel == panel)
+        .filter_map(|s| {
+            let mut copy = s.clone();
+            copy.line = mirror_name.get(&s.line)?.clone();
+            Some(copy)
+        })
+        .collect();
+    template.line_springs.extend(springs);
+    let folds: Vec<_> = template
+        .line_folds
+        .iter()
+        .filter(|f| f.panel == panel)
+        .filter_map(|f| {
+            let mut copy = f.clone();
+            copy.line = mirror_name.get(&f.line)?.clone();
+            Some(copy)
+        })
+        .collect();
+    template.line_folds.extend(folds);
+    let mut piece = source.clone();
+    piece.polygon = Some(whole);
+    normalize(&mut piece);
+    template.panels[index] = piece;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

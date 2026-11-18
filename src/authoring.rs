@@ -249,6 +249,11 @@ pub enum Command {
         panel: String,
         line: String,
     },
+    /// Unfold a half piece across its straight boundary `edge` into the whole piece.
+    Unfold {
+        panel: String,
+        edge: String,
+    },
     /// Merge the two pieces a seam joins edge to edge into one; the seam disappears.
     MergeAlongSeam {
         seam: String,
@@ -3935,6 +3940,10 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
         Command::CutAndSew { panel, line } => {
             topology::cut_and_sew(&mut template, &panel, &line)?;
+            selected = Some(panel);
+        }
+        Command::Unfold { panel, edge } => {
+            topology::unfold(&mut template, &panel, &edge)?;
             selected = Some(panel);
         }
         Command::MergeAlongSeam { seam } => {

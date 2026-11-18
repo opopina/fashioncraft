@@ -58,6 +58,8 @@ mod graphics_ui;
 mod icons;
 #[path = "atelier/issue_ui.rs"]
 mod issue_ui;
+#[path = "atelier/keymap.rs"]
+mod keymap;
 #[path = "atelier/layers_ui.rs"]
 mod layers_ui;
 #[path = "atelier/layout.rs"]

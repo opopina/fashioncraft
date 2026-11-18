@@ -58,6 +58,8 @@ pub(super) struct Preferences {
     pub(super) dt: f64,
     /// VBD iterations per physical step.
     pub(super) iterations: usize,
+    /// Which keys run tools and piece actions.
+    pub(super) keymap: super::keymap::KeymapName,
 }
 
 impl Default for Preferences {
@@ -74,6 +76,7 @@ impl Default for Preferences {
             camera_fov_degrees: marvelous_cloth::render::DEFAULT_FOV_DEGREES,
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
+            keymap: Default::default(),
         }
     }
 }
@@ -155,6 +158,19 @@ pub(super) fn window(
                     .changed();
             });
             ui.small("Viewport appearance: use the gear above the 3D view. Pane sizes: drag a divider; double-click to reset.");
+            ui.horizontal(|ui| {
+                ui.label("Keyboard map");
+                for map in super::keymap::KeymapName::ALL {
+                    edited |= ui
+                        .selectable_value(&mut prefs.keymap, map, map.label())
+                        .changed();
+                }
+            })
+            .response
+            .on_hover_text(
+                "Compatible: the single keys garment designers know (S rectangle, H polygon, \
+                 Cmd+K freeze…). ClothCraft classic: this editor's earlier keys (G, R, M, K, D)",
+            );
 
             ui.separator();
             ui.heading("Board");

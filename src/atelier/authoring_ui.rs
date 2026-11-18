@@ -1076,28 +1076,28 @@ impl Atelier {
                     "measure",
                     "Measure",
                     false,
-                    "M · click two points on the 2D board · Esc: clear",
+                    "Click two points on the 2D board · Esc: clear",
                 ),
                 (
                     Tool::Graphic,
                     "graphic",
                     "Transform graphic",
                     false,
-                    "K · drag a graphic to move it, its corners to scale, its top handle to turn",
+                    "Drag a graphic to move it, its corners to scale, its top handle to turn",
                 ),
                 (
                     Tool::Place,
                     "Move 3D",
                     "Move 3D",
                     false,
-                    "G · move the selected panel's flat arrangement",
+                    "Move the selected panel's flat arrangement · G and R switch move and turn",
                 ),
                 (
                     Tool::Place,
                     "Rotate 3D",
                     "Rotate 3D",
                     true,
-                    "R · X/Y/Z rings · Shift for 15°",
+                    "X/Y/Z rings · Shift for 15°",
                 ),
                 (
                     Tool::Grab,
@@ -1111,7 +1111,7 @@ impl Atelier {
                     "issue_brush",
                     "Mark issue",
                     false,
-                    "D · pause and paint problem faces; export a diagnostic report",
+                    "Pause and paint problem faces; export a diagnostic report",
                 ),
             ] {
                 if tool == Tool::Sew || (tool == Tool::Place && !rotate) || tool == Tool::Grab {
@@ -1133,8 +1133,11 @@ impl Atelier {
                     Tool::Measure => super::icons::Icon::Measure,
                     Tool::Graphic => super::icons::Icon::Graphic,
                 };
-                let button =
-                    super::icons::icon_only(ui, icon, 36., active, &format!("{label}\n{help}"));
+                let button = {
+                    let key = super::keymap::label(self.prefs.keymap, tool_command(tool, rotate))
+                        .map_or_else(String::new, |k| format!(" · {k}"));
+                    super::icons::icon_only(ui, icon, 36., active, &format!("{label}{key}\n{help}"))
+                };
                 self.smoke_target(key, button.rect.center());
                 if button.clicked() {
                     self.set_authoring_tool(tool, rotate);
@@ -1249,23 +1252,20 @@ impl Atelier {
                 self.authoring.sewing.active = 1 - self.authoring.sewing.active;
             }
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::D)) {
-            self.set_authoring_tool(Tool::Inspect, false);
-        }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::M)) {
-            self.set_authoring_tool(Tool::Measure, false);
-        }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::K)) {
-            self.set_authoring_tool(Tool::Graphic, false);
-        }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::A)) {
             self.select_all_pieces();
         }
-        if ctx.input(|i| !i.modifiers.command && !i.modifiers.alt && i.key_pressed(egui::Key::R)) {
-            self.set_authoring_tool(Tool::Place, true);
+        // In the 3D move tool G and R switch between moving and turning, whatever the map.
+        if self.authoring.tool == Tool::Place {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::R)) {
+                self.set_authoring_tool(Tool::Place, true);
+            }
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::G)) {
+                self.set_authoring_tool(Tool::Place, false);
+            }
         }
-        if ctx.input(|i| !i.modifiers.command && !i.modifiers.alt && i.key_pressed(egui::Key::G)) {
-            self.set_authoring_tool(Tool::Place, false);
+        for id in super::keymap::pressed(self.prefs.keymap, ctx) {
+            self.invoke_command(id, ctx);
         }
         if matches!(self.authoring.tool, Tool::Edit | Tool::Sew)
             && ctx.input(|i| i.key_pressed(egui::Key::Delete))
@@ -3227,5 +3227,25 @@ mod transition_tests {
             &state.project.template,
             &state.project.template
         ));
+    }
+}
+
+/// The registry command that selects a toolbar tool.
+fn tool_command(tool: Tool, rotate: bool) -> super::commands::CommandId {
+    use super::commands::CommandId as C;
+    match tool {
+        Tool::Edit => C::ToolEdit,
+        Tool::Draw => C::ToolDraw,
+        Tool::Rectangle => C::ToolRectangle,
+        Tool::Ellipse => C::ToolEllipse,
+        Tool::Sector => C::ToolSector,
+        Tool::InternalLine => C::ToolInternalLine,
+        Tool::Sew => C::ToolSew,
+        Tool::Place if rotate => C::ToolRotate,
+        Tool::Place => C::ToolMove,
+        Tool::Grab => C::ToolGrab,
+        Tool::Measure => C::ToolMeasure,
+        Tool::Inspect => C::ToolInspect,
+        Tool::Graphic => C::ToolGraphic,
     }
 }

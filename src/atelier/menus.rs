@@ -14,6 +14,7 @@ pub(super) enum Custom {
     Presentation,
     Profiles,
     Coverage,
+    Keymap,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -364,6 +365,7 @@ const SETTINGS: &[Item] = &[
     Todo("Camera properties…"),
     Todo("Simulation properties…"),
     Sub("Language", &[Todo("English"), Todo("Español")]),
+    X(Custom::Keymap),
     Run("Preferences…", C::OpenPreferences),
 ];
 
@@ -460,7 +462,9 @@ impl Atelier {
                 Item::Run(label, id) => {
                     let available = commands::availability(id, self.command_context());
                     let mut button = egui::Button::new(label).selected(self.command_checked(id));
-                    if let Some(keys) = id.descriptor().shortcut {
+                    let keys = keymap::label(self.prefs.keymap, id)
+                        .or_else(|| id.descriptor().shortcut.map(String::from));
+                    if let Some(keys) = keys {
                         button = button.shortcut_text(keys);
                     }
                     let response = ui
@@ -523,6 +527,20 @@ impl Atelier {
                         .begin(&self.output.join(workspace_profiles::FILE_NAME));
                     ui.close();
                 }
+            }
+            Custom::Keymap => {
+                ui.menu_button("Keyboard map", |ui| {
+                    for map in keymap::KeymapName::ALL {
+                        if ui
+                            .selectable_label(self.prefs.keymap == map, map.label())
+                            .clicked()
+                        {
+                            self.prefs.keymap = map;
+                            self.prefs_dirty = true;
+                            ui.close();
+                        }
+                    }
+                });
             }
             Custom::Coverage => {
                 let (done, all) = coverage();

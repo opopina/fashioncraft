@@ -271,6 +271,9 @@ impl GpuVbd {
         if contacts.minimum_distance <= 1e-10 {
             return Err("OGC separation is numerically unresolved; state unchanged. Inspect or rearrange the touching region".into());
         }
+        // Friction is lagged to this detection, at the start of the step, as on the CPU. The
+        // solver keeps it too: its f64 refinement of precision vertices uses the same terms.
+        solver.friction = crate::vbd::friction::friction_terms(&contacts, &x, &x, settings);
         let color_start = Instant::now();
         let colors = solver.colors(&contacts, grab);
         let mut profile = GpuStepProfile {
@@ -365,6 +368,35 @@ impl GpuVbd {
                 terms.push(t);
             }
         }
+        // Friction terms follow, one per pressing contact; they join the same vertices as
+        // their contact, so the coloring is unchanged.
+        let friction_base = terms.len();
+        let mut friction_index = vec![u32::MAX; contacts.contacts.len()];
+        for (i, f) in solver.friction.iter().enumerate() {
+            let Some(f) = f else {
+                continue;
+            };
+            let mut t = Term::new(&f.vertices[..f.count], 3);
+            let weight_sum: f64 = f.weights[..f.count].iter().sum();
+            let anchor = f.anchor - origin * weight_sum;
+            for k in 0..f.count {
+                t.a[k] = f.weights[k] as f32;
+            }
+            t.b = [
+                f.normal.x as f32,
+                f.normal.y as f32,
+                f.normal.z as f32,
+                f.mu_lambda as f32,
+            ];
+            t.c = [
+                anchor.x as f32,
+                anchor.y as f32,
+                anchor.z as f32,
+                f.eps as f32,
+            ];
+            friction_index[i] = (terms.len() - friction_base) as u32;
+            terms.push(t);
+        }
         ranges.reserve(n);
         incident.reserve(contacts.contacts.len() * 4 + 12);
         // Detection already built this incidence in canonical contact order.
@@ -385,6 +417,11 @@ impl GpuVbd {
                 if let Ok(index) = grab.patch.binary_search_by_key(&v, |a| a.vertex) {
                     incident
                         .push((prepared.terms.len() + contacts.contacts.len() + 1 + index) as u32);
+                }
+            }
+            for &c in contacts_at_vertex.iter() {
+                if let Some(&k) = friction_index.get(c).filter(|k| **k != u32::MAX) {
+                    incident.push((prepared.terms.len() + friction_base) as u32 + k);
                 }
             }
             ranges.push([

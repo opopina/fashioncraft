@@ -182,7 +182,7 @@ fn run_ogc(
         "vertices":scene.state.x.len(),"triangles":scene.garment.mesh.triangles.len(),"wall_ms":wall_ms,
         "mean_step_ms":if rows.is_empty(){0.}else{wall_ms/rows.len() as f64},"last":rows.last(),
         "seams":scene.garment.seams.iter().map(|s|serde_json::json!({"id":s.id,"max_gap_m":s.max_gap(&scene.state.x)})).collect::<Vec<_>>(),
-        "scope":"OGC two-sided VF/EE normal contact, self-contact, sparse directional bounds with isotropic fallback; local seam exclusions; no friction; fixed iteration budgets do not certify equilibrium"});
+        "scope":if settings.friction>0.{"OGC two-sided VF/EE normal contact, self-contact, sparse directional bounds with isotropic fallback; local seam exclusions; lagged smoothed Coulomb friction (normal force and basis from the start of each step); fixed iteration budgets do not certify equilibrium"}else{"OGC two-sided VF/EE normal contact, self-contact, sparse directional bounds with isotropic fallback; local seam exclusions; no friction; fixed iteration budgets do not certify equilibrium"}});
     fs::write(
         args.output.join("run.json"),
         serde_json::to_string_pretty(&report)?,

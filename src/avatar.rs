@@ -79,8 +79,10 @@ impl SurfaceMesh {
         mesh.validate()?;
         Ok(mesh)
     }
-    /// This surface plus a horizontal floor square at `height` (world y, metres), centred
-    /// under it and much larger than it, as one fixed obstacle for the solver.
+    /// This surface plus a horizontal floor at `height` (world y, metres) as one fixed obstacle
+    /// for the solver: a single large triangle centred under the surface. One face, so cloth
+    /// sliding on it never meets an interior edge (two coplanar faces would add edge contacts
+    /// along their shared diagonal that resist sliding across it).
     pub fn with_floor(&self, height: f64) -> Self {
         let (lo, hi) = self.vertices.iter().fold(
             (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
@@ -91,19 +93,20 @@ impl SurfaceMesh {
         } else {
             ((lo + hi) * 0.5, (hi - lo).max_element())
         };
-        // Large enough for any garment around the avatar, small enough for f32 contact work.
-        let half = (size * 2.).max(20.);
+        // Large enough for any garment around the avatar, small enough for f32 contact work:
+        // the inscribed circle has this radius.
+        let inner = (size * 2.).max(20.);
         let n = self.vertices.len();
         let mut out = self.clone();
-        for (dx, dz) in [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)] {
+        for k in 0..3 {
+            let a = std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::TAU / 3.;
             out.vertices.push(DVec3::new(
-                centre.x + dx * half,
+                centre.x + 2. * inner * a.cos(),
                 height,
-                centre.z + dz * half,
+                centre.z - 2. * inner * a.sin(),
             ));
         }
         out.triangles.push([n, n + 1, n + 2]);
-        out.triangles.push([n, n + 2, n + 3]);
         out
     }
     pub fn validate(&self) -> Result<(), String> {

@@ -198,6 +198,7 @@ pub fn run(
             let simulation = project.simulation.clone().unwrap_or(VbdSettings {
                 dt,
                 iterations,
+                friction: environment_ui::DEFAULT_FRICTION,
                 ..Default::default()
             });
             let mut authoring = AuthoringUi {

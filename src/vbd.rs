@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, sync::Arc, time::Instant};
 pub mod audit;
 mod coloring;
+pub mod friction;
 pub mod grab;
 mod local_step;
 mod prediction;
@@ -27,10 +28,17 @@ pub struct VbdSettings {
     pub damping: f64,
     pub gravity: DVec3,
     pub contact: OgcSettings,
+    /// Coulomb friction coefficient μ of every contact (cloth–avatar, cloth–cloth, floor);
+    /// zero is frictionless, as before this setting existed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub friction: f64,
     /// Height of a physical floor in metres (world y), or none. The floor is a fixed
     /// obstacle like the avatar: cloth rests on it within the contact shell.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
+}
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 impl Default for VbdSettings {
     fn default() -> Self {
@@ -40,6 +48,7 @@ impl Default for VbdSettings {
             damping: 1.5,
             gravity: DVec3::new(0.0, -9.81, 0.0),
             contact: Default::default(),
+            friction: 0.0,
             floor: None,
         }
     }
@@ -55,6 +64,8 @@ impl VbdSettings {
             || self.damping < 0.0
             || !self.gravity.is_finite()
             || self.floor.is_some_and(|h| !h.is_finite())
+            || !self.friction.is_finite()
+            || !(0.0..=5.0).contains(&self.friction)
         {
             return Err("Invalid VBD settings".into());
         }
@@ -182,6 +193,9 @@ pub struct VbdSolver {
     stitches: Vec<Stitch>,
     vertex_stitches: Vec<Vec<usize>>,
     graph: Vec<Vec<usize>>,
+    /// Friction of the current contact set, frozen at its detection; matched to a contact by
+    /// index and checked by kind and vertices, so another contact set never picks it up.
+    pub(crate) friction: Vec<Option<friction::FrictionTerm>>,
 }
 impl VbdSolver {
     pub fn new(
@@ -282,6 +296,7 @@ impl VbdSolver {
                 .into_iter()
                 .map(|neighbors| neighbors.into_iter().collect())
                 .collect(),
+            friction: vec![],
         };
         Ok(solver)
     }
@@ -328,6 +343,14 @@ impl VbdSolver {
                     settings.contact.radius,
                     settings.contact.stiffness,
                 );
+            if let Some(f) = self
+                .friction
+                .get(*i)
+                .and_then(Option::as_ref)
+                .filter(|f| f.kind == c.kind && f.vertices == c.vertices)
+            {
+                value = value + f.energy(get);
+            }
         }
         if let Some(g) = grab.filter(|g| g.vertices.contains(&v)) {
             let mut d = g.target.to_array().map(|a| S::c(-a));
@@ -406,6 +429,7 @@ impl VbdSolver {
         let rq = (settings.contact.radius + predicted_motion)
             .clamp(2.0 * settings.contact.radius, 4.0 * settings.contact.radius);
         let mut x = self.world.positions(&state.x);
+        let start_positions = x.clone();
         self.contact_refresh_capture = None;
         if let Some(audit) = &mut self.contact_refresh_audit {
             audit.clear();
@@ -415,6 +439,8 @@ impl VbdSolver {
         if contacts.minimum_distance <= 1e-12 {
             return Err("OGC zero separation; step rejected, reset the arrangement".into());
         }
+        self.friction =
+            friction::friction_terms(&contacts, &start_positions, &start_positions, settings);
         metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
         metrics.detection_updates += 1;
         metrics.broad_phase_rebuilds += usize::from(contacts.broad_phase_rebuilt);
@@ -460,6 +486,14 @@ impl VbdSolver {
                     }
                 }
                 contacts = refreshed;
+                // Normal forces stay lagged to the start of the step: an intermediate iterate
+                // pressed into the barrier would overstate them.
+                self.friction = friction::friction_terms(
+                    &contacts,
+                    &start_positions,
+                    &start_positions,
+                    settings,
+                );
                 colors = self.colors(&contacts, grab);
                 metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
                 metrics.detection_updates += 1;

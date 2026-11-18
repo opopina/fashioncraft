@@ -3,6 +3,9 @@
 use super::*;
 use glam::DVec3;
 
+/// Friction of new documents: a typical value for cotton on skin and on cotton.
+pub(super) const DEFAULT_FRICTION: f64 = 0.3;
+
 /// Time step (s) and solver iterations of each quality preset.
 pub(super) const PRESETS: [(&str, f64, usize, &str); 3] = [
     (
@@ -50,6 +53,24 @@ impl Atelier {
             self.settings.dt * 1000.,
             self.settings.iterations
         ));
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Friction");
+            ui.add(
+                egui::DragValue::new(&mut self.settings.friction)
+                    .range(0.0..=1.5)
+                    .speed(0.01)
+                    .fixed_decimals(2),
+            )
+            .on_hover_text(
+                "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and \
+                 on the floor. 0 lets cloth slide freely",
+            );
+            for (label, value) in [("None", 0.0), ("Cotton", DEFAULT_FRICTION), ("Grippy", 0.6)] {
+                if ui.small_button(label).clicked() {
+                    self.settings.friction = value;
+                }
+            }
+        });
         ui.separator();
         ui.strong("Environment");
         let feet = self

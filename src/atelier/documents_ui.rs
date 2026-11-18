@@ -496,6 +496,7 @@ impl Atelier {
                 self.settings = project.simulation.clone().unwrap_or_else(|| VbdSettings {
                     dt: self.prefs.dt,
                     iterations: self.prefs.iterations,
+                    friction: super::environment_ui::DEFAULT_FRICTION,
                     ..Default::default()
                 });
                 if let Some(poly) = project

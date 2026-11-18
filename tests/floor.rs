@@ -40,17 +40,23 @@ fn far_away() -> SurfaceMesh {
 }
 
 #[test]
-fn the_floor_mesh_is_a_large_square_under_the_surface() {
+fn the_floor_is_one_large_triangle_under_the_surface() {
     let floored = far_away().with_floor(0.02);
-    assert_eq!(floored.vertices.len(), 7);
-    assert_eq!(floored.triangles.len(), 3);
+    assert_eq!(floored.vertices.len(), 6);
+    assert_eq!(floored.triangles.len(), 2);
     floored.validate().unwrap();
-    for v in &floored.vertices[3..] {
+    let centre = DVec3::new(5.05, 0.02, 5.);
+    let corners: Vec<DVec3> = floored.vertices[3..].to_vec();
+    for v in &corners {
         assert_eq!(v.y, 0.02);
-        assert!(
-            (v.x - 5.05).abs() >= 19.9 && (v.z - 5.).abs() >= 19.9,
-            "at least 20 m out"
-        );
+    }
+    // Every point within 20 m of the centre is inside: its distance to each side is ≥ 20 m.
+    for k in 0..3 {
+        let (a, b) = (corners[k], corners[(k + 1) % 3]);
+        let side = (b - a).normalize();
+        let to_centre = centre - a;
+        let distance = (to_centre - side * to_centre.dot(side)).length();
+        assert!(distance >= 20. - 1e-9, "{distance}");
     }
 }
 

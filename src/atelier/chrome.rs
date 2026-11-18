@@ -259,7 +259,11 @@ impl Atelier {
                     });
                     ui.collapsing("Diagnostics", |ui| {
                         ui.checkbox(&mut self.seams, "All seam samples");
-                        ui.small("Hybrid VBD / OGC · frictionless · uncalibrated materials");
+                        ui.small(if self.settings.friction > 0. {
+                            "Hybrid VBD / OGC · lagged Coulomb friction · uncalibrated materials"
+                        } else {
+                            "Hybrid VBD / OGC · frictionless · uncalibrated materials"
+                        });
                         if let Some(m) = &self.metrics {
                             ui.small(format!(
                                 "Step {:.2} ms · detection {:.2} ms · seam gap {:.2} mm",

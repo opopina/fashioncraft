@@ -63,6 +63,15 @@ fn evaluate(t:Term,v:u32,p:vec3f)->Result {
         for(var j=1u;j<t.info.y;j++){d+=t.a[j]*(x[j]-x[0]);first_weight-=t.a[j];}
         let weight=select(t.a[local],first_weight,local==0u);
         r.e=0.5*t.b.x*dot(d,d);r.g=t.b.x*weight*d;r.h=I*(t.b.x*weight*weight);
+    } else if t.info.x==3u {
+        // Lagged smoothed Coulomb friction (IPC f0): a = side weights, b = (normal, mu*lambda),
+        // c = (sum of weight * start position, epsilon). PSD Hessian mu*lambda*f1/y*w^2*P.
+        var u=-t.c.xyz;for(var j=0u;j<t.info.y;j++){u+=t.a[j]*x[j];}
+        let n=t.b.xyz;let ut=u-n*dot(n,u);let y=length(ut);let eps=t.c.w;
+        var f0=y;var f1y=1/max(y,1e-20);
+        if y<eps {f0=y*y/eps-y*y*y/(3*eps*eps)+eps/3;f1y=2/eps-y/(eps*eps);}
+        let w=t.a[local];
+        r.e=t.b.w*f0;r.g=t.b.w*f1y*w*ut;r.h=t.b.w*f1y*w*w*(I-outer(n,n));
     } else {
         var d=0.0;var gd=vec3f(0);var moll=1.0;var gm=vec3f(0);
         if t.info.x==10u {
@@ -122,6 +131,12 @@ fn energy_value(t:Term,v:u32,p:vec3f)->f32 {
         var d=t.c.w*x[0]-t.c.xyz;
         for(var j=1u;j<t.info.y;j++){d+=t.a[j]*(x[j]-x[0]);}
         return 0.5*t.b.x*dot(d,d);
+    }
+    if t.info.x==3u {
+        var u=-t.c.xyz;for(var j=0u;j<t.info.y;j++){u+=t.a[j]*x[j];}
+        let n=t.b.xyz;let ut=u-n*dot(n,u);let y=length(ut);let eps=t.c.w;
+        if y<eps {return t.b.w*(y*y/eps-y*y*y/(3*eps*eps)+eps/3);}
+        return t.b.w*y;
     }
     var d=0.0;var moll=1.0;
     if t.info.x==10u {

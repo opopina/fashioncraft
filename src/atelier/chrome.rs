@@ -26,6 +26,7 @@ pub(super) fn view_header(
     expanded: bool,
     is_3d: bool,
     help: &str,
+    ui_lang: i18n::Language,
 ) -> ViewHeader {
     let compact = ui.available_width() < 430.;
     ui.horizontal(|ui| {
@@ -37,15 +38,26 @@ pub(super) fn view_header(
         .on_hover_text(help);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let expand = ui
-                .small_button(if expanded { "Split" } else { "Expand" })
+                .small_button(i18n::tr(ui_lang, if expanded { "Split" } else { "Expand" }))
                 .clicked();
-            let settings = icons::dropdown_button(ui, icons::Icon::Settings, "Display options");
-            let fit = icons::icon_only(ui, icons::Icon::Fit, 26., false, "Frame all").clicked();
+            let settings = icons::dropdown_button(
+                ui,
+                icons::Icon::Settings,
+                i18n::tr(ui_lang, "Display options"),
+            );
+            let fit = icons::icon_only(
+                ui,
+                icons::Icon::Fit,
+                26.,
+                false,
+                i18n::tr(ui_lang, "Frame all"),
+            )
+            .clicked();
             let camera = is_3d.then(|| {
                 icons::dropdown_button(
                     ui,
                     icons::Icon::ViewIso,
-                    "Camera · standard views, projection and framing",
+                    i18n::tr(ui_lang, "Camera · standard views, projection and framing"),
                 )
             });
             ViewHeader {
@@ -131,12 +143,14 @@ pub(super) fn appearance_controls(ui: &mut egui::Ui, value: &mut Appearance, msa
 
 impl Atelier {
     pub(super) fn garment_header(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let header = view_header(
             ui,
             i18n::tr(self.prefs.language, "3D GARMENT"),
             self.prefs.workspace.mode == ViewMode::Garment,
             true,
-            view_controls::hint_3d(self.authoring.tool),
+            i18n::tr(ui_lang, view_controls::hint_3d(self.authoring.tool)),
+            ui_lang,
         );
         if header.expand {
             self.prefs.workspace.toggle_focus(ViewMode::Garment);
@@ -158,11 +172,11 @@ impl Atelier {
                 .show(ui, |ui| {
                     appearance_controls(ui, &mut self.prefs.viewport, self.viewport.supports_msaa4());
                     ui.separator();
-                    ui.strong("Overlays");
-                    ui.checkbox(&mut self.clean_view, "Clean view · hide all annotations")
-                        .on_hover_text("Show only the shaded garment and avatar. Keeps your overlay settings for later.");
-                    ui.checkbox(&mut self.wire, "Wireframe");
-                    ui.checkbox(&mut self.seam_links, "Seam links");
+                    ui.strong(i18n::tr(ui_lang, "Overlays"));
+                    ui.checkbox(&mut self.clean_view, i18n::tr(ui_lang, "Clean view · hide all annotations"))
+                        .on_hover_text(i18n::tr(ui_lang, "Show only the shaded garment and avatar. Keeps your overlay settings for later."));
+                    ui.checkbox(&mut self.wire, i18n::tr(ui_lang, "Wireframe"));
+                    ui.checkbox(&mut self.seam_links, i18n::tr(ui_lang, "Seam links"));
                     self.garment_display_controls(ui);
                 });
         });
@@ -175,12 +189,16 @@ impl Atelier {
     }
 
     pub(super) fn inspector(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.horizontal(|ui| {
             ui.strong(i18n::tr(self.prefs.language, "PROPERTIES"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("×")
-                    .on_hover_text("Hide inspector · restore from Workspace menu")
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Hide inspector · restore from Workspace menu",
+                    ))
                     .clicked()
                 {
                     self.prefs.workspace.inspector_open = false;
@@ -195,7 +213,8 @@ impl Atelier {
                 (InspectorTab::Fabric, "Fabric"),
                 (InspectorTab::Simulation, "Simulation"),
             ] {
-                let button = ui.selectable_value(&mut self.inspector_tab, tab, label);
+                let button =
+                    ui.selectable_value(&mut self.inspector_tab, tab, i18n::tr(ui_lang, label));
                 if tab == InspectorTab::Fabric {
                     self.smoke_target("fabric_tab", button.rect.center());
                 }
@@ -221,16 +240,16 @@ impl Atelier {
                         ui.label(&panel.name);
                         self.fabric_properties(ui, &panel);
                     } else {
-                        ui.label("Select a piece to edit its fabric.");
+                        ui.label(i18n::tr(ui_lang, "Select a piece to edit its fabric."));
                     }
                 }
                 InspectorTab::Simulation => {
-                    ui.collapsing("Avatar collision diagnostics", |ui| {
+                    ui.collapsing(i18n::tr(ui_lang, "Avatar collision diagnostics"), |ui| {
                         avatar_diagnostics::show(ui, &self.scene, &self.settings, self.generation, self.playing, self.pending);
                     });
-                    ui.strong("Mesh resolution");
-                    ui.add(egui::Slider::new(&mut self.mesh_mm, 8.0..=60.0).text("mm"));
-                    if ui.button("Remesh").clicked() {
+                    ui.strong(i18n::tr(ui_lang, "Mesh resolution"));
+                    ui.add(egui::Slider::new(&mut self.mesh_mm, 8.0..=60.0).text(i18n::tr(ui_lang, "mm")));
+                    if ui.button(i18n::tr(ui_lang, "Remesh")).clicked() {
                         self.remesh();
                     }
                     ui.small(format!(
@@ -239,31 +258,31 @@ impl Atelier {
                         self.scene.garment.mesh.triangles.len()
                     ));
                     ui.separator();
-                    ui.strong("Solver settings");
-                    ui.checkbox(&mut self.gpu, "GPU compute");
+                    ui.strong(i18n::tr(ui_lang, "Solver settings"));
+                    ui.checkbox(&mut self.gpu, i18n::tr(ui_lang, "GPU compute"));
                     ui.add(
                         egui::Slider::new(&mut self.settings.iterations, 2..=128)
-                            .text("Iterations"),
+                            .text(i18n::tr(ui_lang, "Iterations")),
                     );
                     ui.add(
-                        egui::Slider::new(&mut self.settings.damping, 0.0..=10.0).text("Damping"),
+                        egui::Slider::new(&mut self.settings.damping, 0.0..=10.0).text(i18n::tr(ui_lang, "Damping")),
                     )
-                    .on_hover_text("Air damping: how much the air slows the cloth down (1/s)");
+                    .on_hover_text(i18n::tr(ui_lang, "Air damping: how much the air slows the cloth down (1/s)"));
                     self.simulation_environment(ui);
-                    ui.collapsing("Advanced meshing", |ui| {
+                    ui.collapsing(i18n::tr(ui_lang, "Advanced meshing"), |ui| {
                         ui.add(
-                            egui::Slider::new(&mut self.anisotropy, 1.0..=4.0).text("Anisotropy"),
+                            egui::Slider::new(&mut self.anisotropy, 1.0..=4.0).text(i18n::tr(ui_lang, "Anisotropy")),
                         );
                         ui.add(
-                            egui::Slider::new(&mut self.mesh_axis, 0.0..=180.0).text("Mesh axis"),
+                            egui::Slider::new(&mut self.mesh_axis, 0.0..=180.0).text(i18n::tr(ui_lang, "Mesh axis")),
                         );
                     });
-                    ui.collapsing("Diagnostics", |ui| {
-                        ui.checkbox(&mut self.seams, "All seam samples");
+                    ui.collapsing(i18n::tr(ui_lang, "Diagnostics"), |ui| {
+                        ui.checkbox(&mut self.seams, i18n::tr(ui_lang, "All seam samples"));
                         ui.small(if self.settings.friction > 0. {
-                            "Hybrid VBD / OGC · lagged Coulomb friction · uncalibrated materials"
+                            i18n::tr(ui_lang, "Hybrid VBD / OGC · lagged Coulomb friction · uncalibrated materials")
                         } else {
-                            "Hybrid VBD / OGC · frictionless · uncalibrated materials"
+                            i18n::tr(ui_lang, "Hybrid VBD / OGC · frictionless · uncalibrated materials")
                         });
                         if let Some(m) = &self.metrics {
                             ui.small(format!(
@@ -278,7 +297,7 @@ impl Atelier {
                             ));
                         }
                         ui.separator();
-                        ui.strong("Final accepted state");
+                        ui.strong(i18n::tr(ui_lang, "Final accepted state"));
                         let pending_id = egui::Id::new("clothcraft.final-diagnostics-pending");
                         let requested = ui
                             .ctx()
@@ -317,18 +336,18 @@ impl Atelier {
                             ui.ctx().request_repaint();
                         }
                     });
-                    ui.collapsing("Motion / jitter", |ui| {
+                    ui.collapsing(i18n::tr(ui_lang, "Motion / jitter"), |ui| {
                         let mut inspect = false;
                         if let Some(m) = self.metrics.as_ref().and_then(|m| m.motion.as_ref()) {
                             ui.small(format!("High-pass RMS {:.3} mm · max {:.3} mm", m.highpass_rms_m * 1000., m.highpass_max_m * 1000.));
                             ui.small(format!("{} vertices with persistent oscillation", m.oscillating_vertices));
-                            if m.observed_seconds < 0.75 { ui.small("Collecting physical-step history…"); }
-                            inspect = ui.add_enabled(!m.hotspots.is_empty(), egui::Button::new("Inspect jitter hotspots"))
-                                .on_hover_text("Pause and mark faces around up to 12 strongest detected vertices. Export report includes motion measurements.").clicked();
+                            if m.observed_seconds < 0.75 { ui.small(i18n::tr(ui_lang, "Collecting physical-step history…")); }
+                            inspect = ui.add_enabled(!m.hotspots.is_empty(), egui::Button::new(i18n::tr(ui_lang, "Inspect jitter hotspots")))
+                                .on_hover_text(i18n::tr(ui_lang, "Pause and mark faces around up to 12 strongest detected vertices. Export report includes motion measurements.")).clicked();
                         } else {
-                            ui.small("Run simulation to measure motion.");
+                            ui.small(i18n::tr(ui_lang, "Run simulation to measure motion."));
                         }
-                        ui.small("Repeated reversals, not rendering FPS. Real fabric vibration can also trigger this indicator.");
+                        ui.small(i18n::tr(ui_lang, "Repeated reversals, not rendering FPS. Real fabric vibration can also trigger this indicator."));
                         if inspect { self.inspect_motion(); }
                     });
                 }
@@ -338,17 +357,24 @@ impl Atelier {
 
 impl Atelier {
     pub(super) fn garment_view(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let ctx = ui.ctx().clone();
         self.garment_header(ui);
         if let Some(error) = self.simulation_error.clone() {
             egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.colored_label(Color32::from_rgb(225, 120, 75), "SIMULATION PAUSED");
+                ui.colored_label(
+                    Color32::from_rgb(225, 120, 75),
+                    i18n::tr(ui_lang, "SIMULATION PAUSED"),
+                );
                 ui.label(&error);
                 ui.horizontal(|ui| {
-                    if ui.small_button("Inspect problem faces").clicked() {
+                    if ui
+                        .small_button(i18n::tr(ui_lang, "Inspect problem faces"))
+                        .clicked()
+                    {
                         self.set_authoring_tool(Tool::Inspect, false);
                     }
-                    if ui.small_button("Copy details").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Copy details")).clicked() {
                         ui.ctx().copy_text(error);
                     }
                 });
@@ -360,11 +386,11 @@ impl Atelier {
         }
         if self.authoring.tool == Tool::Grab && !self.authoring.pin_tool.enabled {
             ui.horizontal_wrapped(|ui| {
-                ui.strong("Grab");
-                ui.add(egui::Slider::new(&mut self.grab_radius_px, 0.0..=150.0).text("Radius (px)"))
-                    .on_hover_text("Size on screen. Zero uses the original point grab. The brush follows the picked piece's surface, avoiding nearby disconnected layers.");
-                ui.add(egui::Slider::new(&mut self.grab_strength, 0.25..=20.).logarithmic(true).text("Strength"))
-                    .on_hover_text("1× is the original point spring strength. Higher values pull harder; collision limits still apply. Changes apply to the next drag.");
+                ui.strong(i18n::tr(ui_lang, "Grab"));
+                ui.add(egui::Slider::new(&mut self.grab_radius_px, 0.0..=150.0).text(i18n::tr(ui_lang, "Radius (px)")))
+                    .on_hover_text(i18n::tr(ui_lang, "Size on screen. Zero uses the original point grab. The brush follows the picked piece's surface, avoiding nearby disconnected layers."));
+                ui.add(egui::Slider::new(&mut self.grab_strength, 0.25..=20.).logarithmic(true).text(i18n::tr(ui_lang, "Strength")))
+                    .on_hover_text(i18n::tr(ui_lang, "1× is the original point spring strength. Higher values pull harder; collision limits still apply. Changes apply to the next drag."));
             });
         }
         if self.authoring.tool == Tool::Inspect {

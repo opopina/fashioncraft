@@ -178,7 +178,8 @@ fn sewing_primary_action(ui: &mut egui::Ui, editing: bool, easing_needed: bool) 
 
 impl Atelier {
     pub(super) fn sewing_audit_controls(&mut self, ui: &mut egui::Ui) {
-        let action = egui::CollapsingHeader::new("Sewing audit")
+        let ui_lang = self.prefs.language;
+        let action = egui::CollapsingHeader::new(i18n::tr(ui_lang, "Sewing audit"))
             .show(ui, |ui| {
                 self.authoring.sewing_audit.show(ui, self.generation)
             })
@@ -207,6 +208,7 @@ impl Atelier {
         false
     }
     pub(super) fn sewing_context(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !matches!(self.authoring.tool, Tool::Edit | Tool::Sew)
             || self.quick.blocked
             || self.authoring.radial.blocked
@@ -246,7 +248,7 @@ impl Atelier {
             x.clamp(bounds.left(), (bounds.right() - 306.).max(bounds.left())),
             (at.y + 18.).clamp(bounds.top(), (bounds.bottom() - 330.).max(bounds.top())),
         );
-        egui::Window::new("Sewing at cursor")
+        egui::Window::new(i18n::tr(ui_lang, "Sewing at cursor"))
             .id(egui::Id::new("sewing-context"))
             .title_bar(false)
             .resizable(false)
@@ -261,9 +263,9 @@ impl Atelier {
                         .each_ref()
                         .map(|s| self.sewing_curve(s, false).map_or(0., |c| c.length * 1000.));
                     ui.strong(if self.authoring.sewing.editing.is_some() {
-                        "EDIT SEAM"
+                        i18n::tr(ui_lang, "EDIT SEAM")
                     } else {
-                        "3 · CONFIRM SEAM"
+                        i18n::tr(ui_lang, "3 · CONFIRM SEAM")
                     });
                     for (side, refs) in sides.iter().enumerate() {
                         let details = format!(
@@ -282,9 +284,9 @@ impl Atelier {
                         (lengths[0] - lengths[1]).abs()
                     ));
                     ui.separator();
-                    let flip = ui.checkbox(&mut self.authoring.reverse, "Swap seam ends · F");
+                    let flip = ui.checkbox(&mut self.authoring.reverse, i18n::tr(ui_lang, "Swap seam ends · F"));
                     self.smoke_target_ui(ui, "cursor_flip", flip.rect);
-                    let ease = ui.checkbox(&mut self.authoring.ease, "Allow different lengths · E");
+                    let ease = ui.checkbox(&mut self.authoring.ease, i18n::tr(ui_lang, "Allow different lengths · E"));
                     self.smoke_target_ui(ui, "cursor_ease", ease.rect);
                     if flip.changed() || ease.changed() {
                         self.authoring.error = None;
@@ -295,7 +297,7 @@ impl Atelier {
                     let easing_needed = needs_easing(lengths) && !self.authoring.ease;
                     if easing_needed {
                         ui.colored_label(Color32::from_rgb(225, 155, 65),
-                            "Different lengths: easing gathers the longer side. It does not soften the fabric.");
+                            i18n::tr(ui_lang, "Different lengths: easing gathers the longer side. It does not soften the fabric."));
                     }
                     if let Some(allow_ease) = sewing_primary_action(
                         ui, self.authoring.sewing.editing.is_some(), easing_needed,
@@ -304,39 +306,39 @@ impl Atelier {
                         self.commit_seam();
                     }
                     if self.authoring.sewing.chain_mode {
-                        ui.small("Keep adding edges, or Ctrl+Enter to apply");
+                        ui.small(i18n::tr(ui_lang, "Keep adding edges, or Ctrl+Enter to apply"));
                     } else if !easing_needed {
-                        ui.small("Or click either canvas / press Enter to sew");
+                        ui.small(i18n::tr(ui_lang, "Or click either canvas / press Enter to sew"));
                     }
-                    ui.small("F / Shift+wheel: flip direction · Esc: cancel");
-                    if ui.small_button("Cancel · Esc").clicked() {
+                    ui.small(i18n::tr(ui_lang, "F / Shift+wheel: flip direction · Esc: cancel"));
+                    if ui.small_button(i18n::tr(ui_lang, "Cancel · Esc")).clicked() {
                         self.authoring.ends.clear();
                         self.authoring.sewing = Default::default();
                     }
                 } else if drafting {
                     ui.strong(if self.authoring.sewing.partial && self.authoring.sewing.start.is_some() {
-                        "PICK THE END OF THIS RANGE"
+                        i18n::tr(ui_lang, "PICK THE END OF THIS RANGE")
                     } else if self.authoring.sewing.chain_mode {
-                        "BUILD THE TWO SEAM SIDES"
+                        i18n::tr(ui_lang, "BUILD THE TWO SEAM SIDES")
                     } else {
-                        "2 · CLICK THE SECOND EDGE"
+                        i18n::tr(ui_lang, "2 · CLICK THE SECOND EDGE")
                     });
-                    ui.label("Choose a boundary in either the 2D or 3D view.");
+                    ui.label(i18n::tr(ui_lang, "Choose a boundary in either the 2D or 3D view."));
                     if !self.authoring.sewing.chain_mode && self.authoring.sewing.start.is_none() {
-                        ui.small("The highlighted edge is side A. The next edge becomes side B.");
+                        ui.small(i18n::tr(ui_lang, "The highlighted edge is side A. The next edge becomes side B."));
                     }
                     if self.authoring.sewing.chain_mode {
                         ui.horizontal(|ui| {
-                            ui.selectable_value(&mut self.authoring.sewing.active, 0, "Add to A");
-                            ui.selectable_value(&mut self.authoring.sewing.active, 1, "Add to B");
+                            ui.selectable_value(&mut self.authoring.sewing.active, 0, i18n::tr(ui_lang, "Add to A"));
+                            ui.selectable_value(&mut self.authoring.sewing.active, 1, i18n::tr(ui_lang, "Add to B"));
                         });
                     }
-                    if ui.small_button("Cancel · Esc").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Cancel · Esc")).clicked() {
                         self.authoring.ends.clear();
                         self.authoring.sewing = Default::default();
                     }
                 } else {
-                    ui.strong("SELECTED SEAM");
+                    ui.strong(i18n::tr(ui_lang, "SELECTED SEAM"));
                     for id in seams {
                         ui.horizontal(|ui| {
                             if ui
@@ -348,18 +350,18 @@ impl Atelier {
                             {
                                 self.authoring.selection.seam = Some(id.clone());
                             }
-                            if ui.small_button("Edit").clicked() {
+                            if ui.small_button(i18n::tr(ui_lang, "Edit")).clicked() {
                                 self.begin_seam_edit(&id);
                                 self.authoring.sewing.card = Some(at);
                             }
-                            let delete = ui.small_button("Delete");
+                            let delete = ui.small_button(i18n::tr(ui_lang, "Delete"));
                             self.smoke_target_ui(ui, "cursor_delete_seam", delete.rect);
                             if delete.clicked() {
                                 self.remove_seam(id);
                             }
                         });
                     }
-                    ui.small("Del removes the selected seam · Ctrl+Z restores it");
+                    ui.small(i18n::tr(ui_lang, "Del removes the selected seam · Ctrl+Z restores it"));
                 }
             });
     }
@@ -403,6 +405,7 @@ impl Atelier {
     }
 
     pub(super) fn sewing_strip(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         if self.authoring.tool != Tool::Sew {
             return;
         }
@@ -413,33 +416,47 @@ impl Atelier {
         let ready = sides.iter().all(|s| !s.is_empty());
         ui.horizontal_wrapped(|ui| {
             ui.strong(if ready {
-                "3 · Confirm seam"
+                i18n::tr(ui_lang, "3 · Confirm seam")
             } else if sides.iter().any(|s| !s.is_empty()) {
-                "2 · Pick second edge"
+                i18n::tr(ui_lang, "2 · Pick second edge")
             } else {
-                "1 · Pick first edge"
+                i18n::tr(ui_lang, "1 · Pick first edge")
             });
             ui.label(format!("A {:.1} / B {:.1} mm", lengths[0], lengths[1]));
-            let flip = ui.selectable_label(self.authoring.reverse, "Flip · F").on_hover_text("Reverse side B · F or Shift + wheel over either canvas");
+            let flip = ui.selectable_label(self.authoring.reverse, i18n::tr(ui_lang, "Flip · F")).on_hover_text(i18n::tr(ui_lang, "Reverse side B · F or Shift + wheel over either canvas"));
             self.smoke_target_ui(ui, "quick_flip", flip.rect);
             if flip.clicked() { self.authoring.reverse = !self.authoring.reverse; self.authoring.error = None; }
-            let ease = ui.selectable_label(self.authoring.ease, "Ease · E").on_hover_text("Explicitly allow unequal lengths. This changes correspondence, not the fabric's elasticity.");
+            let ease = ui.selectable_label(self.authoring.ease, i18n::tr(ui_lang, "Ease · E")).on_hover_text(i18n::tr(ui_lang, "Explicitly allow unequal lengths. This changes correspondence, not the fabric's elasticity."));
             self.smoke_target_ui(ui, "quick_ease", ease.rect);
             if ease.clicked() { self.authoring.ease = !self.authoring.ease; self.authoring.error = None; }
-            if ui.add_enabled(ready, egui::Button::new(if self.authoring.sewing.editing.is_some() { "Apply" } else { "Sew" })).on_hover_text("Enter commits a pair · Ctrl+Enter commits a chain").clicked() { self.commit_seam(); }
+            if ui.add_enabled(ready, egui::Button::new(if self.authoring.sewing.editing.is_some() { i18n::tr(ui_lang, "Apply") } else { i18n::tr(ui_lang, "Sew") })).on_hover_text(i18n::tr(ui_lang, "Enter commits a pair · Ctrl+Enter commits a chain")).clicked() { self.commit_seam(); }
         });
         ui.horizontal_wrapped(|ui| {
             if self.authoring.sewing.chain_mode {
-                ui.selectable_value(&mut self.authoring.sewing.active, 0, "Add to A");
-                ui.selectable_value(&mut self.authoring.sewing.active, 1, "Add to B");
+                ui.selectable_value(
+                    &mut self.authoring.sewing.active,
+                    0,
+                    i18n::tr(ui_lang, "Add to A"),
+                );
+                ui.selectable_value(
+                    &mut self.authoring.sewing.active,
+                    1,
+                    i18n::tr(ui_lang, "Add to B"),
+                );
             }
             if ready && needs_easing(lengths) && !self.authoring.ease {
                 ui.colored_label(
                     Color32::from_rgb(200, 110, 35),
-                    "Different lengths · click Sew with easing beside the cursor, or press E",
+                    i18n::tr(
+                        ui_lang,
+                        "Different lengths · click Sew with easing beside the cursor, or press E",
+                    ),
                 );
             } else {
-                ui.small("F / Shift+wheel: direction · E: easing · Q: quick actions");
+                ui.small(i18n::tr(
+                    ui_lang,
+                    "F / Shift+wheel: direction · E: easing · Q: quick actions",
+                ));
             }
         });
     }
@@ -672,6 +689,7 @@ impl Atelier {
         t: f64,
         pointer: egui::Pos2,
     ) {
+        let ui_lang = self.prefs.language;
         self.authoring.sewing.card = Some(pointer);
         self.authoring.selection.seam_card = Some(pointer);
         self.authoring.selection.seam = self
@@ -703,18 +721,24 @@ impl Atelier {
             if let Some((start, s)) = self.authoring.sewing.start.take() {
                 if !same_edge(&start, &edge) {
                     self.authoring.sewing.start = Some((edge, t));
-                    self.status = "Start moved to this boundary · click its end".into();
+                    self.status =
+                        i18n::tr(ui_lang, "Start moved to this boundary · click its end").into();
                     return;
                 }
                 if (s - t).abs() < 1e-6 {
-                    self.status = "Choose two different positions on the boundary".into();
+                    self.status =
+                        i18n::tr(ui_lang, "Choose two different positions on the boundary").into();
                     return;
                 }
                 edge.range = [s.min(t), s.max(t)];
                 edge.reversed = s > t;
             } else {
                 self.authoring.sewing.start = Some((edge, t));
-                self.status = "Partial sewing · click the other endpoint on this boundary".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Partial sewing · click the other endpoint on this boundary",
+                )
+                .into();
                 return;
             }
         }
@@ -746,19 +770,24 @@ impl Atelier {
         self.prefs.workspace.inspector_open = true;
     }
     pub(super) fn sewing_controls(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Sewing");
+        let ui_lang = self.prefs.language;
+        ui.heading(i18n::tr(ui_lang, "Sewing"));
         if let Some(id) = &self.authoring.sewing.editing {
             ui.label(format!("Editing {id} · apply to commit"));
         }
         let mut chain = self.authoring.sewing.chain_mode;
-        let chain_button = ui.checkbox(&mut chain, "Multiple edges per side");
+        let chain_button = ui.checkbox(&mut chain, i18n::tr(ui_lang, "Multiple edges per side"));
         self.smoke_target_ui(ui, "sew_chain", chain_button.rect);
         if chain_button.changed() {
             let sides = self.sewing_sides();
             if chain {
                 self.authoring.sewing.sides = sides;
             } else if sides.iter().any(|s| s.len() > 1) {
-                self.status = "Remove extra segments before switching to single-edge sewing".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Remove extra segments before switching to single-edge sewing",
+                )
+                .into();
                 chain = true;
             } else {
                 self.authoring.ends = sides.into_iter().flatten().collect();
@@ -768,7 +797,7 @@ impl Atelier {
         if ui
             .checkbox(
                 &mut self.authoring.sewing.partial,
-                "Pick partial range (two clicks)",
+                i18n::tr(ui_lang, "Pick partial range (two clicks)"),
             )
             .changed()
         {
@@ -776,15 +805,27 @@ impl Atelier {
         }
         if chain {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.authoring.sewing.active, 0, "Add to A");
-                let button = ui.selectable_value(&mut self.authoring.sewing.active, 1, "Add to B");
+                ui.selectable_value(
+                    &mut self.authoring.sewing.active,
+                    0,
+                    i18n::tr(ui_lang, "Add to A"),
+                );
+                let button = ui.selectable_value(
+                    &mut self.authoring.sewing.active,
+                    1,
+                    i18n::tr(ui_lang, "Add to B"),
+                );
                 self.smoke_target_ui(ui, "sew_side_b", button.rect);
             });
-            ui.small(
+            ui.small(i18n::tr(
+                ui_lang,
                 "Click edges in sewing order. Enter switches A/B. Reverse changes one segment.",
-            );
+            ));
         } else {
-            ui.small("Select A then B in either view. Ranges use rest length, in mm.");
+            ui.small(i18n::tr(
+                ui_lang,
+                "Select A then B in either view. Ranges use rest length, in mm.",
+            ));
         }
         let mut sides = self.sewing_sides();
         for (side, refs) in sides.iter_mut().enumerate() {
@@ -803,15 +844,15 @@ impl Atelier {
                         if chain
                             && i > 0
                             && ui
-                                .small_button("Up")
-                                .on_hover_text("Move earlier in the chain")
+                                .small_button(i18n::tr(ui_lang, "Up"))
+                                .on_hover_text(i18n::tr(ui_lang, "Move earlier in the chain"))
                                 .clicked()
                         {
                             move_up = Some(i);
                         }
                         if ui
                             .small_button("×")
-                            .on_hover_text("Remove this segment from the draft")
+                            .on_hover_text(i18n::tr(ui_lang, "Remove this segment from the draft"))
                             .clicked()
                         {
                             remove = Some(i);
@@ -823,14 +864,14 @@ impl Atelier {
                         let length = c.length * 1000.;
                         let mut mm = r.range.map(|t| t * length);
                         ui.horizontal(|ui| {
-                            ui.label("From");
+                            ui.label(i18n::tr(ui_lang, "From"));
                             ui.add(
                                 egui::DragValue::new(&mut mm[0])
                                     .range(0. ..=length)
                                     .speed(0.5)
                                     .suffix(" mm"),
                             );
-                            ui.label("To");
+                            ui.label(i18n::tr(ui_lang, "To"));
                             let to = ui.add(
                                 egui::DragValue::new(&mut mm[1])
                                     .range(0. ..=length)
@@ -844,7 +885,7 @@ impl Atelier {
                         }
                         ui.horizontal(|ui| {
                             let mut selected = (r.range[1] - r.range[0]) * length;
-                            ui.label("Length");
+                            ui.label(i18n::tr(ui_lang, "Length"));
                             if ui
                                 .add(
                                     egui::DragValue::new(&mut selected)
@@ -856,7 +897,7 @@ impl Atelier {
                             {
                                 r.range[1] = r.range[0] + selected / length;
                             }
-                            ui.checkbox(&mut r.reversed, "Reverse");
+                            ui.checkbox(&mut r.reversed, i18n::tr(ui_lang, "Reverse"));
                         });
                     }
                 });
@@ -875,13 +916,22 @@ impl Atelier {
             lengths[0] * 1000.,
             lengths[1] * 1000.
         ));
-        ui.checkbox(&mut self.authoring.reverse, "Reverse the entire B side");
-        let easing = ui.checkbox(&mut self.authoring.ease, "Allow easing (different lengths)");
+        ui.checkbox(
+            &mut self.authoring.reverse,
+            i18n::tr(ui_lang, "Reverse the entire B side"),
+        );
+        let easing = ui.checkbox(
+            &mut self.authoring.ease,
+            i18n::tr(ui_lang, "Allow easing (different lengths)"),
+        );
         self.smoke_target_ui(ui, "sew_easing", easing.rect);
         if needs_easing(lengths) && !self.authoring.ease {
             ui.colored_label(
                 Color32::GOLD,
-                "Lengths differ. Adjust the ranges or explicitly allow easing.",
+                i18n::tr(
+                    ui_lang,
+                    "Lengths differ. Adjust the ranges or explicitly allow easing.",
+                ),
             );
         }
         let ready = sides.iter().all(|s| !s.is_empty());
@@ -894,16 +944,16 @@ impl Atelier {
             let button = ui.add_enabled(
                 ready,
                 egui::Button::new(if self.authoring.sewing.editing.is_some() {
-                    "Apply seam"
+                    i18n::tr(ui_lang, "Apply seam")
                 } else {
-                    "Commit the seam"
+                    i18n::tr(ui_lang, "Commit the seam")
                 }),
             );
             self.smoke_target_ui(ui, "sew", button.rect);
             if button.clicked() {
                 self.commit_seam();
             }
-            if ui.button("Cancel draft").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Cancel draft")).clicked() {
                 self.authoring.ends.clear();
                 self.authoring.sewing = Default::default();
             }
@@ -911,6 +961,7 @@ impl Atelier {
         ui.separator();
     }
     pub(super) fn commit_seam(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
         let [a, b] = self.sewing_sides();
         if a.is_empty() || b.is_empty() {
             return false;
@@ -932,7 +983,11 @@ impl Atelier {
             self.authoring.ends.clear();
             self.authoring.sewing = Default::default();
             self.authoring.selection.seam_card = None;
-            self.status = "Seam created · pick two more edges, or press Space to simulate".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Seam created · pick two more edges, or press Space to simulate",
+            )
+            .into();
             true
         } else {
             false

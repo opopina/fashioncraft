@@ -165,12 +165,13 @@ impl Atelier {
         response: &egui::Response,
         rect: egui::Rect,
     ) {
+        let ui_lang = self.prefs.language;
         if response.hovered() {
             ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.authoring.eyedropper = false;
-            self.status = "Eyedropper cancelled".into();
+            self.status = i18n::tr(ui_lang, "Eyedropper cancelled").into();
             return;
         }
         if !response.clicked() {
@@ -180,7 +181,7 @@ impl Atelier {
             return;
         };
         let Some(color) = self.colour_at(ctx, pos, rect) else {
-            self.status = "Eyedropper: no cloth there".into();
+            self.status = i18n::tr(ui_lang, "Eyedropper: no cloth there").into();
             return;
         };
         let [r, g, b] = color;

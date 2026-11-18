@@ -13,6 +13,7 @@ impl Atelier {
         ui: &mut egui::Ui,
         panel: &marvelous_cloth::garment::template::Panel,
     ) {
+        let ui_lang = self.prefs.language;
         let state = self
             .project
             .template
@@ -32,33 +33,33 @@ impl Atelier {
             .iter()
             .any(|s| s.panel == panel.id);
         let mut action = None;
-        egui::CollapsingHeader::new("Simulation state")
+        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Simulation state"))
             .id_salt("activation")
             .show(ui, |ui| {
                 ui.small(match state {
-                    None => "Active: simulated and colliding",
-                    Some(false) => "Deactivated: held in place, other cloth passes through it",
+                    None => i18n::tr(ui_lang, "Active: simulated and colliding"),
+                    Some(false) => i18n::tr(ui_lang, "Deactivated: held in place, other cloth passes through it"),
                     Some(true) => {
-                        "Deactivated with its seams: held in place, not sewn, other cloth passes through it"
+                        i18n::tr(ui_lang, "Deactivated with its seams: held in place, not sewn, other cloth passes through it")
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
                     if ui
-                        .button("Deactivate")
-                        .on_hover_text("Hold the selected pieces where they are and let other cloth pass through them; seams stay")
+                        .button(i18n::tr(ui_lang, "Deactivate"))
+                        .on_hover_text(i18n::tr(ui_lang, "Hold the selected pieces where they are and let other cloth pass through them; seams stay"))
                         .clicked()
                     {
                         action = Some(Action::Deactivate(false));
                     }
                     if ui
-                        .button("Deactivate with seams")
-                        .on_hover_text("Also leave their seams out of the simulation")
+                        .button(i18n::tr(ui_lang, "Deactivate with seams"))
+                        .on_hover_text(i18n::tr(ui_lang, "Also leave their seams out of the simulation"))
                         .clicked()
                     {
                         action = Some(Action::Deactivate(true));
                     }
                     if ui
-                        .add_enabled(state.is_some(), egui::Button::new("Activate"))
+                        .add_enabled(state.is_some(), egui::Button::new(i18n::tr(ui_lang, "Activate")))
                         .clicked()
                     {
                         action = Some(Action::Activate);
@@ -67,7 +68,7 @@ impl Atelier {
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
                     if ui
-                        .selectable_label(strong, "Strengthen")
+                        .selectable_label(strong, i18n::tr(ui_lang, "Strengthen"))
                         .on_hover_text(format!(
                             "Simulate the selected pieces {}× stiffer so they hold their shape while the garment settles; click again to return them to normal",
                             marvelous_cloth::garment::template::STRENGTHEN_FACTOR
@@ -77,8 +78,8 @@ impl Atelier {
                         action = Some(Action::Strengthen(!strong));
                     }
                     if ui
-                        .selectable_label(solid, "Solidify")
-                        .on_hover_text("Keep the selected pieces in their current 3D shape: they still move and collide as a whole. Click again to release them")
+                        .selectable_label(solid, i18n::tr(ui_lang, "Solidify"))
+                        .on_hover_text(i18n::tr(ui_lang, "Keep the selected pieces in their current 3D shape: they still move and collide as a whole. Click again to release them"))
                         .clicked()
                     {
                         action = Some(Action::Solidify(!solid));
@@ -86,17 +87,17 @@ impl Atelier {
                 });
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("Superimpose");
+                    ui.label(i18n::tr(ui_lang, "Superimpose"));
                     if ui
-                        .button("Over")
-                        .on_hover_text("Lay the selected pieces on the outside of the pieces they are sewn to")
+                        .button(i18n::tr(ui_lang, "Over"))
+                        .on_hover_text(i18n::tr(ui_lang, "Lay the selected pieces on the outside of the pieces they are sewn to"))
                         .clicked()
                     {
                         action = Some(Action::Superimpose(true));
                     }
                     if ui
-                        .button("Under")
-                        .on_hover_text("Lay the selected pieces on the inside of the pieces they are sewn to")
+                        .button(i18n::tr(ui_lang, "Under"))
+                        .on_hover_text(i18n::tr(ui_lang, "Lay the selected pieces on the inside of the pieces they are sewn to"))
                         .clicked()
                     {
                         action = Some(Action::Superimpose(false));
@@ -124,12 +125,17 @@ impl Atelier {
 
     /// Solidify pieces in their current shape, or release them, as one validated undo step.
     pub(super) fn set_solid(&mut self, ids: &[String], solidify: bool) {
+        let ui_lang = self.prefs.language;
         if ids.is_empty() {
-            self.status = "Select the pieces first".into();
+            self.status = i18n::tr(ui_lang, "Select the pieces first").into();
             return;
         }
         if self.pending {
-            self.status = "Wait for the current step to finish, then try again".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
             return;
         }
         self.playing = false;
@@ -164,12 +170,17 @@ impl Atelier {
 
     /// Deactivate (`deactivate`) or activate pieces as one validated undo step.
     pub(super) fn set_active(&mut self, ids: &[String], deactivate: bool, sewing: bool) {
+        let ui_lang = self.prefs.language;
         if ids.is_empty() {
-            self.status = "Select the pieces first".into();
+            self.status = i18n::tr(ui_lang, "Select the pieces first").into();
             return;
         }
         if self.pending {
-            self.status = "Wait for the current step to finish, then try again".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
             return;
         }
         self.playing = false;
@@ -207,12 +218,17 @@ impl Atelier {
     /// (`over`) or inside. Only the current 3D state changes, at rest; the drape of every other
     /// piece is kept.
     pub(super) fn superimpose_panels(&mut self, ids: &[String], over: bool) {
+        let ui_lang = self.prefs.language;
         if ids.is_empty() {
-            self.status = "Select the pieces first".into();
+            self.status = i18n::tr(ui_lang, "Select the pieces first").into();
             return;
         }
         if self.pending {
-            self.status = "Wait for the current step to finish, then try again".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
             return;
         }
         self.playing = false;
@@ -234,7 +250,11 @@ impl Atelier {
                 .clone()
                 .any(|v| garment.mesh.pins[v].is_some())
             {
-                self.status = "Release the pins of that piece before superimposing it".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Release the pins of that piece before superimposing it",
+                )
+                .into();
                 return;
             }
             let partners: BTreeSet<&str> = self
@@ -271,7 +291,8 @@ impl Atelier {
             moved += 1;
         }
         if moved == 0 {
-            self.status = "Superimpose works on pieces sewn to another piece".into();
+            self.status =
+                i18n::tr(ui_lang, "Superimpose works on pieces sewn to another piece").into();
             return;
         }
         if let Err(error) =

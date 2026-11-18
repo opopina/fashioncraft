@@ -32,8 +32,9 @@ pub(super) const PRESETS: [(&str, f64, usize, &str); 3] = [
 
 impl Atelier {
     pub(super) fn simulation_environment(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.horizontal_wrapped(|ui| {
-            ui.label("Quality");
+            ui.label(i18n::tr(ui_lang, "Quality"));
             for (name, dt, iterations, hint) in PRESETS {
                 let current =
                     (self.settings.dt - dt).abs() < 1e-12 && self.settings.iterations == iterations;
@@ -56,17 +57,18 @@ impl Atelier {
             self.settings.iterations
         ));
         ui.horizontal_wrapped(|ui| {
-            ui.label("Friction");
+            ui.label(i18n::tr(ui_lang, "Friction"));
             ui.add(
                 egui::DragValue::new(&mut self.settings.friction)
                     .range(0.0..=1.5)
                     .speed(0.01)
                     .fixed_decimals(2),
             )
-            .on_hover_text(
+            .on_hover_text(i18n::tr(
+                ui_lang,
                 "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and \
                  on the floor. 0 lets cloth slide freely",
-            );
+            ));
             for (label, value) in [("None", 0.0), ("Cotton", DEFAULT_FRICTION), ("Grippy", 0.6)] {
                 if ui.small_button(label).clicked() {
                     self.settings.friction = value;
@@ -75,7 +77,7 @@ impl Atelier {
         });
         let mut gap = self.settings.contact.radius * 1000.;
         ui.horizontal(|ui| {
-            ui.label("Collision distance");
+            ui.label(i18n::tr(ui_lang, "Collision distance"));
             if ui
                 .add(
                     egui::DragValue::new(&mut gap)
@@ -84,18 +86,19 @@ impl Atelier {
                         .fixed_decimals(1)
                         .suffix(" mm"),
                 )
-                .on_hover_text(
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Gap the solver keeps between cloth and the avatar, the floor and other \
                      cloth. Larger is more forgiving with thick layers; smaller fits closer. A \
                      fabric can set its own in the Fabric tab; two sides keep the mean",
-                )
+                ))
                 .changed()
             {
                 self.settings.contact.radius = gap / 1000.;
             }
         });
         ui.separator();
-        ui.strong("Environment");
+        ui.strong(i18n::tr(ui_lang, "Environment"));
         let feet = self
             .scene
             .collider
@@ -107,8 +110,11 @@ impl Atelier {
         let feet = if feet.is_finite() { feet } else { 0. };
         let mut floor = self.settings.floor.is_some();
         if ui
-            .checkbox(&mut floor, "Floor")
-            .on_hover_text("A physical floor the cloth can rest on; starts under the avatar's feet")
+            .checkbox(&mut floor, i18n::tr(ui_lang, "Floor"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "A physical floor the cloth can rest on; starts under the avatar's feet",
+            ))
             .changed()
         {
             self.settings.floor = floor.then_some(feet);
@@ -116,7 +122,7 @@ impl Atelier {
         if let Some(height) = self.settings.floor.as_mut() {
             let mut mm = *height * 1000.;
             ui.horizontal(|ui| {
-                ui.label("Floor height");
+                ui.label(i18n::tr(ui_lang, "Floor height"));
                 if ui
                     .add(
                         egui::DragValue::new(&mut mm)
@@ -128,14 +134,14 @@ impl Atelier {
                 {
                     *height = mm / 1000.;
                 }
-                if ui.small_button("At the feet").clicked() {
+                if ui.small_button(i18n::tr(ui_lang, "At the feet")).clicked() {
                     *height = feet;
                 }
             });
         }
         let mut g = -self.settings.gravity.y;
         ui.horizontal(|ui| {
-            ui.label("Gravity");
+            ui.label(i18n::tr(ui_lang, "Gravity"));
             if ui
                 .add(
                     egui::DragValue::new(&mut g)
@@ -144,12 +150,15 @@ impl Atelier {
                         .fixed_decimals(2)
                         .suffix(" m/s²"),
                 )
-                .on_hover_text("Downward acceleration; 9.81 on Earth, 0 for weightless cloth")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Downward acceleration; 9.81 on Earth, 0 for weightless cloth",
+                ))
                 .changed()
             {
                 self.settings.gravity = DVec3::new(0., -g, 0.);
             }
-            if ui.small_button("Earth").clicked() {
+            if ui.small_button(i18n::tr(ui_lang, "Earth")).clicked() {
                 self.settings.gravity = DVec3::new(0., -9.81, 0.);
             }
         });
@@ -157,13 +166,15 @@ impl Atelier {
     }
 
     fn wind_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let mut on = self.settings.wind.is_some();
         if ui
-            .checkbox(&mut on, "Wind")
-            .on_hover_text(
+            .checkbox(&mut on, i18n::tr(ui_lang, "Wind"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
                 "A steady breeze. Cloth feels pressure drag where it faces the flow, and the same \
                  drag slows it as it falls",
-            )
+            ))
             .changed()
         {
             self.settings.wind = on.then(Wind::default);
@@ -177,7 +188,7 @@ impl Atelier {
         let mut from = (-flat.x).atan2(-flat.z).to_degrees().rem_euclid(360.);
         let mut changed = false;
         ui.horizontal(|ui| {
-            ui.label("Wind speed");
+            ui.label(i18n::tr(ui_lang, "Wind speed"));
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut speed)
@@ -186,11 +197,14 @@ impl Atelier {
                         .fixed_decimals(1)
                         .suffix(" m/s"),
                 )
-                .on_hover_text("2 m/s is a light breeze, 8 m/s a strong wind")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "2 m/s is a light breeze, 8 m/s a strong wind",
+                ))
                 .changed();
         });
         ui.horizontal_wrapped(|ui| {
-            ui.label("From");
+            ui.label(i18n::tr(ui_lang, "From"));
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut from)
@@ -199,7 +213,10 @@ impl Atelier {
                         .fixed_decimals(0)
                         .suffix("°"),
                 )
-                .on_hover_text("Where the wind comes from: 0° is +Z, 90° is +X, seen from above")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Where the wind comes from: 0° is +Z, 90° is +X, seen from above",
+                ))
                 .changed();
             for (label, angle) in [("+Z", 0.), ("+X", 90.), ("−Z", 180.), ("−X", 270.)] {
                 if ui.small_button(label).clicked() {

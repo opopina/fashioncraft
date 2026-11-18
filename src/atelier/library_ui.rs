@@ -90,6 +90,7 @@ impl Atelier {
     }
 
     pub(super) fn library_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.library.open {
             return;
         }
@@ -97,7 +98,7 @@ impl Atelier {
         let mut open = true;
         let mut action: Option<(Shelf, PathBuf)> = None;
         let mut rescan = false;
-        egui::Window::new("Library")
+        egui::Window::new(i18n::tr(ui_lang, "Library"))
             .open(&mut open)
             .default_width(300.)
             .default_height(380.)
@@ -107,20 +108,25 @@ impl Atelier {
                     ui.small(root.display().to_string());
                 });
                 ui.horizontal(|ui| {
-                    if ui.small_button("Choose folder…").clicked()
+                    if ui
+                        .small_button(i18n::tr(ui_lang, "Choose folder…"))
+                        .clicked()
                         && let Some(dir) = rfd::FileDialog::new().set_directory(&root).pick_folder()
                     {
                         self.prefs.library_dir = Some(dir);
                         self.prefs_dirty = true;
                         rescan = true;
                     }
-                    if ui.small_button("Refresh").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Refresh")).clicked() {
                         rescan = true;
                     }
                     if !root.is_dir()
                         && ui
-                            .small_button("Create folder")
-                            .on_hover_text("Make the library folder so you can drop files in it")
+                            .small_button(i18n::tr(ui_lang, "Create folder"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
+                                "Make the library folder so you can drop files in it",
+                            ))
                             .clicked()
                     {
                         self.status = match std::fs::create_dir_all(&root) {
@@ -161,9 +167,14 @@ impl Atelier {
                     .unwrap_or_default();
                 if files.is_empty() {
                     ui.small(match shelf {
-                        Shelf::Garments => "No project files (.json) in this folder yet.",
-                        Shelf::Avatars => "No avatars (.obj, .gltf, .glb) in this folder yet.",
-                        Shelf::Images => "No PNG images in this folder yet.",
+                        Shelf::Garments => {
+                            i18n::tr(ui_lang, "No project files (.json) in this folder yet.")
+                        }
+                        Shelf::Avatars => i18n::tr(
+                            ui_lang,
+                            "No avatars (.obj, .gltf, .glb) in this folder yet.",
+                        ),
+                        Shelf::Images => i18n::tr(ui_lang, "No PNG images in this folder yet."),
                     });
                 }
                 let verb = match shelf {
@@ -198,7 +209,9 @@ impl Atelier {
             }
             Some((Shelf::Images, path)) => match self.authoring.selected.clone() {
                 Some(panel) => self.add_graphic_from(&panel, path),
-                None => self.status = "Select a piece to put the image on".into(),
+                None => {
+                    self.status = i18n::tr(ui_lang, "Select a piece to put the image on").into()
+                }
             },
             None => {}
         }

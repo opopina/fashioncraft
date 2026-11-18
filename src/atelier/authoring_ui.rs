@@ -966,6 +966,7 @@ impl Atelier {
     /// Put pieces back on their flat 3D arrangement, at rest, keeping every other piece's
     /// drape. A state change only: the document and its history are untouched.
     pub(super) fn reset_panels_3d(&mut self, ids: &[String]) {
+        let ui_lang = self.prefs.language;
         let garment = self.scene.garment.clone();
         let mut count = 0;
         for range in garment.panels.iter().filter(|p| ids.contains(&p.id)) {
@@ -976,7 +977,7 @@ impl Atelier {
             count += 1;
         }
         if count == 0 {
-            self.status = "Select the pieces to reset".into();
+            self.status = i18n::tr(ui_lang, "Select the pieces to reset").into();
             return;
         }
         self.issue.invalidate();
@@ -1022,6 +1023,7 @@ impl Atelier {
         true
     }
     pub(super) fn authoring_toolbar(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         self.history_shortcuts(ui.ctx());
         ui.vertical_centered(|ui| {
             if super::icons::icon_only(
@@ -1029,7 +1031,10 @@ impl Atelier {
                 super::icons::Icon::Grid,
                 36.,
                 self.template_browser_open(),
-                "Templates · browse original examples or import a native template",
+                i18n::tr(
+                    ui_lang,
+                    "Templates · browse original examples or import a native template",
+                ),
             )
             .clicked()
             {
@@ -1037,7 +1042,10 @@ impl Atelier {
             }
             if ui
                 .button("···")
-                .on_hover_text("Right-click either canvas to choose a tool")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Right-click either canvas to choose a tool",
+                ))
                 .clicked()
             {
                 self.authoring.radial.open(
@@ -1165,7 +1173,7 @@ impl Atelier {
                         super::icons::Icon::Undo,
                         32.,
                         false,
-                        "Undo · Ctrl+Z",
+                        i18n::tr(ui_lang, "Undo · Ctrl+Z"),
                     )
                 })
                 .inner;
@@ -1180,7 +1188,7 @@ impl Atelier {
                         super::icons::Icon::Redo,
                         32.,
                         false,
-                        "Redo · Ctrl+Shift+Z",
+                        i18n::tr(ui_lang, "Redo · Ctrl+Shift+Z"),
                     )
                 })
                 .inner;
@@ -1325,6 +1333,7 @@ impl Atelier {
         panel: &marvelous_cloth::garment::template::Panel,
         polygon: &marvelous_cloth::garment::polygon::PolygonPattern,
     ) {
+        let ui_lang = self.prefs.language;
         let Some(name) = self
             .authoring
             .edge
@@ -1349,7 +1358,7 @@ impl Atelier {
         ui.separator();
         ui.strong(format!("Boundary {name}"));
         ui.horizontal(|ui| {
-            ui.label("Target");
+            ui.label(i18n::tr(ui_lang, "Target"));
             millimetre_field(ui, &mut self.authoring.target_mm);
         });
         let target_m = authoring::mm_to_m(self.authoring.target_mm);
@@ -1361,8 +1370,11 @@ impl Atelier {
         ));
         ui.horizontal(|ui| {
             if ui
-                .button("Apply target")
-                .on_hover_text("Store this required length and set the boundary to it")
+                .button(i18n::tr(ui_lang, "Apply target"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Store this required length and set the boundary to it",
+                ))
                 .clicked()
             {
                 self.edit(Command::TargetLength {
@@ -1373,7 +1385,7 @@ impl Atelier {
             }
             let stored = polygon.target_lengths.contains_key(&name);
             if ui
-                .add_enabled(stored, egui::Button::new("Clear target"))
+                .add_enabled(stored, egui::Button::new(i18n::tr(ui_lang, "Clear target")))
                 .clicked()
             {
                 self.edit(Command::TargetLength {
@@ -1385,6 +1397,7 @@ impl Atelier {
         });
     }
     pub(super) fn authoring_properties(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         self.existing_seams(ui);
         self.sewing_audit_controls(ui);
         if self.authoring.tool == Tool::Sew || !self.authoring.ends.is_empty() {
@@ -1396,7 +1409,7 @@ impl Atelier {
         self.edge_properties(ui);
         self.dart_properties(ui);
         self.internal_line_properties(ui);
-        ui.strong("Active panel");
+        ui.strong(i18n::tr(ui_lang, "Active panel"));
         let Some(panel) = self
             .project
             .template
@@ -1405,14 +1418,14 @@ impl Atelier {
             .find(|p| Some(&p.id) == self.authoring.selected.as_ref())
             .cloned()
         else {
-            ui.small("Select a piece in the list or in a view. Pen / Rectangle to draw; Sew to assemble.");
+            ui.small(i18n::tr(ui_lang, "Select a piece in the list or in a view. Pen / Rectangle to draw; Sew to assemble."));
             return;
         };
         ui.label(&panel.name);
         let mut locked = self.board_locked(&panel.id);
         if ui
-            .checkbox(&mut locked, "Locked in 2D")
-            .on_hover_text("A locked piece cannot be picked or box-selected on the 2D board; the 3D view still reaches it")
+            .checkbox(&mut locked, i18n::tr(ui_lang, "Locked in 2D"))
+            .on_hover_text(i18n::tr(ui_lang, "A locked piece cannot be picked or box-selected on the 2D board; the 3D view still reaches it"))
             .changed()
         {
             self.set_piece_locked(&panel.id, locked);
@@ -1437,7 +1450,10 @@ impl Atelier {
             );
             if ui
                 .button(label)
-                .on_hover_text("Open material, weight and stretch for this piece")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Open material, weight and stretch for this piece",
+                ))
                 .clicked()
             {
                 self.inspector_tab = super::chrome::InspectorTab::Fabric;
@@ -1460,7 +1476,7 @@ impl Atelier {
             (hi.x - lo.x) * 1000.,
             (hi.y - lo.y) * 1000.
         ))
-        .on_hover_text("Size of the drawn outline");
+        .on_hover_text(i18n::tr(ui_lang, "Size of the drawn outline"));
         // Numeric entry stays in a draft until Apply, so one click is exactly one
         // document edit and one history entry. Millimetres convert by division:
         // 400 mm / 1000 is the exact f64 0.4, unlike a 0.001 multiplication.
@@ -1470,17 +1486,20 @@ impl Atelier {
             self.authoring.height_mm = panel.pattern.height * 1000.;
             self.authoring.numeric_anchor = None;
         }
-        ui.collapsing("Dimensions and points", |ui| {
-            ui.strong("Dimensions (mm)");
+        ui.collapsing(i18n::tr(ui_lang, "Dimensions and points"), |ui| {
+            ui.strong(i18n::tr(ui_lang, "Dimensions (mm)"));
             ui.horizontal_wrapped(|ui| {
-                ui.label("Width");
+                ui.label(i18n::tr(ui_lang, "Width"));
                 millimetre_field(ui, &mut self.authoring.width_mm);
-                ui.label("Height");
+                ui.label(i18n::tr(ui_lang, "Height"));
                 millimetre_field(ui, &mut self.authoring.height_mm);
             });
             if ui
-                .button("Apply dimensions")
-                .on_hover_text("Exact millimetre size; invalid values leave the document unchanged")
+                .button(i18n::tr(ui_lang, "Apply dimensions"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Exact millimetre size; invalid values leave the document unchanged",
+                ))
                 .clicked()
             {
                 self.edit(Command::Dimensions {
@@ -1493,7 +1512,7 @@ impl Atelier {
                 if !polygon.target_diagnostics().is_empty() {
                     ui.colored_label(
                         Color32::GOLD,
-                        "A stored target length is invalid and is ignored.",
+                        i18n::tr(ui_lang, "A stored target length is invalid and is ignored."),
                     );
                 }
                 if let Some(k) = self
@@ -1552,11 +1571,12 @@ impl Atelier {
                         });
                     }
                     if ui
-                        .button("Apply point")
-                        .on_hover_text(
+                        .button(i18n::tr(ui_lang, "Apply point"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
                             "Material coordinates in millimetres; the rest origin is re-based \
                          without moving the other points",
-                        )
+                        ))
                         .clicked()
                     {
                         let position = DVec2::new(
@@ -1570,7 +1590,10 @@ impl Atelier {
                         });
                     }
                 } else {
-                    ui.small("Click a point on the 2D board to edit its exact position.");
+                    ui.small(i18n::tr(
+                        ui_lang,
+                        "Click a point on the 2D board to edit its exact position.",
+                    ));
                 }
                 self.target_length_properties(ui, &panel, polygon);
             }
@@ -1592,56 +1615,60 @@ impl Atelier {
             };
             egui::CollapsingHeader::new(format!("Point {} · Construction", k+1)).default_open(true).show(ui, |ui| {
                 let controls = construction_controls(ui, &mut self.authoring.construction, &self.project.template, &target);
-                controls.field.on_hover_text("Signed millimetres; typing does not change the pattern");
-                controls.apply.on_hover_text("Move this point only; invalid contours and incompatible seams are rejected");
+                controls.field.on_hover_text(i18n::tr(ui_lang, "Signed millimetres; typing does not change the pattern"));
+                controls.apply.on_hover_text(i18n::tr(ui_lang, "Move this point only; invalid contours and incompatible seams are rejected"));
                 if let Some(command) = controls.command { self.edit(command); }
             });
         }
         self.drafting_properties(ui, &panel);
         ui.horizontal(|ui| {
-            let duplicate = ui.button("Duplicate");
+            let duplicate = ui.button(i18n::tr(ui_lang, "Duplicate"));
             self.smoke_target("duplicate", duplicate.rect.center());
             if duplicate.clicked() {
                 self.edit(Command::Duplicate {
                     panel: panel.id.clone(),
                 });
             }
-            if ui.button("Delete panel").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Delete panel")).clicked() {
                 self.edit(Command::RemovePanel {
                     panel: panel.id.clone(),
                 });
             }
         });
         if ui
-            .button("Reset 3D arrangement")
-            .on_hover_text(
+            .button(i18n::tr(ui_lang, "Reset 3D arrangement"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
                 "Lay the selected pieces flat on their arrangement again; the rest keeps its drape",
-            )
+            ))
             .clicked()
         {
             let ids = self.selected_panels();
             self.reset_panels_3d(&ids);
         }
         if self.authoring.tool != Tool::Place {
-            ui.small("Move 3D (G) / Rotate 3D (R) in the toolbar.");
+            ui.small(i18n::tr(
+                ui_lang,
+                "Move 3D (G) / Rotate 3D (R) in the toolbar.",
+            ));
             return;
         }
         ui.horizontal(|ui| {
             if ui
-                .selectable_label(!self.authoring.rotate, "Move (G)")
+                .selectable_label(!self.authoring.rotate, i18n::tr(ui_lang, "Move (G)"))
                 .clicked()
             {
                 self.set_authoring_tool(Tool::Place, false);
             }
             if ui
-                .selectable_label(self.authoring.rotate, "Rotate (R)")
+                .selectable_label(self.authoring.rotate, i18n::tr(ui_lang, "Rotate (R)"))
                 .clicked()
             {
                 self.set_authoring_tool(Tool::Place, true);
             }
         });
-        ui.small("Flat placement: this piece takes the shape of its pattern. The other pieces stay in place.");
-        let focus = ui.button("Frame the panel");
+        ui.small(i18n::tr(ui_lang, "Flat placement: this piece takes the shape of its pattern. The other pieces stay in place."));
+        let focus = ui.button(i18n::tr(ui_lang, "Frame the panel"));
         self.smoke_target("focus", focus.rect.center());
         if focus.clicked() {
             let placement = self.authoring.preview.as_ref().unwrap_or(&panel.placement);
@@ -1683,16 +1710,22 @@ impl Atelier {
         }
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(self.authoring.preview.is_some(), egui::Button::new("Apply"))
+                .add_enabled(
+                    self.authoring.preview.is_some(),
+                    egui::Button::new(i18n::tr(ui_lang, "Apply")),
+                )
                 .clicked()
             {
                 self.commit_placement();
             }
-            if ui.button("Discard").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Discard")).clicked() {
                 self.cancel_preview();
             }
         });
-        ui.small("Drag an axis / ring · Shift: 15° angles · release: commit · Escape: cancel.");
+        ui.small(i18n::tr(
+            ui_lang,
+            "Drag an axis / ring · Shift: 15° angles · release: commit · Escape: cancel.",
+        ));
         ui.separator();
     }
     pub(super) fn create_polygon(&mut self) {
@@ -1746,14 +1779,23 @@ impl Atelier {
         }
     }
     pub(super) fn prepare_simulation(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
         if !self.authoring.board.freehand.samples.is_empty() {
-            self.status = "Create or cancel the freehand panel before simulating".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Create or cancel the freehand panel before simulating",
+            )
+            .into();
             return false;
         }
         if self.authoring.sewing.chain_mode
             && self.authoring.sewing.sides.iter().any(|s| !s.is_empty())
         {
-            self.status = "Commit or cancel the multi-edge seam before simulating".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Commit or cancel the multi-edge seam before simulating",
+            )
+            .into();
             return false;
         }
         if self.authoring.ends.len() == 2 && !self.commit_seam() {

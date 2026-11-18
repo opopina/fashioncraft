@@ -90,34 +90,39 @@ pub(super) fn dark_style(ctx: &egui::Context) {
 }
 impl Atelier {
     pub(super) fn panel_browser(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let mut select = None;
-        egui::CollapsingHeader::new(format!("Pieces ({})", self.project.template.panels.len()))
-            .id_salt("panel_browser")
-            .default_open(true)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("panel_list")
-                    .max_height(115.)
-                    .show(ui, |ui| {
-                        for panel in &self.project.template.panels {
-                            let name = if self.project.template.locked_panels.contains(&panel.id) {
-                                format!("{} · locked in 2D", panel.name)
-                            } else {
-                                panel.name.clone()
-                            };
-                            if ui
-                                .selectable_label(
-                                    self.authoring.selected.as_ref() == Some(&panel.id),
-                                    name,
-                                )
-                                .on_hover_text(format!("{} · select in both views", panel.id))
-                                .clicked()
-                            {
-                                select = Some(panel.id.clone());
-                            }
+        egui::CollapsingHeader::new(format!(
+            "{} ({})",
+            i18n::tr(ui_lang, "Pieces"),
+            self.project.template.panels.len()
+        ))
+        .id_salt("panel_browser")
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("panel_list")
+                .max_height(115.)
+                .show(ui, |ui| {
+                    for panel in &self.project.template.panels {
+                        let name = if self.project.template.locked_panels.contains(&panel.id) {
+                            format!("{} · locked in 2D", panel.name)
+                        } else {
+                            panel.name.clone()
+                        };
+                        if ui
+                            .selectable_label(
+                                self.authoring.selected.as_ref() == Some(&panel.id),
+                                name,
+                            )
+                            .on_hover_text(format!("{} · select in both views", panel.id))
+                            .clicked()
+                        {
+                            select = Some(panel.id.clone());
                         }
-                    });
-            });
+                    }
+                });
+        });
         if let Some(id) = select {
             self.set_authoring_tool(Tool::Edit, false);
             self.cancel_preview();
@@ -130,12 +135,12 @@ impl Atelier {
 
     /// Archived pieces, each with Restore and Delete; hidden while the archive is empty.
     fn archive_list(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         if self.project.template.archive.is_empty() {
             return;
         }
         let mut command = None;
-        egui::CollapsingHeader::new(format!(
-            "Archived ({})",
+        egui::CollapsingHeader::new(format!("{} ({})", i18n::tr(ui_lang, "Archived"),
             self.project.template.archive.len()
         ))
         .id_salt("archive_list")
@@ -143,17 +148,17 @@ impl Atelier {
             for entry in &self.project.template.archive {
                 ui.horizontal(|ui| {
                     ui.label(entry.names.join(", "))
-                        .on_hover_text("Off the board and out of the simulation, kept with the project");
+                        .on_hover_text(i18n::tr(ui_lang, "Off the board and out of the simulation, kept with the project"));
                     if ui
-                        .small_button("Restore")
-                        .on_hover_text("Bring them back where they were, sewn to the pieces still on the board")
+                        .small_button(i18n::tr(ui_lang, "Restore"))
+                        .on_hover_text(i18n::tr(ui_lang, "Bring them back where they were, sewn to the pieces still on the board"))
                         .clicked()
                     {
                         command = Some(marvelous_cloth::authoring::Command::RestoreArchived {
                             id: entry.id.clone(),
                         });
                     }
-                    if ui.small_button("Delete").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Delete")).clicked() {
                         command = Some(marvelous_cloth::authoring::Command::DeleteArchived {
                             id: entry.id.clone(),
                         });
@@ -166,16 +171,17 @@ impl Atelier {
         }
     }
     pub(super) fn export_information(&mut self, ui: &mut egui::Ui) {
-        ui.collapsing("Files & formats", |ui| {
-            ui.label("Import");
-            ui.small("ClothCraft project and template JSON");
-            ui.small("Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA");
-            ui.small("Pattern outlines: generic ASCII DXF · physical SVG subsets");
-            ui.label("Export");
-            ui.small("Project and template JSON · garment OBJ · SVG patterns · fiber guides");
-            ui.small("Industrial DXF, GLB export, animated avatars, USD, Alembic, FBX and PDF are not yet supported.");
+        let ui_lang = self.prefs.language;
+        ui.collapsing(i18n::tr(ui_lang, "Files & formats"), |ui| {
+            ui.label(i18n::tr(ui_lang, "Import"));
+            ui.small(i18n::tr(ui_lang, "ClothCraft project and template JSON"));
+            ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA"));
+            ui.small(i18n::tr(ui_lang, "Pattern outlines: generic ASCII DXF · physical SVG subsets"));
+            ui.label(i18n::tr(ui_lang, "Export"));
+            ui.small(i18n::tr(ui_lang, "Project and template JSON · garment OBJ · SVG patterns · fiber guides"));
+            ui.small(i18n::tr(ui_lang, "Industrial DXF, GLB export, animated avatars, USD, Alembic, FBX and PDF are not yet supported."));
             ui.separator();
-            ui.small("Export folder (files replaced on every export):");
+            ui.small(i18n::tr(ui_lang, "Export folder (files replaced on every export):"));
             ui.label(egui::RichText::new(self.output.display().to_string()).small());
         });
     }

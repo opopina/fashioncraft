@@ -279,9 +279,10 @@ fn selected_material_points(
 impl Atelier {
     /// Freeze or unfreeze the selected pieces as one undo step.
     pub(super) fn freeze_selected(&mut self, freeze: bool) {
+        let ui_lang = self.prefs.language;
         let selected = self.selected_panels();
         let Some(first) = selected.first().cloned() else {
-            self.status = "Select the pieces first".into();
+            self.status = i18n::tr(ui_lang, "Select the pieces first").into();
             return;
         };
         let action = match (selected.len() > 1, freeze) {
@@ -303,7 +304,9 @@ impl Atelier {
                 self.install_edit(edit);
                 self.status = if freeze { "Frozen" } else { "Unfrozen" }.into();
             }
-            Ok(_) => self.status = "Panel holds already match the request".into(),
+            Ok(_) => {
+                self.status = i18n::tr(ui_lang, "Panel holds already match the request").into()
+            }
             Err(error) => self.status = error,
         }
     }
@@ -313,6 +316,7 @@ impl Atelier {
         ui: &mut egui::Ui,
         panel: &marvelous_cloth::garment::template::Panel,
     ) {
+        let ui_lang = self.prefs.language;
         let mut groups = self.authoring.board.point_selections();
         if groups.is_empty()
             && let Some((id, i)) = &self.authoring.anchor
@@ -398,9 +402,11 @@ impl Atelier {
                 Ok(edit) if edit.reset_simulation => {
                     self.authoring.history.record(self.project.template.clone());
                     self.install_edit(edit);
-                    self.status = "Panel holds updated".into();
+                    self.status = i18n::tr(ui_lang, "Panel holds updated").into();
                 }
-                Ok(_) => self.status = "Panel holds already match the request".into(),
+                Ok(_) => {
+                    self.status = i18n::tr(ui_lang, "Panel holds already match the request").into()
+                }
                 Err(error) => {
                     self.status = error.clone();
                     self.authoring.error = Some(error);

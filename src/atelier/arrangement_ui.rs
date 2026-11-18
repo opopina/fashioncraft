@@ -242,15 +242,16 @@ impl Atelier {
     }
 
     pub(super) fn arrangement_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        let ui_lang = self.prefs.language;
         self.arrangement_sidecar();
-        egui::CollapsingHeader::new("Arrange on body")
+        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Arrange on body"))
             .id_salt("arrange-on-body")
             .default_open(true)
             .show(ui, |ui| {
                 let sidecar = match &self.authoring.arrangement.loaded {
                     Some((_, Ok(Some(s)))) => s.clone(),
                     Some((_, Ok(None))) => {
-                        ui.small("This avatar ships no arrangement anchors (arrangement.json next to its OBJ), and its shape does not allow estimating them: it should stand Y up, facing +Z, arms away from the body.");
+                        ui.small(i18n::tr(ui_lang, "This avatar ships no arrangement anchors (arrangement.json next to its OBJ), and its shape does not allow estimating them: it should stand Y up, facing +Z, arms away from the body."));
                         return;
                     }
                     Some((_, Err(e))) => {
@@ -260,7 +261,7 @@ impl Atelier {
                     None => return,
                 };
                 if sidecar.estimated {
-                    ui.small("Anchors on joints estimated from the avatar's shape.");
+                    ui.small(i18n::tr(ui_lang, "Anchors on joints estimated from the avatar's shape."));
                 }
                 let anchors: Vec<AnchorChoice> = sidecar
                     .set
@@ -286,7 +287,7 @@ impl Atelier {
                 let chosen = anchors.iter().find(|a| a.id == current);
                 let label = chosen.map(|a| a.label.clone()).unwrap_or_default();
                 let max_wrap = chosen.map_or(80.0, |a| a.max_wrap_degrees);
-                egui::ComboBox::from_label("Anchor").selected_text(&label).height(320.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_label(i18n::tr(ui_lang, "Anchor")).selected_text(&label).height(320.0).show_ui(ui, |ui| {
                     for a in &anchors {
                         if ui.selectable_label(a.id == current, &a.label).clicked() {
                             state.anchor = Some(a.id.clone());
@@ -298,11 +299,11 @@ impl Atelier {
                 });
                 ui.horizontal(|ui| {
                     ui.add(egui::DragValue::new(&mut state.clearance_mm).range(0.0..=600.0).speed(1.0).suffix(" mm"))
-                        .on_hover_text("Distance from the skin, measured along the anchor's outward direction");
-                    ui.label("from skin");
+                        .on_hover_text(i18n::tr(ui_lang, "Distance from the skin, measured along the anchor's outward direction"));
+                    ui.label(i18n::tr(ui_lang, "from skin"));
                 });
-                ui.checkbox(&mut state.wrap, "Wrap around body")
-                    .on_hover_text("Curve the panel around the anchor axis, clearing the body across its width and height");
+                ui.checkbox(&mut state.wrap, i18n::tr(ui_lang, "Wrap around body"))
+                    .on_hover_text(i18n::tr(ui_lang, "Curve the panel around the anchor axis, clearing the body across its width and height"));
                 let (clearance, wrap) = (state.clearance_mm / 1000.0, state.wrap);
                 let candidates = arrangements(
                     &sidecar,
@@ -313,7 +314,7 @@ impl Atelier {
                     &self.scene.collider.surface,
                 );
                 ui.horizontal(|ui| {
-                    if ui.button("Preview").on_hover_text("Show the panel on the anchor without changing the document").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Preview")).on_hover_text(i18n::tr(ui_lang, "Show the panel on the anchor without changing the document")).clicked() {
                         let first = candidates.iter().find(|c| c.is_ok()).unwrap_or(&candidates[0]);
                         match first {
                             Ok(a) => {
@@ -323,10 +324,10 @@ impl Atelier {
                             Err(e) => self.authoring.arrangement.report = Some(Err(e.clone())),
                         }
                     }
-                    if ui.button("Place").on_hover_text("Check initialization, then place (one undo step)").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Place")).on_hover_text(i18n::tr(ui_lang, "Check initialization, then place (one undo step)")).clicked() {
                         self.authoring.arrangement.report = Some(self.place_on_anchor(&panel.id, &label, candidates.clone()));
                     }
-                    if self.authoring.preview.is_some() && ui.button("Cancel").clicked() {
+                    if self.authoring.preview.is_some() && ui.button(i18n::tr(ui_lang, "Cancel")).clicked() {
                         self.cancel_preview();
                     }
                 });

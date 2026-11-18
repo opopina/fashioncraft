@@ -179,36 +179,40 @@ impl Atelier {
 
     /// Field of view and saved views, under the 3D view's camera menu.
     pub(super) fn camera_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label("Field of view");
+            ui.label(i18n::tr(ui_lang, "Field of view"));
             let mut fov = self.camera.fov_radians().to_degrees();
             if ui
                 .add(egui::Slider::new(&mut fov, FOV_RANGE_DEGREES).suffix("°"))
-                .on_hover_text("Vertical field of view; also sets the orthographic view's size")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Vertical field of view; also sets the orthographic view's size",
+                ))
                 .changed()
             {
                 self.camera.fov_degrees = fov;
                 self.prefs.camera_fov_degrees = fov;
             }
         });
-        ui.label(egui::RichText::new("Number keys: 2 front · 8 back · 4/6 avatar's right/left side · 5 top · 0 bottom · 1/3 three-quarter right/left · F frame").small());
+        ui.label(egui::RichText::new(i18n::tr(ui_lang, "Number keys: 2 front · 8 back · 4/6 avatar's right/left side · 5 top · 0 bottom · 1/3 three-quarter right/left · F frame")).small());
         ui.separator();
-        ui.strong("Saved views");
+        ui.strong(i18n::tr(ui_lang, "Saved views"));
         let mut go = None;
         let mut remove = None;
         for (index, view) in self.project.saved_views.iter().enumerate() {
             ui.horizontal(|ui| {
                 if ui
                     .button(&view.name)
-                    .on_hover_text("Go to this view; Restore comes back")
+                    .on_hover_text(i18n::tr(ui_lang, "Go to this view; Restore comes back"))
                     .clicked()
                 {
                     go = Some(index);
                 }
                 if ui
                     .small_button("×")
-                    .on_hover_text("Delete this view")
+                    .on_hover_text(i18n::tr(ui_lang, "Delete this view"))
                     .clicked()
                 {
                     remove = Some(index);
@@ -216,7 +220,10 @@ impl Atelier {
             });
         }
         if self.project.saved_views.is_empty() {
-            ui.small("No saved views yet. They are stored with the project.");
+            ui.small(i18n::tr(
+                ui_lang,
+                "No saved views yet. They are stored with the project.",
+            ));
         }
         if let Some(index) = go {
             apply_view(&self.project.saved_views[index], &mut self.camera);
@@ -241,7 +248,7 @@ impl Atelier {
             if ui
                 .add_enabled(
                     self.project.saved_views.len() < SavedView::MAX_VIEWS,
-                    egui::Button::new("Save current view"),
+                    egui::Button::new(i18n::tr(ui_lang, "Save current view")),
                 )
                 .clicked()
             {

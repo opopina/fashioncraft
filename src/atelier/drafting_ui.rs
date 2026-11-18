@@ -36,7 +36,8 @@ impl Default for DraftingUi {
 }
 impl Atelier {
     pub(super) fn primitive_menu(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button("Shapes", |ui| {
+        let ui_lang = self.prefs.language;
+        ui.menu_button(i18n::tr(ui_lang, "Shapes"), |ui| {
             let d = &mut self.authoring.drafting;
             ui.horizontal(|ui| {
                 for (kind, label) in [
@@ -44,7 +45,7 @@ impl Atelier {
                     (Primitive::Ellipse, "Circle / ellipse"),
                     (Primitive::Sector, "Arc sector"),
                 ] {
-                    ui.selectable_value(&mut d.kind, kind, label);
+                    ui.selectable_value(&mut d.kind, kind, i18n::tr(ui_lang, label));
                 }
             });
             for (label, value) in ["Width", "Height"].into_iter().zip(d.size_mm.iter_mut()) {
@@ -57,14 +58,26 @@ impl Atelier {
                     );
                 });
             }
-            if d.kind == Primitive::Ellipse && ui.small_button("Circle: H = W").clicked() {
+            if d.kind == Primitive::Ellipse
+                && ui
+                    .small_button(i18n::tr(ui_lang, "Circle: H = W"))
+                    .clicked()
+            {
                 d.size_mm[1] = d.size_mm[0];
             }
             if d.kind == Primitive::Sector {
-                ui.add(egui::Slider::new(&mut d.sweep, 5. ..=355.).text("Angle"));
-                ui.small("Size of the supporting ellipse. The sector is closed by two radii.");
+                ui.add(
+                    egui::Slider::new(&mut d.sweep, 5. ..=355.).text(i18n::tr(ui_lang, "Angle")),
+                );
+                ui.small(i18n::tr(
+                    ui_lang,
+                    "Size of the supporting ellipse. The sector is closed by two radii.",
+                ));
             }
-            if ui.button("Add at board center").clicked() {
+            if ui
+                .button(i18n::tr(ui_lang, "Add at board center"))
+                .clicked()
+            {
                 let size = DVec2::from_array(d.size_mm) / 1000.;
                 let command = Command::Primitive {
                     kind: d.kind,
@@ -89,9 +102,13 @@ impl Atelier {
         });
     }
     pub(super) fn drafting_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        let ui_lang = self.prefs.language;
         self.linked_mirror_properties(ui, &panel.id);
-        ui.collapsing("Mirrors and booleans", |ui| {
-            ui.small("X: left / right · Y: up / down in local pattern coordinates.");
+        ui.collapsing(i18n::tr(ui_lang, "Mirrors and booleans"), |ui| {
+            ui.small(i18n::tr(
+                ui_lang,
+                "X: left / right · Y: up / down in local pattern coordinates.",
+            ));
             ui.horizontal_wrapped(|ui| {
                 for (axis, label) in [(MirrorAxis::X, "Mirror X"), (MirrorAxis::Y, "Mirror Y")] {
                     if ui.button(label).clicked() {
@@ -103,7 +120,7 @@ impl Atelier {
                     }
                 }
             });
-            ui.label("Create an independent mirrored copy");
+            ui.label(i18n::tr(ui_lang, "Create an independent mirrored copy"));
             ui.horizontal(|ui| {
                 for (axis, side, label) in [
                     (MirrorAxis::X, -1, "−X"),
@@ -127,6 +144,7 @@ impl Atelier {
         self.piece_line_tools(ui, panel);
     }
     pub(super) fn linked_mirror_properties(&mut self, ui: &mut egui::Ui, panel: &str) {
+        let ui_lang = self.prefs.language;
         let link = self
             .project
             .template
@@ -137,17 +155,17 @@ impl Atelier {
         if let Some(link) = link {
             let partner = if link.a == panel { link.b } else { link.a };
             ui.strong(format!("Linked mirror {:?} · {partner}", link.axis));
-            ui.small("Edit either piece. Shape, curves, internal lines and grain update together on release. Placement and fabric stay independent.");
-            if ui.button("Unlink mirror").clicked() {
+            ui.small(i18n::tr(ui_lang, "Edit either piece. Shape, curves, internal lines and grain update together on release. Placement and fabric stay independent."));
+            if ui.button(i18n::tr(ui_lang, "Unlink mirror")).clicked() {
                 self.edit(Command::UnlinkMirror {
                     panel: panel.into(),
                 });
             }
         } else {
             ui.horizontal(|ui| {
-                ui.label("Linked copy");
+                ui.label(i18n::tr(ui_lang, "Linked copy"));
                 for (axis, name) in [(MirrorAxis::X, "X"), (MirrorAxis::Y, "Y")] {
-                    let button = ui.button(name).on_hover_text("Create a mirrored partner. Later shape edits update both pieces; undo restores both.");
+                    let button = ui.button(name).on_hover_text(i18n::tr(ui_lang, "Create a mirrored partner. Later shape edits update both pieces; undo restores both."));
                     self.smoke_target_ui(ui, &format!("linked_mirror_{name}"), button.rect);
                     if button.clicked() {
                         self.edit(Command::LinkedMirror { panel: panel.into(), axis });
@@ -157,7 +175,8 @@ impl Atelier {
         }
     }
     fn boolean_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
-        ui.label("Boolean · A = active panel");
+        let ui_lang = self.prefs.language;
+        ui.label(i18n::tr(ui_lang, "Boolean · A = active panel"));
         let choices: Vec<_> = self
             .project
             .template
@@ -182,9 +201,15 @@ impl Atelier {
                     ui.selectable_value(&mut d.operand, id, name);
                 }
             });
-        ui.checkbox(&mut d.keep_tool, "Keep B");
-        ui.small("Overlap the pieces on the 2D board. A supplies fabric and placement.");
-        ui.small("Remove seams, pins, internal lines and target lengths first.");
+        ui.checkbox(&mut d.keep_tool, i18n::tr(ui_lang, "Keep B"));
+        ui.small(i18n::tr(
+            ui_lang,
+            "Overlap the pieces on the 2D board. A supplies fabric and placement.",
+        ));
+        ui.small(i18n::tr(
+            ui_lang,
+            "Remove seams, pins, internal lines and target lengths first.",
+        ));
         ui.horizontal_wrapped(|ui| {
             for (op, label) in [
                 (BooleanOp::Union, "Union"),
@@ -265,24 +290,26 @@ impl Atelier {
     }
     /// Cut and sew along the selected internal line, as one undo step.
     pub(super) fn cut_and_sew_selected_line(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
         let Some((panel, line)) = self
             .authoring
             .edge
             .as_ref()
             .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
         else {
-            self.status = "Select a straight internal line first".into();
+            self.status = i18n::tr(ui_lang, "Select a straight internal line first").into();
             return false;
         };
         if self.edit(Command::CutAndSew { panel, line }) {
             self.authoring.edge = None;
-            self.status = "Cut in two and sewn along the cut".into();
+            self.status = i18n::tr(ui_lang, "Cut in two and sewn along the cut").into();
             return true;
         }
         false
     }
 
     pub(super) fn internal_line_properties(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let Some(edge) = self.authoring.edge.clone() else {
             return;
         };
@@ -314,8 +341,11 @@ impl Atelier {
         ));
         if line.closed
             && ui
-                .button("Cut out as hole")
-                .on_hover_text("Remove the cloth inside this closed shape")
+                .button(i18n::tr(ui_lang, "Cut out as hole"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Remove the cloth inside this closed shape",
+                ))
                 .clicked()
             && self.edit(Command::ConvertToHole {
                 panel: edge.panel.clone(),
@@ -323,13 +353,20 @@ impl Atelier {
             })
         {
             self.authoring.edge = None;
-            self.status = "Hole cut · fill it back in from the piece inspector".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Hole cut · fill it back in from the piece inspector",
+            )
+            .into();
             return;
         }
         if line.closed
             && ui
-                .button("Clone as piece")
-                .on_hover_text("A new piece of the same fabric with this outline, next to this one")
+                .button(i18n::tr(ui_lang, "Clone as piece"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A new piece of the same fabric with this outline, next to this one",
+                ))
                 .clicked()
             && let Some(origin) = self.clone_origin(&edge.panel, &name)
         {
@@ -340,7 +377,8 @@ impl Atelier {
             }) {
                 // Show the new piece rather than the shape it was copied from.
                 self.authoring.edge = None;
-                self.status = "Shape cloned as a piece of the same fabric".into();
+                self.status =
+                    i18n::tr(ui_lang, "Shape cloned as a piece of the same fabric").into();
             }
             return;
         }
@@ -349,11 +387,12 @@ impl Atelier {
             && line.tangents.iter().all(|t| t.length() < 1e-12);
         if straight
             && ui
-                .button("Cut and sew along this line")
-                .on_hover_text(
+                .button(i18n::tr(ui_lang, "Cut and sew along this line"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Split the piece in two along this line, carried on to the outline, and sew \
                      the halves together; seams crossing the cut are split, not lost",
-                )
+                ))
                 .clicked()
         {
             self.cut_and_sew_selected_line();
@@ -362,13 +401,14 @@ impl Atelier {
         if !line.closed {
             let mut command = None;
             ui.horizontal_wrapped(|ui| {
-                ui.label("Extend to outline");
+                ui.label(i18n::tr(ui_lang, "Extend to outline"));
                 for (label, at_start) in [("Start", true), ("End", false)] {
                     if ui
                         .small_button(label)
-                        .on_hover_text(
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
                             "Carry this end on straight up to the outline or the nearest line",
-                        )
+                        ))
                         .clicked()
                     {
                         command = Some(Command::ExtendLine {
@@ -384,11 +424,11 @@ impl Atelier {
                 let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
                 at = at.clamp(1, line.points.len() - 2);
                 ui.horizontal(|ui| {
-                    ui.label("Split at point");
+                    ui.label(i18n::tr(ui_lang, "Split at point"));
                     ui.add(egui::DragValue::new(&mut at).range(1..=line.points.len() - 2));
                     if ui
-                        .small_button("Split")
-                        .on_hover_text("Cut the line in two at this point")
+                        .small_button(i18n::tr(ui_lang, "Split"))
+                        .on_hover_text(i18n::tr(ui_lang, "Cut the line in two at this point"))
                         .clicked()
                     {
                         command = Some(Command::SplitLine {
@@ -411,7 +451,10 @@ impl Atelier {
         if !line.closed {
             self.internal_line_offsets(ui, &edge.panel, &name);
         }
-        if ui.small_button("Smooth tangents").clicked() {
+        if ui
+            .small_button(i18n::tr(ui_lang, "Smooth tangents"))
+            .clicked()
+        {
             let mut poly = self
                 .project
                 .template
@@ -435,15 +478,18 @@ impl Atelier {
         }
         let d = &mut self.authoring.drafting;
         ui.horizontal(|ui| {
-            ui.label("Ruffle width");
+            ui.label(i18n::tr(ui_lang, "Ruffle width"));
             ui.add(
                 egui::DragValue::new(&mut d.width_mm)
                     .range(5. ..=1000.)
                     .suffix(" mm"),
             );
         });
-        ui.add(egui::Slider::new(&mut d.ratio, 1. ..=4.).text("Length ×"));
-        if ui.button("Create and sew a ruffle").clicked() {
+        ui.add(egui::Slider::new(&mut d.ratio, 1. ..=4.).text(i18n::tr(ui_lang, "Length ×")));
+        if ui
+            .button(i18n::tr(ui_lang, "Create and sew a ruffle"))
+            .clicked()
+        {
             let command = Command::Ruffle {
                 panel: edge.panel.clone(),
                 line: name.clone(),
@@ -457,8 +503,11 @@ impl Atelier {
                     "Ruffle created with ease · adjust its 3D placement before simulation".into();
             }
         }
-        ui.small("A ratio > 1 adds ease. Adjust the initial placement, especially along a curve.");
-        if ui.small_button("Delete line").clicked() {
+        ui.small(i18n::tr(
+            ui_lang,
+            "A ratio > 1 adds ease. Adjust the initial placement, especially along a curve.",
+        ));
+        if ui.small_button(i18n::tr(ui_lang, "Delete line")).clicked() {
             self.edit(Command::RemoveLine {
                 panel: edge.panel,
                 line: name,
@@ -467,13 +516,14 @@ impl Atelier {
         ui.separator();
     }
     pub(super) fn online_patterns(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button("Free patterns · Web", |ui| {
-            ui.label("FreeSewing · parametric patterns");
+        let ui_lang = self.prefs.language;
+        ui.menu_button(i18n::tr(ui_lang, "Free patterns · Web"), |ui| {
+            ui.label(i18n::tr(ui_lang, "FreeSewing · parametric patterns"));
             for (label,url) in [("Teagan · T-shirt","https://freesewing.eu/designs/teagan/"),("Titan · trouser block","https://freesewing.eu/designs/titan/"),("Jett · bomber","https://freesewing.eu/designs/jett/")] {
                 ui.hyperlink_to(label,url);
             }
             ui.separator();
-            ui.small("Open the website to generate a pattern from your measurements. FreeSewing / SVG import is planned; these links do not add pieces to the scene.");
+            ui.small(i18n::tr(ui_lang, "Open the website to generate a pattern from your measurements. FreeSewing / SVG import is planned; these links do not add pieces to the scene."));
             ui.hyperlink_to("FreeSewing terms of use","https://freesewing.eu/docs/about/faq/commercial-use/");
         });
     }

@@ -110,18 +110,19 @@ fn end_label(end: SegmentEnd) -> &'static str {
 impl Atelier {
     /// Unfold the selected piece across its selected contour segment, as one undo step.
     pub(super) fn unfold_selected_segment(&mut self) -> bool {
+        let ui_lang = self.prefs.language;
         let Some((panel, edge)) = self
             .authoring
             .edge
             .as_ref()
             .and_then(|e| Some((e.panel.clone(), e.edge.clone()?)))
         else {
-            self.status = "Select a straight contour segment first".into();
+            self.status = i18n::tr(ui_lang, "Select a straight contour segment first").into();
             return false;
         };
         if self.edit(Command::Unfold { panel, edge }) {
             self.authoring.edge = None;
-            self.status = "Unfolded into the whole piece".into();
+            self.status = i18n::tr(ui_lang, "Unfolded into the whole piece").into();
             return true;
         }
         false
@@ -134,6 +135,7 @@ impl Atelier {
         panel: &Panel,
         polygon: &PolygonPattern,
     ) {
+        let ui_lang = self.prefs.language;
         let Some(name) = self
             .authoring
             .edge
@@ -157,7 +159,7 @@ impl Atelier {
         }
         let mut command = None;
         let mut elastic_ui = false;
-        egui::CollapsingHeader::new("Segment")
+        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Segment"))
             .id_salt("segment-tools")
             .default_open(true)
             .show(ui, |ui| {
@@ -170,7 +172,7 @@ impl Atelier {
                 ));
                 elastic_ui = true;
                 ui.horizontal(|ui| {
-                    ui.label("Length");
+                    ui.label(i18n::tr(ui_lang, "Length"));
                     ui.add(
                         egui::DragValue::new(&mut state.length_mm)
                             .range(1.0..=50_000.0)
@@ -179,17 +181,17 @@ impl Atelier {
                     );
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Moves");
+                    ui.label(i18n::tr(ui_lang, "Moves"));
                     for end in SegmentEnd::ALL {
                         ui.selectable_value(&mut state.moving, end, end_label(end))
                             .on_hover_text(match end {
-                                SegmentEnd::Start => "The start point moves; the end stays",
-                                SegmentEnd::Center => "Both ends move by the same amount",
-                                SegmentEnd::End => "The end point moves; the start stays",
+                                SegmentEnd::Start => i18n::tr(ui_lang, "The start point moves; the end stays"),
+                                SegmentEnd::Center => i18n::tr(ui_lang, "Both ends move by the same amount"),
+                                SegmentEnd::End => i18n::tr(ui_lang, "The end point moves; the start stays"),
                             });
                     }
                 });
-                if ui.button("Change length").clicked() {
+                if ui.button(i18n::tr(ui_lang, "Change length")).clicked() {
                     command = Some(Command::SetLength {
                         panel: panel.id.clone(),
                         edge: name.clone(),
@@ -199,15 +201,15 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label("Match length to the");
-                    ui.selectable_value(&mut state.to_longer, false, "shorter");
-                    ui.selectable_value(&mut state.to_longer, true, "longer");
+                    ui.label(i18n::tr(ui_lang, "Match length to the"));
+                    ui.selectable_value(&mut state.to_longer, false, i18n::tr(ui_lang, "shorter"));
+                    ui.selectable_value(&mut state.to_longer, true, i18n::tr(ui_lang, "longer"));
                 });
                 if ui
-                    .button("Pick the other segment…")
+                    .button(i18n::tr(ui_lang, "Pick the other segment…"))
                     .on_hover_text(
-                        "Click a second segment: the one that differs takes the other's length, \
-                         moving the end chosen above",
+                        i18n::tr(ui_lang, "Click a second segment: the one that differs takes the other's length, \
+                         moving the end chosen above"),
                     )
                     .clicked()
                 {
@@ -219,22 +221,22 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label("Match up at");
+                    ui.label(i18n::tr(ui_lang, "Match up at"));
                     for end in SegmentEnd::ALL {
                         let label = match end {
                             SegmentEnd::Start => "start",
                             SegmentEnd::Center => "centre",
                             SegmentEnd::End => "end",
                         };
-                        ui.selectable_value(&mut state.anchor, end, label);
+                        ui.selectable_value(&mut state.anchor, end, i18n::tr(ui_lang, label));
                     }
                 });
                 if ui
-                    .button("Pick a segment on another piece…")
+                    .button(i18n::tr(ui_lang, "Pick a segment on another piece…"))
                     .on_hover_text(
-                        "That piece turns and moves so its segment lies along this one, the other \
+                        i18n::tr(ui_lang, "That piece turns and moves so its segment lies along this one, the other \
                          way round, as if sewn edge to edge. Start: its start meets this segment's \
-                         end. End: its end meets this segment's start.",
+                         end. End: its end meets this segment's start."),
                     )
                     .clicked()
                 {
@@ -246,15 +248,15 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label("Move out");
+                    ui.label(i18n::tr(ui_lang, "Move out"));
                     ui.add(
                         egui::DragValue::new(&mut state.offset_mm)
                             .range(-1000.0..=1000.0)
                             .fixed_decimals(1)
                             .suffix(" mm"),
                     )
-                    .on_hover_text("Negative values move the segment into the piece");
-                    if ui.button("Move").clicked() {
+                    .on_hover_text(i18n::tr(ui_lang, "Negative values move the segment into the piece"));
+                    if ui.button(i18n::tr(ui_lang, "Move")).clicked() {
                         command = Some(Command::MovePoints {
                             panel: panel.id.clone(),
                             points: vec![k, (k + 1) % n],
@@ -263,11 +265,11 @@ impl Atelier {
                     }
                 });
                 ui.separator();
-                ui.strong("Internal lines from this segment");
+                ui.strong(i18n::tr(ui_lang, "Internal lines from this segment"));
                 ui.horizontal(|ui| {
-                    ui.label("Copies");
+                    ui.label(i18n::tr(ui_lang, "Copies"));
                     ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
-                    ui.label("every");
+                    ui.label(i18n::tr(ui_lang, "every"));
                     ui.add(
                         egui::DragValue::new(&mut state.copy_mm)
                             .range(1.0..=1000.0)
@@ -276,11 +278,11 @@ impl Atelier {
                     );
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut state.extend, "Extend to outline")
-                        .on_hover_text("Run each copy up to the outline instead of stopping at the segment's ends");
+                    ui.checkbox(&mut state.extend, i18n::tr(ui_lang, "Extend to outline"))
+                        .on_hover_text(i18n::tr(ui_lang, "Run each copy up to the outline instead of stopping at the segment's ends"));
                     if ui
-                        .button("Offset")
-                        .on_hover_text("Parallel copies of this segment inside the piece")
+                        .button(i18n::tr(ui_lang, "Offset"))
+                        .on_hover_text(i18n::tr(ui_lang, "Parallel copies of this segment inside the piece"))
                         .clicked()
                     {
                         command = Some(Command::OffsetAsLines {
@@ -299,26 +301,26 @@ impl Atelier {
                     state.branch_at_mm = measured * 500.;
                 }
                 ui.horizontal(|ui| {
-                    ui.label("Line at");
+                    ui.label(i18n::tr(ui_lang, "Line at"));
                     ui.add(
                         egui::DragValue::new(&mut state.branch_at_mm)
                             .range(0.0..=measured * 1000.)
                             .fixed_decimals(1)
                             .suffix(" mm"),
                     )
-                    .on_hover_text("Distance from the segment's start");
-                    ui.label("angle");
+                    .on_hover_text(i18n::tr(ui_lang, "Distance from the segment's start"));
+                    ui.label(i18n::tr(ui_lang, "angle"));
                     ui.add(
                         egui::DragValue::new(&mut state.branch_angle)
                             .range(1.0..=179.0)
                             .fixed_decimals(1)
                             .suffix("°"),
                     )
-                    .on_hover_text("90° is perpendicular; smaller angles lean towards the end");
+                    .on_hover_text(i18n::tr(ui_lang, "90° is perpendicular; smaller angles lean towards the end"));
                 });
                 ui.horizontal(|ui| {
                     let mut to_outline = state.branch_length_mm.is_none();
-                    ui.checkbox(&mut to_outline, "Up to outline");
+                    ui.checkbox(&mut to_outline, i18n::tr(ui_lang, "Up to outline"));
                     if to_outline {
                         state.branch_length_mm = None;
                     } else {
@@ -330,7 +332,7 @@ impl Atelier {
                                 .suffix(" mm"),
                         );
                     }
-                    if ui.button("Add line").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Add line")).clicked() {
                         command = Some(Command::PerpendicularLine {
                             panel: panel.id.clone(),
                             path: name.clone(),
@@ -343,8 +345,8 @@ impl Atelier {
                 });
                 if state.pick.is_some() {
                     ui.horizontal(|ui| {
-                        ui.colored_label(Color32::from_rgb(0x15, 0x65, 0xC0), "Click a segment");
-                        if ui.small_button("Cancel").clicked() {
+                        ui.colored_label(Color32::from_rgb(0x15, 0x65, 0xC0), i18n::tr(ui_lang, "Click a segment"));
+                        if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
                             state.pick = None;
                         }
                     });
@@ -355,11 +357,12 @@ impl Atelier {
                 self.line_spring_controls(ui, &panel.id, &name);
                 self.segment_trims(ui, &panel.id, &name);
                 if ui
-                    .button("Unfold across this segment")
-                    .on_hover_text(
+                    .button(i18n::tr(ui_lang, "Unfold across this segment"))
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
                         "Mirror the piece across this straight segment into the whole piece; the \
                          segment ends up inside it",
-                    )
+                    ))
                     .clicked()
                 {
                     command = Some(Command::Unfold {
@@ -385,6 +388,7 @@ impl Atelier {
         edge: String,
         contour: bool,
     ) -> bool {
+        let ui_lang = self.prefs.language;
         let Some(action) = self.authoring.segments.pick.as_ref().map(|p| p.action) else {
             return false;
         };
@@ -401,7 +405,8 @@ impl Atelier {
         let command = match pick.action {
             PickAction::GroupLine => {
                 if panel != pick.panel {
-                    self.status = "Only lines of the same piece can be grouped".into();
+                    self.status =
+                        i18n::tr(ui_lang, "Only lines of the same piece can be grouped").into();
                     return true;
                 }
                 Command::GroupLines {
@@ -430,7 +435,8 @@ impl Atelier {
                 };
                 let Some((which, target)) = arrange2d::matched_length([a, b], state.to_longer)
                 else {
-                    self.status = "The two segments already have the same length".into();
+                    self.status =
+                        i18n::tr(ui_lang, "The two segments already have the same length").into();
                     return true;
                 };
                 let (panel, edge) = if which == 0 {
@@ -458,6 +464,7 @@ impl Atelier {
 
     /// Group membership of the selected internal line, and the group actions.
     pub(super) fn line_group_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let ui_lang = self.prefs.language;
         let Some(polygon) = self
             .project
             .template
@@ -485,7 +492,7 @@ impl Atelier {
             match &group {
                 Some(name) => {
                     ui.small(format!("Group {name} · {members} lines"));
-                    if ui.small_button("Ungroup").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Ungroup")).clicked() {
                         command = Some(Command::UngroupLines {
                             panel: panel.into(),
                             line: line.into(),
@@ -493,14 +500,15 @@ impl Atelier {
                     }
                 }
                 None => {
-                    ui.small("Not grouped");
+                    ui.small(i18n::tr(ui_lang, "Not grouped"));
                 }
             }
             if ui
-                .small_button("Group with…")
-                .on_hover_text(
+                .small_button(i18n::tr(ui_lang, "Group with…"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Click another internal line of this piece; grouped lines move together",
-                )
+                ))
                 .clicked()
             {
                 self.authoring.segments.pick = Some(SegmentPick {
@@ -511,7 +519,10 @@ impl Atelier {
                 self.status = pick_prompt(PickAction::GroupLine).into();
             }
         });
-        ui.small("Drag a line on the board to move it with its group.");
+        ui.small(i18n::tr(
+            ui_lang,
+            "Drag a line on the board to move it with its group.",
+        ));
         if let Some(command) = command {
             self.edit(command);
         }
@@ -539,6 +550,7 @@ impl Atelier {
 
     /// "Clean up points" for the active piece or every piece, and inset copies of the outline.
     pub(super) fn piece_line_tools(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        let ui_lang = self.prefs.language;
         if panel.polygon.is_none() {
             return;
         }
@@ -551,14 +563,14 @@ impl Atelier {
             .map(|p| p.id.clone())
             .collect();
         let mut command = None;
-        egui::CollapsingHeader::new("Outline offsets and clean-up")
+        egui::CollapsingHeader::new(i18n::tr(ui_lang, "Outline offsets and clean-up"))
             .id_salt("outline-cleanup")
             .show(ui, |ui| {
                 let state = &mut self.authoring.segments;
                 ui.horizontal(|ui| {
-                    ui.label("Copies");
+                    ui.label(i18n::tr(ui_lang, "Copies"));
                     ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
-                    ui.label("every");
+                    ui.label(i18n::tr(ui_lang, "every"));
                     ui.add(
                         egui::DragValue::new(&mut state.copy_mm)
                             .range(1.0..=1000.0)
@@ -567,8 +579,8 @@ impl Atelier {
                     );
                 });
                 if ui
-                    .button("Offset outline inwards")
-                    .on_hover_text("Closed internal shapes following the whole outline")
+                    .button(i18n::tr(ui_lang, "Offset outline inwards"))
+                    .on_hover_text(i18n::tr(ui_lang, "Closed internal shapes following the whole outline"))
                     .clicked()
                 {
                     command = Some(Command::OffsetAsLines {
@@ -582,7 +594,7 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label("Overlapping within");
+                    ui.label(i18n::tr(ui_lang, "Overlapping within"));
                     ui.add(
                         egui::DragValue::new(&mut state.overlap_mm)
                             .range(0.0..=10.0)
@@ -592,7 +604,7 @@ impl Atelier {
                     );
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut state.straight, "Also points on straight lines, under");
+                    ui.checkbox(&mut state.straight, i18n::tr(ui_lang, "Also points on straight lines, under"));
                     ui.add_enabled(
                         state.straight,
                         egui::DragValue::new(&mut state.straight_degrees)
@@ -607,14 +619,14 @@ impl Atelier {
                     straight_degrees: state.straight.then_some(state.straight_degrees),
                 };
                 ui.horizontal(|ui| {
-                    if ui.button("Clean up this piece").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Clean up this piece")).clicked() {
                         command = Some(clean(vec![panel.id.clone()]));
                     }
-                    if ui.button("All pieces").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "All pieces")).clicked() {
                         command = Some(clean(all.clone()));
                     }
                 });
-                ui.small("Sewn boundaries and those with targets, allowances or notches keep their points.");
+                ui.small(i18n::tr(ui_lang, "Sewn boundaries and those with targets, allowances or notches keep their points."));
                 ui.separator();
                 if state.curve_for.as_deref() != Some(panel.id.as_str()) {
                     state.curve_for = Some(panel.id.clone());
@@ -627,14 +639,14 @@ impl Atelier {
                     .map_or(50., |r| (r * 100.).round());
                 }
                 ui.horizontal(|ui| {
-                    ui.label("Curve points");
+                    ui.label(i18n::tr(ui_lang, "Curve points"));
                     ui.add(
                         egui::Slider::new(&mut state.curve_percent, 0.0..=100.0)
                             .suffix(" %")
                             .fixed_decimals(0),
                     )
                     .on_hover_text(
-                        "Share of the curve points kept; the start value keeps this piece within 0.5 mm",
+                        i18n::tr(ui_lang, "Share of the curve points kept; the start value keeps this piece within 0.5 mm"),
                     );
                 });
                 let optimize = |panels: Vec<String>| Command::OptimizeCurvePoints {
@@ -642,10 +654,10 @@ impl Atelier {
                     ratio: state.curve_percent / 100.,
                 };
                 ui.horizontal(|ui| {
-                    if ui.button("Optimize this piece").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Optimize this piece")).clicked() {
                         command = Some(optimize(vec![panel.id.clone()]));
                     }
-                    if ui.button("All pieces").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "All pieces")).clicked() {
                         command = Some(optimize(all.clone()));
                     }
                 });
@@ -678,12 +690,13 @@ impl Atelier {
 
     /// Offset copies of the selected open internal line, on either side.
     pub(super) fn internal_line_offsets(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let ui_lang = self.prefs.language;
         let state = &mut self.authoring.segments;
         let mut command = None;
         ui.horizontal(|ui| {
-            ui.label("Copies");
+            ui.label(i18n::tr(ui_lang, "Copies"));
             ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
-            ui.label("every");
+            ui.label(i18n::tr(ui_lang, "every"));
             ui.add(
                 egui::DragValue::new(&mut state.copy_mm)
                     .range(1.0..=1000.0)
@@ -692,9 +705,9 @@ impl Atelier {
             );
         });
         ui.horizontal(|ui| {
-            ui.checkbox(&mut state.reverse, "Other side");
-            ui.checkbox(&mut state.extend, "Extend to outline");
-            if ui.button("Offset").clicked() {
+            ui.checkbox(&mut state.reverse, i18n::tr(ui_lang, "Other side"));
+            ui.checkbox(&mut state.extend, i18n::tr(ui_lang, "Extend to outline"));
+            if ui.button(i18n::tr(ui_lang, "Offset")).clicked() {
                 command = Some(Command::OffsetAsLines {
                     panel: panel.into(),
                     path: Some(line.into()),

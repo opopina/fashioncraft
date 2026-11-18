@@ -17,6 +17,7 @@ pub(super) struct FabricDraft {
 }
 impl Atelier {
     pub(super) fn fabric_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
+        let ui_lang = self.prefs.language;
         let Some(fabric) = self
             .project
             .template
@@ -100,7 +101,7 @@ impl Atelier {
         if let Some(appearance) = appearance_action {
             let fabric = fabric.id.clone();
             if self.project.template.fabric_appearance.get(&fabric) == appearance.as_ref() {
-                self.status = "Fabric appearance is unchanged".into();
+                self.status = i18n::tr(ui_lang, "Fabric appearance is unchanged").into();
                 return;
             }
             self.edit(Command::FabricAppearance { fabric, appearance });
@@ -132,7 +133,7 @@ impl Atelier {
         let mut discard = false;
         let mut targets = vec![];
         let scene_gap = self.settings.contact.radius;
-        let header = egui::CollapsingHeader::new("Fabric · weight and stretch")
+        let header = egui::CollapsingHeader::new(i18n::tr(ui_lang, "Fabric · weight and stretch"))
             .id_salt("fabric_controls").default_open(true).show(ui, |ui| {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
                 let old = d.preset;
@@ -151,7 +152,7 @@ impl Atelier {
                     d.properties = preset.properties();
                     d.extension = preset.extension;
                 }
-                ui.small("Indicative presets. Elasticity and bending must be calibrated on your fabric.");
+                ui.small(i18n::tr(ui_lang, "Indicative presets. Elasticity and bending must be calibrated on your fabric."));
                 if let Some(i) = d.preset {
                     ui.small(PRESETS[i].evidence);
                     ui.hyperlink_to("Measurement source", PRESETS[i].source);
@@ -168,11 +169,11 @@ impl Atelier {
                 if value(ui, "Thickness", &mut thickness, 0.01, 0.02, 5., " mm") { p.thickness = thickness / 1000.; }
                 let mut own = p.collision_distance.is_some();
                 if ui
-                    .checkbox(&mut own, "Own collision distance")
+                    .checkbox(&mut own, i18n::tr(ui_lang, "Own collision distance"))
                     .on_hover_text(
-                        "Gap the simulator keeps between this fabric and the avatar, the floor or \
+                        i18n::tr(ui_lang, "Gap the simulator keeps between this fabric and the avatar, the floor or \
                          other cloth; two fabrics keep the mean of theirs. Off: the scene's \
-                         Collision distance in Simulation",
+                         Collision distance in Simulation"),
                     )
                     .changed()
                 {
@@ -186,30 +187,30 @@ impl Atelier {
                 if value(ui, "Internal damping", &mut damping_ms, 0.1, 0., 100., " ms") {
                     p.internal_damping = damping_ms / 1000.;
                 }
-                ui.small("Internal damping settles stretching and bending; the piece as a whole still moves freely.");
-                ui.label("Stretch under 5 N on a 5 cm strip");
-                ui.small("The larger the %, the more the fabric stretches. This is not the strain at failure.");
+                ui.small(i18n::tr(ui_lang, "Internal damping settles stretching and bending; the piece as a whole still moves freely."));
+                ui.label(i18n::tr(ui_lang, "Stretch under 5 N on a 5 cm strip"));
+                ui.small(i18n::tr(ui_lang, "The larger the %, the more the fabric stretches. This is not the strain at failure."));
                 for (axis, label) in ["Warp", "Weft"].iter().enumerate() {
                     if value(ui, label, &mut d.extension[axis], 0.1, 0.1, 100., " %")
                         && let Ok(k) = fabrics::stiffness_for_extension(d.extension[axis], p) {
                             if axis == 0 { p.warp = k; } else { p.weft = k; }
                         }
                 }
-                ui.collapsing("Advanced stiffness", |ui| {
+                ui.collapsing(i18n::tr(ui_lang, "Advanced stiffness"), |ui| {
                     value(ui, "Shear", &mut p.shear, 1., 0.1, 10000., " N/m");
                     for (label, b) in [("Bending warp", &mut p.bend_warp), ("Bending weft", &mut p.bend_weft)] {
                         let mut micro = *b * 1e6;
                         if value(ui, label, &mut micro, 1., 0., 100000., " µN·m") { *b = micro * 1e-6; }
                     }
                     ui.small(format!("Warp/weft membrane: {:.0} / {:.0} N/m", p.warp, p.weft));
-                    ui.small("Without its own collision distance a fabric uses the scene's, in Simulation.");
+                    ui.small(i18n::tr(ui_lang, "Without its own collision distance a fabric uses the scene's, in Simulation."));
                 });
                 if d.properties != before_properties { d.preset = None; }
-                ui.checkbox(&mut d.all_panels, "Apply to all panels");
-                let button = ui.button("Apply fabric");
+                ui.checkbox(&mut d.all_panels, i18n::tr(ui_lang, "Apply to all panels"));
+                let button = ui.button(i18n::tr(ui_lang, "Apply fabric"));
                 targets.push(("fabric_apply".into(), button.rect.center()));
                 apply = button.clicked();
-                discard = ui.button("Discard settings").clicked();
+                discard = ui.button(i18n::tr(ui_lang, "Discard settings")).clicked();
             });
         self.smoke_target("fabric_panel", header.header_response.rect.center());
         for (name, p) in targets {
@@ -231,6 +232,7 @@ impl Atelier {
 impl Atelier {
     /// Stage a PNG as the drafted fabric's texture; its height follows the image's aspect.
     fn pick_fabric_texture(&mut self) {
+        let ui_lang = self.prefs.language;
         let Some(path) = rfd::FileDialog::new()
             .add_filter("PNG image", &["png"])
             .pick_file()
@@ -262,7 +264,7 @@ impl Atelier {
             rotation_degrees: previous.as_ref().map_or(0., |t| t.rotation_degrees),
             relief_mm: previous.as_ref().map_or(0., |t| t.relief_mm),
         });
-        self.status = "Texture staged · Apply appearance to show it".into();
+        self.status = i18n::tr(ui_lang, "Texture staged · Apply appearance to show it").into();
     }
 }
 

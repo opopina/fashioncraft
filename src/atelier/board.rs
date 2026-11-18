@@ -922,10 +922,11 @@ impl Atelier {
         }
     }
     fn freehand_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         // Keep this row present throughout the stroke: the canvas must not
         // move when the first pointer sample arrives.
         ui.horizontal(|ui| {
-            ui.label("Fit tolerance");
+            ui.label(i18n::tr(ui_lang, "Fit tolerance"));
             let draft = &mut self.authoring.board.freehand;
             let changed = ui
                 .add_enabled(
@@ -942,7 +943,7 @@ impl Atelier {
             let ready = self.authoring.board.freehand.preview.is_some()
                 && !self.authoring.board.freehand.drawing;
             if ui
-                .add_enabled(ready, egui::Button::new("Create panel"))
+                .add_enabled(ready, egui::Button::new(i18n::tr(ui_lang, "Create panel")))
                 .clicked()
             {
                 let draft = &self.authoring.board.freehand;
@@ -963,13 +964,14 @@ impl Atelier {
                     }
                 }
             }
-            if ui.small_button("Cancel").clicked() {
+            if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
                 self.authoring.board.clear_preview();
             }
         });
-        ui.small(
+        ui.small(i18n::tr(
+            ui_lang,
             "Drag an outline · release to preview · orange edge closes the stroke · Esc: cancel",
-        );
+        ));
     }
     fn freehand_canvas(&mut self, ui: &egui::Ui, rect: egui::Rect, response: &egui::Response) {
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -1380,6 +1382,7 @@ impl Atelier {
         }
     }
     pub(super) fn edge_properties(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let Some(edge) = self.authoring.edge.clone() else {
             return;
         };
@@ -1417,9 +1420,9 @@ impl Atelier {
             let curved = poly.curves.contains_key(&poly.edges[k]);
             if ui
                 .button(if curved {
-                    "Convert to straight segment"
+                    i18n::tr(ui_lang, "Convert to straight segment")
                 } else {
-                    "Add Bézier handles"
+                    i18n::tr(ui_lang, "Add Bézier handles")
                 })
                 .clicked()
             {
@@ -1438,7 +1441,10 @@ impl Atelier {
                     polygon: poly.clone(),
                 });
             }
-            ui.small("Drag the points or handles on the 2D plane.");
+            ui.small(i18n::tr(
+                ui_lang,
+                "Drag the points or handles on the 2D plane.",
+            ));
         }
         self.marking_properties(ui, &edge.panel, &poly, &poly.edges[k]);
         ui.separator();
@@ -1471,12 +1477,14 @@ impl Atelier {
         }
     }
     pub(super) fn patterns(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let header = super::chrome::view_header(
             ui,
             super::i18n::tr(self.prefs.language, "2D PATTERNS"),
             self.prefs.workspace.mode == super::layout::ViewMode::Patterns,
             false,
-            super::view_controls::HINT_2D_VIEW,
+            super::i18n::tr(ui_lang, super::view_controls::HINT_2D_VIEW),
+            ui_lang,
         );
         if header.expand {
             self.prefs
@@ -1495,21 +1503,21 @@ impl Atelier {
                 .max_height(room)
                 .min_scrolled_height(room)
                 .show(ui, |ui| {
-            ui.strong("PATTERN DISPLAY");
+            ui.strong(i18n::tr(ui_lang, "PATTERN DISPLAY"));
             let snap_label = format!("Snap to {} mm", self.authoring.board.snap_grid_mm());
             ui.checkbox(&mut self.authoring.board.snap, snap_label);
-            ui.checkbox(&mut self.authoring.board.smart_guides, "Smart guides")
-                .on_hover_text("Line dragged points and pieces up with the points around them · Ctrl: off while held");
+            ui.checkbox(&mut self.authoring.board.smart_guides, i18n::tr(ui_lang, "Smart guides"))
+                .on_hover_text(i18n::tr(ui_lang, "Line dragged points and pieces up with the points around them · Ctrl: off while held"));
             let display = &mut self.prefs.pattern_display;
-            ui.checkbox(&mut display.names, "Piece names");
-            ui.checkbox(&mut display.lengths, "Segment lengths")
-                .on_hover_text("Rest length of every outline segment, in millimetres");
-            ui.checkbox(&mut display.grid, "Grid");
-            ui.checkbox(&mut display.measurements, "2D measurements").on_hover_text(
-                "Distances to the outline from the cursor while drawing an internal line, and from the selected internal line",
+            ui.checkbox(&mut display.names, i18n::tr(ui_lang, "Piece names"));
+            ui.checkbox(&mut display.lengths, i18n::tr(ui_lang, "Segment lengths"))
+                .on_hover_text(i18n::tr(ui_lang, "Rest length of every outline segment, in millimetres"));
+            ui.checkbox(&mut display.grid, i18n::tr(ui_lang, "Grid"));
+            ui.checkbox(&mut display.measurements, i18n::tr(ui_lang, "2D measurements")).on_hover_text(
+                i18n::tr(ui_lang, "Distances to the outline from the cursor while drawing an internal line, and from the selected internal line"),
             );
-            ui.checkbox(&mut display.silhouette, "Avatar silhouette").on_hover_text(
-                "Front view of the avatar behind the pieces, lined up with the first piece that faces the front",
+            ui.checkbox(&mut display.silhouette, i18n::tr(ui_lang, "Avatar silhouette")).on_hover_text(
+                i18n::tr(ui_lang, "Front view of the avatar behind the pieces, lined up with the first piece that faces the front"),
             );
             self.lock_controls(ui);
             self.guide_display_controls(ui);
@@ -1521,13 +1529,13 @@ impl Atelier {
         self.window_tools(ui, false);
         ui.horizontal(|ui| {
             self.primitive_menu(ui);
-            if ui.selectable_label(self.authoring.board.freehand.enabled, "Freehand").on_hover_text("Drag a new panel outline, release to preview, then Create panel").clicked() {
+            if ui.selectable_label(self.authoring.board.freehand.enabled, i18n::tr(ui_lang, "Freehand")).on_hover_text(i18n::tr(ui_lang, "Drag a new panel outline, release to preview, then Create panel")).clicked() {
                 self.activate_freehand();
             }
-            let quick = ui.small_button("Quick · Q").on_hover_text("Shapes, mirrors and booleans near the cursor");
+            let quick = ui.small_button(i18n::tr(ui_lang, "Quick · Q")).on_hover_text(i18n::tr(ui_lang, "Shapes, mirrors and booleans near the cursor"));
             self.smoke_target("quick_open", quick.rect.center());
             if quick.clicked() { self.quick.open(ui.ctx(), quick.rect.left_bottom()); }
-            let new=ui.small_button("New sheet").on_hover_text("Draw the first panel of a new garment; replaces the current garment when the contour is closed");
+            let new=ui.small_button(i18n::tr(ui_lang, "New sheet")).on_hover_text(i18n::tr(ui_lang, "Draw the first panel of a new garment; replaces the current garment when the contour is closed"));
             self.smoke_target("replace",new.rect.center());
             if new.clicked() {
                 self.playing = false;
@@ -1545,13 +1553,13 @@ impl Atelier {
             }
 
             ui.label("?").on_hover_text(match self.authoring.tool {
-                Tool::Draw => "Pen: click = corner · drag = curve · click the first corner to close",
-                Tool::Rectangle => "Rectangle: drag between two opposite corners",
-                Tool::InternalLine => "Click a boundary to choose its panel, then draw inside · Enter: finish",
-                Tool::Sew => "Choose two boundaries in 2D or 3D, then create the seam in Properties",
-                Tool::Edit => "Drag points to edit · Shift+click to add · drag empty space to box select · Ctrl+C / Ctrl+V",
-                Tool::Graphic => "Drag a graphic to move it · its corners scale it · its top handle turns it (Shift: 15°) · Delete removes it",
-                _ => "Right-click for tools · middle-drag to pan · wheel to zoom",
+                Tool::Draw => i18n::tr(ui_lang, "Pen: click = corner · drag = curve · click the first corner to close"),
+                Tool::Rectangle => i18n::tr(ui_lang, "Rectangle: drag between two opposite corners"),
+                Tool::InternalLine => i18n::tr(ui_lang, "Click a boundary to choose its panel, then draw inside · Enter: finish"),
+                Tool::Sew => i18n::tr(ui_lang, "Choose two boundaries in 2D or 3D, then create the seam in Properties"),
+                Tool::Edit => i18n::tr(ui_lang, "Drag points to edit · Shift+click to add · drag empty space to box select · Ctrl+C / Ctrl+V"),
+                Tool::Graphic => i18n::tr(ui_lang, "Drag a graphic to move it · its corners scale it · its top handle turns it (Shift: 15°) · Delete removes it"),
+                _ => i18n::tr(ui_lang, "Right-click for tools · middle-drag to pan · wheel to zoom"),
             });
         });
         if self.authoring.tool == Tool::Draw && self.authoring.board.freehand.enabled {
@@ -1569,7 +1577,7 @@ impl Atelier {
             ));
         }
         if self.authoring.tool == Tool::Measure {
-            ui.small("2D ruler · two clicks · third click: new measurement · Esc: clear · Ctrl: no snap. Board distance, not a 3D surface tape.");
+            ui.small(i18n::tr(ui_lang, "2D ruler · two clicks · third click: new measurement · Esc: clear · Ctrl: no snap. Board distance, not a 3D surface tape."));
         }
         if !self.authoring.draft.is_empty()
             && matches!(self.authoring.tool, Tool::Draw | Tool::InternalLine)
@@ -1579,9 +1587,9 @@ impl Atelier {
                 let create = ui.add_enabled(
                     self.authoring.draft.len() >= if internal { 2 } else { 3 },
                     egui::Button::new(if internal {
-                        "Finish line"
+                        i18n::tr(ui_lang, "Finish line")
                     } else {
-                        "Close contour"
+                        i18n::tr(ui_lang, "Close contour")
                     }),
                 );
                 self.smoke_target("create", create.rect.center());
@@ -1592,7 +1600,7 @@ impl Atelier {
                         self.create_polygon();
                     }
                 }
-                if ui.small_button("Cancel").clicked() {
+                if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
                     self.authoring.draft.clear();
                     self.authoring.tangents.clear();
                     self.authoring.replace = false;
@@ -1738,9 +1746,9 @@ impl Atelier {
                 r.min - Vec2::new(0., 6.),
                 egui::Align2::LEFT_BOTTOM,
                 if *points {
-                    "Points · Shift to add"
+                    i18n::tr(ui_lang, "Points · Shift to add")
                 } else {
-                    "Panels · Shift to add"
+                    i18n::tr(ui_lang, "Panels · Shift to add")
                 },
                 egui::FontId::proportional(11.),
                 color,
@@ -1751,6 +1759,7 @@ impl Atelier {
     /// selected boundary, a corner/curve control for the focused point, and point
     /// removal. Visible controls — never a hidden shortcut.
     pub(super) fn drafting_tools(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let edge = self
             .authoring
             .edge
@@ -1781,8 +1790,8 @@ impl Atelier {
                         self.authoring.target_edge = Some((panel.clone(), name.clone()));
                         self.authoring.target_mm = stored.map(authoring::m_to_mm).unwrap_or(measured_mm);
                     }
-                    ui.label("Target").on_hover_text(
-                        "Type the length this boundary must be, then set it exactly",
+                    ui.label(i18n::tr(ui_lang, "Target")).on_hover_text(
+                        i18n::tr(ui_lang, "Type the length this boundary must be, then set it exactly"),
                     );
                     // Shared numeric entry, so the board and the inspector format
                     // and parse millimetres identically.
@@ -1800,15 +1809,15 @@ impl Atelier {
                     let target_ok = self.authoring.target_mm.is_finite()
                         && self.authoring.target_mm > 0.;
                     if ui
-                        .add_enabled(target_ok, egui::Button::new("Set exact length"))
-                        .on_hover_text("Move this boundary to the target length, as one edit")
-                        .on_disabled_hover_text("Target length must be a positive finite value")
+                        .add_enabled(target_ok, egui::Button::new(i18n::tr(ui_lang, "Set exact length")))
+                        .on_hover_text(i18n::tr(ui_lang, "Move this boundary to the target length, as one edit"))
+                        .on_disabled_hover_text(i18n::tr(ui_lang, "Target length must be a positive finite value"))
                         .clicked()
                     {
                         let target = self.authoring.target_mm;
                         self.apply_target_length(panel.clone(), name.clone(), target);
                     }
-                    if stored.is_some() && ui.button("Clear target").clicked() {
+                    if stored.is_some() && ui.button(i18n::tr(ui_lang, "Clear target")).clicked() {
                         self.apply_target_length(panel.clone(), name.clone(), 0.0);
                     }
                 }
@@ -1819,8 +1828,8 @@ impl Atelier {
                 match self.corner_is_curved(&panel, k) {
                     Some(true)
                         if ui
-                            .button("Make this corner sharp")
-                            .on_hover_text("Replace both incident curves by straight boundaries")
+                            .button(i18n::tr(ui_lang, "Make this corner sharp"))
+                            .on_hover_text(i18n::tr(ui_lang, "Replace both incident curves by straight boundaries"))
                             .clicked() =>
                     {
                         self.edit(Command::CurvePoint {
@@ -1831,8 +1840,8 @@ impl Atelier {
                     }
                     Some(false)
                         if ui
-                            .button("Round this corner")
-                            .on_hover_text("Add collinear Bézier handles; the outline is unchanged")
+                            .button(i18n::tr(ui_lang, "Round this corner"))
+                            .on_hover_text(i18n::tr(ui_lang, "Add collinear Bézier handles; the outline is unchanged"))
                             .clicked() =>
                     {
                         self.edit(Command::CurvePoint {
@@ -1844,10 +1853,10 @@ impl Atelier {
                     _ => {}
                 }
                 let blocked = self.delete_blocked(&panel, k);
-                let button = ui.add_enabled(blocked.is_none(), egui::Button::new("Delete point"));
+                let button = ui.add_enabled(blocked.is_none(), egui::Button::new(i18n::tr(ui_lang, "Delete point")));
                 let response = match &blocked {
                     Some(reason) => button.on_disabled_hover_text(reason),
-                    None => button.on_hover_text("Remove this point and rejoin its two boundaries (Del)"),
+                    None => button.on_hover_text(i18n::tr(ui_lang, "Remove this point and rejoin its two boundaries (Del)")),
                 };
                 if response.clicked() {
                     self.edit(Command::RemovePoint {
@@ -2892,6 +2901,7 @@ impl Atelier {
         true
     }
     fn paint_board(&mut self, ui: &egui::Ui, rect: egui::Rect, response: &egui::Response) {
+        let ui_lang = self.prefs.language;
         // Selection can change while the Piece inspector is hidden.
         if self.authoring.dart.as_ref().is_some_and(|d| {
             self.authoring.tool != Tool::Edit || !d.matches_boundary(self.authoring.edge.as_ref())
@@ -3311,7 +3321,7 @@ impl Atelier {
                 painter.text(
                     start + Vec2::new(8., 8.),
                     egui::Align2::LEFT_TOP,
-                    "Edge start · 0 mm",
+                    i18n::tr(ui_lang, "Edge start · 0 mm"),
                     egui::FontId::proportional(11.),
                     color,
                 );
@@ -3327,7 +3337,7 @@ impl Atelier {
             painter.text(
                 apex + Vec2::new(8., -8.),
                 egui::Align2::LEFT_BOTTOM,
-                "Dart preview",
+                i18n::tr(ui_lang, "Dart preview"),
                 egui::FontId::proportional(12.),
                 color,
             );
@@ -3406,7 +3416,12 @@ impl Atelier {
                         -12.,
                     ),
                 egui::Align2::LEFT_BOTTOM,
-                format!("Grid {:.0} mm · {:.0} px/m", spacing * 1000., board.scale),
+                format!(
+                    "{} {:.0} mm · {:.0} px/m",
+                    super::i18n::tr(self.prefs.language, "Grid"),
+                    spacing * 1000.,
+                    board.scale
+                ),
                 egui::FontId::proportional(12.),
                 // Dark enough to read on the white board.
                 Color32::from_gray(0x55),
@@ -3452,6 +3467,7 @@ impl Atelier {
     /// measurements, and the insert/delete affordances. Presentation only; it
     /// never writes a material coordinate.
     fn paint_drafting(&self, painter: &egui::Painter, rect: egui::Rect, response: &egui::Response) {
+        let ui_lang = self.prefs.language;
         let board = &self.authoring.board;
         let font = egui::FontId::proportional(12.);
         let label = Color32::from_rgb(0x15, 0x65, 0xC0);
@@ -3605,7 +3621,7 @@ impl Atelier {
                 painter.text(
                     at + Vec2::new(12., 0.),
                     egui::Align2::LEFT_CENTER,
-                    "Delete point (Del)",
+                    i18n::tr(ui_lang, "Delete point (Del)"),
                     font.clone(),
                     Color32::from_rgb(0xD3, 0x2F, 0x2F),
                 );

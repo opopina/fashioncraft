@@ -285,8 +285,9 @@ impl Atelier {
 
     /// Start or stop isolating the current selection (Shift+I).
     pub(super) fn toggle_isolation(&mut self) {
+        let ui_lang = self.prefs.language;
         if self.authoring.view3d.isolated.take().is_some() {
-            self.status = "Isolation ended: every piece is shown again".into();
+            self.status = i18n::tr(ui_lang, "Isolation ended: every piece is shown again").into();
             return;
         }
         let selected: BTreeSet<String> = self.selected_panels().into_iter().collect();
@@ -360,23 +361,30 @@ impl Atelier {
 
     /// The "Display" part of the 3D view's settings menu.
     pub(super) fn garment_display_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.separator();
-        ui.strong("Display");
+        ui.strong(i18n::tr(ui_lang, "Display"));
         let display = &mut self.prefs.garment_display;
         ui.horizontal(|ui| {
-            ui.checkbox(&mut display.avatar, "Avatar · Shift+A");
+            ui.checkbox(&mut display.avatar, i18n::tr(ui_lang, "Avatar · Shift+A"));
             ui.color_edit_button_srgb(&mut display.avatar_color)
-                .on_hover_text("Avatar colour");
+                .on_hover_text(i18n::tr(ui_lang, "Avatar colour"));
         });
-        ui.checkbox(&mut display.garment, "Garment · Shift+C");
-        ui.checkbox(&mut display.piece_colors, "Random piece colours")
-            .on_hover_text("One distinct colour per piece instead of the fabric colour");
+        ui.checkbox(&mut display.garment, i18n::tr(ui_lang, "Garment · Shift+C"));
+        ui.checkbox(
+            &mut display.piece_colors,
+            i18n::tr(ui_lang, "Random piece colours"),
+        )
+        .on_hover_text(i18n::tr(
+            ui_lang,
+            "One distinct colour per piece instead of the fabric colour",
+        ));
         ui.checkbox(
             &mut display.state_colors,
-            "Tint frozen and deactivated pieces",
+            i18n::tr(ui_lang, "Tint frozen and deactivated pieces"),
         );
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.heat, "Strain map · Alt+7");
+            ui.checkbox(&mut self.heat, i18n::tr(ui_lang, "Strain map · Alt+7"));
             ui.add(
                 egui::DragValue::new(&mut display.strain_max_percent)
                     .range(STRAIN_MAX_PERCENT)
@@ -385,24 +393,47 @@ impl Atelier {
                     .prefix("max ")
                     .suffix(" %"),
             )
-            .on_hover_text("Strain that reaches the last of the eight colours");
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Strain that reaches the last of the eight colours",
+            ));
         });
         ui.horizontal(|ui| {
             ui.add_space(22.);
-            ui.selectable_value(&mut display.strain_gradient, true, "Gradient");
-            ui.selectable_value(&mut display.strain_gradient, false, "Bands");
+            ui.selectable_value(
+                &mut display.strain_gradient,
+                true,
+                i18n::tr(ui_lang, "Gradient"),
+            );
+            ui.selectable_value(
+                &mut display.strain_gradient,
+                false,
+                i18n::tr(ui_lang, "Bands"),
+            );
             ui.separator();
-            ui.selectable_value(&mut display.strain_fabric, false, "Global")
-                .on_hover_text("|stretch − 1| against the same range for every fabric");
-            ui.selectable_value(&mut display.strain_fabric, true, "Fabric")
-                .on_hover_text(
-                    "Estimated tension against each fabric's limit: stiff fabrics reach it sooner",
-                );
+            ui.selectable_value(
+                &mut display.strain_fabric,
+                false,
+                i18n::tr(ui_lang, "Global"),
+            )
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "|stretch − 1| against the same range for every fabric",
+            ));
+            ui.selectable_value(
+                &mut display.strain_fabric,
+                true,
+                i18n::tr(ui_lang, "Fabric"),
+            )
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Estimated tension against each fabric's limit: stiff fabrics reach it sooner",
+            ));
         });
         if display.strain_fabric {
             ui.horizontal(|ui| {
                 ui.add_space(22.);
-                ui.label("Limit tension");
+                ui.label(i18n::tr(ui_lang, "Limit tension"));
                 ui.add(
                     egui::DragValue::new(&mut display.reference_tension)
                         .range(REFERENCE_TENSION)
@@ -410,23 +441,28 @@ impl Atelier {
                         .fixed_decimals(1)
                         .suffix(" N/m"),
                 )
-                .on_hover_text(
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Tension at which a fabric counts as stretched to its wearable limit (100 %)",
-                );
+                ));
             });
         }
-        ui.checkbox(&mut display.contacts, "Contact points")
-            .on_hover_text("Cloth touching the avatar, in red");
+        ui.checkbox(&mut display.contacts, i18n::tr(ui_lang, "Contact points"))
+            .on_hover_text(i18n::tr(ui_lang, "Cloth touching the avatar, in red"));
         ui.horizontal(|ui| {
-            ui.checkbox(&mut display.schematic, "Technical view · Alt+0")
-                .on_hover_text(
-                    "A flat sketch: plain garment colour with outline and silhouette lines",
-                );
+            ui.checkbox(
+                &mut display.schematic,
+                i18n::tr(ui_lang, "Technical view · Alt+0"),
+            )
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "A flat sketch: plain garment colour with outline and silhouette lines",
+            ));
             if display.schematic {
                 ui.color_edit_button_srgb(&mut display.schematic_garment_color)
-                    .on_hover_text("Garment colour");
+                    .on_hover_text(i18n::tr(ui_lang, "Garment colour"));
                 ui.color_edit_button_srgb(&mut display.schematic_line_color)
-                    .on_hover_text("Line colour");
+                    .on_hover_text(i18n::tr(ui_lang, "Line colour"));
             }
         });
         if display.schematic {
@@ -439,15 +475,21 @@ impl Atelier {
                         .fixed_decimals(1)
                         .suffix(" px"),
                 )
-                .on_hover_text("Line width on screen");
-                ui.checkbox(&mut display.schematic_outlines, "Edges");
-                ui.checkbox(&mut display.schematic_silhouette, "Silhouette");
+                .on_hover_text(i18n::tr(ui_lang, "Line width on screen"));
+                ui.checkbox(&mut display.schematic_outlines, i18n::tr(ui_lang, "Edges"));
+                ui.checkbox(
+                    &mut display.schematic_silhouette,
+                    i18n::tr(ui_lang, "Silhouette"),
+                );
             });
         }
         let isolating = self.authoring.view3d.isolated.is_some();
         if ui
-            .selectable_label(isolating, "Isolate selection · Shift+I")
-            .on_hover_text("Show only the pieces selected now; press again to show every piece")
+            .selectable_label(isolating, i18n::tr(ui_lang, "Isolate selection · Shift+I"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Show only the pieces selected now; press again to show every piece",
+            ))
             .clicked()
         {
             self.toggle_isolation();

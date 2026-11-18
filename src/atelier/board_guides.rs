@@ -247,6 +247,7 @@ impl Atelier {
         rect: egui::Rect,
         response: &egui::Response,
     ) -> bool {
+        let ui_lang = self.prefs.language;
         let rulers = self.rulers_active().then(|| ruler_rects(rect));
         let pointer = response.interact_pointer_pos().or(response.hover_pos());
         // A drag in progress owns the pointer until release.
@@ -341,7 +342,7 @@ impl Atelier {
             if response.double_clicked() && r.corner.contains(pos) {
                 self.project.board_guides.origin_m = [0., 0.];
                 self.document.dirty = true;
-                self.status = "Ruler origin reset".into();
+                self.status = i18n::tr(ui_lang, "Ruler origin reset").into();
             }
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             // Clicks on the rulers never reach the board tools.
@@ -382,6 +383,7 @@ impl Atelier {
     }
 
     fn finish_guide_drag(&mut self, dropped_on_ruler: bool) {
+        let ui_lang = self.prefs.language;
         let Some(drag) = self.authoring.board.guides_ui.drag.take() else {
             return;
         };
@@ -395,7 +397,8 @@ impl Atelier {
                 if self.project.board_guides.lines.len()
                     >= marvelous_cloth::fitting::BoardGuides::MAX_LINES
                 {
-                    self.status = "Guide limit reached; delete some guides first".into();
+                    self.status =
+                        i18n::tr(ui_lang, "Guide limit reached; delete some guides first").into();
                     return;
                 }
                 self.project.board_guides.lines.push(GuideLine {
@@ -426,18 +429,23 @@ impl Atelier {
             }
             GuideDrag::Origin { at } => {
                 self.project.board_guides.origin_m = [at.x, at.y];
-                self.status = "Ruler origin moved · double-click the corner to reset it".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Ruler origin moved · double-click the corner to reset it",
+                )
+                .into();
             }
         }
         self.document.dirty = true;
     }
 
     fn delete_guide(&mut self, index: usize) {
+        let ui_lang = self.prefs.language;
         if index < self.project.board_guides.lines.len() {
             self.project.board_guides.lines.remove(index);
             self.authoring.board.guides_ui.selected = None;
             self.document.dirty = true;
-            self.status = "Guide deleted".into();
+            self.status = i18n::tr(ui_lang, "Guide deleted").into();
         }
     }
 
@@ -448,6 +456,7 @@ impl Atelier {
 
     /// Draw the guides, the guide being dragged and, when shown, the rulers on top.
     pub(super) fn paint_guides_and_rulers(&self, painter: &egui::Painter, rect: egui::Rect) {
+        let ui_lang = self.prefs.language;
         let display = self.prefs.pattern_display;
         let ui_state = &self.authoring.board.guides_ui;
         let unit = display.ruler_unit;
@@ -507,7 +516,7 @@ impl Atelier {
             painter.text(
                 rect.right_top() + egui::vec2(-8., 8.),
                 egui::Align2::RIGHT_TOP,
-                "Rulers hidden while the board is rotated",
+                i18n::tr(ui_lang, "Rulers hidden while the board is rotated"),
                 egui::FontId::proportional(11.),
                 Color32::from_gray(0x77),
             );
@@ -625,34 +634,38 @@ impl Atelier {
 
     /// "Rulers & guides" in the board's display menu.
     pub(super) fn guide_display_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.separator();
-        ui.strong("RULERS & GUIDES");
+        ui.strong(i18n::tr(ui_lang, "RULERS & GUIDES"));
         let display = &mut self.prefs.pattern_display;
         ui.horizontal(|ui| {
-            ui.checkbox(&mut display.rulers, "Rulers");
+            ui.checkbox(&mut display.rulers, i18n::tr(ui_lang, "Rulers"));
             for unit in RulerUnit::ALL {
                 ui.selectable_value(&mut display.ruler_unit, unit, unit.symbol());
             }
         });
-        ui.checkbox(&mut display.guides, "Guides")
-            .on_hover_text("Drag out of a ruler to add one (Ctrl: the other axis); drop it back on a ruler to delete it");
+        ui.checkbox(&mut display.guides, i18n::tr(ui_lang, "Guides"))
+            .on_hover_text(i18n::tr(ui_lang, "Drag out of a ruler to add one (Ctrl: the other axis); drop it back on a ruler to delete it"));
         let lines = &mut self.project.board_guides.lines;
         let any = !lines.is_empty();
         let mut changed = false;
         ui.horizontal(|ui| {
-            if ui.add_enabled(any, egui::Button::new("Lock all")).clicked() {
+            if ui
+                .add_enabled(any, egui::Button::new(i18n::tr(ui_lang, "Lock all")))
+                .clicked()
+            {
                 lines.iter_mut().for_each(|l| l.locked = true);
                 changed = true;
             }
             if ui
-                .add_enabled(any, egui::Button::new("Unlock all"))
+                .add_enabled(any, egui::Button::new(i18n::tr(ui_lang, "Unlock all")))
                 .clicked()
             {
                 lines.iter_mut().for_each(|l| l.locked = false);
                 changed = true;
             }
             if ui
-                .add_enabled(any, egui::Button::new("Delete all"))
+                .add_enabled(any, egui::Button::new(i18n::tr(ui_lang, "Delete all")))
                 .clicked()
             {
                 lines.clear();
@@ -667,6 +680,7 @@ impl Atelier {
 
     /// The selected guide's actions, shown above the board while a guide is selected.
     pub(super) fn guide_toolbar(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let Some(index) = self.authoring.board.guides_ui.selected else {
             return;
         };
@@ -689,7 +703,11 @@ impl Atelier {
                 .color(GUIDE_COLOR),
             );
             if ui
-                .button(if line.locked { "Unlock" } else { "Lock" })
+                .button(if line.locked {
+                    i18n::tr(ui_lang, "Unlock")
+                } else {
+                    i18n::tr(ui_lang, "Lock")
+                })
                 .clicked()
             {
                 self.project.board_guides.lines[index].locked = !line.locked;
@@ -697,7 +715,7 @@ impl Atelier {
             }
             ui.separator();
             let state = &mut self.authoring.board.guides_ui;
-            ui.label("Offset");
+            ui.label(i18n::tr(ui_lang, "Offset"));
             ui.add(
                 egui::DragValue::new(&mut state.offset_count)
                     .range(1..=50)
@@ -710,10 +728,10 @@ impl Atelier {
                     .fixed_decimals(1)
                     .suffix(" mm"),
             );
-            ui.checkbox(&mut state.offset_both, "Both sides");
+            ui.checkbox(&mut state.offset_both, i18n::tr(ui_lang, "Both sides"));
             if ui
-                .button("Create")
-                .on_hover_text("Add evenly spaced guides from this one")
+                .button(i18n::tr(ui_lang, "Create"))
+                .on_hover_text(i18n::tr(ui_lang, "Add evenly spaced guides from this one"))
                 .clicked()
             {
                 let copies = offset_guides(
@@ -736,7 +754,7 @@ impl Atelier {
                 );
             }
             ui.separator();
-            if ui.button("Delete").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Delete")).clicked() {
                 self.delete_guide(index);
             }
         });

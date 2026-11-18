@@ -171,8 +171,9 @@ impl Atelier {
 
     /// "Background image" and "Save board as PNG" in the board's display menu.
     pub(super) fn media_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.separator();
-        ui.strong("BACKGROUND IMAGE");
+        ui.strong(i18n::tr(ui_lang, "BACKGROUND IMAGE"));
         let pick = || {
             FileDialog::new()
                 .add_filter("Image", &["png", "tif", "tiff"])
@@ -196,7 +197,7 @@ impl Atelier {
             let mut opacity = background.opacity * 100.;
             let mut rotation = background.rotation_degrees;
             egui::Grid::new("board-background").num_columns(2).show(ui, |ui| {
-                ui.label("Width");
+                ui.label(i18n::tr(ui_lang, "Width"));
                 changed |= ui
                     .add(
                         egui::DragValue::new(&mut width_mm)
@@ -205,10 +206,10 @@ impl Atelier {
                             .fixed_decimals(1)
                             .suffix(" mm"),
                     )
-                    .on_hover_text("Real width the image spans; set it from a known measurement to trace at scale")
+                    .on_hover_text(i18n::tr(ui_lang, "Real width the image spans; set it from a known measurement to trace at scale"))
                     .changed();
                 ui.end_row();
-                ui.label("Left");
+                ui.label(i18n::tr(ui_lang, "Left"));
                 changed |= ui
                     .add(
                         egui::DragValue::new(&mut x_mm)
@@ -218,7 +219,7 @@ impl Atelier {
                     )
                     .changed();
                 ui.end_row();
-                ui.label("Top");
+                ui.label(i18n::tr(ui_lang, "Top"));
                 changed |= ui
                     .add(
                         egui::DragValue::new(&mut y_mm)
@@ -228,7 +229,7 @@ impl Atelier {
                     )
                     .changed();
                 ui.end_row();
-                ui.label("Rotation");
+                ui.label(i18n::tr(ui_lang, "Rotation"));
                 changed |= ui
                     .add(
                         egui::DragValue::new(&mut rotation)
@@ -237,10 +238,10 @@ impl Atelier {
                             .fixed_decimals(1)
                             .suffix("°"),
                     )
-                    .on_hover_text("Turn the image around its centre to square a skewed scan")
+                    .on_hover_text(i18n::tr(ui_lang, "Turn the image around its centre to square a skewed scan"))
                     .changed();
                 ui.end_row();
-                ui.label("Opacity");
+                ui.label(i18n::tr(ui_lang, "Opacity"));
                 changed |= ui
                     .add(egui::Slider::new(&mut opacity, 0.0..=100.0).suffix(" %"))
                     .changed();
@@ -254,21 +255,24 @@ impl Atelier {
             }
             let mut remove = false;
             ui.horizontal(|ui| {
-                if ui.button("Replace…").clicked()
+                if ui.button(i18n::tr(ui_lang, "Replace…")).clicked()
                     && let Some(path) = pick()
                 {
                     background.path = path;
                     changed = true;
                 }
-                remove = ui.button("Remove").clicked();
+                remove = ui.button(i18n::tr(ui_lang, "Remove")).clicked();
             });
             if remove {
                 self.project.board_background = None;
                 changed = true;
             }
         } else if ui
-            .button("Choose image…")
-            .on_hover_text("Trace over a scanned or photographed pattern (PNG or TIFF)")
+            .button(i18n::tr(ui_lang, "Choose image…"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Trace over a scanned or photographed pattern (PNG or TIFF)",
+            ))
             .clicked()
             && let Some(path) = pick()
         {
@@ -288,8 +292,11 @@ impl Atelier {
         }
         ui.separator();
         if ui
-            .button("Save board as PNG…")
-            .on_hover_text("Save the 2D board exactly as shown, at screen resolution")
+            .button(i18n::tr(ui_lang, "Save board as PNG…"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Save the 2D board exactly as shown, at screen resolution",
+            ))
             .clicked()
             && let Some(path) = FileDialog::new()
                 .add_filter("PNG image", &["png"])
@@ -308,6 +315,7 @@ impl Atelier {
     /// Run a pending board capture: wait a few frames, request a screenshot, then crop it to
     /// the board and save it. Call once per frame after the board is painted.
     pub(super) fn drive_board_capture(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         let Some(capture) = self.authoring.board.media.capture.as_mut() else {
             return;
         };
@@ -353,7 +361,8 @@ impl Atelier {
             .last_rect
             .and_then(|r| capture_rect(r, image.size, pixels_per_point))
         else {
-            self.status = "Board capture failed: the board is not on screen".into();
+            self.status =
+                i18n::tr(ui_lang, "Board capture failed: the board is not on screen").into();
             return;
         };
         let board = image.region(&rect, Some(pixels_per_point));

@@ -61,6 +61,7 @@ impl Atelier {
 
     /// Rebuild the avatar in `pose`; the drape restarts from the flat arrangement.
     pub(super) fn apply_pose(&mut self, pose: AvatarPose) -> bool {
+        let ui_lang = self.prefs.language;
         let mut project = self.project.clone();
         project.avatar_pose = Some(pose);
         project.state = None;
@@ -78,7 +79,11 @@ impl Atelier {
                 self.metrics = None;
                 self.simulation_error = None;
                 self.document.dirty = true;
-                self.status = "Pose applied · the drape starts again from the arrangement".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Pose applied · the drape starts again from the arrangement",
+                )
+                .into();
                 true
             }
             Err(e) => {
@@ -136,6 +141,7 @@ impl Atelier {
 
     /// After each accepted simulation step, move the avatar one step further into its new pose.
     pub(super) fn advance_pose_transition(&mut self) {
+        let ui_lang = self.prefs.language;
         let Some(t) = self.authoring.pose.transition.as_mut() else {
             return;
         };
@@ -166,13 +172,14 @@ impl Atelier {
             let done = self.authoring.pose.transition.take().unwrap();
             self.project.avatar_pose = Some(done.to);
             self.document.dirty = true;
-            self.status = "In the new pose · the drape followed the body".into();
+            self.status = i18n::tr(ui_lang, "In the new pose · the drape followed the body").into();
         } else {
             self.status = format!("Moving into the pose… {:.0} %", fraction * 100.);
         }
     }
 
     pub(super) fn pose_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.pose.open {
             return;
         }
@@ -184,7 +191,7 @@ impl Atelier {
         }
         let mut open = true;
         let mut apply = None;
-        egui::Window::new("Avatar pose")
+        egui::Window::new(i18n::tr(ui_lang, "Avatar pose"))
             .open(&mut open)
             .default_width(300.)
             .resizable(false)
@@ -198,7 +205,7 @@ impl Atelier {
                     return;
                 };
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("Preset");
+                    ui.label(i18n::tr(ui_lang, "Preset"));
                     for name in avatar_rig::PRESETS {
                         if ui.small_button(name).clicked()
                             && let Some(p) = avatar_rig::preset(name)
@@ -210,7 +217,7 @@ impl Atelier {
                 ui.separator();
                 let names: Vec<&str> = avatar_rig::bone_names().collect();
                 state.bone = state.bone.min(names.len() - 1);
-                egui::ComboBox::from_label("Bone")
+                egui::ComboBox::from_label(i18n::tr(ui_lang, "Bone"))
                     .selected_text(names[state.bone])
                     .show_ui(ui, |ui| {
                         for (k, name) in names.iter().enumerate() {
@@ -233,9 +240,10 @@ impl Atelier {
                             .changed();
                     }
                 });
-                ui.small(
+                ui.small(i18n::tr(
+                    ui_lang,
                     "Turns about the bone's joint, around the world axes at rest; children follow.",
-                );
+                ));
                 if changed {
                     if angles == [0.; 3] {
                         draft.pose.0.remove(&bone);
@@ -251,30 +259,35 @@ impl Atelier {
                 ui.add_enabled_ui(moving.is_none(), |ui| {
                     ui.horizontal(|ui| {
                         if ui
-                            .button("Move into pose")
-                            .on_hover_text(
+                            .button(i18n::tr(ui_lang, "Move into pose"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
                                 "Move the avatar into this pose while simulating: the drape \
                                  follows the body",
-                            )
+                            ))
                             .clicked()
                         {
                             apply = Some((draft.clone(), true));
                         }
                         if ui
-                            .button("Apply and restart")
-                            .on_hover_text(
+                            .button(i18n::tr(ui_lang, "Apply and restart"))
+                            .on_hover_text(i18n::tr(
+                                ui_lang,
                                 "Rebuild the avatar in this pose at once; the drape starts again",
-                            )
+                            ))
                             .clicked()
                         {
                             apply = Some((draft.clone(), false));
                         }
-                        if ui.button("Rest").clicked() {
+                        if ui.button(i18n::tr(ui_lang, "Rest")).clicked() {
                             draft.pose = Default::default();
                         }
                     });
                 });
-                ui.checkbox(&mut state.skeleton, "Show skeleton (X-ray)");
+                ui.checkbox(
+                    &mut state.skeleton,
+                    i18n::tr(ui_lang, "Show skeleton (X-ray)"),
+                );
             });
         self.authoring.pose.open &= open;
         if !self.authoring.pose.open {
@@ -354,6 +367,7 @@ impl Atelier {
     /// Drag a hand or foot of the pose being edited; the limb follows by inverse kinematics.
     /// Returns whether the 3D view's pointer belongs to this drag.
     pub(super) fn ik_interaction(&mut self, response: &egui::Response, rect: egui::Rect) -> bool {
+        let ui_lang = self.prefs.language;
         let state = &self.authoring.pose;
         if !state.open || !state.skeleton || state.transition.is_some() {
             return false;
@@ -398,7 +412,11 @@ impl Atelier {
         }
         if response.drag_stopped() {
             self.authoring.pose.reaching = None;
-            self.status = "Limb placed · Move into pose to bring the avatar there".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Limb placed · Move into pose to bring the avatar there",
+            )
+            .into();
         }
         true
     }

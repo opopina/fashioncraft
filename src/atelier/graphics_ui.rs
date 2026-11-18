@@ -581,6 +581,7 @@ impl Atelier {
     /// "Graphics" in the Piece inspector: add a PNG, then size, turn, move, flip to the back
     /// or remove each graphic.
     pub(super) fn piece_graphics(&mut self, ui: &mut egui::Ui, panel: &str) {
+        let ui_lang = self.prefs.language;
         let mine: Vec<GraphicPlacement> = self
             .project
             .template
@@ -614,125 +615,138 @@ impl Atelier {
             .collect();
         let mut command = None;
         let mut add = false;
-        egui::CollapsingHeader::new(format!("Graphics ({})", mine.len()))
-            .id_salt("piece_graphics")
-            .show(ui, |ui| {
-                add = ui
-                    .button("Add graphic…")
-                    .on_hover_text("Print a PNG image on this piece, 12 cm wide at its middle")
-                    .clicked();
-                for g in &mine {
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        let name = names.get(&g.asset_id).cloned().unwrap_or_default();
-                        ui.label(format!("{name} · {}", g.id));
-                        if ui.small_button("Remove").clicked() {
-                            command = Some(Command::RemoveGraphic { id: g.id.clone() });
-                        }
-                    });
-                    if let Some(error) = errors.get(&g.asset_id) {
-                        ui.colored_label(ui.visuals().error_fg_color, error);
+        egui::CollapsingHeader::new(format!(
+            "{} ({})",
+            i18n::tr(ui_lang, "Graphics"),
+            mine.len()
+        ))
+        .id_salt("piece_graphics")
+        .show(ui, |ui| {
+            add = ui
+                .button(i18n::tr(ui_lang, "Add graphic…"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Print a PNG image on this piece, 12 cm wide at its middle",
+                ))
+                .clicked();
+            for g in &mine {
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let name = names.get(&g.asset_id).cloned().unwrap_or_default();
+                    ui.label(format!("{name} · {}", g.id));
+                    if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
+                        command = Some(Command::RemoveGraphic { id: g.id.clone() });
                     }
-                    let mut edited = g.clone();
-                    let mm = |label, hover, range| Field {
-                        label,
-                        hover,
-                        range,
-                        speed: 1.,
-                        decimals: 1,
-                        suffix: " mm",
-                        reset: None,
-                    };
-                    ui.horizontal(|ui| {
-                        if let Some(w) = committed_value(
-                            ui,
-                            ("graphic_w", &g.id),
-                            g.size_m.x * 1000.,
-                            mm("W", "Width of the image on the piece", 1.0..=2000.),
-                        ) {
-                            // Width and height keep the image's proportions.
-                            let ratio = g.size_m.y / g.size_m.x;
-                            edited.size_m = DVec2::new(w, w * ratio) / 1000.;
-                        }
-                        if let Some(h) = committed_value(
-                            ui,
-                            ("graphic_h", &g.id),
-                            g.size_m.y * 1000.,
-                            mm("H", "Height of the image on the piece", 1.0..=2000.),
-                        ) {
-                            let ratio = g.size_m.x / g.size_m.y;
-                            edited.size_m = DVec2::new(h * ratio, h) / 1000.;
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        if let Some(x) = committed_value(
-                            ui,
-                            ("graphic_x", &g.id),
-                            g.center_m.x * 1000.,
-                            mm("X", "Centre across the piece", -5000.0..=5000.),
-                        ) {
-                            edited.center_m.x = x / 1000.;
-                        }
-                        if let Some(y) = committed_value(
-                            ui,
-                            ("graphic_y", &g.id),
-                            g.center_m.y * 1000.,
-                            mm("Y", "Centre along the piece", -5000.0..=5000.),
-                        ) {
-                            edited.center_m.y = y / 1000.;
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        if let Some(angle) = committed_value(
-                            ui,
-                            ("graphic_angle", &g.id),
-                            g.rotation_degrees,
-                            Field {
-                                label: "Angle",
-                                hover: "Turn the image on the piece",
-                                range: -360.0..=360.,
-                                speed: 0.5,
-                                decimals: 1,
-                                suffix: "°",
-                                reset: Some(0.),
-                            },
-                        ) {
-                            edited.rotation_degrees = angle;
-                        }
-                        let back = g.side == GraphicSide::Back;
-                        if ui
-                            .selectable_label(back, "Back")
-                            .on_hover_text("Print on the back face of the fabric instead")
-                            .clicked()
-                        {
-                            edited.side = if back {
-                                GraphicSide::Front
-                            } else {
-                                GraphicSide::Back
-                            };
-                        }
-                    });
-                    if let Some(percent) = committed_value(
+                });
+                if let Some(error) = errors.get(&g.asset_id) {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                }
+                let mut edited = g.clone();
+                let mm = |label, hover, range| Field {
+                    label,
+                    hover,
+                    range,
+                    speed: 1.,
+                    decimals: 1,
+                    suffix: " mm",
+                    reset: None,
+                };
+                ui.horizontal(|ui| {
+                    if let Some(w) = committed_value(
                         ui,
-                        ("graphic_opacity", &g.id),
-                        g.opacity * 100.,
+                        ("graphic_w", &g.id),
+                        g.size_m.x * 1000.,
+                        mm("W", "Width of the image on the piece", 1.0..=2000.),
+                    ) {
+                        // Width and height keep the image's proportions.
+                        let ratio = g.size_m.y / g.size_m.x;
+                        edited.size_m = DVec2::new(w, w * ratio) / 1000.;
+                    }
+                    if let Some(h) = committed_value(
+                        ui,
+                        ("graphic_h", &g.id),
+                        g.size_m.y * 1000.,
+                        mm("H", "Height of the image on the piece", 1.0..=2000.),
+                    ) {
+                        let ratio = g.size_m.x / g.size_m.y;
+                        edited.size_m = DVec2::new(h * ratio, h) / 1000.;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if let Some(x) = committed_value(
+                        ui,
+                        ("graphic_x", &g.id),
+                        g.center_m.x * 1000.,
+                        mm("X", "Centre across the piece", -5000.0..=5000.),
+                    ) {
+                        edited.center_m.x = x / 1000.;
+                    }
+                    if let Some(y) = committed_value(
+                        ui,
+                        ("graphic_y", &g.id),
+                        g.center_m.y * 1000.,
+                        mm("Y", "Centre along the piece", -5000.0..=5000.),
+                    ) {
+                        edited.center_m.y = y / 1000.;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if let Some(angle) = committed_value(
+                        ui,
+                        ("graphic_angle", &g.id),
+                        g.rotation_degrees,
                         Field {
-                            label: "Opacity",
-                            hover: "How solid the print looks; the image's own transparency adds to it",
-                            range: 0.0..=100.,
+                            label: i18n::tr(ui_lang, "Angle"),
+                            hover: i18n::tr(ui_lang, "Turn the image on the piece"),
+                            range: -360.0..=360.,
                             speed: 0.5,
-                            decimals: 0,
-                            suffix: " %",
-                            reset: Some(100.),
+                            decimals: 1,
+                            suffix: "°",
+                            reset: Some(0.),
                         },
                     ) {
-                        edited.opacity = percent / 100.;
+                        edited.rotation_degrees = angle;
                     }
-                    if edited != *g && edited.validate().is_ok() {
-                        command = Some(Command::SetGraphic { placement: edited });
+                    let back = g.side == GraphicSide::Back;
+                    if ui
+                        .selectable_label(back, i18n::tr(ui_lang, "Back"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Print on the back face of the fabric instead",
+                        ))
+                        .clicked()
+                    {
+                        edited.side = if back {
+                            GraphicSide::Front
+                        } else {
+                            GraphicSide::Back
+                        };
                     }
+                });
+                if let Some(percent) = committed_value(
+                    ui,
+                    ("graphic_opacity", &g.id),
+                    g.opacity * 100.,
+                    Field {
+                        label: i18n::tr(ui_lang, "Opacity"),
+                        hover: i18n::tr(
+                            ui_lang,
+                            "How solid the print looks; the image's own transparency adds to it",
+                        ),
+                        range: 0.0..=100.,
+                        speed: 0.5,
+                        decimals: 0,
+                        suffix: " %",
+                        reset: Some(100.),
+                    },
+                ) {
+                    edited.opacity = percent / 100.;
                 }
-            });
+                if edited != *g && edited.validate().is_ok() {
+                    command = Some(Command::SetGraphic { placement: edited });
+                }
+            }
+        });
         if add {
             self.add_graphic(panel);
         }

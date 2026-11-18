@@ -32,35 +32,38 @@ impl Atelier {
         })
     }
     pub(super) fn remove_seam(&mut self, seam: String) {
+        let ui_lang = self.prefs.language;
         if self.edit(Command::RemoveSeam { seam }) {
             self.authoring.selection.seam = None;
             self.authoring.selection.seam_card = None;
-            self.status = "Seam removed · drape preserved · Ctrl+Z to undo".into();
+            self.status =
+                i18n::tr(ui_lang, "Seam removed · drape preserved · Ctrl+Z to undo").into();
         }
     }
     pub(super) fn existing_seams(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let selected = self.edge_seams();
         let mut remove = None;
         let mut edit = None;
         let mut merge = None;
         for id in &selected {
             ui.colored_label(super::seam_links::seam_color(id), format!("Seam: {id}"));
-            let button = ui.button("Edit ranges / chain…");
+            let button = ui.button(i18n::tr(ui_lang, "Edit ranges / chain…"));
             self.smoke_target_ui(ui, "edit_seam", button.rect);
             if button.clicked() {
                 edit = Some(id.clone());
             }
-            let button = ui.button("Delete the seam").on_hover_text(
-                "Free both boundaries without deleting the fabric. Shortcut: Del. Undo: Ctrl+Z.",
+            let button = ui.button(i18n::tr(ui_lang, "Delete the seam")).on_hover_text(
+                i18n::tr(ui_lang, "Free both boundaries without deleting the fabric. Shortcut: Del. Undo: Ctrl+Z."),
             );
             self.smoke_target("remove_seam", button.rect.center());
             if button.clicked() {
                 remove = Some(id.clone());
             }
             if ui
-                .button("Merge the two pieces here")
+                .button(i18n::tr(ui_lang, "Merge the two pieces here"))
                 .on_hover_text(
-                    "Join the pieces this seam sews edge to edge into one piece; the seam goes away",
+                    i18n::tr(ui_lang, "Join the pieces this seam sews edge to edge into one piece; the seam goes away"),
                 )
                 .clicked()
             {
@@ -70,14 +73,15 @@ impl Atelier {
         }
         let mut select = None;
         egui::CollapsingHeader::new(format!(
-            "Existing seams ({})",
+            "{} ({})",
+            i18n::tr(ui_lang, "Existing seams"),
             self.project.template.seams.len()
         ))
         .id_salt("existing_seams")
         .default_open(false)
         .show(ui, |ui| {
             if self.project.template.seams.is_empty() {
-                ui.small("No seams. Sewing links two boundaries.");
+                ui.small(i18n::tr(ui_lang, "No seams. Sewing links two boundaries."));
             }
             for seam in &self.project.template.seams {
                 ui.horizontal(|ui| {
@@ -88,7 +92,7 @@ impl Atelier {
                         3.5,
                         super::seam_links::seam_color(&seam.id),
                     );
-                    if ui.small_button("Edit").clicked() {
+                    if ui.small_button(i18n::tr(ui_lang, "Edit")).clicked() {
                         edit = Some(seam.id.clone());
                     }
                     if ui
@@ -101,8 +105,8 @@ impl Atelier {
                         select = Some((seam.a.clone(), seam.id.clone()));
                     }
                     if ui
-                        .small_button("Delete")
-                        .on_hover_text("Delete this seam only")
+                        .small_button(i18n::tr(ui_lang, "Delete"))
+                        .on_hover_text(i18n::tr(ui_lang, "Delete this seam only"))
                         .clicked()
                     {
                         remove = Some(seam.id.clone());
@@ -143,10 +147,11 @@ impl Atelier {
 impl Atelier {
     /// Merge the pieces a seam joins into one, as one undo step.
     pub(super) fn merge_along_seam(&mut self, seam: String) -> bool {
+        let ui_lang = self.prefs.language;
         if self.edit(marvelous_cloth::authoring::Command::MergeAlongSeam { seam }) {
             self.authoring.edge = None;
             self.authoring.selection.seam = None;
-            self.status = "Pieces merged along the seam".into();
+            self.status = i18n::tr(ui_lang, "Pieces merged along the seam").into();
             return true;
         }
         false
@@ -154,13 +159,14 @@ impl Atelier {
 
     /// The angle at which the selected seam's pieces meet (180° flat) and its strength.
     fn seam_fold_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
+        let ui_lang = self.prefs.language;
         use marvelous_cloth::garment::template::SeamFold;
         let current = self.project.template.seam_folds.get(seam).cloned();
         let mut wanted: Option<Option<SeamFold>> = None;
         ui.horizontal(|ui| {
             if ui
-                .selectable_label(current.is_some(), "Fold angle")
-                .on_hover_text("Make the two pieces meet at an angle across this seam, like a pressed collar or a turned facing")
+                .selectable_label(current.is_some(), i18n::tr(ui_lang, "Fold angle"))
+                .on_hover_text(i18n::tr(ui_lang, "Make the two pieces meet at an angle across this seam, like a pressed collar or a turned facing"))
                 .clicked()
             {
                 wanted = Some(current.is_none().then_some(SeamFold {
@@ -179,7 +185,7 @@ impl Atelier {
                             .fixed_decimals(0)
                             .suffix("°"),
                     )
-                    .on_hover_text("180° is flat; less folds toward the pieces' front, more away from it");
+                    .on_hover_text(i18n::tr(ui_lang, "180° is flat; less folds toward the pieces' front, more away from it"));
                 commit |= r.drag_stopped() || (r.changed() && !r.dragged());
                 let r = ui
                     .add(
@@ -189,7 +195,7 @@ impl Atelier {
                             .fixed_decimals(0)
                             .prefix("×"),
                     )
-                    .on_hover_text("Bending stiffness across the seam, times the fabric's");
+                    .on_hover_text(i18n::tr(ui_lang, "Bending stiffness across the seam, times the fabric's"));
                 commit |= r.drag_stopped() || (r.changed() && !r.dragged());
                 if commit && &edited != fold {
                     wanted = Some(Some(edited));

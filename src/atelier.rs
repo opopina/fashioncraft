@@ -225,6 +225,7 @@ pub fn run(
             // Copy the startup values out before `prefs` moves into the struct.
             let (wire, seam_links) = (prefs.wireframe, prefs.seam_links);
             let (dt, iterations) = (prefs.dt, prefs.iterations);
+            let ui_lang = prefs.language;
             let simulation = project.simulation.clone().unwrap_or(VbdSettings {
                 dt,
                 iterations,
@@ -293,7 +294,7 @@ pub fn run(
                 metrics: None,
                 cadence: Default::default(),
                 simulation_error: None,
-                status: "Ready · Space to start the simulation".into(),
+                status: i18n::tr(ui_lang, "Ready · Space to start the simulation").into(),
                 grab: None,
                 grab_radius_px: 30.,
                 grab_strength: 1.,
@@ -816,6 +817,7 @@ impl Atelier {
         true
     }
     fn load(&mut self, p: FittingProject) -> bool {
+        let ui_lang = self.prefs.language;
         match p.compile() {
             Ok(scene) => {
                 self.document.dirty = true;
@@ -856,7 +858,8 @@ impl Atelier {
                 self.metrics = None;
                 self.grab = None;
                 self.drag_plane = None;
-                self.status = "New arrangement · run to assemble the seams".into();
+                self.status =
+                    i18n::tr(ui_lang, "New arrangement · run to assemble the seams").into();
                 true
             }
             Err(e) => {
@@ -1192,7 +1195,7 @@ impl eframe::App for Atelier {
                     } else {
                         Color32::GRAY
                     },
-                    if self.playing { "Simulation" } else { "Pause" },
+                    i18n::tr(self.prefs.language, if self.playing { "Simulation" } else { "Pause" }),
                 );
                 ui.separator();
                 if let Some(speed) = self.cadence.speed {

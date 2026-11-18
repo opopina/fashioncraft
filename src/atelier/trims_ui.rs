@@ -55,6 +55,7 @@ impl Atelier {
 
     /// "Trims" in the Piece inspector.
     pub(super) fn piece_trims(&mut self, ui: &mut egui::Ui, panel: &str) {
+        let ui_lang = self.prefs.language;
         let mine: Vec<Trim> = self
             .project
             .template
@@ -64,14 +65,20 @@ impl Atelier {
             .cloned()
             .collect();
         let mut command = None;
-        egui::CollapsingHeader::new(format!("Trims ({})", mine.len()))
+        egui::CollapsingHeader::new(format!("{} ({})", i18n::tr(ui_lang, "Trims"), mine.len()))
             .id_salt("piece_trims")
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let centre = self.piece_centre(panel);
                     if ui
-                        .add_enabled(centre.is_some(), egui::Button::new("Add button"))
-                        .on_hover_text("A 15 mm button at the middle of the piece")
+                        .add_enabled(
+                            centre.is_some(),
+                            egui::Button::new(i18n::tr(ui_lang, "Add button")),
+                        )
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "A 15 mm button at the middle of the piece",
+                        ))
                         .clicked()
                         && let Some(c) = centre
                     {
@@ -87,8 +94,14 @@ impl Atelier {
                         });
                     }
                     if ui
-                        .add_enabled(centre.is_some(), egui::Button::new("Add buttonhole"))
-                        .on_hover_text("An 18 mm buttonhole at the middle of the piece")
+                        .add_enabled(
+                            centre.is_some(),
+                            egui::Button::new(i18n::tr(ui_lang, "Add buttonhole")),
+                        )
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "An 18 mm buttonhole at the middle of the piece",
+                        ))
                         .clicked()
                         && let Some(c) = centre
                     {
@@ -106,7 +119,10 @@ impl Atelier {
                     }
                 });
                 if mine.is_empty() {
-                    ui.small("Topstitching and zippers go along a selected segment.");
+                    ui.small(i18n::tr(
+                        ui_lang,
+                        "Topstitching and zippers go along a selected segment.",
+                    ));
                 }
                 for trim in &mine {
                     ui.horizontal(|ui| {
@@ -117,7 +133,7 @@ impl Atelier {
                             TrimKind::Topstitch { .. } => "Topstitch",
                         };
                         ui.label(format!("{kind} · {}", trim.id));
-                        if ui.small_button("Remove").clicked() {
+                        if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
                             command = Some(Command::RemoveTrim {
                                 id: trim.id.clone(),
                             });
@@ -132,6 +148,7 @@ impl Atelier {
 
     /// Topstitch or a zipper along the selected contour segment, a little inside it.
     pub(super) fn segment_trims(&mut self, ui: &mut egui::Ui, panel: &str, edge: &str) {
+        let ui_lang = self.prefs.language;
         let Some(polygon) = self
             .project
             .template
@@ -150,8 +167,11 @@ impl Atelier {
         let mut kind = None;
         ui.horizontal_wrapped(|ui| {
             if ui
-                .button("Topstitch")
-                .on_hover_text("A row of topstitching 4 mm inside this segment")
+                .button(i18n::tr(ui_lang, "Topstitch"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A row of topstitching 4 mm inside this segment",
+                ))
                 .clicked()
             {
                 kind = inside(0.004).map(|path_m| TrimKind::Topstitch {
@@ -161,8 +181,8 @@ impl Atelier {
                 });
             }
             if ui
-                .button("Zipper")
-                .on_hover_text("An 8 mm zipper 6 mm inside this segment")
+                .button(i18n::tr(ui_lang, "Zipper"))
+                .on_hover_text(i18n::tr(ui_lang, "An 8 mm zipper 6 mm inside this segment"))
                 .clicked()
             {
                 kind = inside(0.006).map(|path_m| TrimKind::Zipper {

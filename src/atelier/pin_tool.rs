@@ -25,33 +25,36 @@ const MAX_BOX_PINS: usize = 65_536;
 impl Atelier {
     /// Mode switch and pin count above the 3D view while the Grab tool is active.
     pub(super) fn pin_tool_bar(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         let count = self.project.template.pin_targets.len();
         ui.horizontal_wrapped(|ui| {
             let tool = &mut self.authoring.pin_tool;
             if ui
-                .selectable_label(!tool.enabled, "Grab")
-                .on_hover_text("Drag the cloth while it simulates")
+                .selectable_label(!tool.enabled, i18n::tr(ui_lang, "Grab"))
+                .on_hover_text(i18n::tr(ui_lang, "Drag the cloth while it simulates"))
                 .clicked()
             {
                 tool.enabled = false;
                 tool.tack = false;
             }
             if ui
-                .selectable_label(tool.enabled && !tool.tack, "Pin")
-                .on_hover_text(
+                .selectable_label(tool.enabled && !tool.tack, i18n::tr(ui_lang, "Pin"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Click the cloth to pin a point where it is · drag a box to pin an area · \
                  click a pin to remove it · Cmd+drag removes the pins in a box",
-                )
+                ))
                 .clicked()
             {
                 tool.enabled = true;
                 tool.tack = false;
             }
             if ui
-                .selectable_label(tool.enabled && tool.tack, "Tack")
-                .on_hover_text(
+                .selectable_label(tool.enabled && tool.tack, i18n::tr(ui_lang, "Tack"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Click two points of the cloth to hold them together, like a basting stitch",
-                )
+                ))
                 .clicked()
             {
                 tool.enabled = true;
@@ -61,7 +64,10 @@ impl Atelier {
             ui.separator();
             ui.label(super::garment_display::counted(count, "pin", "pins"));
             if ui
-                .add_enabled(count > 0, egui::Button::new("Delete all pins"))
+                .add_enabled(
+                    count > 0,
+                    egui::Button::new(i18n::tr(ui_lang, "Delete all pins")),
+                )
                 .clicked()
             {
                 self.delete_all_pins();
@@ -70,7 +76,10 @@ impl Atelier {
             let tacks = self.project.template.tacks.len();
             ui.label(super::garment_display::counted(tacks, "tack", "tacks"));
             if ui
-                .add_enabled(tacks > 0, egui::Button::new("Remove tacks"))
+                .add_enabled(
+                    tacks > 0,
+                    egui::Button::new(i18n::tr(ui_lang, "Remove tacks")),
+                )
                 .clicked()
             {
                 let ids = self
@@ -81,17 +90,20 @@ impl Atelier {
                     .map(|t| t.id.clone())
                     .collect();
                 if self.edit(authoring::Command::RemoveTacks { ids }) {
-                    self.status = "Tacks removed".into();
+                    self.status = i18n::tr(ui_lang, "Tacks removed").into();
                 }
             }
             if ui
-                .button("Fasten buttons")
-                .on_hover_text("Fasten each button to the nearest buttonhole on another piece")
+                .button(i18n::tr(ui_lang, "Fasten buttons"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Fasten each button to the nearest buttonhole on another piece",
+                ))
                 .clicked()
             {
                 self.fasten(true);
             }
-            if ui.button("Unfasten").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Unfasten")).clicked() {
                 self.fasten(false);
             }
         });
@@ -119,13 +131,18 @@ impl Atelier {
 
     /// Tack-mode click: the first point, then the second, which makes the tack.
     fn tack_click(&mut self, pos: egui::Pos2, rect: egui::Rect) {
+        let ui_lang = self.prefs.language;
         let Some(v) = self.picked_vertex(pos, rect) else {
-            self.status = "Click on the cloth to tack it".into();
+            self.status = i18n::tr(ui_lang, "Click on the cloth to tack it").into();
             return;
         };
         let Some(first) = self.authoring.pin_tool.tack_first.take() else {
             self.authoring.pin_tool.tack_first = Some(v);
-            self.status = "First point chosen · click the point to tack it to".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "First point chosen · click the point to tack it to",
+            )
+            .into();
             return;
         };
         let g = &self.scene.garment;
@@ -141,7 +158,7 @@ impl Atelier {
             return;
         };
         if first == v {
-            self.status = "Pick two different points".into();
+            self.status = i18n::tr(ui_lang, "Pick two different points").into();
             return;
         }
         let n = (1..)
@@ -160,12 +177,13 @@ impl Atelier {
             b,
         };
         if self.edit(authoring::Command::AddTack { tack }) {
-            self.status = "Tacked · the two points are drawn together".into();
+            self.status = i18n::tr(ui_lang, "Tacked · the two points are drawn together").into();
         }
     }
 
     /// Pin-mode clicks and box drags in the 3D view.
     pub(super) fn pin_interaction(&mut self, response: &egui::Response, rect: egui::Rect) {
+        let ui_lang = self.prefs.language;
         if self.authoring.pin_tool.tack {
             if response.clicked_by(egui::PointerButton::Primary)
                 && let Some(pos) = response.interact_pointer_pos()
@@ -195,7 +213,7 @@ impl Atelier {
             if region.width() >= 4. || region.height() >= 4. {
                 let vertices = self.visible_vertices_in(rect, region);
                 if vertices.is_empty() {
-                    self.status = "No visible cloth inside the box".into();
+                    self.status = i18n::tr(ui_lang, "No visible cloth inside the box").into();
                 } else {
                     self.apply_pins(&vertices, !removing);
                 }
@@ -216,7 +234,7 @@ impl Atelier {
             } else if let Some(v) = self.picked_vertex(pos, rect) {
                 self.apply_pins(&[v], true);
             } else {
-                self.status = "Click on the cloth to pin it".into();
+                self.status = i18n::tr(ui_lang, "Click on the cloth to pin it").into();
             }
         }
     }
@@ -333,8 +351,13 @@ impl Atelier {
 
     /// Pin (`hold`) or release the given cloth vertices as one validated undo step.
     fn apply_pins(&mut self, vertices: &[usize], hold: bool) {
+        let ui_lang = self.prefs.language;
         if self.pending {
-            self.status = "Wait for the current step to finish, then try again".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
             return;
         }
         self.playing = false;

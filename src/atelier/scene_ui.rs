@@ -34,6 +34,7 @@ fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
 impl Atelier {
     /// Rebuild the scene with `objects`; the drape starts again from the arrangement.
     pub(super) fn apply_scene_objects(&mut self, objects: Vec<SceneObject>) -> bool {
+        let ui_lang = self.prefs.language;
         let mut project = self.project.clone();
         project.scene_objects = objects;
         project.state = None;
@@ -52,7 +53,11 @@ impl Atelier {
                 self.simulation_error = None;
                 self.document.dirty = true;
                 self.authoring.scene.draft = None;
-                self.status = "Scene updated · the drape starts again from the arrangement".into();
+                self.status = i18n::tr(
+                    ui_lang,
+                    "Scene updated · the drape starts again from the arrangement",
+                )
+                .into();
                 true
             }
             Err(e) => {
@@ -63,6 +68,7 @@ impl Atelier {
     }
 
     pub(super) fn scene_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.scene.open {
             return;
         }
@@ -74,28 +80,29 @@ impl Atelier {
         let mut open = true;
         let mut add: Option<PathBuf> = None;
         let mut apply = false;
-        egui::Window::new("Scene and props")
+        egui::Window::new(i18n::tr(ui_lang, "Scene and props"))
             .open(&mut open)
             .default_width(320.)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.small(
+                ui.small(i18n::tr(
+                    ui_lang,
                     "Static OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over.",
-                );
+                ));
                 if draft.is_empty() {
-                    ui.label("No objects yet.");
+                    ui.label(i18n::tr(ui_lang, "No objects yet."));
                 }
                 let mut remove = None;
                 for (k, object) in draft.iter_mut().enumerate() {
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.strong(&object.name);
-                        if ui.small_button("Remove").clicked() {
+                        if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
                             remove = Some(k);
                         }
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Position");
+                        ui.label(i18n::tr(ui_lang, "Position"));
                         for (axis, v) in ["X", "Y", "Z"].iter().zip(object.translation.iter_mut()) {
                             let mut mm = *v * 1000.;
                             if ui
@@ -112,7 +119,7 @@ impl Atelier {
                         }
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Turn");
+                        ui.label(i18n::tr(ui_lang, "Turn"));
                         for (axis, v) in ["X", "Y", "Z"]
                             .iter()
                             .zip(object.rotation_degrees.iter_mut())
@@ -127,13 +134,13 @@ impl Atelier {
                         }
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Scale");
+                        ui.label(i18n::tr(ui_lang, "Scale"));
                         ui.add(
                             egui::DragValue::new(&mut object.scale)
                                 .range(0.0001..=1000.)
                                 .speed(0.01),
                         )
-                        .on_hover_text("From the file's units to metres");
+                        .on_hover_text(i18n::tr(ui_lang, "From the file's units to metres"));
                     });
                 }
                 if let Some(k) = remove {
@@ -141,16 +148,17 @@ impl Atelier {
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Add object…").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Add object…")).clicked() {
                         add = rfd::FileDialog::new()
                             .add_filter("Mesh", &["obj", "stl", "ply", "dae"])
                             .pick_file();
                     }
                     if ui
-                        .button("Apply")
-                        .on_hover_text(
+                        .button(i18n::tr(ui_lang, "Apply"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
                             "Rebuild the obstacle with these objects; the drape starts again",
-                        )
+                        ))
                         .clicked()
                     {
                         apply = true;

@@ -323,6 +323,7 @@ impl Atelier {
     }
 
     pub(super) fn obj_export_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.media3d.obj.open {
             return;
         }
@@ -330,23 +331,23 @@ impl Atelier {
         let mut export = false;
         let dialog = &mut self.authoring.media3d.obj;
         egui::Window::new(if dialog.selected_only {
-            "Export OBJ (selected)"
+            i18n::tr(ui_lang, "Export OBJ (selected)")
         } else {
-            "Export OBJ"
+            i18n::tr(ui_lang, "Export OBJ")
         })
         .open(&mut open)
         .resizable(false)
         .default_width(280.)
         .show(ctx, |ui| {
             let o = &mut dialog.options;
-            ui.checkbox(&mut o.thick, "Thick")
-                .on_hover_text("Both faces of the cloth, apart by the fabric's look thickness (1 mm without one), joined by a rim");
-            ui.checkbox(&mut o.unified_uv, "Unified UV")
-                .on_hover_text("Pack every piece into the unit square of texture space; fabric textures are left out");
-            ui.checkbox(&mut o.per_piece, "One object per piece");
-            ui.checkbox(&mut dialog.avatar, "Include the avatar and scene objects");
+            ui.checkbox(&mut o.thick, i18n::tr(ui_lang, "Thick"))
+                .on_hover_text(i18n::tr(ui_lang, "Both faces of the cloth, apart by the fabric's look thickness (1 mm without one), joined by a rim"));
+            ui.checkbox(&mut o.unified_uv, i18n::tr(ui_lang, "Unified UV"))
+                .on_hover_text(i18n::tr(ui_lang, "Pack every piece into the unit square of texture space; fabric textures are left out"));
+            ui.checkbox(&mut o.per_piece, i18n::tr(ui_lang, "One object per piece"));
+            ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
             ui.horizontal(|ui| {
-                ui.label("Units");
+                ui.label(i18n::tr(ui_lang, "Units"));
                 egui::ComboBox::from_id_salt("obj.units")
                     .selected_text(o.units.label())
                     .show_ui(ui, |ui| {
@@ -354,10 +355,10 @@ impl Atelier {
                             ui.selectable_value(&mut o.units, u, u.label());
                         }
                     });
-                ui.checkbox(&mut o.z_up, "Z up");
+                ui.checkbox(&mut o.z_up, i18n::tr(ui_lang, "Z up"));
             });
-            ui.small("Pieces stay split along seams.");
-            if ui.button("Export…").clicked() {
+            ui.small(i18n::tr(ui_lang, "Pieces stay split along seams."));
+            if ui.button(i18n::tr(ui_lang, "Export…")).clicked() {
                 export = true;
             }
         });
@@ -426,6 +427,7 @@ impl Atelier {
     }
 
     fn begin_capture(&mut self, target: PathBuf, video: Option<PathBuf>, frames: usize, fps: f64) {
+        let ui_lang = self.prefs.language;
         self.authoring.media3d.capture = Some(Capture {
             target,
             video,
@@ -438,7 +440,7 @@ impl Atelier {
         });
         // Captures show the garment and avatar without selection and inspection marks.
         self.clean_view = true;
-        self.status = "Capturing the 3D view…".into();
+        self.status = i18n::tr(ui_lang, "Capturing the 3D view…").into();
     }
 
     fn end_capture(&mut self, status: String) {

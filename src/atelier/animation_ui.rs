@@ -238,6 +238,7 @@ impl Atelier {
     /// Simulate the cloth along the animation from the live drape, a frame at a time, on a
     /// thread of its own.
     pub(super) fn start_animation_recording(&mut self, ctx: &egui::Context) -> Result<(), String> {
+        let ui_lang = self.prefs.language;
         if self.authoring.animation.recording.is_some() {
             return Err("Already recording".into());
         }
@@ -298,7 +299,7 @@ impl Atelier {
         a.previewing = false;
         a.take = None;
         a.error = None;
-        self.status = "Recording…".into();
+        self.status = i18n::tr(ui_lang, "Recording…").into();
         Ok(())
     }
 
@@ -485,6 +486,7 @@ impl Atelier {
     }
 
     pub(super) fn delete_animation(&mut self) -> Result<(), String> {
+        let ui_lang = self.prefs.language;
         if self.authoring.animation.recording.is_some() {
             return Err("Stop recording first".into());
         }
@@ -499,7 +501,7 @@ impl Atelier {
         a.previewing = false;
         a.posed = None;
         self.document.dirty = true;
-        self.status = "Animation deleted".into();
+        self.status = i18n::tr(ui_lang, "Animation deleted").into();
         Ok(())
     }
 

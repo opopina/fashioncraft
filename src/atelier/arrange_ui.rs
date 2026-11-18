@@ -77,8 +77,9 @@ impl Atelier {
     }
 
     fn scale_inputs(&mut self, ui: &mut egui::Ui) -> DVec2 {
+        let ui_lang = self.prefs.language;
         let state = &mut self.authoring.arrange;
-        ui.label("Scale");
+        ui.label(i18n::tr(ui_lang, "Scale"));
         let changed = ui
             .add(
                 egui::DragValue::new(&mut state.scale_percent[0])
@@ -87,7 +88,7 @@ impl Atelier {
                     .fixed_decimals(1)
                     .suffix(" %"),
             )
-            .on_hover_text("Horizontal scale")
+            .on_hover_text(i18n::tr(ui_lang, "Horizontal scale"))
             .changed();
         if state.uniform {
             if changed {
@@ -101,11 +102,11 @@ impl Atelier {
                     .fixed_decimals(1)
                     .suffix(" %"),
             )
-            .on_hover_text("Vertical scale");
+            .on_hover_text(i18n::tr(ui_lang, "Vertical scale"));
         }
         if ui
-            .checkbox(&mut state.uniform, "Uniform")
-            .on_hover_text("Same scale both ways")
+            .checkbox(&mut state.uniform, i18n::tr(ui_lang, "Uniform"))
+            .on_hover_text(i18n::tr(ui_lang, "Same scale both ways"))
             .changed()
             && state.uniform
         {
@@ -151,11 +152,12 @@ impl Atelier {
         groups: Vec<(String, Vec<usize>)>,
         count: usize,
     ) {
+        let ui_lang = self.prefs.language;
         let mut command = None;
         ui.horizontal_wrapped(|ui| {
             ui.label(super::garment_display::counted(count, "point", "points"));
             ui.separator();
-            ui.label("Align");
+            ui.label(i18n::tr(ui_lang, "Align"));
             let reference = self.authoring.anchor.clone();
             for mode in AlignMode::ALL {
                 let needs_reference = matches!(mode, AlignMode::ToPointX | AlignMode::ToPointY);
@@ -182,7 +184,7 @@ impl Atelier {
                 }
             }
             ui.separator();
-            ui.label("Rotate");
+            ui.label(i18n::tr(ui_lang, "Rotate"));
             ui.add(
                 egui::DragValue::new(&mut self.authoring.arrange.rotation_degrees)
                     .range(-360.0..=360.0)
@@ -192,8 +194,14 @@ impl Atelier {
             );
             let scale = self.scale_inputs(ui);
             if ui
-                .add_enabled(count >= 2, egui::Button::new("Transform"))
-                .on_hover_text("Rotate and scale the selected points about their centre")
+                .add_enabled(
+                    count >= 2,
+                    egui::Button::new(i18n::tr(ui_lang, "Transform")),
+                )
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Rotate and scale the selected points about their centre",
+                ))
                 .clicked()
                 && let Some(pivot) = self.point_selection_centre(&groups)
             {
@@ -208,11 +216,12 @@ impl Atelier {
         if let Some(command) = command
             && self.edit(command)
         {
-            self.status = "Points arranged · Ctrl+Z undoes it".into();
+            self.status = i18n::tr(ui_lang, "Points arranged · Ctrl+Z undoes it").into();
         }
     }
 
     fn panel_arrange_bar(&mut self, ui: &mut egui::Ui, panels: Vec<String>) {
+        let ui_lang = self.prefs.language;
         let mut command = None;
         let reference = self
             .authoring
@@ -224,8 +233,8 @@ impl Atelier {
             ui.separator();
             let scale = self.scale_inputs(ui);
             if ui
-                .add_enabled(panels.len() == 1, egui::Button::new("Scale piece"))
-                .on_hover_text("Scale the piece, its holes and internal lines about its centre")
+                .add_enabled(panels.len() == 1, egui::Button::new(i18n::tr(ui_lang, "Scale piece")))
+                .on_hover_text(i18n::tr(ui_lang, "Scale the piece, its holes and internal lines about its centre"))
                 .clicked()
             {
                 command = Some(Command::ScalePanel {
@@ -239,7 +248,7 @@ impl Atelier {
                     .as_ref()
                     .and_then(|id| self.project.template.panels.iter().find(|p| &p.id == id))
                     .map_or("the active piece".to_string(), |p| p.name.clone());
-                ui.label("Align to")
+                ui.label(i18n::tr(ui_lang, "Align to"))
                     .on_hover_text(format!("Line pieces up with {name}"));
                 for mode in AlignMode::ALL.into_iter().take(6) {
                     if ui
@@ -259,7 +268,7 @@ impl Atelier {
                     }
                 }
                 ui.separator();
-                ui.label("Distribute");
+                ui.label(i18n::tr(ui_lang, "Distribute"));
                 ui.add(
                     egui::DragValue::new(&mut self.authoring.arrange.gap_mm)
                         .range(-1000.0..=1000.0)
@@ -267,10 +276,10 @@ impl Atelier {
                         .fixed_decimals(1)
                         .suffix(" mm"),
                 )
-                .on_hover_text("Gap between neighbouring pieces");
+                .on_hover_text(i18n::tr(ui_lang, "Gap between neighbouring pieces"));
                 if ui
-                    .small_button("Even")
-                    .on_hover_text("Use the current average gap, left to right: equal gaps within the same overall width")
+                    .small_button(i18n::tr(ui_lang, "Even"))
+                    .on_hover_text(i18n::tr(ui_lang, "Use the current average gap, left to right: equal gaps within the same overall width"))
                     .clicked()
                 {
                     let template = &self.project.template;
@@ -289,8 +298,8 @@ impl Atelier {
                     if ui
                         .small_button(label)
                         .on_hover_text(match axis {
-                            Axis::Horizontal => "Space the pieces left to right",
-                            Axis::Vertical => "Space the pieces top to bottom",
+                            Axis::Horizontal => i18n::tr(ui_lang, "Space the pieces left to right"),
+                            Axis::Vertical => i18n::tr(ui_lang, "Space the pieces top to bottom"),
                         })
                         .clicked()
                     {
@@ -306,7 +315,7 @@ impl Atelier {
         if let Some(command) = command
             && self.edit(command)
         {
-            self.status = "Pieces arranged · Ctrl+Z undoes it".into();
+            self.status = i18n::tr(ui_lang, "Pieces arranged · Ctrl+Z undoes it").into();
         }
     }
 }

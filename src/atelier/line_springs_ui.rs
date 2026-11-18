@@ -8,6 +8,7 @@ use marvelous_cloth::{
 
 impl Atelier {
     pub(super) fn line_spring_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let ui_lang = self.prefs.language;
         let current = self
             .project
             .template
@@ -20,15 +21,15 @@ impl Atelier {
             let elastic = current.as_ref().is_some_and(|s| s.kind == LineKind::Elastic);
             let tape = current.as_ref().is_some_and(|s| s.kind == LineKind::Tape);
             if ui
-                .selectable_label(elastic, "Elastic")
-                .on_hover_text("Gather this line to a share of its cut length, like an elastic band sewn along it")
+                .selectable_label(elastic, i18n::tr(ui_lang, "Elastic"))
+                .on_hover_text(i18n::tr(ui_lang, "Gather this line to a share of its cut length, like an elastic band sewn along it"))
                 .clicked()
             {
                 wanted = Some((!elastic).then(|| LineSpring::elastic(panel, line)));
             }
             if ui
-                .selectable_label(tape, "Tape")
-                .on_hover_text("Keep this line from stretching, like a stay tape sewn along it")
+                .selectable_label(tape, i18n::tr(ui_lang, "Tape"))
+                .on_hover_text(i18n::tr(ui_lang, "Keep this line from stretching, like a stay tape sewn along it"))
                 .clicked()
             {
                 wanted = Some((!tape).then(|| LineSpring::tape(panel, line)));
@@ -38,7 +39,7 @@ impl Atelier {
             let mut edited = spring.clone();
             let mut commit = false;
             ui.horizontal(|ui| {
-                ui.label("Ratio");
+                ui.label(i18n::tr(ui_lang, "Ratio"));
                 let r = ui.add(
                     egui::DragValue::new(&mut edited.ratio)
                         .range(30.0..=100.0)
@@ -47,7 +48,7 @@ impl Atelier {
                         .suffix(" %"),
                 );
                 commit |= r.drag_stopped() || (r.changed() && !r.dragged());
-                ui.label("Strength");
+                ui.label(i18n::tr(ui_lang, "Strength"));
                 let r = ui.add(
                     egui::DragValue::new(&mut edited.strength)
                         .range(0.1..=10_000.0)
@@ -74,6 +75,7 @@ impl Atelier {
 impl Atelier {
     /// Fold of the selected internal line: on/off, its angle (180° flat) and strength.
     pub(super) fn line_fold_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
+        let ui_lang = self.prefs.language;
         use marvelous_cloth::garment::template::LineFold;
         let current = self
             .project
@@ -86,10 +88,11 @@ impl Atelier {
         ui.horizontal(|ui| {
             let on = current.is_some();
             if ui
-                .selectable_label(on, "Fold")
-                .on_hover_text(
+                .selectable_label(on, i18n::tr(ui_lang, "Fold"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Crease the piece along this line at a set angle, like a pressed pleat",
-                )
+                ))
                 .clicked()
             {
                 wanted = Some((!on).then(|| LineFold::new(panel, line)));
@@ -105,9 +108,10 @@ impl Atelier {
                             .fixed_decimals(0)
                             .suffix("°"),
                     )
-                    .on_hover_text(
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
                         "180° is flat; less folds toward the piece's front, more away from it",
-                    );
+                    ));
                 commit |= r.drag_stopped() || (r.changed() && !r.dragged());
                 let r = ui
                     .add(
@@ -117,7 +121,10 @@ impl Atelier {
                             .fixed_decimals(0)
                             .prefix("×"),
                     )
-                    .on_hover_text("Bending stiffness of the crease, times the fabric's");
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Bending stiffness of the crease, times the fabric's",
+                    ));
                 commit |= r.drag_stopped() || (r.changed() && !r.dragged());
                 if commit && &edited != fold {
                     wanted = Some(Some(edited));

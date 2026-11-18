@@ -44,6 +44,7 @@ fn centimetres(m: &BodyMeasurements) -> [f64; 4] {
 
 impl Atelier {
     pub(super) fn avatar_shape_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.avatar_shape.open {
             return;
         }
@@ -57,7 +58,7 @@ impl Atelier {
         }
         let mut open = true;
         let mut make = false;
-        egui::Window::new("Avatar editor")
+        egui::Window::new(i18n::tr(ui_lang, "Avatar editor"))
             .open(&mut open)
             .resizable(false)
             .default_width(300.)
@@ -74,16 +75,16 @@ impl Atelier {
                 };
                 let now = centimetres(&measured.now);
                 let target = state.target.get_or_insert(now);
-                ui.small("Girths are taken around the torso: bust at the chest, the narrowest waist, the widest hip.");
+                ui.small(i18n::tr(ui_lang, "Girths are taken around the torso: bust at the chest, the narrowest waist, the widest hip."));
                 egui::Grid::new("avatar.measurements")
                     .num_columns(3)
                     .show(ui, |ui| {
                         ui.label("");
-                        ui.strong("Now");
-                        ui.strong("New");
+                        ui.strong(i18n::tr(ui_lang, "Now"));
+                        ui.strong(i18n::tr(ui_lang, "New"));
                         ui.end_row();
                         for (k, name) in ["Height", "Bust", "Waist", "Hip"].iter().enumerate() {
-                            ui.label(*name);
+                            ui.label(i18n::tr(ui_lang, name));
                             ui.label(format!("{:.1} cm", now[k]));
                             ui.add(
                                 egui::DragValue::new(&mut target[k])
@@ -95,12 +96,12 @@ impl Atelier {
                         }
                     });
                 ui.horizontal(|ui| {
-                    if ui.button("Reset").clicked() {
+                    if ui.button(i18n::tr(ui_lang, "Reset")).clicked() {
                         *target = now;
                     }
                     if ui
-                        .button("Make avatar…")
-                        .on_hover_text("Reshape the avatar to these measurements, then confirm it like an imported avatar")
+                        .button(i18n::tr(ui_lang, "Make avatar…"))
+                        .on_hover_text(i18n::tr(ui_lang, "Reshape the avatar to these measurements, then confirm it like an imported avatar"))
                         .clicked()
                     {
                         make = true;
@@ -212,13 +213,14 @@ impl Atelier {
     }
 
     pub(super) fn draft_window(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.authoring.shirt_draft.open {
             return;
         }
         let mut open = true;
         let (mut from_avatar, mut create) = (false, false);
         let state = &mut self.authoring.shirt_draft;
-        egui::Window::new("T-shirt from measurements")
+        egui::Window::new(i18n::tr(ui_lang, "T-shirt from measurements"))
             .open(&mut open)
             .resizable(false)
             .default_width(300.)
@@ -239,7 +241,7 @@ impl Atelier {
                         .iter()
                         .enumerate()
                         {
-                            ui.label(*name);
+                            ui.label(i18n::tr(ui_lang, name));
                             ui.add(
                                 egui::DragValue::new(&mut state.values[k])
                                     .range(0.0..=250.0)
@@ -251,17 +253,18 @@ impl Atelier {
                     });
                 ui.horizontal(|ui| {
                     if ui
-                        .button("From the avatar")
-                        .on_hover_text(
+                        .button(i18n::tr(ui_lang, "From the avatar"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
                             "Bust, hip, shoulders, length and placement from the current avatar",
-                        )
+                        ))
                         .clicked()
                     {
                         from_avatar = true;
                     }
                     if ui
-                        .button("Create")
-                        .on_hover_text("Replace the garment with this T-shirt")
+                        .button(i18n::tr(ui_lang, "Create"))
+                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with this T-shirt"))
                         .clicked()
                     {
                         create = true;
@@ -305,7 +308,8 @@ impl Atelier {
                     project.scene_objects = self.project.scene_objects.clone();
                     if self.load(project) {
                         self.authoring.shirt_draft.error = None;
-                        self.status = "T-shirt drafted from the measurements".into();
+                        self.status =
+                            i18n::tr(ui_lang, "T-shirt drafted from the measurements").into();
                     } else {
                         self.authoring.shirt_draft.error = Some(self.status.clone());
                     }

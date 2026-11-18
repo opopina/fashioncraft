@@ -152,29 +152,31 @@ impl Atelier {
 
     /// The "Lock" part of the board's display menu.
     pub(super) fn lock_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.separator();
-        ui.strong("LOCK");
+        ui.strong(i18n::tr(ui_lang, "LOCK"));
         let mut action = None;
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(
                     !self.selected_panels().is_empty(),
-                    egui::Button::new("Lock selected"),
+                    egui::Button::new(i18n::tr(ui_lang, "Lock selected")),
                 )
-                .on_hover_text(
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Selected pieces can no longer be picked or box-selected on the board",
-                )
+                ))
                 .clicked()
             {
                 action = Some(LockAction::LockSelected);
             }
-            if ui.button("Lock all").clicked() {
+            if ui.button(i18n::tr(ui_lang, "Lock all")).clicked() {
                 action = Some(LockAction::LockAll);
             }
             if ui
                 .add_enabled(
                     !self.project.template.locked_panels.is_empty(),
-                    egui::Button::new("Unlock all"),
+                    egui::Button::new(i18n::tr(ui_lang, "Unlock all")),
                 )
                 .clicked()
             {
@@ -183,8 +185,11 @@ impl Atelier {
         });
         let mut lines = self.project.template.internal_lines_locked;
         if ui
-            .checkbox(&mut lines, "Lock internal lines")
-            .on_hover_text("Clicks and boxes on the board reach only the pieces")
+            .checkbox(&mut lines, i18n::tr(ui_lang, "Lock internal lines"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Clicks and boxes on the board reach only the pieces",
+            ))
             .changed()
         {
             action = Some(if lines {

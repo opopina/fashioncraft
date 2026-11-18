@@ -139,14 +139,16 @@ impl Atelier {
         self.document.svg_import.smoke_status()
     }
     pub(super) fn open_svg_import(&mut self) {
+        let ui_lang = self.prefs.language;
         if self.authoring.preview.is_some() || self.has_document_draft() {
-            self.status = "Finish or cancel the current drawing, placement or sewing before importing patterns".into();
+            self.status = i18n::tr(ui_lang, "Finish or cancel the current drawing, placement or sewing before importing patterns").into();
             return;
         }
         self.playing = false;
         self.document.svg_import.begin(&self.project.template);
     }
     fn svg_import_tick(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         use svg_import_ui::Action;
         match self.document.svg_import.show(ctx, &self.project.template) {
             Some(Action::Choose) => {
@@ -176,7 +178,7 @@ impl Atelier {
                         self.svg_smoke_deliver(delayed);
                         self.authoring.board.request_fit();
                         self.document.svg_import = Default::default();
-                        self.status = "SVG panels added · move and sew them in the workspace · Undo is available".into();
+                        self.status = i18n::tr(ui_lang, "SVG panels added · move and sew them in the workspace · Undo is available").into();
                     }
                     Err(error) => self.document.svg_import.error = Some(error),
                 }
@@ -185,14 +187,16 @@ impl Atelier {
         }
     }
     pub(super) fn open_pattern_import(&mut self) {
+        let ui_lang = self.prefs.language;
         if self.authoring.preview.is_some() || self.has_document_draft() {
-            self.status = "Finish or cancel the current drawing, placement or sewing before importing patterns".into();
+            self.status = i18n::tr(ui_lang, "Finish or cancel the current drawing, placement or sewing before importing patterns").into();
             return;
         }
         self.playing = false;
         self.document.pattern_import.begin(&self.project.template);
     }
     fn pattern_import_tick(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         use pattern_import_ui::Action;
         match self
             .document
@@ -219,7 +223,7 @@ impl Atelier {
                         self.authoring.history.record(self.project.template.clone());
                         self.install_edit(edit);
                         self.document.pattern_import = Default::default();
-                        self.status = "DXF panels added · move and sew them in the workspace · Undo is available".into();
+                        self.status = i18n::tr(ui_lang, "DXF panels added · move and sew them in the workspace · Undo is available").into();
                     }
                     Err(error) => self.document.pattern_import.error = Some(error),
                 }
@@ -566,6 +570,7 @@ impl Atelier {
         }
     }
     pub(super) fn new_document(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         if !self.can_replace_document(ctx) {
             return;
         }
@@ -593,7 +598,7 @@ impl Atelier {
                 self.authoring.history = Default::default();
                 self.document.path = None;
                 self.document.dirty = true;
-                self.status = "New project · one unsewn rectangle".into();
+                self.status = i18n::tr(ui_lang, "New project · one unsewn rectangle").into();
             }
             Err(e) => self.status = e,
         }
@@ -607,6 +612,7 @@ impl Atelier {
     // Only the explicitly selected acceptance scenario reaches this adapter.
     // It substitutes a fixture path for dialogs, not the Save/Open transactions.
     fn appearance_document_smoke(&mut self, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         let save = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let open = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O));
         if save {
@@ -623,7 +629,7 @@ impl Atelier {
             self.save_document(ctx, false);
         } else if open {
             let Some(path) = self.document.smoke_fixture.clone() else {
-                self.status = "Appearance fixture has not been saved".into();
+                self.status = i18n::tr(ui_lang, "Appearance fixture has not been saved").into();
                 return;
             };
             // The normal loader performs the missing-avatar check immediately

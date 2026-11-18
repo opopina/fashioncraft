@@ -60,40 +60,53 @@ impl Atelier {
     }
 
     pub(super) fn issue_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!("{} faces marked", self.issue.faces.len()));
-            ui.add(egui::Slider::new(&mut self.issue.radius, 4. ..=48.).text("Brush px"));
-            if ui.small_button("Clear").clicked() {
+            ui.add(
+                egui::Slider::new(&mut self.issue.radius, 4. ..=48.)
+                    .text(i18n::tr(ui_lang, "Brush px")),
+            );
+            if ui.small_button(i18n::tr(ui_lang, "Clear")).clicked() {
                 self.issue.invalidate();
             }
         });
-        ui.small("Paint visible cloth · Shift erases · right drag orbits · simulation paused");
+        ui.small(i18n::tr(
+            ui_lang,
+            "Paint visible cloth · Shift erases · right drag orbits · simulation paused",
+        ));
         ui.add(
             egui::TextEdit::singleline(&mut self.issue.note)
-                .hint_text("What goes wrong here? (optional)")
+                .hint_text(i18n::tr(ui_lang, "What goes wrong here? (optional)"))
                 .char_limit(2000),
         );
         ui.horizontal(|ui| {
-            let export = ui.button("Export report");
+            let export = ui.button(i18n::tr(ui_lang, "Export report"));
             self.smoke_target("issue_export", export.rect.center());
             if export.clicked() {
                 self.export_issue(ui.ctx());
             }
             if let Some(path) = &self.issue.last_export
-                && ui.small_button("Copy path").clicked()
+                && ui.small_button(i18n::tr(ui_lang, "Copy path")).clicked()
             {
                 ui.ctx().copy_text(path.display().to_string());
             }
-            if ui.small_button("Done").clicked() {
+            if ui.small_button(i18n::tr(ui_lang, "Done")).clicked() {
                 self.set_authoring_tool(Tool::Edit, false);
             }
         });
-        ui.small("Local capture only. Share the exported folder path to request debugging.");
+        ui.small(i18n::tr(
+            ui_lang,
+            "Local capture only. Share the exported folder path to request debugging.",
+        ));
         if !self.authoring.draft.is_empty()
             || !self.authoring.ends.is_empty()
             || self.authoring.sewing.sides.iter().any(|s| !s.is_empty())
         {
-            ui.small("Uncommitted drawing and sewing previews are not included in the report.");
+            ui.small(i18n::tr(
+                ui_lang,
+                "Uncommitted drawing and sewing previews are not included in the report.",
+            ));
         }
     }
 

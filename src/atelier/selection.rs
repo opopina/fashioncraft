@@ -675,6 +675,7 @@ impl Atelier {
         viewport: egui::Rect,
         gesture: PlacementMarquee,
     ) {
+        let ui_lang = self.prefs.language;
         let garment = &self.scene.garment;
         let state = &self.scene.state;
         let cloth = garment.panels.iter().enumerate().flat_map(|(index, p)| {
@@ -688,7 +689,11 @@ impl Atelier {
             .iter()
             .map(|t| (None, t.map(|v| surface.vertices[v])));
         if gesture.overflow {
-            self.status = "Lasso is too complex; draw a shorter, simpler shape".into();
+            self.status = i18n::tr(
+                ui_lang,
+                "Lasso is too complex; draw a shorter, simpler shape",
+            )
+            .into();
             return;
         }
         let selection = if gesture.lasso {
@@ -966,6 +971,7 @@ impl Atelier {
         self.authoring.edge = None;
     }
     pub(super) fn selection_controls(&mut self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
         if self.authoring.tool != Tool::Edit {
             return;
         }
@@ -974,45 +980,57 @@ impl Atelier {
                 .selectable_value(
                     &mut self.authoring.selection.shape,
                     SelectionShape::Box,
-                    "Box",
+                    i18n::tr(ui_lang, "Box"),
                 )
-                .on_hover_text(
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Drag to select panels or contour points across multiple panels. Shift adds.",
-                );
+                ));
             self.smoke_target_ui(ui, "selection_box", r.rect);
             let r = ui
                 .selectable_value(
                     &mut self.authoring.selection.shape,
                     SelectionShape::Lasso,
-                    "Lasso",
+                    i18n::tr(ui_lang, "Lasso"),
                 )
-                .on_hover_text(
+                .on_hover_text(i18n::tr(
+                    ui_lang,
                     "Draw a freehand selection on the board. Shift adds to the selection.",
-                );
+                ));
             self.smoke_target_ui(ui, "selection_lasso", r.rect);
             ui.separator();
             ui.selectable_value(
                 &mut self.authoring.selection.target,
                 BoxTarget::Panels,
-                "Panels",
+                i18n::tr(ui_lang, "Panels"),
             );
             let r = ui.selectable_value(
                 &mut self.authoring.selection.target,
                 BoxTarget::Points,
-                "Points",
+                i18n::tr(ui_lang, "Points"),
             );
             self.smoke_target_ui(ui, "selection_points", r.rect);
             let count = self.selected_panels().len();
             ui.separator();
             if self.authoring.selection.target == BoxTarget::Points {
-                ui.small(format!("{} points", self.authoring.board.point_count()));
+                ui.small(format!(
+                    "{} {}",
+                    self.authoring.board.point_count(),
+                    i18n::tr(ui_lang, "points")
+                ));
             } else {
-                ui.small(format!("{count} panels"));
+                ui.small(format!("{count} {}", i18n::tr(ui_lang, "panels")));
             }
-            ui.menu_button("Clipboard", |ui| {
+            ui.menu_button(i18n::tr(ui_lang, "Clipboard"), |ui| {
                 if ui
-                    .add_enabled(count > 0, egui::Button::new("Copy panels"))
-                    .on_hover_text("Ctrl+C · copy panels and seams between them")
+                    .add_enabled(
+                        count > 0,
+                        egui::Button::new(i18n::tr(ui_lang, "Copy panels")),
+                    )
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Ctrl+C · copy panels and seams between them",
+                    ))
                     .clicked()
                 {
                     self.copy_panels(ui.ctx());
@@ -1020,11 +1038,12 @@ impl Atelier {
                 if ui
                     .add_enabled(
                         self.authoring.selection.clipboard.is_some(),
-                        egui::Button::new("Paste"),
+                        egui::Button::new(i18n::tr(ui_lang, "Paste")),
                     )
-                    .on_hover_text(
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
                         "Paste the last copied panels · Ctrl+V reads the system clipboard",
-                    )
+                    ))
                     .clicked()
                     && let Some(clip) = self.authoring.selection.clipboard.clone()
                 {
@@ -1051,6 +1070,7 @@ impl Atelier {
         }
     }
     pub(super) fn paste_panels(&mut self, clip: PatternClipboard, ctx: &egui::Context) {
+        let ui_lang = self.prefs.language;
         let board = &self.authoring.board;
         let cursor = ctx.input(|i| i.pointer.hover_pos());
         let center = self
@@ -1087,7 +1107,7 @@ impl Atelier {
             self.authoring.edge = None;
             self.authoring.selection.clipboard = Some(clip);
             self.authoring.selection.paste_count += 1;
-            self.status = "Panels pasted · internal seams retained · arrange copies in 3D before simulation · Ctrl+Z to undo".into();
+            self.status = i18n::tr(ui_lang, "Panels pasted · internal seams retained · arrange copies in 3D before simulation · Ctrl+Z to undo").into();
         }
     }
     pub(super) fn clipboard_shortcuts(&mut self, ctx: &egui::Context) {

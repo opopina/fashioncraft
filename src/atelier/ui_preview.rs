@@ -33,6 +33,7 @@ fn frame(
                         false,
                         is_3d,
                         "Navigation",
+                        Default::default(),
                     );
                     assert!(
                         rect.contains_rect(header.settings.rect),
@@ -137,7 +138,7 @@ fn export_chrome_preview() {
                         for name in ["Existing seams (6)","Dimensions and points","Mirrors and booleans"] { pane.collapsing(name,|_| {}); }
                         pane.horizontal(|ui| { let _=ui.button("Duplicate");let _=ui.button("Delete panel"); });
                     } else {
-                        let _=chrome::view_header(&mut pane,if id=="3d" { "3D GARMENT" } else { "2D PATTERNS" },false,id=="3d","");
+                        let _=chrome::view_header(&mut pane,if id=="3d" { "3D GARMENT" } else { "2D PATTERNS" },false,id=="3d","",Default::default());
                         if id=="2d" { pane.horizontal(|ui| { for label in ["Shapes","Edit","New sheet","?"] { let _=ui.button(label); } }); }
                         pane.separator();
                         let rect=pane.available_rect_before_wrap();

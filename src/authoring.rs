@@ -499,6 +499,11 @@ pub enum Command {
         seam: String,
         fold: Option<crate::garment::template::SeamFold>,
     },
+    /// Put a zipper on a seam, move its slider, or take it off (`zipper: None`). One undo step.
+    SetSeamZipper {
+        seam: String,
+        zipper: Option<crate::garment::template::SeamZipper>,
+    },
     /// Hold two points of the cloth together. One undo step.
     AddTack {
         tack: crate::garment::template::Tack,
@@ -650,6 +655,7 @@ impl Command {
             Self::AttachPins { attached: false } => "Detach pins from the avatar",
             Self::FlipNormals { .. } => "Flip faces",
             Self::SetSeamFold { .. } => "Seam fold",
+            Self::SetSeamZipper { .. } => "Zipper",
             Self::AddTack { .. } => "Tack",
             Self::RemoveTacks { .. } => "Remove tacks",
             Self::SetLineFold { .. } => "Line fold",
@@ -1511,6 +1517,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     let seams: std::collections::BTreeSet<String> =
         template.seams.iter().map(|s| s.id.clone()).collect();
     template.seam_folds.retain(|id, _| seams.contains(id));
+    template.seam_zippers.retain(|id, _| seams.contains(id));
 }
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
@@ -1528,6 +1535,11 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.internal_lines_locked = false;
         // Pins held on to the avatar only move while an animation records.
         t.pins_attached = false;
+        // A zipper's width is its look; closed all along, it sews like a plain seam.
+        t.seam_zippers.retain(|_, z| z.closed < 1.);
+        for z in t.seam_zippers.values_mut() {
+            z.width_m = 0.;
+        }
         for p in &mut t.panels {
             p.layout_2d = None;
             p.layout_rotation_degrees = 0.;
@@ -3063,6 +3075,22 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 }
                 None => {
                     template.seam_folds.remove(&seam);
+                }
+            }
+        }
+        Command::SetSeamZipper { seam, zipper } => {
+            if !template.seams.iter().any(|s| s.id == seam) {
+                return Err(format!("There is no seam {seam}"));
+            }
+            if template.seam_zippers.get(&seam) == zipper.as_ref() {
+                return Err("The seam is set that way already".into());
+            }
+            match zipper {
+                Some(z) => {
+                    template.seam_zippers.insert(seam, z);
+                }
+                None => {
+                    template.seam_zippers.remove(&seam);
                 }
             }
         }

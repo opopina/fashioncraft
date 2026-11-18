@@ -321,6 +321,10 @@ pub struct GarmentTemplate {
     /// Fold angle and strength of seams, by seam id: the two pieces meet at that angle.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_folds: BTreeMap<String, SeamFold>,
+    /// Zippers on seams, by seam id: only the share of the seam the slider has closed is
+    /// sewn, from the seam's start.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seam_zippers: BTreeMap<String, SeamZipper>,
     /// Tacks: two points of the cloth held together (basting, or a button fastened to its
     /// buttonhole).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -449,6 +453,24 @@ impl Default for SeamFold {
         Self {
             angle: 180.,
             strength: 1.,
+        }
+    }
+}
+
+/// A zipper along a seam. The slider has closed its first `closed` share, from 0 (open, the
+/// two sides apart) to 1 (closed all along); the tape is `width_m` wide.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeamZipper {
+    pub closed: f64,
+    pub width_m: f64,
+}
+
+impl Default for SeamZipper {
+    fn default() -> Self {
+        Self {
+            closed: 1.,
+            width_m: 0.012,
         }
     }
 }
@@ -735,6 +757,16 @@ impl GarmentTemplate {
             if !(0.0..=360.0).contains(&fold.angle) || !(1.0..=1000.0).contains(&fold.strength) {
                 return Err(
                     "A seam fold needs an angle of 0 to 360° and a strength of 1 to 1000".into(),
+                );
+            }
+        }
+        for (id, zipper) in &self.seam_zippers {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Zipper refers to unknown seam {id}"));
+            }
+            if !(0.0..=1.0).contains(&zipper.closed) || !(0.002..=0.05).contains(&zipper.width_m) {
+                return Err(
+                    "A zipper needs a closed share of 0 to 100 % and a width of 2 to 50 mm".into(),
                 );
             }
         }
@@ -1118,7 +1150,12 @@ impl GarmentTemplate {
                     }
                 }
             }
-            let seam = CompiledSeam::compile(
+            // A zipper sews only the share its slider has closed; fully open, nothing.
+            let closed = self.seam_zippers.get(&spec.id).map_or(1., |z| z.closed);
+            if closed <= 1e-9 {
+                continue;
+            }
+            let seam = CompiledSeam::compile_until(
                 spec,
                 BoundaryCurve::concatenate(
                     spec.side(false)
@@ -1132,6 +1169,7 @@ impl GarmentTemplate {
                         .collect::<Result<_, _>>()?,
                     spec.reverse_b,
                 )?,
+                closed,
             )?;
             if (seam.lengths[0] - seam.lengths[1]).abs()
                 > 1e-8 * seam.lengths[0].max(seam.lengths[1])
@@ -1389,6 +1427,7 @@ impl GarmentTemplate {
             flipped_panels: Default::default(),
             archive: Vec::new(),
             seam_folds: Default::default(),
+            seam_zippers: Default::default(),
             tacks: vec![],
             line_folds: vec![],
             line_springs: vec![],

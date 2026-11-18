@@ -123,6 +123,112 @@ fn surface_point(
     (n != glam::DVec3::ZERO).then_some((p, -n))
 }
 
+/// What the zippers on seams draw, as trims of the pieces they lie on: a tape with teeth along
+/// each side of the seam (half the zipper's width each, so a closed zipper shows one tape) and
+/// the slider where the closed share ends, along the seam's first side.
+pub fn zipper_trims(template: &super::GarmentTemplate) -> Vec<Trim> {
+    // The material path of one sewn boundary interval, walked in its seam direction.
+    let path_of = |r: &super::seam::BoundaryRef| -> Option<Vec<DVec2>> {
+        let polygon = template
+            .panels
+            .iter()
+            .find(|p| p.id == r.panel)?
+            .polygon
+            .as_ref()?;
+        let points = polygon.named_boundary(r.edge.as_deref()?)?;
+        let mut path = sub_path(&points, r.range[0], r.range[1]);
+        if r.reversed {
+            path.reverse();
+        }
+        (path.len() >= 2).then_some(path)
+    };
+    let mut out = vec![];
+    for (seam, zipper) in &template.seam_zippers {
+        let Some(spec) = template.seams.iter().find(|s| &s.id == seam) else {
+            continue;
+        };
+        let mut first_side = vec![];
+        for (side, refs) in [("a", spec.side(false)), ("b", spec.side(true))] {
+            for (k, r) in refs.enumerate() {
+                let Some(path) = path_of(r) else {
+                    continue;
+                };
+                out.push(Trim {
+                    id: format!("zipper-{seam}-{side}{k}"),
+                    panel_id: r.panel.clone(),
+                    kind: TrimKind::Zipper {
+                        path_m: path.clone(),
+                        width_m: 0.5 * zipper.width_m,
+                    },
+                });
+                if side == "a" {
+                    first_side.push((r.panel.clone(), path));
+                }
+            }
+        }
+        // The slider sits where the closed share ends along the first side.
+        let total: f64 = first_side.iter().map(|(_, p)| length(p)).sum();
+        let mut left = zipper.closed * total;
+        for (panel, path) in &first_side {
+            let here = length(path);
+            if left <= here + 1e-12 {
+                if let Some(centre) = point_at(path, left) {
+                    out.push(Trim {
+                        id: format!("zipper-{seam}-slider"),
+                        panel_id: panel.clone(),
+                        kind: TrimKind::Button {
+                            center_m: centre,
+                            diameter_m: 1.4 * zipper.width_m,
+                        },
+                    });
+                }
+                break;
+            }
+            left -= here;
+        }
+    }
+    out
+}
+
+fn length(path: &[DVec2]) -> f64 {
+    path.windows(2).map(|w| w[0].distance(w[1])).sum()
+}
+
+/// The point `at` metres along `path`.
+fn point_at(path: &[DVec2], at: f64) -> Option<DVec2> {
+    let mut left = at.max(0.);
+    for w in path.windows(2) {
+        let d = w[0].distance(w[1]);
+        if left <= d {
+            return Some(w[0].lerp(w[1], if d > 0. { left / d } else { 0. }));
+        }
+        left -= d;
+    }
+    path.last().copied()
+}
+
+/// The part of `path` between the shares `from` and `to` of its length.
+fn sub_path(path: &[DVec2], from: f64, to: f64) -> Vec<DVec2> {
+    let total = length(path);
+    let (a, b) = (from * total, to * total);
+    let mut out = vec![];
+    if let Some(p) = point_at(path, a) {
+        out.push(p);
+    }
+    let mut walked = 0.;
+    for w in path.windows(2) {
+        walked += w[0].distance(w[1]);
+        if walked > a + 1e-12 && walked < b - 1e-12 {
+            out.push(w[1]);
+        }
+    }
+    if let Some(p) = point_at(path, b) {
+        out.push(p);
+    }
+    out.dedup_by(|p, q| p.distance(*q) < 1e-9);
+    out
+}
+
 /// The 3D look of `trims` on the cloth at positions `x`: button discs with their holes,
 /// stitched buttonholes, zipper tape and teeth, and topstitch dashes, all lying on the front
 /// face. Trims on pieces that are not in `garment` are skipped.

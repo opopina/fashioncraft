@@ -70,6 +70,7 @@ impl Atelier {
                 merge = Some(id.clone());
             }
             self.seam_fold_controls(ui, id);
+            self.seam_zipper_controls(ui, id);
         }
         let mut select = None;
         egui::CollapsingHeader::new(format!(
@@ -155,6 +156,65 @@ impl Atelier {
             return true;
         }
         false
+    }
+
+    /// A zipper along the selected seam: put it on or take it off, slide it closed or open (only
+    /// the closed share is sewn) and set its tape width.
+    fn seam_zipper_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
+        let ui_lang = self.prefs.language;
+        use marvelous_cloth::garment::template::SeamZipper;
+        let current = self.project.template.seam_zippers.get(seam).cloned();
+        let mut wanted: Option<Option<SeamZipper>> = None;
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .selectable_label(current.is_some(), i18n::tr(ui_lang, "Zipper"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A zipper along this seam: only the share its slider has closed is sewn",
+                ))
+                .clicked()
+            {
+                wanted = Some(current.is_none().then(SeamZipper::default));
+            }
+            if let Some(zipper) = &current {
+                let mut edited = zipper.clone();
+                let mut closed = edited.closed * 100.;
+                let r = ui
+                    .add(
+                        egui::Slider::new(&mut closed, 0.0..=100.0)
+                            .fixed_decimals(0)
+                            .suffix(" %"),
+                    )
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "How far the slider has closed it, from the seam's start: 0 % open and \
+                         apart, 100 % closed",
+                    ));
+                let mut commit = r.drag_stopped() || (r.changed() && !r.dragged());
+                edited.closed = (closed / 100.).clamp(0., 1.);
+                let mut width = edited.width_m * 1000.;
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut width)
+                            .range(2.0..=50.0)
+                            .speed(0.2)
+                            .fixed_decimals(1)
+                            .suffix(" mm"),
+                    )
+                    .on_hover_text(i18n::tr(ui_lang, "Tape width"));
+                commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                edited.width_m = width / 1000.;
+                if commit && &edited != zipper {
+                    wanted = Some(Some(edited));
+                }
+            }
+        });
+        if let Some(zipper) = wanted {
+            self.edit(marvelous_cloth::authoring::Command::SetSeamZipper {
+                seam: seam.into(),
+                zipper,
+            });
+        }
     }
 
     /// The angle at which the selected seam's pieces meet (180° flat) and its strength.

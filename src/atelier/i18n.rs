@@ -1350,6 +1350,16 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Flip" => "Invertir",
         "Flipped" => "Invertida",
         "Fold angle" => "Ángulo de pliegue",
+        "A zipper along this seam: only the share its slider has closed is sewn" => {
+            "Una cremallera a lo largo de esta costura: solo se cose el tramo que ha cerrado el cursor"
+        }
+        "How far the slider has closed it, from the seam's start: 0 % open and apart, 100 % closed" => {
+            "Cuánto la ha cerrado el cursor desde el inicio de la costura: 0 % abierta y separada, 100 % cerrada"
+        }
+        "Tape width" => "Ancho de la cinta",
+        "A zipper needs a closed share of 0 to 100 % and a width of 2 to 50 mm" => {
+            "Una cremallera necesita un cierre de 0 a 100 % y un ancho de 2 a 50 mm"
+        }
         "Free both boundaries without deleting the fabric. Shortcut: Del. Undo: Ctrl+Z." => {
             "Libera ambos bordes sin borrar el tejido. Atajo: Supr. Deshacer: Ctrl+Z."
         }

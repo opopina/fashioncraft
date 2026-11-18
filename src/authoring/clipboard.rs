@@ -75,6 +75,7 @@ impl PatternClipboard {
             .retain(|t| ids.contains(&t.a.panel) && ids.contains(&t.b.panel));
         let kept: BTreeSet<String> = template.seams.iter().map(|s| s.id.clone()).collect();
         template.seam_folds.retain(|id, _| kept.contains(id));
+        template.seam_zippers.retain(|id, _| kept.contains(id));
         template.panel_wraps.retain(|id, _| ids.contains(id));
         template.locked_panels.retain(|id| ids.contains(id));
         template

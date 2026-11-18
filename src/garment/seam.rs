@@ -320,6 +320,20 @@ impl CompiledSeam {
         Ok(())
     }
     pub fn compile(spec: &SeamSpec, a: BoundaryCurve, b: BoundaryCurve) -> Result<Self, String> {
+        Self::compile_until(spec, a, b, 1.)
+    }
+
+    /// The seam sewn only from its start to `until` (a share of its length, as for a zipper
+    /// closed that far); 1 sews all of it.
+    pub fn compile_until(
+        spec: &SeamSpec,
+        a: BoundaryCurve,
+        b: BoundaryCurve,
+        until: f64,
+    ) -> Result<Self, String> {
+        if !until.is_finite() || until <= 0. || until > 1. {
+            return Err("A seam is sewn over a share of 0 to 1 of its length".into());
+        }
         if !spec.stiffness.is_finite() || spec.stiffness <= 0.0 {
             return Err("Seam stiffness must be positive and finite (N/m²)".into());
         }
@@ -363,6 +377,8 @@ impl CompiledSeam {
                 .map(|t| interpolate(&knots, t, 1)),
         );
         partition.extend(knots.iter().map(|k| k[0]));
+        partition.push(until);
+        partition.retain(|s| *s <= until + 1e-12);
         partition.sort_by(f64::total_cmp);
         partition.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         let mut samples = vec![];
@@ -387,12 +403,13 @@ impl CompiledSeam {
         let joints = a
             .joints()
             .into_iter()
-            .chain(b.joints().into_iter().map(|t| interpolate(&knots, t, 1)));
+            .chain(b.joints().into_iter().map(|t| interpolate(&knots, t, 1)))
+            .filter(|s| *s <= until + 1e-12);
         probes
             .extend(joints.map(|s| StitchPoint::limit(&a, &b, s, interpolate(&knots, s, 0), true)));
         let guides = (0..=8)
             .map(|i| {
-                let t = i as f64 / 8.;
+                let t = until * i as f64 / 8.;
                 [a.point(t), b.point(interpolate(&knots, t, 0))]
             })
             .collect();

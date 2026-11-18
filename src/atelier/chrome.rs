@@ -470,11 +470,13 @@ impl Atelier {
         let flipped_faces = self.flipped_faces();
         // Trims of the pieces on show, lying on their front faces.
         let trims = if self.prefs.garment_display.garment {
+            let zippers = marvelous_cloth::garment::trims::zipper_trims(&self.project.template);
             let shown: Vec<_> = self
                 .project
                 .template
                 .trims
                 .iter()
+                .chain(&zippers)
                 .filter(|t| self.panel_shown(&t.panel_id))
                 .cloned()
                 .collect();

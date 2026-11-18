@@ -181,7 +181,19 @@ impl GpuVbd {
             return Err("Experimental contact laws are CPU-only".into());
         }
         let start = Instant::now();
-        let mut metrics = self.step_inner(solver, state, settings, grab)?;
+        // A step whose motion its contacts cannot allow at once is split, as on the CPU.
+        let parts = solver.parts(state, settings);
+        let mut part = settings.clone();
+        part.dt = settings.dt / parts as f64;
+        part.max_substeps = 1;
+        let mut metrics = self.step_inner(solver, state, &part, grab)?;
+        for _ in 1..parts {
+            let next = self.step_inner(solver, state, &part, grab)?;
+            metrics.detection_ms += next.detection_ms;
+            metrics.detection_updates += next.detection_updates;
+            metrics.broad_phase_rebuilds += next.broad_phase_rebuilds;
+        }
+        metrics.dt_s = settings.dt;
         let elapsed = start.elapsed().as_secs_f64() * 1000.;
         if let Some(profile) = &mut metrics.gpu_profile {
             profile.cleanup_ms = (elapsed - metrics.step_ms).max(0.);

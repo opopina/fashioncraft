@@ -39,7 +39,22 @@ pub struct VbdSettings {
     /// obstacle like the avatar: cloth rests on it within the contact shell.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
+    /// Most parts a step may be split into when the cloth would move further in it than
+    /// its contacts let one step go (about 0.3 m/s at 1/60 s): each part is a whole step,
+    /// contacts and all, of a share of the time. One never splits, as before.
+    #[serde(default = "one_part", skip_serializing_if = "is_one_part")]
+    pub max_substeps: usize,
 }
+fn one_part() -> usize {
+    1
+}
+fn is_one_part(v: &usize) -> bool {
+    *v == 1
+}
+/// Share of the contact query radius one step's motion may use before a split step is
+/// split: the warm start keeps each vertex within 0.45 of its distance to the nearest
+/// geometry, at most the query radius of four contact radii.
+const SPLIT_SHARE: f64 = 0.4;
 /// Energy of one elastic or tape spring, tension only: ½·k·max(0, |x_a − x_b| − rest)².
 pub(crate) fn line_energy<S: Scalar>(
     line: &crate::garment::template::CompiledLine,
@@ -210,6 +225,7 @@ impl Default for VbdSettings {
             friction: 0.0,
             wind: None,
             floor: None,
+            max_substeps: 1,
         }
     }
 }
@@ -227,6 +243,7 @@ impl VbdSettings {
             || !self.friction.is_finite()
             || !(0.0..=5.0).contains(&self.friction)
             || self.wind.as_ref().is_some_and(|w| w.validate().is_err())
+            || !(1..=16).contains(&self.max_substeps)
         {
             return Err("Invalid VBD settings".into());
         }
@@ -784,6 +801,66 @@ impl VbdSolver {
         grab: Option<&Grab>,
     ) -> Result<VbdMetrics, String> {
         settings.validate()?;
+        let parts = self.parts(state, settings);
+        if parts <= 1 {
+            return self.step_once(state, settings, grab);
+        }
+        let mut part = settings.clone();
+        part.dt = settings.dt / parts as f64;
+        part.max_substeps = 1;
+        let mut total: Option<VbdMetrics> = None;
+        for _ in 0..parts {
+            let m = self.step_once(state, &part, grab)?;
+            total = Some(match total {
+                None => m,
+                Some(mut t) => {
+                    t.step_ms += m.step_ms;
+                    t.detection_ms += m.detection_ms;
+                    t.solve_ms += m.solve_ms;
+                    t.detection_updates += m.detection_updates;
+                    t.broad_phase_rebuilds += m.broad_phase_rebuilds;
+                    VbdMetrics {
+                        step_ms: t.step_ms,
+                        detection_ms: t.detection_ms,
+                        solve_ms: t.solve_ms,
+                        detection_updates: t.detection_updates,
+                        broad_phase_rebuilds: t.broad_phase_rebuilds,
+                        ..m
+                    }
+                }
+            });
+        }
+        let mut total = total.expect("at least two parts");
+        total.dt_s = settings.dt;
+        Ok(total)
+    }
+
+    /// How many parts a step of `settings` is split into: enough that no free vertex's
+    /// motion (its velocity and gravity over the step) exceeds what one step's contacts
+    /// allow, up to `max_substeps`.
+    pub fn parts(&self, state: &State, settings: &VbdSettings) -> usize {
+        if settings.max_substeps <= 1 {
+            return 1;
+        }
+        let dt = settings.dt;
+        let fall = 0.5 * settings.gravity.length() * dt * dt;
+        let motion = state
+            .v
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.garment.mesh.pins[*i].is_none())
+            .map(|(_, v)| v.length() * dt + fall)
+            .fold(0., f64::max);
+        let allowed = SPLIT_SHARE * 4. * settings.contact.radius;
+        ((motion / allowed).ceil() as usize).clamp(1, settings.max_substeps)
+    }
+
+    fn step_once(
+        &mut self,
+        state: &mut State,
+        settings: &VbdSettings,
+        grab: Option<&Grab>,
+    ) -> Result<VbdMetrics, String> {
         let n = self.garment.mesh.uv.len();
         if state.x.len() != n
             || state.v.len() != n

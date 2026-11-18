@@ -97,6 +97,19 @@ impl Atelier {
                 self.settings.contact.radius = gap / 1000.;
             }
         });
+        let mut fast = self.settings.max_substeps > 1;
+        if ui
+            .checkbox(&mut fast, i18n::tr(ui_lang, "Full-speed falls"))
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Split a step into up to 16 shorter ones when the cloth moves faster than one step's \
+                 contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while \
+                 cloth moves fast; settled cloth is unaffected",
+            ))
+            .changed()
+        {
+            self.settings.max_substeps = if fast { 16 } else { 1 };
+        }
         ui.separator();
         ui.strong(i18n::tr(ui_lang, "Environment"));
         let feet = self

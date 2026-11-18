@@ -117,6 +117,7 @@ pub enum CommandId {
     DraftTshirt,
     ToggleHistory,
     ToggleObjectBrowser,
+    DraftSkirt,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1165,6 +1166,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        DraftSkirt,
+        "pattern.draft_skirt",
+        "Skirt from measurements…",
+        Workspace,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

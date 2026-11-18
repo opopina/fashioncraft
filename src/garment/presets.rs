@@ -320,3 +320,126 @@ pub fn tshirt(m: &TshirtMeasurements, subdivisions: u32) -> Result<GarmentTempla
     template.compile()?;
     Ok(template)
 }
+
+/// Measurements a skirt is drafted from, metres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SkirtMeasurements {
+    /// Waist girth of the body it is for.
+    pub waist_m: f64,
+    /// Hip girth of the body it is for.
+    pub hip_m: f64,
+    /// Added to both girths: how loose the skirt is.
+    pub ease_m: f64,
+    /// From the waist down to the widest hip.
+    pub hip_depth_m: f64,
+    /// From the waist to the hem.
+    pub length_m: f64,
+    /// How much wider the hem is than the hip, all round: 0 is a straight skirt.
+    pub flare_m: f64,
+    /// Height of the waist above the floor, to place the pieces at.
+    pub waist_height_m: f64,
+}
+
+impl Default for SkirtMeasurements {
+    /// A knee-length A-line skirt for the 1.75 m mannequin.
+    fn default() -> Self {
+        Self {
+            waist_m: 0.74,
+            hip_m: 0.98,
+            ease_m: 0.04,
+            hip_depth_m: 0.18,
+            length_m: 0.55,
+            flare_m: 0.24,
+            waist_height_m: 1.06,
+        }
+    }
+}
+
+impl SkirtMeasurements {
+    pub fn validate(&self) -> Result<(), String> {
+        let within = |v: f64, lo: f64, hi: f64| v.is_finite() && (lo..=hi).contains(&v);
+        if !within(self.waist_m, 0.4, 2.0)
+            || !within(self.hip_m, 0.5, 2.2)
+            || !within(self.ease_m, 0.0, 0.4)
+            || !within(self.hip_depth_m, 0.08, 0.4)
+            || !within(self.length_m, 0.2, 1.3)
+            || !within(self.flare_m, 0.0, 2.0)
+            || !within(self.waist_height_m, 0.4, 2.0)
+        {
+            return Err("Skirt measurements are out of range".into());
+        }
+        if self.waist_m > self.hip_m {
+            return Err("The waist is wider than the hip".into());
+        }
+        if self.length_m < self.hip_depth_m + 0.05 {
+            return Err("The skirt must reach below the hip".into());
+        }
+        if self.length_m > self.waist_height_m - 0.02 {
+            return Err("The skirt would reach the floor".into());
+        }
+        Ok(())
+    }
+}
+
+/// A skirt drafted from `m`: a front and a back of the same outline, from the waist out to
+/// the hip and on down to a hem as much wider as the flare asks, sewn down both sides. The
+/// waist is left open; its girth with the ease keeps the skirt up on the body.
+pub fn skirt(m: &SkirtMeasurements, subdivisions: u32) -> Result<GarmentTemplate, String> {
+    m.validate()?;
+    let cx = 0.5;
+    let waist = (m.waist_m + m.ease_m) / 4.;
+    let hip = (m.hip_m + m.ease_m) / 4.;
+    let hem = hip + m.flare_m / 4.;
+    let points = [
+        [cx - waist, 0.0],
+        [cx + waist, 0.0],
+        [cx + hip, m.hip_depth_m],
+        [cx + hem, m.length_m],
+        [cx - hem, m.length_m],
+        [cx - hip, m.hip_depth_m],
+    ];
+    let edges = [
+        "waist",
+        "hip-right",
+        "side-right",
+        "hem",
+        "side-left",
+        "hip-left",
+    ];
+    let sewn = [1, 2, 4, 5];
+    let shift = 0.01 - (cx - hem);
+    let mut template = basic(GarmentKind::Tshirt, subdivisions);
+    let polygon = template.panels[0].polygon.clone().map(|mut p| {
+        p.points = points
+            .iter()
+            .map(|q| DVec2::new(q[0] + shift, q[1]))
+            .collect();
+        p.edges = edges.iter().map(|e| e.to_string()).collect();
+        p
+    });
+    for (panel, z) in template.panels.iter_mut().zip([0.30, -0.22]) {
+        panel.name = format!("skirt {}", panel.id);
+        panel.polygon = polygon.clone();
+        panel.pattern.width = 2. * hem + 0.02;
+        panel.pattern.height = m.length_m;
+        panel.placement.translation = DVec3::new(-(cx + shift), m.waist_height_m, z);
+    }
+    template.seams = sewn
+        .iter()
+        .map(|&i| {
+            let mut seam = template.seams[0].clone();
+            seam.id = edges[i].into();
+            seam.a.edge = Some(edges[i].into());
+            seam.b.edge = Some(edges[i].into());
+            seam
+        })
+        .collect();
+    template.name = format!(
+        "Skirt for a {:.0} cm waist, {:.0} cm hip, {:.0} cm long",
+        m.waist_m * 100.,
+        m.hip_m * 100.,
+        m.length_m * 100.
+    );
+    template.compile()?;
+    Ok(template)
+}

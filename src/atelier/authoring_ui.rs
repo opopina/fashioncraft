@@ -57,6 +57,7 @@ pub(super) struct AuthoringUi {
     pub avatar_shape: super::avatar_shape_ui::AvatarShapeUi,
     /// Drafting a T-shirt from measurements.
     pub shirt_draft: super::avatar_shape_ui::DraftUi,
+    pub skirt_draft: super::avatar_shape_ui::SkirtDraftUi,
     pub history_ui: super::history_ui::HistoryUi,
     pub object_browser: super::object_browser_ui::ObjectBrowserUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,

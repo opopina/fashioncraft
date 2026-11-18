@@ -1567,6 +1567,16 @@ fn spanish(text: &str) -> Option<&'static str> {
             "movidos · la tela los sigue al simular"
         }
         "Move pins" => "Mover alfileres",
+        "Skirt from measurements…" => "Falda por medidas…",
+        "Skirt from measurements" => "Falda por medidas",
+        "Hip depth" => "Profundidad de cadera",
+        "Flare" => "Vuelo",
+        "Waist height" => "Altura de cintura",
+        "Waist, hip, depths, length and placement from the current avatar" => {
+            "Cintura, cadera, profundidades, largo y colocación del avatar actual"
+        }
+        "Replace the garment with this skirt" => "Sustituye la prenda por esta falda",
+        "Skirt drafted from the measurements" => "Falda trazada a partir de las medidas",
         _ => return None,
     })
 }

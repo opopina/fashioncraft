@@ -1224,8 +1224,9 @@ impl eframe::App for Atelier {
                         .on_hover_text("Actual physical time advanced per wall-clock second. Independent of render FPS.");
                     ui.separator();
                 }
-                ui.add(egui::Label::new(&self.status).truncate())
-                    .on_hover_text(&self.status);
+                let status = i18n::status(self.prefs.language, &self.status);
+                ui.add(egui::Label::new(status.as_ref()).truncate())
+                    .on_hover_text(status.as_ref());
             });
         });
         if self.authoring.animation.open {

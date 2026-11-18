@@ -38,6 +38,175 @@ pub(super) fn tr_any(language: Language, text: &str) -> &str {
     }
 }
 
+/// Status messages that carry data, as templates: each `{}` stands for a value, kept as it
+/// is in the translation, in the same order.
+const STATUS_TEMPLATES: &[(&str, &str)] = &[
+    (
+        "Avatar made to {} / {} / {} / {} / {} / {} cm · confirm to replace the current one",
+        "Avatar hecho a {} / {} / {} / {} / {} / {} cm · confirma para sustituir el actual",
+    ),
+    (
+        "Capturing the take… frame {} of {}",
+        "Capturando la toma… fotograma {} de {}",
+    ),
+    (
+        "Copied {} panels and {} internal seams · Ctrl+V to paste",
+        "Copiadas {} piezas y {} costuras internas · Ctrl+V para pegar",
+    ),
+    (
+        "Exported {}: {} vertices, {} faces, {} textures",
+        "Exportado {}: {} vértices, {} caras, {} texturas",
+    ),
+    ("Exported {}", "Exportado {}"),
+    ("Guide at {}", "Guía en {}"),
+    ("Guide moved to {}", "Guía movida a {}"),
+    (
+        "Internal line → {} · now click inside this panel",
+        "Línea interna → {} · ahora haz clic dentro de esta pieza",
+    ),
+    ("Key set at {} s", "Clave puesta en {} s"),
+    (
+        "MDD cache saved: {} frames in {}",
+        "Caché MDD guardada: {} fotogramas en {}",
+    ),
+    ("Motion: {}", "Movimiento: {}"),
+    (
+        "Moving into the pose over {} steps…",
+        "Pasando a la pose en {} pasos…",
+    ),
+    ("Moving into the pose… {} %", "Pasando a la pose… {} %"),
+    (
+        "Not superimposed: the pieces would start intersecting ({})",
+        "No se superpone: las piezas empezarían cruzándose ({})",
+    ),
+    (
+        "OBJ sequence saved: {} frames of the cloth and the avatar in {}",
+        "Secuencia OBJ guardada: {} fotogramas de la tela y el avatar en {}",
+    ),
+    (
+        "Open failed; current document retained: {}",
+        "No se pudo abrir; se conserva el documento actual: {}",
+    ),
+    (
+        "Point cache saved: {} frames in {}",
+        "Caché de puntos guardada: {} fotogramas en {}",
+    ),
+    (
+        "Preferences could not be saved: {}",
+        "No se pudieron guardar las preferencias: {}",
+    ),
+    ("Reaching with the {}", "Alcanzando con {}"),
+    (
+        "Recovery save failed: {}",
+        "Falló la copia de recuperación: {}",
+    ),
+    ("Report failed: {}", "Falló el informe: {}"),
+    (
+        "Report saved · path copied · {}",
+        "Informe guardado · ruta copiada · {}",
+    ),
+    ("Save failed: {}", "No se pudo guardar: {}"),
+    (
+        "Selection inverted: {} selected",
+        "Selección invertida: {} seleccionadas",
+    ),
+    (
+        "View “{}” saved with the project",
+        "Vista «{}» guardada con el proyecto",
+    ),
+    ("View “{}” updated", "Vista «{}» actualizada"),
+    ("View “{}” deleted", "Vista «{}» borrada"),
+    (
+        "{} back on the arrangement · the rest keeps its drape",
+        "{} de vuelta en la colocación · el resto conserva su drapeado",
+    ),
+    (
+        "{} panels selected · drag to arrange in 2D · Ctrl+C to copy",
+        "{} piezas seleccionadas · arrastra para colocarlas en 2D · Ctrl+C para copiar",
+    ),
+    (
+        "{} panels selected · {} · {} · moved pieces keep their drape",
+        "{} piezas seleccionadas · {} · {} · las piezas movidas conservan su drapeado",
+    ),
+    (
+        "{}: select a piece, then click the point to place it",
+        "{}: selecciona una pieza y haz clic en el punto para colocarla",
+    ),
+    (
+        "{} added · the points stay where they are",
+        "{} añadidos · los puntos se quedan donde están",
+    ),
+];
+
+/// The values `text` puts where `template` has `{}`, when it fits the template.
+fn fill_in<'a>(template: &str, text: &'a str) -> Option<Vec<&'a str>> {
+    let parts: Vec<&str> = template.split("{}").collect();
+    let mut rest = text.strip_prefix(parts[0])?;
+    let mut values = Vec::with_capacity(parts.len() - 1);
+    for (k, part) in parts.iter().enumerate().skip(1) {
+        let at = if k + 1 == parts.len() {
+            // The last literal closes the text.
+            if !rest.ends_with(part) {
+                return None;
+            }
+            rest.len() - part.len()
+        } else {
+            rest.find(part)?
+        };
+        if part.is_empty() && k + 1 < parts.len() {
+            return None;
+        }
+        values.push(&rest[..at]);
+        rest = &rest[at + part.len()..];
+    }
+    (rest.is_empty() && values.iter().all(|v| !v.is_empty())).then_some(values)
+}
+
+/// A status message in `language`: its translation when there is one, a translated
+/// template filled with the message's own values when it fits one, else as it is.
+pub(super) fn status(language: Language, text: &str) -> std::borrow::Cow<'_, str> {
+    if language == Language::English {
+        return text.into();
+    }
+    if let Some(t) = spanish(text) {
+        return t.into();
+    }
+    for (template, translation) in STATUS_TEMPLATES {
+        if let Some(values) = fill_in(template, text) {
+            let mut out = String::new();
+            for (k, piece) in translation.split("{}").enumerate() {
+                if k > 0 {
+                    out.push_str(&counted_nouns(values[k - 1]));
+                }
+                out.push_str(piece);
+            }
+            return out.into();
+        }
+    }
+    text.into()
+}
+
+/// A counted value such as "3 pieces" or "1 pin" with its noun in Spanish.
+fn counted_nouns(value: &str) -> String {
+    const NOUNS: [(&str, &str); 8] = [
+        ("pieces", "piezas"),
+        ("piece", "pieza"),
+        ("pins", "alfileres"),
+        ("pin", "alfiler"),
+        ("panels", "piezas"),
+        ("panel", "pieza"),
+        ("frames", "fotogramas"),
+        ("frame", "fotograma"),
+    ];
+    match value.split_once(' ') {
+        Some((number, noun)) if number.chars().all(|c| c.is_ascii_digit()) => NOUNS
+            .iter()
+            .find(|(en, _)| *en == noun)
+            .map_or_else(|| value.to_string(), |(_, es)| format!("{number} {es}")),
+        _ => value.to_string(),
+    }
+}
+
 fn spanish(text: &str) -> Option<&'static str> {
     Some(match text {
         "File" => "Archivo",
@@ -1745,6 +1914,24 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Mass: panel" => "Masa: pieza",
         "garment" => "prenda",
         "Search actions · Ctrl/Cmd+Shift+P" => "Buscar acciones · Ctrl/Cmd+Mayús+P",
+        // Status messages set outside the editor windows.
+        "Dynamic simulation · OGC contacts" => "Simulación dinámica · contactos OGC",
+        "Draft metadata updated" => "Datos del borrador actualizados",
+        "Edit applied · edited pieces keep their 3D shape · ready to simulate" => {
+            "Edición aplicada · las piezas editadas conservan su forma 3D · lista para simular"
+        }
+        "Edit applied · the edited piece starts flat again: keeping its 3D shape would start inside the avatar or itself" => {
+            "Edición aplicada · la pieza editada vuelve a empezar plana: conservar su forma 3D la haría empezar dentro del avatar o de sí misma"
+        }
+        "Edit applied · unchanged panels retained · ready to simulate" => {
+            "Edición aplicada · se conservan las piezas sin cambios · lista para simular"
+        }
+        "2D layout changed · 3D state preserved" => {
+            "Distribución 2D cambiada · estado 3D conservado"
+        }
+        "Avatar replaced · drape reset · save to keep the imported asset" => {
+            "Avatar sustituido · drapeado reiniciado · guarda para conservar el recurso importado"
+        }
         _ => return None,
     })
 }
@@ -1762,6 +1949,45 @@ pub(super) fn coverage_line(language: Language, done: usize, all: usize) -> Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn status_messages_with_values_are_translated_around_them() {
+        use super::{Language, status};
+        assert_eq!(
+            status(Language::Spanish, "Capturing the take… frame 3 of 40"),
+            "Capturando la toma… fotograma 3 de 40"
+        );
+        assert_eq!(
+            status(
+                Language::Spanish,
+                "144 pins added · the points stay where they are"
+            ),
+            "144 alfileres añadidos · los puntos se quedan donde están"
+        );
+        assert_eq!(
+            status(
+                Language::Spanish,
+                "Exported a.glb: 10 vertices, 4 faces, 0 textures"
+            ),
+            "Exportado a.glb: 10 vértices, 4 caras, 0 texturas"
+        );
+        // Exact messages first; unknown ones and English stay as they are.
+        assert_eq!(status(Language::Spanish, "Pressure"), "Presión");
+        assert_eq!(status(Language::Spanish, "Something new"), "Something new");
+        assert_eq!(
+            status(Language::English, "Capturing the take… frame 3 of 40"),
+            "Capturing the take… frame 3 of 40"
+        );
+        // Every template has a translation with as many values.
+        for (template, translation) in super::STATUS_TEMPLATES {
+            assert_eq!(
+                template.matches("{}").count(),
+                translation.matches("{}").count(),
+                "{template}"
+            );
+            assert!(!template.contains("{}{}"), "{template}");
+        }
+    }
+
     use super::super::menus::{Item, MENUS};
     use super::*;
 

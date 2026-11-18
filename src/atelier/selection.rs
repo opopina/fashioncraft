@@ -738,7 +738,7 @@ impl Atelier {
                 self.authoring.selection.seam = None;
                 self.authoring.selection.seam_card = None;
                 self.status = format!(
-                    "{} panels selected · {} · {} · group placement resets selected drape",
+                    "{} panels selected · {} · {} · moved pieces keep their drape",
                     self.selected_panels().len(),
                     if gesture.subtract {
                         "subtract"

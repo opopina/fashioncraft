@@ -1158,23 +1158,26 @@ pub fn layout(template: &GarmentTemplate, index: usize) -> DVec2 {
         )
     })
 }
+/// Whether `panel` has a contour segment or internal line called `line` (a rectangle side
+/// for rectangle pieces).
+fn line_exists(t: &GarmentTemplate, panel: &str, line: &str) -> bool {
+    t.panels
+        .iter()
+        .find(|p| p.id == panel)
+        .is_some_and(|p| match &p.polygon {
+            Some(poly) => {
+                poly.edges.iter().any(|e| e == line) || poly.lines.iter().any(|l| l.id == line)
+            }
+            None => matches!(line, "top" | "right" | "bottom" | "left"),
+        })
+}
+
 /// Drop the simulation settings of pieces, lines and seams an edit removed (a deleted piece
 /// takes its layer, pressure, elastics, folds and tacks with it; a deleted seam its fold), so
 /// the edit is not refused for pointing at them.
 pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     let panels: std::collections::BTreeSet<String> =
         template.panels.iter().map(|p| p.id.clone()).collect();
-    let line_exists = |t: &GarmentTemplate, panel: &str, line: &str| {
-        t.panels
-            .iter()
-            .find(|p| p.id == panel)
-            .is_some_and(|p| match &p.polygon {
-                Some(poly) => {
-                    poly.edges.iter().any(|e| e == line) || poly.lines.iter().any(|l| l.id == line)
-                }
-                None => matches!(line, "top" | "right" | "bottom" | "left"),
-            })
-    };
     template
         .deactivated_panels
         .retain(|d| panels.contains(&d.panel));
@@ -2709,6 +2712,11 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             }
         }
         Command::AddTack { tack } => {
+            for p in [&tack.a, &tack.b] {
+                if !template.panels.iter().any(|q| q.id == p.panel) || !p.uv.is_finite() {
+                    return Err(format!("Tack {} refers to an unknown panel", tack.id));
+                }
+            }
             if template.tacks.iter().any(|t| t.id == tack.id) {
                 return Err(format!("A tack called {} exists already", tack.id));
             }
@@ -2727,6 +2735,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.tacks.retain(|t| !ids.contains(&t.id));
         }
         Command::SetLineFold { panel, line, fold } => {
+            if !line_exists(&template, &panel, &line) {
+                return Err(format!("Panel {panel} has no internal line {line}"));
+            }
             if let Some(f) = &fold
                 && (f.panel != panel || f.line != line)
             {
@@ -2756,6 +2767,11 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             line,
             spring,
         } => {
+            if !line_exists(&template, &panel, &line) {
+                return Err(format!(
+                    "Panel {panel} has no segment or internal line {line}"
+                ));
+            }
             if let Some(s) = &spring
                 && (s.panel != panel || s.line != line)
             {

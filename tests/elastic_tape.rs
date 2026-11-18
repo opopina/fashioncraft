@@ -125,6 +125,18 @@ fn elastics_are_validated_and_removable() {
     let mut wrong = t.clone();
     wrong.line_springs.push(LineSpring::elastic(&id, "nowhere"));
     assert!(wrong.compile().is_err(), "unknown line");
+    assert!(
+        authoring::apply(
+            &t,
+            Command::SetLineSpring {
+                panel: id.clone(),
+                line: "nowhere".into(),
+                spring: Some(LineSpring::elastic(&id, "nowhere"))
+            }
+        )
+        .is_err(),
+        "refused, not silently dropped"
+    );
     let mut stretched_tape = LineSpring::tape(&id, "top");
     stretched_tape.ratio = 90.;
     assert!(

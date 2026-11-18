@@ -251,7 +251,10 @@ impl Atelier {
             Some(Action::Choose) => {
                 if let Some(path) = FileDialog::new()
                     .set_title("Import static avatar")
-                    .add_filter("Static mesh", &["obj", "gltf", "glb", "stl", "ply", "dae"])
+                    .add_filter(
+                        "Static mesh",
+                        &["obj", "gltf", "glb", "stl", "ply", "dae", "fbx"],
+                    )
                     .pick_file()
                 {
                     self.document.avatar_import.choose(&path);

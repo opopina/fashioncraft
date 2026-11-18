@@ -175,7 +175,7 @@ impl Atelier {
         ui.collapsing(i18n::tr(ui_lang, "Files & formats"), |ui| {
             ui.label(i18n::tr(ui_lang, "Import"));
             ui.small(i18n::tr(ui_lang, "ClothCraft project and template JSON"));
-            ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA"));
+            ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA · FBX"));
             ui.small(i18n::tr(ui_lang, "Pattern outlines: generic ASCII DXF · physical SVG subsets"));
             ui.label(i18n::tr(ui_lang, "Export"));
             ui.small(i18n::tr(ui_lang, "Project and template JSON · garment OBJ · SVG patterns · fiber guides"));

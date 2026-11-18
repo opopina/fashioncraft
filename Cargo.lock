@@ -1392,6 +1392,7 @@ dependencies = [
  "glam",
  "i_overlay",
  "image",
+ "miniz_oxide 0.8.9",
  "naga",
  "pollster 1.0.1",
  "quick-xml",

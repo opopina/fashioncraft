@@ -1121,8 +1121,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Solver settings" => "Ajustes del solver",
         "Split" => "Dividir",
         "Split at point" => "Dividir en un punto",
-        "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA" => {
-            "Avatares estáticos: OBJ · glTF · GLB · STL · PLY · COLLADA"
+        "Static avatars: OBJ · glTF · GLB · STL · PLY · COLLADA · FBX" => {
+            "Avatares estáticos: OBJ · glTF · GLB · STL · PLY · COLLADA · FBX"
         }
         "Store this required length and set the boundary to it" => {
             "Guardar este largo exigido y llevar el borde a él"
@@ -1653,8 +1653,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Simulation" => "Simulación",
         "Sleeve" => "Manga",
         "Sleeve opening" => "Bocamanga",
-        "Static OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over." => {
-            "Objetos estáticos OBJ, STL, PLY o COLLADA sobre los que la tela se apoya o cae."
+        "Static OBJ, STL, PLY, COLLADA or FBX objects the cloth rests on or drapes over." => {
+            "Objetos estáticos OBJ, STL, PLY, COLLADA o FBX sobre los que la tela se apoya o cae."
         }
         "Tint frozen and deactivated pieces" => "Teñir las piezas congeladas y desactivadas",
         "Turns about the bone's joint, around the world axes at rest; children follow." => {
@@ -2056,8 +2056,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Clear keys" => "Borrar claves",
         "Keys" => "Claves",
-        "OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over; with keys they move while the animation records." => {
-            "Objetos OBJ, STL, PLY o COLLADA sobre los que la tela se apoya o cae; con claves se mueven mientras se graba la animación."
+        "OBJ, STL, PLY, COLLADA or FBX objects the cloth rests on or drapes over; with keys they move while the animation records." => {
+            "Objetos OBJ, STL, PLY, COLLADA o FBX sobre los que la tela se apoya o cae; con claves se mueven mientras se graba la animación."
         }
         "Key wind" => "Clave de viento",
         "Key gravity" => "Clave de gravedad",

@@ -86,7 +86,7 @@ fn guess_units(mesh: &mut SurfaceMesh, warnings: &mut Vec<String>, format: &str)
     ));
 }
 
-fn finish(
+pub(crate) fn finish(
     mut mesh: SurfaceMesh,
     dropped: usize,
     mut warnings: Vec<String>,
@@ -104,8 +104,8 @@ pub fn stl(bytes: &[u8]) -> Result<Imported, String> {
     stl_with(bytes, true)
 }
 
-/// A mesh file as it is, in its own units (COLLADA's declared unit turned into metres): OBJ,
-/// STL, PLY or COLLADA, by extension. For props, whose scale the caller sets.
+/// A mesh file as it is, in its own units (COLLADA's and FBX's declared units turned into
+/// metres): OBJ, STL, PLY, COLLADA or FBX, by extension. For props, whose scale the caller sets.
 pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
     let extension = path
         .extension()
@@ -122,7 +122,8 @@ pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
             dae(std::str::from_utf8(&bytes).map_err(|e| format!("COLLADA must be UTF-8: {e}"))?)?
                 .mesh
         }
-        _ => return Err("Choose an OBJ, STL, PLY or COLLADA mesh".into()),
+        "fbx" => crate::fbx_import::fbx(&bytes)?.mesh,
+        _ => return Err("Choose an OBJ, STL, PLY, COLLADA or FBX mesh".into()),
     })
 }
 

@@ -67,7 +67,7 @@ impl Candidate {
                 (mesh, vec!["OBJ has no declared units: coordinates are interpreted as metres, Y-up. No rescaling is applied.".into(),
                     "Geometry only: materials, textures, UVs, authored normals and object groups are not retained. Polygon faces use the existing fan triangulation; use triangulated OBJ for unambiguous geometry.".into()])
             }
-            "stl" | "ply" | "dae" => {
+            "stl" | "ply" | "dae" | "fbx" => {
                 let mut bytes = Vec::new();
                 std::fs::File::open(path)
                     .map_err(|e| e.to_string())?
@@ -80,6 +80,7 @@ impl Candidate {
                 let imported = match extension.as_str() {
                     "stl" => crate::mesh_import::stl(&bytes)?,
                     "ply" => crate::mesh_import::ply(&bytes)?,
+                    "fbx" => crate::fbx_import::fbx(&bytes)?,
                     _ => crate::mesh_import::dae(
                         std::str::from_utf8(&bytes)
                             .map_err(|e| format!("COLLADA must be UTF-8: {e}"))?,
@@ -93,7 +94,9 @@ impl Candidate {
                 (imported.mesh, imported.warnings)
             }
             _ => {
-                return Err("Choose a static OBJ, glTF, GLB, STL, PLY or COLLADA avatar".into());
+                return Err(
+                    "Choose a static OBJ, glTF, GLB, STL, PLY, COLLADA or FBX avatar".into(),
+                );
             }
         };
         mesh.validate()?;

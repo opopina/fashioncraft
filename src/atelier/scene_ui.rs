@@ -88,7 +88,7 @@ impl Atelier {
             .show(ctx, |ui| {
                 ui.small(i18n::tr(
                     ui_lang,
-                    "OBJ, STL, PLY or COLLADA objects the cloth rests on or drapes over; with keys they move while the animation records.",
+                    "OBJ, STL, PLY, COLLADA or FBX objects the cloth rests on or drapes over; with keys they move while the animation records.",
                 ));
                 if draft.is_empty() {
                     ui.label(i18n::tr(ui_lang, "No objects yet."));
@@ -181,7 +181,7 @@ impl Atelier {
                 ui.horizontal(|ui| {
                     if ui.button(i18n::tr(ui_lang, "Add object…")).clicked() {
                         add = rfd::FileDialog::new()
-                            .add_filter("Mesh", &["obj", "stl", "ply", "dae"])
+                            .add_filter("Mesh", &["obj", "stl", "ply", "dae", "fbx"])
                             .pick_file();
                     }
                     if ui

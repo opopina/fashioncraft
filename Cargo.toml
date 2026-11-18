@@ -29,6 +29,7 @@ eframe = { version = "0.36.2", optional = true, default-features = false, featur
 bytemuck = { version = "1", optional = true }
 pollster = { version = "1.0.1", optional = true }
 image = { version = "0.25.10", optional = true, default-features = false, features = ["png"] }
+miniz_oxide = "0.8.9"
 
 [dev-dependencies]
 naga = { version = "30.0.1", features = ["wgsl-in"] }

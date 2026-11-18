@@ -102,8 +102,10 @@ fn keys_and_markers_are_kept_in_order_and_nonsense_is_refused() {
     refused(&|b| b.keys[0].time_s = -1.);
     refused(&|b| b.fps = 0.);
     refused(&|b| b.fps = 500.);
+    // A name no bone can have; a possible added bone's name is checked against the
+    // avatar's skeleton when recording.
     refused(&|b| {
-        b.keys[0].pose.0.insert("tail".into(), [0.; 3]);
+        b.keys[0].pose.0.insert("no tail!".into(), [0.; 3]);
     });
     refused(&|b| {
         b.markers.push(Marker {

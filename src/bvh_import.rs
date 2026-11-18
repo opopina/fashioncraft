@@ -393,7 +393,7 @@ pub fn retarget(bvh: &Bvh, rig: &Rig) -> Result<AvatarAnimation, String> {
         let mut pose = BTreeMap::new();
         for (index, bone) in rig.bones.iter().enumerate() {
             let parent = bone.parent.map_or(DQuat::IDENTITY, |p| world[p]);
-            let local = match found.get(bone.name) {
+            let local = match found.get(bone.name.as_str()) {
                 Some(&(joint, _)) if bone.name == "pelvis" => {
                     facing * rotations[joint] * rest_rotations[joint].inverse() * facing.inverse()
                 }
@@ -407,7 +407,7 @@ pub fn retarget(bvh: &Bvh, rig: &Rig) -> Result<AvatarAnimation, String> {
             let mut angles = euler_degrees(local.normalize());
             // Keep each angle near the previous key's, so curves between keys do not
             // swing the long way round.
-            if let Some(before) = previous.get(bone.name) {
+            if let Some(before) = previous.get(bone.name.as_str()) {
                 for (a, b) in angles.iter_mut().zip(before) {
                     while *a - b > 180. && *a - 360. >= -360. {
                         *a -= 360.;
@@ -420,7 +420,7 @@ pub fn retarget(bvh: &Bvh, rig: &Rig) -> Result<AvatarAnimation, String> {
             if angles.iter().any(|a| a.abs() > 1e-6) {
                 pose.insert(bone.name.to_string(), angles);
             }
-            previous.insert(bone.name, angles);
+            previous.insert(bone.name.as_str(), angles);
         }
         keys.push(PoseKey {
             time_s: frame as f64 * bvh.frame_time,

@@ -267,7 +267,7 @@ impl AvatarAnimation {
                 return Err("Keys must be in time order, at different times".into());
             }
             previous = key.time_s;
-            key.pose.validate()?;
+            key.pose.validate_angles()?;
         }
         for marker in &self.markers {
             if !marker.time_s.is_finite() || !(0.0..=MAX_DURATION_S).contains(&marker.time_s) {
@@ -765,6 +765,12 @@ impl Recorder {
         };
         let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
         let rig = avatar.rig(&rest)?;
+        // Keys may turn added bones, but only bones this skeleton has.
+        for key in &animation.keys {
+            if let Some(name) = key.pose.0.keys().find(|b| rig.bone(b).is_none()) {
+                return Err(format!("Unknown bone {name}"));
+            }
+        }
         let props = crate::fitting::MovingProps::new(&project.scene_objects)?;
         // The objects stand where the scene put them, then move to their first keys
         // together with the body moving into the first pose.

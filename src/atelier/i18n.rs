@@ -2041,6 +2041,29 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Export USD / USDZ…" => "Exportar USD / USDZ…",
         "Export FBX…" => "Exportar FBX…",
         "Export Alembic…" => "Exportar Alembic…",
+        "Bones and skin weights" => "Huesos y pesos de la piel",
+        "Remove this bone and the bones hanging from it" => {
+            "Quitar este hueso y los que cuelgan de él"
+        }
+        "Add bone" => "Añadir hueso",
+        "Click its two ends on the body; it hangs from the nearest bone" => {
+            "Haz clic en sus dos extremos sobre el cuerpo; cuelga del hueso más cercano"
+        }
+        "Click the bone's first end on the body" => {
+            "Haz clic en el primer extremo del hueso sobre el cuerpo"
+        }
+        "Click the bone's other end" => "Haz clic en el otro extremo del hueso",
+        "Paint weights" => "Pintar pesos",
+        "Drag on the body to make the skin there follow the selected bone" => {
+            "Arrastra sobre el cuerpo para que la piel de esa zona siga al hueso seleccionado"
+        }
+        "Painting" => "Pintando",
+        "Radius" => "Radio",
+        "Clear painted weights" => "Borrar los pesos pintados",
+        "Apply and restart uses the new bones and weights." => {
+            "«Aplicar y reiniciar» usa los huesos y pesos nuevos."
+        }
+        "Click on the body" => "Haz clic en el cuerpo",
         "Trace a piece on the body (3D pen)" => "Trazar una pieza sobre el cuerpo (lápiz 3D)",
         "Make piece" => "Crear pieza",
         "Remove last point" => "Quitar el último punto",

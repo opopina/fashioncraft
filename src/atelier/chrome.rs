@@ -589,6 +589,7 @@ impl Atelier {
             }
             self.paint_gizmo(ui, rect);
             self.paint_skeleton(ui, rect);
+            self.paint_skin_weights(ui, rect);
             self.paint_arrangement_points(ui, rect);
             self.paint_selected_points_3d(ui, rect);
             self.paint_pins_3d(ui, rect);

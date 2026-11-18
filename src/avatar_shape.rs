@@ -268,7 +268,7 @@ pub fn reshape(
             .map(|(p, weights)| {
                 let mut shift = DVec3::ZERO;
                 for (bone, w) in weights {
-                    match region(rig.bones[*bone].name) {
+                    match region(&rig.bones[*bone].name) {
                         Some("torso") => shift += (across(*p) - *p) * *w,
                         Some(hang) => shift += moved(hang) * *w,
                         None => {}
@@ -328,7 +328,7 @@ pub fn reshape(
         for (p, weights) in body.vertices.iter_mut().zip(&rig.weights) {
             let w: f64 = weights
                 .iter()
-                .filter(|(bone, _)| bones.contains(&rig.bones[*bone].name))
+                .filter(|(bone, _)| bones.contains(&rig.bones[*bone].name.as_str()))
                 .map(|(_, w)| *w)
                 .sum();
             *p += reach(*p) * w;

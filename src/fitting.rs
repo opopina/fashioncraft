@@ -273,6 +273,12 @@ pub fn scene_objects_mesh(objects: &[SceneObject]) -> Result<Option<SurfaceMesh>
 pub struct AvatarPose {
     pub pose: crate::avatar_rig::Pose,
     pub joints: std::collections::BTreeMap<String, [f64; 3]>,
+    /// Bones added to the skeleton, after the built-in ones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub added_bones: Vec<crate::avatar_rig::AddedBone>,
+    /// Skin weights painted by hand, by avatar vertex.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub painted_weights: crate::avatar_rig::PaintedWeights,
 }
 
 impl AvatarPose {
@@ -293,6 +299,8 @@ impl AvatarPose {
         Ok(Self {
             pose: Default::default(),
             joints,
+            added_bones: vec![],
+            painted_weights: Default::default(),
         })
     }
     /// The skeleton with joint `id` moved to `at` (avatar metres, at rest). Refused when the
@@ -332,13 +340,22 @@ impl AvatarPose {
         Ok(Some(sidecar.posed(&self.rig(&rest)?, &self.pose)))
     }
     pub fn rig(&self, surface: &SurfaceMesh) -> Result<crate::avatar_rig::Rig, String> {
-        self.pose.validate()?;
+        self.pose.validate_angles()?;
         let joints = self
             .joints
             .iter()
             .map(|(id, p)| (id.clone(), glam::DVec3::from_array(*p)))
             .collect();
-        crate::avatar_rig::Rig::new(&joints, surface)
+        let rig = crate::avatar_rig::Rig::build(
+            &joints,
+            surface,
+            &self.added_bones,
+            &self.painted_weights,
+        )?;
+        if let Some(name) = self.pose.0.keys().find(|b| rig.bone(b).is_none()) {
+            return Err(format!("Unknown bone {name}"));
+        }
+        Ok(rig)
     }
 }
 

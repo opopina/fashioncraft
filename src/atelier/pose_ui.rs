@@ -29,6 +29,24 @@ pub(super) struct PoseUi {
     pub move_joints: bool,
     /// The joint being dragged and the camera-facing plane it moves in.
     joint_drag: Option<(String, glam::DVec3, glam::DVec3)>,
+    /// Adding a bone: none until started, then its head once picked on the body.
+    pub adding_bone: Option<Option<glam::DVec3>>,
+    /// Painting skin weights onto the selected bone, with this brush.
+    pub painting: bool,
+    brush_cm: f64,
+    brush_strength: f64,
+    brush_remove: bool,
+    /// The rest avatar and its rig with skin weights, keyed by the draft's skeleton.
+    skin: Option<(String, Arc<marvelous_cloth::avatar::SurfaceMesh>, Arc<Rig>)>,
+}
+
+/// Brush defaults: radius in centimetres and strength per dab.
+const BRUSH_CM: f64 = 4.;
+const BRUSH_STRENGTH: f64 = 0.3;
+
+/// The draft's skeleton as a cache key: joints and added bones.
+fn skeleton_key(pose: &AvatarPose) -> String {
+    format!("{:?}{:?}", pose.joints, pose.added_bones)
 }
 
 impl PoseUi {
@@ -269,13 +287,16 @@ impl Atelier {
                     }
                 });
                 ui.separator();
-                let names: Vec<&str> = avatar_rig::bone_names().collect();
+                let names: Vec<String> = avatar_rig::bone_names()
+                    .map(String::from)
+                    .chain(draft.added_bones.iter().map(|b| b.name.clone()))
+                    .collect();
                 state.bone = state.bone.min(names.len() - 1);
                 egui::ComboBox::from_label(i18n::tr(ui_lang, "Bone"))
-                    .selected_text(names[state.bone])
+                    .selected_text(names[state.bone].as_str())
                     .show_ui(ui, |ui| {
                         for (k, name) in names.iter().enumerate() {
-                            ui.selectable_value(&mut state.bone, k, *name);
+                            ui.selectable_value(&mut state.bone, k, name.as_str());
                         }
                     });
                 let bone = names[state.bone].to_string();
@@ -359,6 +380,103 @@ impl Atelier {
                         state.move_joints = false;
                     }
                 }
+                ui.separator();
+                ui.collapsing(i18n::tr(ui_lang, "Bones and skin weights"), |ui| {
+                    let mut remove = None;
+                    for (k, b) in draft.added_bones.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{} ({})", b.name, b.parent));
+                            if ui
+                                .small_button("×")
+                                .on_hover_text(i18n::tr(ui_lang, "Remove this bone and the bones hanging from it"))
+                                .clicked()
+                            {
+                                remove = Some(k);
+                            }
+                        });
+                    }
+                    if let Some(k) = remove {
+                        remove_bone(draft, k);
+                        state.bones = None;
+                        state.skin = None;
+                    }
+                    match state.adding_bone {
+                        None => {
+                            if ui
+                                .button(i18n::tr(ui_lang, "Add bone"))
+                                .on_hover_text(i18n::tr(
+                                    ui_lang,
+                                    "Click its two ends on the body; it hangs from the nearest bone",
+                                ))
+                                .clicked()
+                            {
+                                state.adding_bone = Some(None);
+                                state.painting = false;
+                                state.skeleton = true;
+                            }
+                        }
+                        Some(head) => {
+                            ui.horizontal(|ui| {
+                                ui.label(i18n::tr(
+                                    ui_lang,
+                                    if head.is_none() {
+                                        "Click the bone's first end on the body"
+                                    } else {
+                                        "Click the bone's other end"
+                                    },
+                                ));
+                                if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
+                                    state.adding_bone = None;
+                                }
+                            });
+                        }
+                    }
+                    if ui
+                        .checkbox(&mut state.painting, i18n::tr(ui_lang, "Paint weights"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Drag on the body to make the skin there follow the selected bone",
+                        ))
+                        .changed()
+                        && state.painting
+                    {
+                        state.adding_bone = None;
+                    }
+                    if state.painting {
+                        if state.brush_cm <= 0. {
+                            state.brush_cm = BRUSH_CM;
+                            state.brush_strength = BRUSH_STRENGTH;
+                        }
+                        ui.label(format!(
+                            "{}: {}",
+                            i18n::tr(ui_lang, "Painting"),
+                            names[state.bone]
+                        ));
+                        ui.add(
+                            egui::Slider::new(&mut state.brush_cm, 1.0..=20.)
+                                .suffix(" cm")
+                                .text(i18n::tr(ui_lang, "Radius")),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut state.brush_strength, 0.05..=1.)
+                                .text(i18n::tr(ui_lang, "Strength")),
+                        );
+                        ui.checkbox(&mut state.brush_remove, i18n::tr(ui_lang, "Remove"));
+                    }
+                    if ui
+                        .add_enabled(
+                            !draft.painted_weights.is_empty(),
+                            egui::Button::new(i18n::tr(ui_lang, "Clear painted weights")),
+                        )
+                        .clicked()
+                    {
+                        draft.painted_weights.clear();
+                    }
+                    ui.small(i18n::tr(
+                        ui_lang,
+                        "Apply and restart uses the new bones and weights.",
+                    ));
+                });
             });
         self.authoring.pose.open &= open;
         if !self.authoring.pose.open {
@@ -391,7 +509,7 @@ impl Atelier {
         else {
             return;
         };
-        let key = format!("{:?}", pose.joints);
+        let key = skeleton_key(&pose);
         let fresh = self
             .authoring
             .pose
@@ -523,6 +641,12 @@ impl Atelier {
     pub(super) fn ik_interaction(&mut self, response: &egui::Response, rect: egui::Rect) -> bool {
         let ui_lang = self.prefs.language;
         let state = &self.authoring.pose;
+        if state.open
+            && state.transition.is_none()
+            && (state.adding_bone.is_some() || state.painting)
+        {
+            return self.skin_interaction(response, rect);
+        }
         if !state.open || !state.skeleton || state.transition.is_some() {
             return false;
         }
@@ -576,5 +700,234 @@ impl Atelier {
             .into();
         }
         true
+    }
+}
+
+/// Remove added bone `k` from `pose`, with the bones hanging from it, their painted weights
+/// and their rotations.
+fn remove_bone(pose: &mut AvatarPose, k: usize) {
+    let mut gone = std::collections::BTreeSet::from([pose.added_bones[k].name.clone()]);
+    loop {
+        let more: Vec<String> = pose
+            .added_bones
+            .iter()
+            .filter(|b| gone.contains(&b.parent) && !gone.contains(&b.name))
+            .map(|b| b.name.clone())
+            .collect();
+        if more.is_empty() {
+            break;
+        }
+        gone.extend(more);
+    }
+    pose.added_bones.retain(|b| !gone.contains(&b.name));
+    for list in pose.painted_weights.values_mut() {
+        list.retain(|(b, _)| !gone.contains(b));
+    }
+    pose.painted_weights.retain(|_, list| !list.is_empty());
+    pose.pose.0.retain(|b, _| !gone.contains(b));
+}
+
+impl Atelier {
+    /// The rest avatar and the draft's rig with skin weights, built once per skeleton.
+    fn skin(&mut self) -> Option<(Arc<marvelous_cloth::avatar::SurfaceMesh>, Arc<Rig>)> {
+        let draft = self.authoring.pose.draft.as_ref()?;
+        let key = skeleton_key(draft);
+        if self
+            .authoring
+            .pose
+            .skin
+            .as_ref()
+            .is_none_or(|(k, _, _)| *k != key)
+        {
+            let rest =
+                marvelous_cloth::avatar::SurfaceMesh::load_obj(&self.project.avatar_path).ok()?;
+            let plain = AvatarPose {
+                painted_weights: Default::default(),
+                ..draft.clone()
+            };
+            let rig = plain.rig(&rest).ok()?;
+            self.authoring.pose.skin = Some((key, Arc::new(rest), Arc::new(rig)));
+        }
+        let (_, rest, rig) = self.authoring.pose.skin.as_ref()?;
+        Some((rest.clone(), rig.clone()))
+    }
+
+    /// The selected bone's name in the pose window.
+    fn selected_bone(&self) -> Option<String> {
+        let draft = self.authoring.pose.draft.as_ref()?;
+        avatar_rig::bone_names()
+            .map(str::to_string)
+            .chain(draft.added_bones.iter().map(|b| b.name.clone()))
+            .nth(self.authoring.pose.bone)
+    }
+
+    /// Clicks and drags on the body while adding a bone or painting weights.
+    fn skin_interaction(&mut self, response: &egui::Response, rect: egui::Rect) -> bool {
+        let ui_lang = self.prefs.language;
+        let Some((rest, rig)) = self.skin() else {
+            return false;
+        };
+        let picked = |at: egui::Pos2, this: &Self| {
+            let (origin, dir) = this.camera.ray(at, rect);
+            marvelous_cloth::trace3d::pick(&this.scene.collider.surface, origin, dir)
+                .filter(|v| *v < rest.vertices.len())
+        };
+        if self.authoring.pose.adding_bone.is_some() {
+            if response.clicked()
+                && let Some(at) = response.interact_pointer_pos()
+            {
+                let Some(v) = picked(at, self) else {
+                    self.status = i18n::tr(ui_lang, "Click on the body").into();
+                    return true;
+                };
+                let point = rest.vertices[v];
+                match self.authoring.pose.adding_bone {
+                    Some(None) => self.authoring.pose.adding_bone = Some(Some(point)),
+                    Some(Some(head)) => {
+                        self.authoring.pose.adding_bone = None;
+                        self.add_bone(&rig, head, point);
+                    }
+                    None => {}
+                }
+            }
+            return true;
+        }
+        // Painting: one dab per frame while the button is down over the body.
+        let down = response.is_pointer_button_down_on() || response.clicked();
+        if down
+            && let Some(at) = response.interact_pointer_pos().or(response.hover_pos())
+            && let Some(v) = picked(at, self)
+            && let Some(bone) = self.selected_bone()
+        {
+            let state = &mut self.authoring.pose;
+            let strength = if state.brush_remove {
+                -state.brush_strength
+            } else {
+                state.brush_strength
+            };
+            let radius = state.brush_cm / 100.;
+            if let Some(draft) = state.draft.as_mut()
+                && let Err(e) = avatar_rig::paint_weights(
+                    &rig,
+                    &rest,
+                    &mut draft.painted_weights,
+                    &bone,
+                    rest.vertices[v],
+                    radius,
+                    strength,
+                )
+            {
+                self.status = e;
+            }
+        }
+        true
+    }
+
+    /// Add a bone from `head` to `tail` (rest positions), hanging from the bone nearest its head.
+    fn add_bone(&mut self, rig: &Rig, head: glam::DVec3, tail: glam::DVec3) {
+        let ui_lang = self.prefs.language;
+        let Some(draft) = self.authoring.pose.draft.as_mut() else {
+            return;
+        };
+        let parent = rig
+            .bones
+            .iter()
+            .min_by(|a, b| {
+                avatar_rig::segment_distance_to(head, a.head, a.tail)
+                    .total_cmp(&avatar_rig::segment_distance_to(head, b.head, b.tail))
+            })
+            .map(|b| b.name.clone())
+            .unwrap_or_else(|| "pelvis".into());
+        let name = (1..)
+            .map(|k| format!("bone_{k}"))
+            .find(|n| rig.bone(n).is_none() && !draft.added_bones.iter().any(|b| &b.name == n))
+            .unwrap();
+        let mut next = draft.clone();
+        next.added_bones.push(avatar_rig::AddedBone {
+            name: name.clone(),
+            parent: parent.clone(),
+            head: head.to_array(),
+            tail: tail.to_array(),
+        });
+        // The bone must make a valid skeleton.
+        let empty = marvelous_cloth::avatar::SurfaceMesh {
+            vertices: vec![],
+            triangles: vec![],
+        };
+        match next.rig(&empty) {
+            Ok(_) => {
+                *draft = next;
+                self.authoring.pose.bones = None;
+                self.authoring.pose.bone =
+                    avatar_rig::bone_names().count() + draft.added_bones.len() - 1;
+                self.status = format!(
+                    "{name} ({parent}) · {}",
+                    i18n::tr(ui_lang, "Apply and restart uses the new bones and weights.")
+                );
+            }
+            Err(e) => self.status = e,
+        }
+    }
+
+    /// The selected bone's skin weights as coloured dots while painting.
+    pub(super) fn paint_skin_weights(&mut self, ui: &egui::Ui, rect: egui::Rect) {
+        let state = &self.authoring.pose;
+        if !state.open || !state.painting {
+            return;
+        }
+        let Some(bone) = self.selected_bone() else {
+            return;
+        };
+        let Some((rest, rig)) = self.skin() else {
+            return;
+        };
+        let Some(index) = rig.bone(&bone) else {
+            return;
+        };
+        let Some(draft) = self.authoring.pose.draft.as_ref() else {
+            return;
+        };
+        let body = &self.scene.collider.surface;
+        let n = rest.vertices.len().min(body.vertices.len());
+        let mut normals = vec![glam::DVec3::ZERO; n];
+        for t in &body.triangles {
+            if t.iter().any(|v| *v >= n) {
+                continue;
+            }
+            let [a, b, c] = t.map(|v| body.vertices[v]);
+            let face = (b - a).cross(c - a);
+            for v in t {
+                normals[*v] += face;
+            }
+        }
+        let forward = self.camera.forward().as_dvec3();
+        let painter = ui.painter().with_clip_rect(rect);
+        for (v, normal) in normals.iter().enumerate() {
+            if normal.dot(forward) >= 0. {
+                continue;
+            }
+            let weight = match draft.painted_weights.get(&v) {
+                Some(list) => list
+                    .iter()
+                    .find(|(b, _)| *b == bone)
+                    .map_or(0., |(_, w)| *w),
+                None => rig.weights[v]
+                    .iter()
+                    .find(|(b, _)| *b == index)
+                    .map_or(0., |(_, w)| *w),
+            };
+            if weight < 0.02 {
+                continue;
+            }
+            if let Some(at) = self.camera.project(body.vertices[v].as_vec3(), rect) {
+                let w = weight.clamp(0., 1.) as f32;
+                let colour = Color32::from_rgb(
+                    (40. + 215. * w) as u8,
+                    (90. * (1. - w)) as u8,
+                    (255. * (1. - w)) as u8,
+                );
+                painter.circle_filled(at, 1.6, colour);
+            }
+        }
     }
 }

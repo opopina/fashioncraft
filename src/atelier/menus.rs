@@ -78,12 +78,15 @@ const FILE: &[Item] = &[
         "Export",
         &[
             Run("Session files (OBJ, patterns, previews)", C::ExportSession),
-            Todo("OBJ (selected)…"),
+            Run("OBJ…", C::ExportObj),
+            Run("OBJ (selected)…", C::ExportObjSelected),
             Todo("FBX…"),
             Run("glTF / GLB…", C::ExportGltf),
             Todo("Alembic…"),
             Todo("USD…"),
             Run("Point cache…", C::ExportPointCache),
+            Run("MDD cache…", C::ExportMdd),
+            Run("MDD cache (Maya/3ds Max)…", C::ExportMddZUp),
             Run("OBJ sequence…", C::ExportObjSequence),
         ],
     ),
@@ -639,7 +642,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 99, "{done} of {all}");
+        assert!(done >= 103, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

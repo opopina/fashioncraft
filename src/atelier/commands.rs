@@ -106,6 +106,10 @@ pub enum CommandId {
     CaptureView3d,
     CaptureVideo,
     ExportGltf,
+    ExportObj,
+    ExportObjSelected,
+    ExportMdd,
+    ExportMddZUp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1052,6 +1056,42 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportGltf,
         "export.gltf",
         "Export glTF / GLB…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportObj,
+        "export.obj",
+        "Export OBJ…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportObjSelected,
+        "export.obj_selected",
+        "Export the selected pieces as OBJ…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportMdd,
+        "animation.export_mdd",
+        "Export the take as an MDD cache…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportMddZUp,
+        "animation.export_mdd_z_up",
+        "Export the take as an MDD cache for Maya or 3ds Max…",
         Simulation,
         None,
         NotUndoable,

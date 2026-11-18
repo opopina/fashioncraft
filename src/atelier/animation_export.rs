@@ -1,6 +1,7 @@
-//! Taking animation out of the editor: the take as a PC2 point cache or as OBJ sequences of
-//! the cloth and the avatar, and captures of the 3D view: one PNG, or every frame of the take
-//! encoded as a video with ffmpeg when it is installed (otherwise the PNG frames stay).
+//! Taking the garment and its animation out of the editor: OBJ with its options, glTF, the
+//! take as PC2 or MDD point caches or as OBJ sequences of the cloth and the avatar, and
+//! captures of the 3D view: one PNG, or every frame of the take encoded as a video with
+//! ffmpeg when it is installed (otherwise the PNG frames stay).
 use super::*;
 use marvelous_cloth::avatar_animation;
 use rfd::FileDialog;
@@ -34,6 +35,16 @@ struct Capture {
 pub(super) struct Media3d {
     capture: Option<Capture>,
     encoding: Option<std::thread::JoinHandle<Result<String, String>>>,
+    obj: ObjDialog,
+}
+
+/// The OBJ export options, kept between exports.
+#[derive(Default)]
+struct ObjDialog {
+    open: bool,
+    selected_only: bool,
+    avatar: bool,
+    options: marvelous_cloth::obj_export::ObjOptions,
 }
 
 /// The ffmpeg program, looked for on the path and where Homebrew installs it.
@@ -177,6 +188,122 @@ impl Atelier {
             } else {
                 ""
             }
+        );
+        Ok(())
+    }
+
+    /// Open the OBJ export options, for every piece or only the selected ones.
+    pub(super) fn open_obj_export(&mut self, selected_only: bool) -> Result<(), String> {
+        if selected_only && self.selected_panels().is_empty() {
+            return Err("Select the pieces to export first".into());
+        }
+        let dialog = &mut self.authoring.media3d.obj;
+        dialog.open = true;
+        dialog.selected_only = selected_only;
+        Ok(())
+    }
+
+    fn export_obj(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .add_filter("OBJ mesh", &["obj"])
+            .set_file_name("garment.obj")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let dialog = &self.authoring.media3d.obj;
+        let mut options = dialog.options.clone();
+        options.pieces = dialog
+            .selected_only
+            .then(|| self.selected_panels().into_iter().collect());
+        let images: Vec<(String, PathBuf)> = self
+            .project
+            .image_assets
+            .iter()
+            .map(|a| (a.id.clone(), a.path.clone()))
+            .collect();
+        let scene = marvelous_cloth::obj_export::ObjScene {
+            template: &self.project.template,
+            garment: &self.scene.garment,
+            state: &self.scene.state,
+            images: &images,
+            avatar: dialog
+                .avatar
+                .then_some(self.scene.collider.surface.as_ref()),
+        };
+        let summary = marvelous_cloth::obj_export::write(&scene, &options, &path)?;
+        self.status = format!(
+            "Exported {}: {} vertices, {} faces, {} textures",
+            path.display(),
+            summary.vertices,
+            summary.faces,
+            summary.textures
+        );
+        Ok(())
+    }
+
+    pub(super) fn obj_export_window(&mut self, ctx: &egui::Context) {
+        if !self.authoring.media3d.obj.open {
+            return;
+        }
+        let mut open = true;
+        let mut export = false;
+        let dialog = &mut self.authoring.media3d.obj;
+        egui::Window::new(if dialog.selected_only {
+            "Export OBJ (selected)"
+        } else {
+            "Export OBJ"
+        })
+        .open(&mut open)
+        .resizable(false)
+        .default_width(280.)
+        .show(ctx, |ui| {
+            let o = &mut dialog.options;
+            ui.checkbox(&mut o.thick, "Thick")
+                .on_hover_text("Both faces of the cloth, apart by the fabric's look thickness (1 mm without one), joined by a rim");
+            ui.checkbox(&mut o.unified_uv, "Unified UV")
+                .on_hover_text("Pack every piece into the unit square of texture space; fabric textures are left out");
+            ui.checkbox(&mut o.per_piece, "One object per piece");
+            ui.checkbox(&mut dialog.avatar, "Include the avatar and scene objects");
+            ui.horizontal(|ui| {
+                ui.label("Units");
+                egui::ComboBox::from_id_salt("obj.units")
+                    .selected_text(o.units.label())
+                    .show_ui(ui, |ui| {
+                        for u in marvelous_cloth::obj_export::Units::ALL {
+                            ui.selectable_value(&mut o.units, u, u.label());
+                        }
+                    });
+                ui.checkbox(&mut o.z_up, "Z up");
+            });
+            ui.small("Pieces stay split along seams.");
+            if ui.button("Export…").clicked() {
+                export = true;
+            }
+        });
+        self.authoring.media3d.obj.open &= open;
+        if export {
+            match self.export_obj() {
+                Ok(()) => self.authoring.media3d.obj.open = false,
+                Err(e) => self.status = e,
+            }
+        }
+    }
+
+    pub(super) fn export_mdd(&mut self, z_up: bool) -> Result<(), String> {
+        let take = self.current_take().ok_or(NO_TAKE)?;
+        let Some(path) = FileDialog::new()
+            .add_filter("MDD point cache", &["mdd"])
+            .set_file_name("cloth.mdd")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        take.write_mdd(&path, z_up)?;
+        self.status = format!(
+            "MDD cache saved: {} frames in {}",
+            take.frames.len(),
+            path.display()
         );
         Ok(())
     }

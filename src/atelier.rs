@@ -574,6 +574,10 @@ impl Atelier {
             Id::CaptureView3d => self.capture_view3d()?,
             Id::CaptureVideo => self.capture_video()?,
             Id::ExportGltf => self.export_gltf()?,
+            Id::ExportObj => self.open_obj_export(false)?,
+            Id::ExportObjSelected => self.open_obj_export(true)?,
+            Id::ExportMdd => self.export_mdd(false)?,
+            Id::ExportMddZUp => self.export_mdd(true)?,
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());
@@ -1154,6 +1158,7 @@ impl eframe::App for Atelier {
             self.library_window(&ctx);
             self.pose_window(&ctx);
             self.scene_window(&ctx);
+            self.obj_export_window(&ctx);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits

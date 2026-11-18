@@ -345,6 +345,31 @@ impl Take {
         file.write_all(&bytes).map_err(|e| e.to_string())
     }
 
+    /// Write the take as an MDD point cache: big-endian frame and point counts, each frame's
+    /// time in seconds, then every frame's points. `z_up` turns Y up into Z up, as Maya and
+    /// 3ds Max scenes expect.
+    pub fn write_mdd(&self, path: &Path, z_up: bool) -> Result<(), String> {
+        let points = self.frames.first().map_or(0, Vec::len);
+        if self.frames.is_empty() || points == 0 {
+            return Err("The take holds no frames".into());
+        }
+        let mut bytes = Vec::with_capacity(8 + self.frames.len() * (4 + points * 12));
+        bytes.extend_from_slice(&(self.frames.len() as i32).to_be_bytes());
+        bytes.extend_from_slice(&(points as i32).to_be_bytes());
+        for k in 0..self.frames.len() {
+            bytes.extend_from_slice(&((k as f64 / self.fps) as f32).to_be_bytes());
+        }
+        for frame in &self.frames {
+            for [x, y, z] in frame {
+                let p = if z_up { [*x, -*z, *y] } else { [*x, *y, *z] };
+                for c in p {
+                    bytes.extend_from_slice(&c.to_be_bytes());
+                }
+            }
+        }
+        std::fs::write(path, bytes).map_err(|e| e.to_string())
+    }
+
     /// Read a PC2 point cache as a take recorded at `fps`.
     pub fn read_pc2(path: &Path, fps: f64) -> Result<Self, String> {
         if !fps.is_finite() || !FPS_RANGE.contains(&fps) {

@@ -19,6 +19,7 @@ pub mod issue_report;
 pub mod math;
 pub mod model;
 pub mod motion;
+pub mod obj_export;
 pub mod ogc;
 pub mod pattern_import;
 pub mod picking;

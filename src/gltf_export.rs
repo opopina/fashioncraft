@@ -152,6 +152,47 @@ impl Builder {
     }
 }
 
+/// Each vertex's texture coordinates: image repeats along the grain on a textured fabric,
+/// otherwise the pattern's warp and weft in metres.
+pub fn texture_coordinates(template: &GarmentTemplate, garment: &CompiledGarment) -> Vec<DVec2> {
+    let appearances = crate::garment::appearance::bind(template, garment);
+    let mut uv = vec![DVec2::ZERO; garment.mesh.uv.len()];
+    for panel in &garment.panels {
+        let material = &garment.materials[panel.material];
+        let (sin, cos) = material.grain_degrees.to_radians().sin_cos();
+        let texture = appearances[panel.material]
+            .as_ref()
+            .and_then(|a| a.texture.as_ref());
+        for i in panel.vertices.clone() {
+            let p = garment.mesh.uv[i];
+            let warp_weft = DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
+            uv[i] = texture.map_or(warp_weft, |t| t.image_uv(warp_weft));
+        }
+    }
+    uv
+}
+
+/// The garment's triangles wound counter-clockwise seen from the fabric's front face, which
+/// is opposite the solver's winding normal except on flipped pieces.
+pub fn front_triangles(template: &GarmentTemplate, garment: &CompiledGarment) -> Vec<[usize; 3]> {
+    let mut flipped = vec![false; garment.mesh.triangles.len()];
+    for panel in &garment.panels {
+        if template.flipped_panels.contains(&panel.id) {
+            flipped[panel.triangles.clone()].fill(true);
+        }
+    }
+    garment
+        .mesh
+        .triangles
+        .iter()
+        .zip(&flipped)
+        .map(|(t, &flip)| {
+            let [a, b, c] = t.vertices;
+            if flip { [a, b, c] } else { [a, c, b] }
+        })
+        .collect()
+}
+
 /// Outward vertex normals: area weighted, from triangles wound outwards.
 fn normals(points: &[DVec3], triangles: &[[u32; 3]]) -> Vec<f32> {
     let mut n = vec![DVec3::ZERO; points.len()];
@@ -213,39 +254,13 @@ fn build(scene: &GltfScene) -> Result<Builder, String> {
         }
     }
     let mut b = Builder::new();
-    // Texture coordinates: image repeats along the grain for textured fabrics, otherwise
-    // warp and weft in metres.
-    let mut uv = vec![[0f32; 2]; n];
-    for panel in &garment.panels {
-        let material = &garment.materials[panel.material];
-        let (sin, cos) = material.grain_degrees.to_radians().sin_cos();
-        let texture = appearances[panel.material]
-            .as_ref()
-            .and_then(|a| a.texture.as_ref());
-        for i in panel.vertices.clone() {
-            let p = garment.mesh.uv[i];
-            let warp_weft = DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
-            let q = texture.map_or(warp_weft, |t| t.image_uv(warp_weft));
-            uv[i] = q.as_vec2().to_array();
-        }
-    }
-    // The fabric's front face is opposite the solver's winding normal, except on flipped
-    // pieces; glTF's front face is the counter-clockwise one.
-    let mut flipped = vec![false; garment.mesh.triangles.len()];
-    for panel in &garment.panels {
-        if scene.template.flipped_panels.contains(&panel.id) {
-            flipped[panel.triangles.clone()].fill(true);
-        }
-    }
-    let triangles: Vec<[u32; 3]> = garment
-        .mesh
-        .triangles
+    let uv: Vec<[f32; 2]> = texture_coordinates(scene.template, garment)
         .iter()
-        .zip(&flipped)
-        .map(|(t, &flip)| {
-            let [a, b, c] = t.vertices.map(|i| i as u32);
-            if flip { [a, b, c] } else { [a, c, b] }
-        })
+        .map(|p| p.as_vec2().to_array())
+        .collect();
+    let triangles: Vec<[u32; 3]> = front_triangles(scene.template, garment)
+        .into_iter()
+        .map(|t| t.map(|i| i as u32))
         .collect();
     let positions: Vec<f32> = base.iter().flat_map(|p| p.as_vec3().to_array()).collect();
     let position = b.floats(&positions, 3, true);

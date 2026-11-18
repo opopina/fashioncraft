@@ -307,18 +307,35 @@ pub fn estimated_sidecar(surface: &crate::avatar::SurfaceMesh) -> Option<Sidecar
 /// Load the sidecar for an avatar: the anchors and landmarks shipped next to it, or else
 /// anchors on joints estimated from its shape. `Ok(None)` when it ships none and its shape
 /// does not allow an estimate.
-pub fn load_sidecar(avatar_path: &std::path::Path) -> Result<Option<Sidecar>, String> {
+/// The anchors and joints shipped with an avatar: `<stem>.arrangement.json` and
+/// `<stem>.measurements.json` next to it, else `arrangement.json` and `measurements.json` in
+/// its folder. `None` when there are none.
+pub fn sidecar_files(
+    avatar_path: &std::path::Path,
+) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     let dir = avatar_path.parent().unwrap_or(std::path::Path::new("."));
-    let anchors = dir.join("arrangement.json");
-    if !anchors.exists() {
+    if let Some(stem) = avatar_path.file_stem().map(|s| s.to_string_lossy()) {
+        let own = (
+            dir.join(format!("{stem}.arrangement.json")),
+            dir.join(format!("{stem}.measurements.json")),
+        );
+        if own.0.exists() {
+            return Some(own);
+        }
+    }
+    let shared = (dir.join("arrangement.json"), dir.join("measurements.json"));
+    shared.0.exists().then_some(shared)
+}
+
+pub fn load_sidecar(avatar_path: &std::path::Path) -> Result<Option<Sidecar>, String> {
+    let Some((anchors, measurements)) = sidecar_files(avatar_path) else {
         return Ok(crate::avatar::SurfaceMesh::load_obj(avatar_path)
             .ok()
             .and_then(|surface| estimated_sidecar(&surface)));
-    }
+    };
     let set = ArrangementSet::from_json(
         &std::fs::read_to_string(&anchors).map_err(|e| format!("{}: {e}", anchors.display()))?,
     )?;
-    let measurements = dir.join("measurements.json");
     let text = std::fs::read_to_string(&measurements)
         .map_err(|e| format!("{}: {e}", measurements.display()))?;
     #[derive(Deserialize)]

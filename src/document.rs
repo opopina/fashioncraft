@@ -27,7 +27,25 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 /// Content-addressed OBJ next to the project. Existing asset names are never overwritten.
 /// Copy the project and its `.assets` directory together to relocate it.
 pub fn portable_avatar(source: &Path, project: &Path) -> Result<PathBuf, String> {
-    portable_asset(source, project, "avatar", "obj")
+    let relative = portable_asset(source, project, "avatar", "obj")?;
+    // Its anchors and joints go along as `<asset stem>.arrangement.json` and
+    // `<asset stem>.measurements.json`.
+    if let Some((anchors, joints)) = crate::garment::arrangement::sidecar_files(source)
+        && joints.exists()
+    {
+        let saved = project.parent().unwrap_or(Path::new(".")).join(&relative);
+        let stem = saved
+            .file_stem()
+            .ok_or("Avatar asset needs a name")?
+            .to_string_lossy()
+            .into_owned();
+        let dir = saved.parent().unwrap_or(Path::new("."));
+        for (from, kind) in [(anchors, "arrangement"), (joints, "measurements")] {
+            let bytes = fs::read(&from).map_err(|e| format!("{}: {e}", from.display()))?;
+            atomic_write(&dir.join(format!("{stem}.{kind}.json")), &bytes)?;
+        }
+    }
+    Ok(relative)
 }
 
 /// Content-addressed scene object (an OBJ, STL, PLY or COLLADA prop) next to the project,

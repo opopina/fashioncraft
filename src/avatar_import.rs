@@ -123,6 +123,15 @@ impl Candidate {
             writeln!(out, "f {} {} {}", a + 1, b + 1, c + 1).map_err(|e| e.to_string())?;
         }
         out.flush().map_err(|e| e.to_string())?;
+        // The avatar's own anchors and joints travel with it, so they are not estimated again.
+        if let Some((anchors, joints)) = crate::garment::arrangement::sidecar_files(path)
+            && joints.exists()
+        {
+            let dir = asset.0.path();
+            std::fs::copy(&anchors, dir.join("arrangement.json")).map_err(|e| e.to_string())?;
+            std::fs::copy(&joints, dir.join("measurements.json")).map_err(|e| e.to_string())?;
+            warnings.push("The avatar's own anchors and joints are kept.".into());
+        }
         Ok(Self {
             source: path.to_owned(),
             vertices: mesh.vertices.len(),

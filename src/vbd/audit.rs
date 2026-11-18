@@ -336,7 +336,7 @@ impl VbdSolver {
         let mut verifier = self.world.clone();
         let contacts = verifier.detect(
             &accepted_positions,
-            2.0 * settings.contact.radius,
+            2.0 * self.world.max_radius(settings.contact.radius),
             &settings.contact,
         )?;
         let detection_ms = start.elapsed().as_secs_f64() * 1000.0;

@@ -19,6 +19,10 @@ pub struct Material {
     pub density: f64,
     pub thickness: f64,
     pub grain_degrees: f64,
+    /// Distance (m) the solver keeps between this fabric and anything else; none uses the
+    /// scene's collision distance. A contact keeps the mean of its two sides' distances.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collision_distance: Option<f64>,
 }
 impl Default for Material {
     fn default() -> Self {
@@ -33,9 +37,14 @@ impl Default for Material {
             density: 0.2,
             thickness: 0.001,
             grain_degrees: 0.0,
+            collision_distance: None,
         }
     }
 }
+/// Range of a fabric's collision distance, metres.
+pub const MIN_COLLISION_DISTANCE: f64 = 0.0005;
+pub const MAX_COLLISION_DISTANCE: f64 = 0.02;
+
 impl Material {
     pub fn validate(&self) -> Result<(), String> {
         for (name, v) in [
@@ -49,6 +58,12 @@ impl Material {
             if !v.is_finite() || v <= 0.0 {
                 return Err(format!("{name} must be finite and positive"));
             }
+        }
+        if self
+            .collision_distance
+            .is_some_and(|d| !(MIN_COLLISION_DISTANCE..=MAX_COLLISION_DISTANCE).contains(&d))
+        {
+            return Err("Collision distance must be between 0.5 and 20 mm".into());
         }
         if !self.grain_degrees.is_finite()
             || !self.compression_ratio.is_finite()

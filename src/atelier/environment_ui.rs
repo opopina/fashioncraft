@@ -86,7 +86,8 @@ impl Atelier {
                 )
                 .on_hover_text(
                     "Gap the solver keeps between cloth and the avatar, the floor and other \
-                     cloth. Larger is more forgiving with thick layers; smaller fits closer",
+                     cloth. Larger is more forgiving with thick layers; smaller fits closer. A \
+                     fabric can set its own in the Fabric tab; two sides keep the mean",
                 )
                 .changed()
             {

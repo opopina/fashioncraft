@@ -97,6 +97,7 @@ impl Atelier {
         let mut apply = false;
         let mut discard = false;
         let mut targets = vec![];
+        let scene_gap = self.settings.contact.radius;
         let header = egui::CollapsingHeader::new("Fabric · weight and stretch")
             .id_salt("fabric_controls").default_open(true).show(ui, |ui| {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
@@ -131,6 +132,22 @@ impl Atelier {
                 if value(ui, "Area weight", &mut gsm, 1., 10., 2000., " g/m²") { p.density = gsm / 1000.; }
                 let mut thickness = p.thickness * 1000.;
                 if value(ui, "Thickness", &mut thickness, 0.01, 0.02, 5., " mm") { p.thickness = thickness / 1000.; }
+                let mut own = p.collision_distance.is_some();
+                if ui
+                    .checkbox(&mut own, "Own collision distance")
+                    .on_hover_text(
+                        "Gap the simulator keeps between this fabric and the avatar, the floor or \
+                         other cloth; two fabrics keep the mean of theirs. Off: the scene's \
+                         Collision distance in Simulation",
+                    )
+                    .changed()
+                {
+                    p.collision_distance = own.then_some(scene_gap);
+                }
+                if let Some(gap) = p.collision_distance.as_mut() {
+                    let mut mm = *gap * 1000.;
+                    if value(ui, "Collision distance", &mut mm, 0.05, 0.5, 20., " mm") { *gap = mm / 1000.; }
+                }
                 ui.label("Stretch under 5 N on a 5 cm strip");
                 ui.small("The larger the %, the more the fabric stretches. This is not the strain at failure.");
                 for (axis, label) in ["Warp", "Weft"].iter().enumerate() {
@@ -146,7 +163,7 @@ impl Atelier {
                         if value(ui, label, &mut micro, 1., 0., 100000., " µN·m") { *b = micro * 1e-6; }
                     }
                     ui.small(format!("Warp/weft membrane: {:.0} / {:.0} N/m", p.warp, p.weft));
-                    ui.small("The collision radius is set separately in Simulation.");
+                    ui.small("Without its own collision distance a fabric uses the scene's, in Simulation.");
                 });
                 if d.properties != before_properties { d.preset = None; }
                 ui.checkbox(&mut d.all_panels, "Apply to all panels");

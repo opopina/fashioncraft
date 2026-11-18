@@ -26,6 +26,10 @@ pub struct FabricProperties {
     pub bend_weft: f64,
     pub density: f64,
     pub thickness: f64,
+    /// Distance (m) the solver keeps between this fabric and anything else; none uses the
+    /// scene's collision distance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collision_distance: Option<f64>,
 }
 impl Default for FabricProperties {
     fn default() -> Self {
@@ -44,6 +48,7 @@ impl From<&Material> for FabricProperties {
             bend_weft: m.bend_weft,
             density: m.density,
             thickness: m.thickness,
+            collision_distance: m.collision_distance,
         }
     }
 }
@@ -60,6 +65,7 @@ impl FabricProperties {
             density: self.density,
             thickness: self.thickness,
             grain_degrees,
+            collision_distance: self.collision_distance,
         }
     }
 }

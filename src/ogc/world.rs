@@ -102,6 +102,9 @@ pub struct ContactSet {
     pub profile: DetectionProfile,
     /// Nearby terms retained until the next detection, including zero energy.
     pub contacts: Vec<Contact>,
+    /// Radius of each contact when fabrics set their own collision distance; empty when every
+    /// contact uses the settings' radius (see [`ContactSet::radius`]).
+    pub contact_radius: Vec<f64>,
     /// Terms with positive energy at the detection configuration.
     pub active_contacts: usize,
     pub incident: ContactIncidence,
@@ -180,8 +183,13 @@ impl ContactSet {
     pub fn value(&self, x: &[DVec3], settings: &OgcSettings) -> f64 {
         self.contacts
             .iter()
-            .map(|c| c.value(x, settings.radius, settings.stiffness))
+            .enumerate()
+            .map(|(i, c)| c.value(x, self.radius(i, settings.radius), settings.stiffness))
             .sum()
+    }
+    /// The activation radius of contact `i`: its own, or `default` when contacts share one.
+    pub fn radius(&self, i: usize, default: f64) -> f64 {
+        self.contact_radius.get(i).copied().unwrap_or(default)
     }
 }
 
@@ -213,6 +221,9 @@ pub struct OgcWorld {
     excluded_neighbors: Vec<Vec<usize>>,
     /// Vertices that take part in no contact at all (deactivated cloth). Empty: none.
     inert: Vec<bool>,
+    /// Contact radius of each moving vertex (its fabric's collision distance). Empty: every
+    /// contact uses the settings' radius.
+    cloth_radius: Vec<f64>,
 }
 impl OgcWorld {
     pub fn new(
@@ -308,7 +319,37 @@ impl OgcWorld {
             moving_faces,
             candidates: None,
             inert: vec![],
+            cloth_radius: vec![],
         })
+    }
+    /// Give each moving vertex its own contact radius; fixed vertices keep the settings'
+    /// radius. A contact's radius is the mean of its two sides', each side taking the largest
+    /// of its vertices. An empty list goes back to one radius for every contact.
+    pub fn set_cloth_radius(&mut self, radius: Vec<f64>) -> Result<(), String> {
+        if !radius.is_empty()
+            && (radius.len() != self.moving || radius.iter().any(|r| !r.is_finite() || *r <= 0.))
+        {
+            return Err("OGC per-vertex radii must be positive, one per moving vertex".into());
+        }
+        self.cloth_radius = radius;
+        Ok(())
+    }
+    /// The largest contact radius any contact can have.
+    pub fn max_radius(&self, default: f64) -> f64 {
+        self.cloth_radius.iter().copied().fold(default, f64::max)
+    }
+    fn pair_radius(&self, c: &Contact, default: f64) -> f64 {
+        let first = match c.kind {
+            Kind::EdgeEdge | Kind::EdgeEdgeInterior | Kind::SegmentSegment => 2,
+            _ => 1,
+        };
+        let side = |vertices: &[usize]| {
+            vertices
+                .iter()
+                .map(|&v| self.cloth_radius.get(v).copied().unwrap_or(default))
+                .fold(0., f64::max)
+        };
+        0.5 * (side(&c.vertices[..first]) + side(&c.vertices[first..c.count]))
     }
     /// Leave the given vertices out of every contact, as if they were not there. Call before
     /// `validate_start`. Shorter masks are padded with `false`.
@@ -508,7 +549,7 @@ impl OgcWorld {
         if self.experimental_interior_edges && self.experimental_primitive_distances {
             return Err("Select only one experimental contact law".into());
         }
-        if !query_radius.is_finite() || query_radius < settings.radius {
+        if !query_radius.is_finite() || query_radius < self.max_radius(settings.radius) {
             return Err("OGC query radius must cover the contact radius".into());
         }
         let start = Instant::now();
@@ -632,9 +673,21 @@ impl OgcWorld {
         // Sort/merge once instead of allocating a tree node for every retained
         // nearby term. Canonical order remains the same for colors/reductions.
         let contacts = super::canonical::canonicalize(found, x.len());
+        let contact_radius: Vec<f64> = if self.cloth_radius.is_empty() {
+            vec![]
+        } else {
+            contacts
+                .iter()
+                .map(|c| self.pair_radius(c, settings.radius))
+                .collect()
+        };
         let active_contacts = contacts
             .iter()
-            .filter(|c| c.value(x, settings.radius, settings.stiffness) > 0.)
+            .enumerate()
+            .filter(|(i, c)| {
+                let r = contact_radius.get(*i).copied().unwrap_or(settings.radius);
+                c.value(x, r, settings.stiffness) > 0.
+            })
             .count();
         let canonical_ms = canonical_start.elapsed().as_secs_f64() * 1000.;
         let incidence_start = Instant::now();
@@ -668,6 +721,7 @@ impl OgcWorld {
                 aabb_rejections,
             },
             contacts,
+            contact_radius,
             active_contacts,
             incident,
             centers: x[..self.moving].to_vec(),

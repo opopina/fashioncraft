@@ -72,12 +72,14 @@ pub fn friction_terms(
     if settings.friction <= 0. {
         return vec![];
     }
-    let (r, k) = (settings.contact.radius, settings.contact.stiffness);
+    let k = settings.contact.stiffness;
     let eps = STICK_SPEED_M_S * settings.dt;
     contacts
         .contacts
         .iter()
-        .map(|c| {
+        .enumerate()
+        .map(|(i, c)| {
+            let r = contacts.radius(i, settings.contact.radius);
             let gradients: Vec<DVec3> = (0..c.count)
                 .map(|i| c.block(x, c.vertices[i], r, k).1)
                 .collect();

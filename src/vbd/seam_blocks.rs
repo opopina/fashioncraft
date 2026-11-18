@@ -125,7 +125,7 @@ impl Problem<'_> {
             let c = &self.contacts.contacts[i];
             e = e + c.energy(
                 c.vertices.map(get),
-                self.settings.contact.radius,
+                self.contacts.radius(i, self.settings.contact.radius),
                 self.settings.contact.stiffness,
             );
         }

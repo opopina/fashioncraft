@@ -283,6 +283,9 @@ pub struct VbdSolver {
     pub(crate) friction: Vec<Option<friction::FrictionTerm>>,
     /// Accelerations besides gravity for the current step (wind), per vertex; empty if none.
     pub(crate) external: Vec<DVec3>,
+    /// Collision distance of each vertex's fabric, the largest of its triangles'; none where
+    /// the scene's applies. Empty when no fabric sets its own.
+    collision: Vec<Option<f64>>,
 }
 impl VbdSolver {
     pub fn new(
@@ -365,7 +368,7 @@ impl VbdSolver {
             }
             connect(&ids);
         }
-        let solver = Self {
+        let mut solver = Self {
             contact_refresh_audit: None,
             contact_refresh_capture: None,
             local_probe: Default::default(),
@@ -385,8 +388,28 @@ impl VbdSolver {
                 .collect(),
             friction: vec![],
             external: vec![],
+            collision: vec![],
         };
+        let mut collision = vec![None; n];
+        for t in &solver.garment.mesh.triangles {
+            if let Some(d) = solver.garment.materials[t.material].collision_distance {
+                for v in t.vertices {
+                    collision[v] = Some(collision[v].map_or(d, |c: f64| c.max(d)));
+                }
+            }
+        }
+        if collision.iter().any(Option::is_some) {
+            solver.collision = collision;
+        }
         Ok(solver)
+    }
+    /// Hand the contact detection each vertex's collision distance for these settings, and
+    /// return the largest contact radius.
+    pub(crate) fn prepare_collision(&mut self, settings: &VbdSettings) -> Result<f64, String> {
+        let r = settings.contact.radius;
+        self.world
+            .set_cloth_radius(self.collision.iter().map(|d| d.unwrap_or(r)).collect())?;
+        Ok(self.world.max_radius(r))
     }
     /// Gravity plus this step's external acceleration of vertex `v`.
     pub(crate) fn acceleration(&self, settings: &VbdSettings, v: usize) -> DVec3 {
@@ -439,7 +462,7 @@ impl VbdSolver {
             value = value
                 + c.energy(
                     c.vertices.map(get),
-                    settings.contact.radius,
+                    contact.radius(*i, settings.contact.radius),
                     settings.contact.stiffness,
                 );
             if let Some(f) = self
@@ -525,8 +548,8 @@ impl VbdSolver {
             .zip(&state.x)
             .map(|(a, b)| a.distance(*b))
             .fold(0.0, f64::max);
-        let rq = (settings.contact.radius + predicted_motion)
-            .clamp(2.0 * settings.contact.radius, 4.0 * settings.contact.radius);
+        let radius = self.prepare_collision(settings)?;
+        let rq = (radius + predicted_motion).clamp(2.0 * radius, 4.0 * radius);
         let mut x = self.world.positions(&state.x);
         let start_positions = x.clone();
         self.contact_refresh_capture = None;

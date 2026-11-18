@@ -234,8 +234,8 @@ impl GpuVbd {
             .fold(0., f64::max);
         // A bounded query controls broad-phase work. This can slow convergence,
         // never enlarge the allowable movement beyond a conservative ball.
-        let rq = (settings.contact.radius + motion)
-            .clamp(settings.contact.radius * 2., settings.contact.radius * 4.);
+        let radius = solver.prepare_collision(settings)?;
+        let rq = (radius + motion).clamp(radius * 2., radius * 4.);
         let contacts = if self.filter_contacts {
             solver.world.detect_with_filter(
                 &x,
@@ -328,7 +328,7 @@ impl GpuVbd {
         order.clear();
         configs.clear();
         terms.reserve(contacts.contacts.len() + usize::from(grab.is_some()));
-        for c in &contacts.contacts {
+        for (i, c) in contacts.contacts.iter().enumerate() {
             let kind = match c.kind {
                 Kind::PointPoint => 10,
                 Kind::PointEdge => 11,
@@ -340,7 +340,7 @@ impl GpuVbd {
             };
             let mut t = Term::new(&c.vertices[..c.count], kind);
             t.a = [
-                settings.contact.radius as f32,
+                contacts.radius(i, settings.contact.radius) as f32,
                 settings.contact.stiffness as f32,
                 c.mollifier_epsilon as f32,
                 0.,

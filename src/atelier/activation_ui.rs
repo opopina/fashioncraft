@@ -20,6 +20,17 @@ impl Atelier {
             .iter()
             .find(|d| d.panel == panel.id)
             .map(|d| d.sewing);
+        let strong = self
+            .project
+            .template
+            .strengthened_panels
+            .contains(&panel.id);
+        let solid = self
+            .project
+            .template
+            .solidified_panels
+            .iter()
+            .any(|s| s.panel == panel.id);
         let mut action = None;
         egui::CollapsingHeader::new("Simulation state")
             .id_salt("activation")
@@ -55,6 +66,26 @@ impl Atelier {
                 });
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .selectable_label(strong, "Strengthen")
+                        .on_hover_text(format!(
+                            "Simulate the selected pieces {}× stiffer so they hold their shape while the garment settles; click again to return them to normal",
+                            marvelous_cloth::garment::template::STRENGTHEN_FACTOR
+                        ))
+                        .clicked()
+                    {
+                        action = Some(Action::Strengthen(!strong));
+                    }
+                    if ui
+                        .selectable_label(solid, "Solidify")
+                        .on_hover_text("Keep the selected pieces in their current 3D shape: they still move and collide as a whole. Click again to release them")
+                        .clicked()
+                    {
+                        action = Some(Action::Solidify(!solid));
+                    }
+                });
+                ui.separator();
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Superimpose");
                     if ui
                         .button("Over")
@@ -77,7 +108,57 @@ impl Atelier {
             Some(Action::Deactivate(sewing)) => self.set_active(&ids, true, sewing),
             Some(Action::Activate) => self.set_active(&ids, false, false),
             Some(Action::Superimpose(over)) => self.superimpose_panels(&ids, over),
+            Some(Action::Strengthen(on)) => {
+                if self.edit(authoring::Command::Strengthen { panels: ids, on }) {
+                    self.status = if on {
+                        "Strengthened · simulated stiffer until released".into()
+                    } else {
+                        "Back to the fabric's own stiffness".into()
+                    };
+                }
+            }
+            Some(Action::Solidify(on)) => self.set_solid(&ids, on),
             None => {}
+        }
+    }
+
+    /// Solidify pieces in their current shape, or release them, as one validated undo step.
+    pub(super) fn set_solid(&mut self, ids: &[String], solidify: bool) {
+        if ids.is_empty() {
+            self.status = "Select the pieces first".into();
+            return;
+        }
+        if self.pending {
+            self.status = "Wait for the current step to finish, then try again".into();
+            return;
+        }
+        self.playing = false;
+        let result = authoring::prepare_solidify_edit(
+            &self.project.template,
+            &self.scene.garment,
+            &self.scene.state,
+            ids,
+            solidify,
+        )
+        .and_then(|(edit, next)| {
+            super::pins_ui::validate(&edit, &next, Some(&self.scene.collider.surface))?;
+            Ok(edit)
+        });
+        match result {
+            Ok(edit) => {
+                self.authoring.history.record(self.project.template.clone());
+                self.install_edit(edit);
+                let what = super::garment_display::counted(ids.len(), "piece", "pieces");
+                self.status = if solidify {
+                    format!("{what} solidified · they keep this shape")
+                } else {
+                    format!("{what} released")
+                };
+            }
+            Err(error) => {
+                self.status = error.clone();
+                self.authoring.error = Some(error);
+            }
         }
     }
 
@@ -218,4 +299,6 @@ enum Action {
     Deactivate(bool),
     Activate,
     Superimpose(bool),
+    Strengthen(bool),
+    Solidify(bool),
 }

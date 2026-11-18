@@ -135,16 +135,12 @@ impl VbdSolver {
         grab: Option<&Grab>,
         vertices: &[usize],
     ) {
-        let dt = settings.dt;
-        let damp = 1. + settings.damping * dt;
         let groups = super::coloring::ordered_groups(&self.graph, contacts, grab, vertices);
         // Two sparse sweeps; detection is refreshed normally at the next step.
         for _ in 0..2 {
             for group in &groups {
                 let solve = |&v: &usize| {
-                    let target = state.x[v]
-                        + (state.v[v] * dt + self.acceleration(settings, v) * dt * dt) / damp;
-                    let inertia = self.garment.mesh.masses[v] * damp / (dt * dt);
+                    let (target, inertia) = self.inertia_target(settings, state, v);
                     (
                         v,
                         self.local_step(v, x, contacts, settings, grab, (target, inertia))

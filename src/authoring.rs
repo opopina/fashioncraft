@@ -407,6 +407,12 @@ pub enum Command {
         panels: std::collections::BTreeSet<String>,
         internal_lines: bool,
     },
+    /// Strengthen pieces (their fabric simulated `STRENGTHEN_FACTOR` times stiffer) or return
+    /// them to normal. One undo step.
+    Strengthen {
+        panels: Vec<String>,
+        on: bool,
+    },
     /// Put pieces on a simulation layer (0 clears it): where pieces of different layers touch,
     /// only the outer one gives way. One undo step.
     SetLayer {
@@ -840,6 +846,66 @@ pub fn prepare_deactivate_edit(
             .retain(|d| !ids.contains(&d.panel));
         if template.deactivated_panels.len() == before {
             return Err("Those pieces are active already".into());
+        }
+    }
+    let garment = template.compile()?;
+    let edit = Edit {
+        reset_simulation: !same_physics(source, &template),
+        template,
+        garment,
+        selected: panels.first().cloned(),
+        new_point: None,
+    };
+    let next = edit.state_after(compiled, state);
+    Ok((edit, next))
+}
+
+/// Solidify pieces in their current 3D shape (they keep it while moving and colliding as a
+/// whole) or release them, as one undo step. Returns the edit and the state to install.
+pub fn prepare_solidify_edit(
+    source: &GarmentTemplate,
+    compiled: &CompiledGarment,
+    state: &State,
+    panels: &[String],
+    solidify: bool,
+) -> Result<(Edit, State), String> {
+    use crate::garment::pins::{FrozenPanel, MaterialPinTarget, topology_fingerprint};
+    let ids: std::collections::BTreeSet<_> = panels.iter().collect();
+    if ids.is_empty() || ids.len() > 128 || ids.len() != panels.len() {
+        return Err("Select 1..128 distinct pieces".into());
+    }
+    validate_pin_source(source, compiled, state)?;
+    let mut template = source.clone();
+    if solidify {
+        for panel in &ids {
+            if source.frozen_panels.iter().any(|f| &f.panel == *panel)
+                || source.deactivated_panels.iter().any(|d| &d.panel == *panel)
+            {
+                return Err("Unfreeze or activate the piece before solidifying it".into());
+            }
+            template.solidified_panels.retain(|s| &s.panel != *panel);
+            let captured = capture_panel_targets(compiled, state, panel, None)?;
+            template.solidified_panels.push(FrozenPanel {
+                panel: (*panel).clone(),
+                topology: topology_fingerprint(compiled, panel)?,
+                targets: captured
+                    .into_iter()
+                    .map(|(uv, world)| MaterialPinTarget {
+                        panel: (*panel).clone(),
+                        uv,
+                        world,
+                    })
+                    .collect(),
+            });
+        }
+        template.version = 2;
+    } else {
+        let before = template.solidified_panels.len();
+        template
+            .solidified_panels
+            .retain(|s| !ids.contains(&s.panel));
+        if template.solidified_panels.len() == before {
+            return Err("Those pieces are not solidified".into());
         }
     }
     let garment = template.compile()?;
@@ -2454,6 +2520,30 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.internal_lines_locked = internal_lines;
             // A locked piece cannot stay selected on the board.
             selected = None;
+        }
+        Command::Strengthen { panels, on } => {
+            if panels.is_empty() {
+                return Err("Select pieces to strengthen".into());
+            }
+            let mut changed = false;
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Cannot strengthen {id}: panel not found"));
+                }
+                changed |= if on {
+                    template.strengthened_panels.insert(id.clone())
+                } else {
+                    template.strengthened_panels.remove(id)
+                };
+            }
+            if !changed {
+                return Err(if on {
+                    "Those pieces are strengthened already".into()
+                } else {
+                    "Those pieces are not strengthened".into()
+                });
+            }
+            selected = panels.first().cloned();
         }
         Command::SetLayer { panels, layer } => {
             if panels.is_empty() {

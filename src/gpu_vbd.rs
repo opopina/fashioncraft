@@ -449,14 +449,9 @@ impl GpuVbd {
             ]
         }));
         targets.extend((0..n).map(|i| {
-            let t = state.x[i] - origin
-                + (state.v[i] * dt + solver.acceleration(settings, i) * dt * dt) / damp;
-            [
-                t.x as f32,
-                t.y as f32,
-                t.z as f32,
-                (g.mesh.masses[i] * damp / (dt * dt)) as f32,
-            ]
+            let (t, inertia) = solver.inertia_target(settings, state, i);
+            let t = t - origin;
+            [t.x as f32, t.y as f32, t.z as f32, inertia as f32]
         }));
         balls.extend((0..n).map(|i| {
             let p = contacts.centers[i] - origin;

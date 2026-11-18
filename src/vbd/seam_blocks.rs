@@ -162,14 +162,10 @@ impl Problem<'_> {
                 }
             }
         }
-        let dt = self.settings.dt;
-        let damp = 1. + self.settings.damping * dt;
         for &v in &block.vertices {
-            let target = self.state.x[v]
-                + (self.state.v[v] * dt + self.solver.acceleration(self.settings, v) * dt * dt)
-                    / damp;
+            let (target, inertia) = self.solver.inertia_target(self.settings, self.state, v);
             let gap = crate::math::sub(get(v), target.to_array().map(S::c));
-            e = e + S::c(0.5 * g.mesh.masses[v] * damp / (dt * dt)) * crate::math::dot(gap, gap);
+            e = e + S::c(0.5 * inertia) * crate::math::dot(gap, gap);
         }
         e
     }
@@ -183,8 +179,6 @@ impl Problem<'_> {
             .collect();
         contacts.sort_unstable();
         contacts.dedup();
-        let dt = self.settings.dt;
-        let damp = 1. + self.settings.damping * dt;
         let mut membrane_diagonal = vec![DMat3::ZERO; ids.len()];
         let mut membrane_rows = Vec::new();
         for &i in &block.triangles {
@@ -220,10 +214,7 @@ impl Problem<'_> {
                     self.settings,
                     self.grab,
                 );
-                let inertia = self.solver.garment.mesh.masses[v] * damp / (dt * dt);
-                let target = self.state.x[v]
-                    + (self.state.v[v] * dt + self.solver.acceleration(self.settings, v) * dt * dt)
-                        / damp;
+                let (target, inertia) = self.solver.inertia_target(self.settings, self.state, v);
                 let g = DVec3::from_array(jet.g) + (self.x[v] - target) * inertia;
                 // Keep material/contact local curvature, but assemble the complete
                 // sewing matrix separately, including every off-diagonal coupling.

@@ -40,6 +40,31 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
 }
+/// Stiffness per unit mass (1/s²) drawing a solidified panel to its fitted shape: a 10 Hz
+/// spring, firm against the cloth's own sag yet soft enough to stay well conditioned.
+pub const SOLIDIFY_STIFFNESS: f64 =
+    (2. * std::f64::consts::PI * 10.) * (2. * std::f64::consts::PI * 10.);
+
+/// The rotation part of `a` (Müller et al. 2016, "A robust method to extract the rotational
+/// part of deformations"), refined from `q`. Unlike a polar decomposition it is well defined
+/// when `a` is singular, as it is for a flat panel.
+fn extract_rotation(a: glam::DMat3, mut q: glam::DQuat) -> glam::DQuat {
+    for _ in 0..30 {
+        let r = glam::DMat3::from_quat(q);
+        let omega = r.x_axis.cross(a.x_axis) + r.y_axis.cross(a.y_axis) + r.z_axis.cross(a.z_axis);
+        let denominator =
+            (r.x_axis.dot(a.x_axis) + r.y_axis.dot(a.y_axis) + r.z_axis.dot(a.z_axis)).abs()
+                + 1e-12;
+        let w = omega / denominator;
+        let angle = w.length();
+        if angle < 1e-12 {
+            break;
+        }
+        q = (glam::DQuat::from_axis_angle(w / angle, angle) * q).normalize();
+    }
+    q
+}
+
 /// The factor on a fabric's elastic energy in a local solve: 1 + k_d/dt with its internal
 /// damping k_d (see `VbdSolver::prepare_damping`).
 pub(crate) fn damped(m: &crate::model::Material, settings: &VbdSettings) -> f64 {
@@ -292,6 +317,10 @@ pub struct VbdSolver {
     /// The constant part of internal damping for the current step, as an acceleration per
     /// vertex (see `prepare_damping`); empty if no fabric is damped.
     damping_shift: Vec<DVec3>,
+    /// This step's solidify target of each vertex (none outside solidified panels), and the
+    /// last fitted rotation of each solidified panel, to start the next fit from.
+    solid_target: Vec<Option<DVec3>>,
+    solid_rotation: Vec<glam::DQuat>,
     /// Collision distance of each vertex's fabric, the largest of its triangles'; none where
     /// the scene's applies. Empty when no fabric sets its own.
     collision: Vec<Option<f64>>,
@@ -398,6 +427,8 @@ impl VbdSolver {
             friction: vec![],
             external: vec![],
             damping_shift: vec![],
+            solid_target: vec![],
+            solid_rotation: vec![],
             collision: vec![],
         };
         let mut collision = vec![None; n];
@@ -463,6 +494,68 @@ impl VbdSolver {
             None => vec![],
         };
         self.prepare_damping(settings, state);
+        self.prepare_solid(settings, state);
+    }
+    /// The inertia term of vertex `v` this step, as a target position and a weight (N/m): the
+    /// implicit-Euler prediction with mass m·damp/dt², joined by a solidified panel's spring
+    /// of stiffness m·ω² to its solidify target. Both are quadratic, so their sum is one.
+    pub(crate) fn inertia_target(
+        &self,
+        settings: &VbdSettings,
+        state: &State,
+        v: usize,
+    ) -> (DVec3, f64) {
+        let dt = settings.dt;
+        let damp = 1. + settings.damping * dt;
+        let target =
+            state.x[v] + (state.v[v] * dt + self.acceleration(settings, v) * dt * dt) / damp;
+        let inertia = self.garment.mesh.masses[v] * damp / (dt * dt);
+        match self.solid_target.get(v).copied().flatten() {
+            Some(s) => {
+                let k = self.garment.mesh.masses[v] * SOLIDIFY_STIFFNESS;
+                ((target * inertia + s * k) / (inertia + k), inertia + k)
+            }
+            None => (target, inertia),
+        }
+    }
+    /// Fit each solidified panel's captured shape, rotated and moved, to where its vertices
+    /// are heading this step (their inertia targets), and draw them toward the fit. A rigid
+    /// motion of the panel is followed exactly; only changes of shape are resisted.
+    fn prepare_solid(&mut self, settings: &VbdSettings, state: &State) {
+        self.solid_target.clear();
+        if self.garment.solid.is_empty() {
+            return;
+        }
+        self.solid_rotation
+            .resize(self.garment.solid.len(), glam::DQuat::IDENTITY);
+        let mut targets = vec![None; state.x.len()];
+        let dt = settings.dt;
+        let damp = 1. + settings.damping * dt;
+        for (k, group) in self.garment.solid.iter().enumerate() {
+            let heading: Vec<DVec3> = group
+                .vertices
+                .iter()
+                .map(|&v| {
+                    state.x[v] + (state.v[v] * dt + self.acceleration(settings, v) * dt * dt) / damp
+                })
+                .collect();
+            let count = heading.len().max(1) as f64;
+            let centre = heading.iter().sum::<DVec3>() / count;
+            let rest = group.reference.iter().sum::<DVec3>() / count;
+            let mut a = glam::DMat3::ZERO;
+            for (p, r) in heading.iter().zip(&group.reference) {
+                let (p, r) = (*p - centre, *r - rest);
+                a += glam::DMat3::from_cols(p * r.x, p * r.y, p * r.z);
+            }
+            let q = extract_rotation(a, self.solid_rotation[k]);
+            self.solid_rotation[k] = q;
+            for (&v, r) in group.vertices.iter().zip(&group.reference) {
+                if self.garment.mesh.pins[v].is_none() {
+                    targets[v] = Some(centre + q * (*r - rest));
+                }
+            }
+        }
+        self.solid_target = targets;
     }
     /// Internal damping adds the force −(k_d/dt)(∇E(x) − ∇E(xᵗ)) on each vertex, with E a
     /// damped fabric's membrane and bending energy and xᵗ the start of the step: it resists
@@ -627,19 +720,9 @@ impl VbdSolver {
         let old_velocity = state.v.clone();
         self.prepare_external(settings, state);
         let guess = self.prediction.guess(state, settings, &self.external);
-        let damp = 1.0 + settings.damping * dt;
-        let target: Vec<_> = (0..n)
-            .map(|i| {
-                state.x[i] + (state.v[i] * dt + self.acceleration(settings, i) * dt * dt) / damp
-            })
-            .collect();
-        let inertia: Vec<_> = self
-            .garment
-            .mesh
-            .masses
-            .iter()
-            .map(|m| m * damp / (dt * dt))
-            .collect();
+        let (target, inertia): (Vec<_>, Vec<_>) = (0..n)
+            .map(|i| self.inertia_target(settings, state, i))
+            .unzip();
         let predicted_motion = target
             .iter()
             .zip(&state.x)

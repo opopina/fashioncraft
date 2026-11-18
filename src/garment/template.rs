@@ -231,6 +231,15 @@ pub struct GarmentTemplate {
     /// Panels taken out of the simulation: held in place, and no contact with any cloth.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deactivated_panels: Vec<super::pins::DeactivatedPanel>,
+    /// Panels simulated with their fabric stiffened `STRENGTHEN_FACTOR` times, to hold their
+    /// shape while a garment settles; usually switched off afterwards.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub strengthened_panels: BTreeSet<String>,
+    /// Panels that keep a captured 3D shape: each vertex is drawn softly to the captured shape
+    /// best fitted (rotated and moved) to where the panel is going, so it moves and collides as
+    /// a whole but holds its form.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub solidified_panels: Vec<super::pins::FrozenPanel>,
     /// Simulation layer by panel id (absent = 0): where two pieces of different layers touch,
     /// only the higher (outer) one gives way, as if the lower lay under it unmoved. Used to
     /// settle layered garments, then usually reset to 0.
@@ -257,6 +266,15 @@ pub struct MirrorLink {
 }
 /// Highest simulation layer a panel can take.
 pub const MAX_LAYER: u32 = 9;
+/// Stiffness factor of a strengthened panel.
+pub const STRENGTHEN_FACTOR: f64 = 10.;
+
+/// A solidified panel's vertices and the captured shape they are drawn to.
+#[derive(Clone, Debug)]
+pub struct SolidGroup {
+    pub vertices: Vec<usize>,
+    pub reference: Vec<DVec3>,
+}
 
 #[derive(Clone, Debug)]
 pub struct PanelRange {
@@ -280,6 +298,8 @@ pub struct CompiledGarment {
     pub inert: Vec<bool>,
     /// Simulation layer of each vertex's panel; empty when every panel is on layer 0.
     pub layers: Vec<u32>,
+    /// Solidified panels: their vertices and captured reference positions.
+    pub solid: Vec<SolidGroup>,
     /// One orientation-bound material per panel, derived from shared fabric properties.
     pub materials: Vec<Material>,
     pub vertex_material: Vec<usize>,
@@ -333,6 +353,31 @@ impl GarmentTemplate {
                 return Err(format!("Panel wrap refers to unknown panel {id}"));
             }
             wrap.validate()?;
+        }
+        for id in &self.strengthened_panels {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("Strengthened panel {id} is not in the template"));
+            }
+        }
+        let mut solidified = BTreeSet::new();
+        for s in &self.solidified_panels {
+            if !self.panels.iter().any(|p| p.id == s.panel) {
+                return Err(format!(
+                    "Solidified panel {} is not in the template",
+                    s.panel
+                ));
+            }
+            if !solidified.insert(s.panel.as_str()) {
+                return Err(format!("Panel {} is solidified twice", s.panel));
+            }
+            if self.frozen_panels.iter().any(|f| f.panel == s.panel)
+                || self.deactivated_panels.iter().any(|d| d.panel == s.panel)
+            {
+                return Err(format!(
+                    "Panel {} cannot be solidified while frozen or deactivated",
+                    s.panel
+                ));
+            }
         }
         for (id, layer) in &self.panel_layers {
             if !self.panels.iter().any(|p| &p.id == id) {
@@ -433,6 +478,7 @@ impl GarmentTemplate {
             authored_holds: vec![],
             inert: vec![],
             layers: vec![],
+            solid: vec![],
             mesh: Mesh {
                 uv: vec![],
                 triangles: vec![],
@@ -668,6 +714,26 @@ impl GarmentTemplate {
             out.mesh.pins[i] = Some(target);
             out.initial_state.x[i] = target;
         }
+        for range in &out.panels {
+            if self.strengthened_panels.contains(&range.id) {
+                let m = &mut out.materials[range.material];
+                m.warp *= STRENGTHEN_FACTOR;
+                m.weft *= STRENGTHEN_FACTOR;
+                m.shear *= STRENGTHEN_FACTOR;
+                m.bend_warp *= STRENGTHEN_FACTOR;
+                m.bend_weft *= STRENGTHEN_FACTOR;
+            }
+        }
+        for hold in &self.solidified_panels {
+            let (vertices, reference) =
+                super::pins::resolve_frozen(&out, std::slice::from_ref(hold))?
+                    .into_iter()
+                    .unzip();
+            out.solid.push(SolidGroup {
+                vertices,
+                reference,
+            });
+        }
         if self.panel_layers.values().any(|l| *l > 0) {
             out.layers = vec![0; out.mesh.uv.len()];
             for range in &out.panels {
@@ -697,6 +763,8 @@ impl GarmentTemplate {
             pin_targets: vec![],
             frozen_panels: vec![],
             deactivated_panels: vec![],
+            strengthened_panels: Default::default(),
+            solidified_panels: vec![],
             panel_layers: Default::default(),
             panel_wraps: Default::default(),
             locked_panels: Default::default(),

@@ -202,6 +202,23 @@ impl PanelWrap {
     }
 }
 
+/// Archived pieces with the seams among them, as they were when archived.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArchivedPieces {
+    pub id: String,
+    /// The pieces' ids and names when archived, in the order the archive holds them.
+    pub ids: Vec<String>,
+    pub names: Vec<String>,
+    /// Seams between these pieces and pieces left on the board, sewn again on restore when
+    /// those pieces are still there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub seams: Vec<super::seam::SeamSpec>,
+    /// Middle of the board area they occupied, metres.
+    pub center: DVec2,
+    pub pieces: crate::authoring::clipboard::PatternClipboard,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GarmentTemplate {
@@ -235,6 +252,10 @@ pub struct GarmentTemplate {
     /// back colour shows where the front did.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub flipped_panels: BTreeSet<String>,
+    /// Pieces taken off the board and out of the simulation, kept with the document so they
+    /// can be brought back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub archive: Vec<ArchivedPieces>,
     /// Fold angle and strength of seams, by seam id: the two pieces meet at that angle.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_folds: BTreeMap<String, SeamFold>,
@@ -1300,6 +1321,7 @@ impl GarmentTemplate {
             frozen_panels: vec![],
             deactivated_panels: vec![],
             flipped_panels: Default::default(),
+            archive: Vec::new(),
             seam_folds: Default::default(),
             tacks: vec![],
             line_folds: vec![],

@@ -22,6 +22,8 @@ impl PatternClipboard {
             return Err("Select between 1 and 64 panels to copy".into());
         }
         let mut template = source.clone();
+        // An archive never travels inside copied or archived pieces.
+        template.archive.clear();
         template
             .mirror_links
             .retain(|l| ids.contains(&l.a) && ids.contains(&l.b));
@@ -81,16 +83,7 @@ impl PatternClipboard {
         template
             .fabric_appearance
             .retain(|id, _| template.fabrics.iter().any(|f| &f.id == id));
-        let mut lo = DVec2::splat(f64::INFINITY);
-        let mut hi = DVec2::splat(f64::NEG_INFINITY);
-        for p in &template.panels {
-            for uv in corners(p) {
-                let q = p.layout_2d.unwrap() + rotate_2d(uv, p.layout_rotation_degrees);
-                lo = lo.min(q);
-                hi = hi.max(q);
-            }
-        }
-        let center = (lo + hi) * 0.5;
+        let center = board_center(&template.panels);
         for p in &mut template.panels {
             p.layout_2d = p.layout_2d.map(|q| q - center);
         }
@@ -177,6 +170,25 @@ impl PatternClipboard {
         target: &mut GarmentTemplate,
         center: DVec2,
     ) -> Result<Vec<String>, String> {
+        self.insert(target, center, false)
+    }
+
+    /// Put archived pieces back as they were: their names, ids when free, board position
+    /// around `center` and 3D arrangement, without the offset a paste adds.
+    pub(super) fn restore(
+        &self,
+        target: &mut GarmentTemplate,
+        center: DVec2,
+    ) -> Result<Vec<String>, String> {
+        self.insert(target, center, true)
+    }
+
+    fn insert(
+        &self,
+        target: &mut GarmentTemplate,
+        center: DVec2,
+        restore: bool,
+    ) -> Result<Vec<String>, String> {
         self.validate()?;
         if !center.is_finite() {
             return Err("Invalid paste position".into());
@@ -194,7 +206,11 @@ impl PatternClipboard {
             .iter()
             .flat_map(|p| corners(p).map(|uv| p.placement.transform(DVec3::new(uv.x, -uv.y, 0.)).x))
             .fold(f64::INFINITY, f64::min);
-        let shift = DVec3::new(max_x + 0.15 - min_x, 0., 0.);
+        let shift = if restore {
+            DVec3::ZERO
+        } else {
+            DVec3::new(max_x + 0.15 - min_x, 0., 0.)
+        };
         let mut fabrics = BTreeMap::new();
         for f in &self.template.fabrics {
             let id = if let Some(existing) = target.fabrics.iter().find(|v| {
@@ -221,8 +237,13 @@ impl PatternClipboard {
         let mut created = Vec::new();
         for p in &self.template.panels {
             let mut copy = p.clone();
-            copy.id = unused_id("panel", target.panels.iter().map(|p| p.id.clone()));
-            copy.name = format!("{} copy", p.name);
+            let taken = target.panels.iter().any(|q| q.id == p.id);
+            if !restore || taken {
+                copy.id = unused_id("panel", target.panels.iter().map(|p| p.id.clone()));
+            }
+            if !restore {
+                copy.name = format!("{} copy", p.name);
+            }
             copy.fabric = fabrics[&p.fabric].clone();
             copy.layout_2d = Some(p.layout_2d.unwrap() + center);
             copy.placement.translation += shift;
@@ -274,4 +295,35 @@ fn corners(p: &Panel) -> [DVec2; 4] {
         DVec2::new(w, h),
         DVec2::new(0., h),
     ]
+}
+
+/// Middle of the board box of `panels` (their laid-out corners).
+fn board_center(panels: &[crate::garment::template::Panel]) -> DVec2 {
+    let mut lo = DVec2::splat(f64::INFINITY);
+    let mut hi = DVec2::splat(f64::NEG_INFINITY);
+    for p in panels {
+        for uv in corners(p) {
+            let q = p.layout_2d.unwrap_or(DVec2::ZERO) + rotate_2d(uv, p.layout_rotation_degrees);
+            lo = lo.min(q);
+            hi = hi.max(q);
+        }
+    }
+    (lo + hi) * 0.5
+}
+
+/// Middle of the board box the pieces `ids` occupy in `template`, with implicit layouts
+/// resolved as the board draws them.
+pub fn layout_center(template: &GarmentTemplate, ids: &[String]) -> DVec2 {
+    let panels: Vec<_> = template
+        .panels
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| ids.contains(&p.id))
+        .map(|(i, p)| {
+            let mut p = p.clone();
+            p.layout_2d = Some(layout(template, i));
+            p
+        })
+        .collect();
+    board_center(&panels)
 }

@@ -88,6 +88,7 @@ fn aliases(id: CommandId) -> &'static str {
         FastenButtons => "fasten button close",
         AddGraphic => "graphic print logo image png",
         ToggleLibrary => "library assets folder browse files",
+        ArchivePieces => "archive shelve put away hide pieces",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

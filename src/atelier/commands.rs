@@ -86,6 +86,7 @@ pub enum CommandId {
     FastenButtons,
     AddGraphic,
     ToggleLibrary,
+    ArchivePieces,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -857,6 +858,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Preference,
         NativeWorkspace
     ),
+    entry!(
+        ArchivePieces,
+        "pattern.archive",
+        "Archive pieces",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
 ];
 
 impl CommandId {
@@ -943,6 +953,7 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
             | CommandId::AddButton
             | CommandId::AddButtonhole
             | CommandId::AddGraphic
+            | CommandId::ArchivePieces
     ) && !ctx.selected_panel
     {
         return Err(UnavailableReason::NoSelectedPanel);

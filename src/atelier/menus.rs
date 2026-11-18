@@ -134,6 +134,7 @@ const GARMENT_3D: &[Item] = &[
     Sub(
         "Pieces",
         &[
+            Run("Archive", C::ArchivePieces),
             Run("Deactivate", C::DeactivatePieces),
             Run("Deactivate with seams", C::DeactivatePiecesWithSeams),
             Run("Activate", C::ActivatePieces),
@@ -588,7 +589,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 79, "{done} of {all}");
+        assert!(done >= 80, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

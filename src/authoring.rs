@@ -237,6 +237,19 @@ pub enum Command {
     RemovePanels {
         panels: Vec<String>,
     },
+    /// Take pieces off the board and out of the simulation, keeping them (with the seams
+    /// among them) in the document's archive. One undo step.
+    ArchivePanels {
+        panels: Vec<String>,
+    },
+    /// Bring archived pieces back where they were.
+    RestoreArchived {
+        id: String,
+    },
+    /// Drop archived pieces for good.
+    DeleteArchived {
+        id: String,
+    },
     Sew {
         a: BoundaryRef,
         b: BoundaryRef,
@@ -1224,6 +1237,8 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.fabric_appearance.clear();
         t.graphics.clear();
         t.trims.clear();
+        // Archived pieces are out of the simulation.
+        t.archive.clear();
         // Board locks only filter 2D picking; flipping a piece's front only changes its look.
         t.locked_panels.clear();
         t.flipped_panels.clear();
@@ -3848,6 +3863,100 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template
                 .seams
                 .retain(|s| s.references().all(|r| !ids.contains(&r.panel)));
+        }
+        Command::ArchivePanels { panels } => {
+            let ids: std::collections::BTreeSet<_> = panels.iter().cloned().collect();
+            if ids.is_empty()
+                || ids
+                    .iter()
+                    .any(|id| !template.panels.iter().any(|p| &p.id == id))
+            {
+                return Err("Select existing panels to archive".into());
+            }
+            if ids.len() >= template.panels.len() {
+                return Err("Keep at least one panel on the board".into());
+            }
+            let held = |id: &String| {
+                template.pin_targets.iter().any(|p| &p.panel == id)
+                    || template.frozen_panels.iter().any(|p| &p.panel == id)
+            };
+            if ids.iter().any(held) {
+                return Err("Release pins and unfreeze the pieces before archiving them".into());
+            }
+            let ordered: Vec<String> = template
+                .panels
+                .iter()
+                .filter(|p| ids.contains(&p.id))
+                .map(|p| p.id.clone())
+                .collect();
+            let pieces = clipboard::PatternClipboard::capture(&template, &ordered)?;
+            let center = clipboard::layout_center(&template, &ordered);
+            let names = template
+                .panels
+                .iter()
+                .filter(|p| ids.contains(&p.id))
+                .map(|p| p.name.clone())
+                .collect();
+            let crossing = template
+                .seams
+                .iter()
+                .filter(|s| {
+                    s.references().any(|r| ids.contains(&r.panel))
+                        && s.references().any(|r| !ids.contains(&r.panel))
+                })
+                .cloned()
+                .collect();
+            let id = unused_id("archive", template.archive.iter().map(|a| a.id.clone()));
+            template.panels.retain(|p| !ids.contains(&p.id));
+            template
+                .seams
+                .retain(|s| s.references().all(|r| !ids.contains(&r.panel)));
+            template
+                .archive
+                .push(crate::garment::template::ArchivedPieces {
+                    id,
+                    ids: ordered,
+                    names,
+                    seams: crossing,
+                    center,
+                    pieces,
+                });
+        }
+        Command::RestoreArchived { id } => {
+            let k = template
+                .archive
+                .iter()
+                .position(|a| a.id == id)
+                .ok_or("Archived pieces not found")?;
+            let entry = template.archive.remove(k);
+            let created = entry.pieces.restore(&mut template, entry.center)?;
+            let renamed: std::collections::BTreeMap<&String, &String> =
+                entry.ids.iter().zip(&created).collect();
+            // Sew the pieces back to the ones still on the board.
+            for seam in entry.seams {
+                let mut seam = seam;
+                for r in seam.references_mut() {
+                    if let Some(new) = renamed.get(&r.panel) {
+                        r.panel = (*new).clone();
+                    }
+                }
+                let present = seam
+                    .references()
+                    .all(|r| template.panels.iter().any(|p| p.id == r.panel));
+                if present {
+                    if template.seams.iter().any(|s| s.id == seam.id) {
+                        seam.id = unused_id("seam", template.seams.iter().map(|s| s.id.clone()));
+                    }
+                    template.seams.push(seam);
+                }
+            }
+            selected = created.first().cloned();
+        }
+        Command::DeleteArchived { id } => {
+            if !template.archive.iter().any(|a| a.id == id) {
+                return Err("Archived pieces not found".into());
+            }
+            template.archive.retain(|a| a.id != id);
         }
         Command::Sew {
             a,

@@ -124,7 +124,46 @@ impl Atelier {
             self.select_panel(id, ui.input(|i| i.modifiers.shift));
             self.authoring.edge = None;
         }
+        self.archive_list(ui);
         ui.separator();
+    }
+
+    /// Archived pieces, each with Restore and Delete; hidden while the archive is empty.
+    fn archive_list(&mut self, ui: &mut egui::Ui) {
+        if self.project.template.archive.is_empty() {
+            return;
+        }
+        let mut command = None;
+        egui::CollapsingHeader::new(format!(
+            "Archived ({})",
+            self.project.template.archive.len()
+        ))
+        .id_salt("archive_list")
+        .show(ui, |ui| {
+            for entry in &self.project.template.archive {
+                ui.horizontal(|ui| {
+                    ui.label(entry.names.join(", "))
+                        .on_hover_text("Off the board and out of the simulation, kept with the project");
+                    if ui
+                        .small_button("Restore")
+                        .on_hover_text("Bring them back where they were, sewn to the pieces still on the board")
+                        .clicked()
+                    {
+                        command = Some(marvelous_cloth::authoring::Command::RestoreArchived {
+                            id: entry.id.clone(),
+                        });
+                    }
+                    if ui.small_button("Delete").clicked() {
+                        command = Some(marvelous_cloth::authoring::Command::DeleteArchived {
+                            id: entry.id.clone(),
+                        });
+                    }
+                });
+            }
+        });
+        if let Some(command) = command {
+            self.edit(command);
+        }
     }
     pub(super) fn export_information(&mut self, ui: &mut egui::Ui) {
         ui.collapsing("Files & formats", |ui| {

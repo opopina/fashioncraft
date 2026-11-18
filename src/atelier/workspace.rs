@@ -53,6 +53,8 @@ fn light_visuals(visuals: &mut egui::Visuals) {
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xDD, 0xDD, 0xDD);
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xF1, 0xDF, 0xC6);
     visuals.widgets.active.bg_fill = Color32::from_rgb(0xEC, 0xC9, 0x95);
+    // Section headers sit on a full-width band, as property groups do.
+    visuals.collapsing_header_frame = true;
 }
 
 /// Dark counterpart of the light palette, carrying the same accent. Text and
@@ -67,6 +69,7 @@ fn dark_visuals(visuals: &mut egui::Visuals) {
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x32, 0x32, 0x38);
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x4A, 0x40, 0x33);
     visuals.widgets.active.bg_fill = Color32::from_rgb(0x6B, 0x52, 0x2E);
+    visuals.collapsing_header_frame = true;
 }
 
 fn install(ctx: &egui::Context, dark: bool) {

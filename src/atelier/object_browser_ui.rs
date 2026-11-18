@@ -82,6 +82,8 @@ impl Atelier {
             .default_width(300.)
             .default_height(440.)
             .show(ctx, |ui| {
+                // A tree, not property groups: no bands behind its branches.
+                ui.visuals_mut().collapsing_header_frame = false;
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, true])
                     .show(ui, |ui| {

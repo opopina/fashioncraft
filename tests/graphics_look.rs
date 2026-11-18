@@ -139,6 +139,27 @@ fn a_graphic_beyond_the_piece_is_cut_at_its_outline() {
 }
 
 #[test]
+fn a_print_carries_the_fabric_coordinates_under_it() {
+    let (g, panel) = front_panel();
+    let mut p = placement(&panel, GraphicSide::Front);
+    p.rotation_degrees = 0.;
+    let triangles = p.graphic_triangles(&g, &g.initial_state.x, false).unwrap();
+    let range = g.panels.iter().find(|r| r.id == panel).unwrap();
+    for t in &triangles {
+        assert_eq!(t.fabric, range.material);
+        for k in 0..3 {
+            // The material point under each corner is where the print says it is.
+            let expected = p.uv_to_material(t.uv[k]).unwrap();
+            assert!(
+                t.material[k].distance(expected) < 1e-9,
+                "{} vs {expected}",
+                t.material[k]
+            );
+        }
+    }
+}
+
+#[test]
 fn graphic_images_are_copied_with_the_project_and_unused_ones_dropped() {
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("logo.png");

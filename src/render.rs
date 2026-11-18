@@ -1414,8 +1414,26 @@ impl Viewport {
         self.render_state
             .queue
             .write_buffer(&self.vertices, 0, bytes);
+        // Prints follow the weave and relief of the fabric they lie on.
+        let looks: Vec<Vec<Option<Surface>>> = graphics
+            .iter()
+            .map(|draw| {
+                draw.triangles
+                    .iter()
+                    .map(|t| {
+                        let appearance = optics.and_then(|v| v.get(t.fabric)?.as_ref())?;
+                        let grain = materials.get(t.fabric)?.grain_degrees;
+                        let layers = layers.get(t.fabric).copied().unwrap_or([None; 3]);
+                        Some(face_surface(appearance, grain, t.material, false, layers).1)
+                    })
+                    .collect()
+            })
+            .collect();
+        let maps = self
+            .fabric_maps
+            .bind_for(device, &self.graphics.maps_layout());
         self.graphics
-            .prepare(device, &self.render_state.queue, graphics);
+            .prepare(device, &self.render_state.queue, graphics, &looks, maps);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("cloth-viewport"),
         });

@@ -273,6 +273,11 @@ pub struct GraphicTriangle {
     pub points: [DVec3; 3],
     pub normals: [DVec3; 3],
     pub uv: [DVec2; 3],
+    /// The cloth's material coordinates at the corners (metres), so the print can follow the
+    /// fabric's weave and relief there.
+    pub material: [DVec2; 3],
+    /// The compiled material (fabric) of the piece it lies on.
+    pub fabric: usize,
 }
 
 /// The parts of a triangle with image coordinates `uv` that lie inside the image square
@@ -359,18 +364,27 @@ impl GraphicPlacement {
             let corners = t
                 .vertices
                 .map(|v| (x[v] + normal(v) * GRAPHIC_LIFT_M, normal(v)));
+            let material = t.vertices.map(|v| garment.mesh.uv[v]);
             for weights in clip_to_image(t.image_uv) {
                 let blend = |w: DVec3| {
                     let p = corners[0].0 * w.x + corners[1].0 * w.y + corners[2].0 * w.z;
                     let n = corners[0].1 * w.x + corners[1].1 * w.y + corners[2].1 * w.z;
                     let uv = t.image_uv[0] * w.x + t.image_uv[1] * w.y + t.image_uv[2] * w.z;
-                    (p, n.normalize_or_zero(), uv.clamp(DVec2::ZERO, DVec2::ONE))
+                    let m = material[0] * w.x + material[1] * w.y + material[2] * w.z;
+                    (
+                        p,
+                        n.normalize_or_zero(),
+                        uv.clamp(DVec2::ZERO, DVec2::ONE),
+                        m,
+                    )
                 };
                 let [a, b, c] = weights.map(blend);
                 out.push(GraphicTriangle {
                     points: [a.0, b.0, c.0],
                     normals: [a.1, b.1, c.1],
                     uv: [a.2, b.2, c.2],
+                    material: [a.3, b.3, c.3],
+                    fabric: panel.material,
                 });
             }
         }

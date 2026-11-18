@@ -161,6 +161,15 @@ impl FabricMaps {
     }
 
     /// Bind the same textures to a rebuilt pipeline's layout.
+    /// The maps bound for another pipeline's layout of the same two entries.
+    pub fn bind_for(
+        &self,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
+        bind_group(device, layout, &self.view, &self.sampler)
+    }
+
     pub fn rebind(&mut self, device: &wgpu::Device, layout: &wgpu::BindGroupLayout) {
         self.bind = bind_group(device, layout, &self.view, &self.sampler);
     }

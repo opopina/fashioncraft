@@ -5,8 +5,9 @@ use super::*;
 use crate::garment::graphics::GraphicTriangle;
 use std::collections::HashMap;
 
-/// Floats per graphic vertex: position, normal, image coordinates, opacity.
-const GRAPHIC_FLOATS: usize = 9;
+/// Floats per graphic vertex: position, normal, image coordinates, opacity, and the fabric's
+/// look there (weave coordinates and parameters, map coordinates, layers and relief).
+const GRAPHIC_FLOATS: usize = 20;
 
 /// Decoded straight-alpha RGBA8 pixels of a graphic's image, in sRGB. `key` identifies the
 /// pixels: equal keys must mean equal pixels, as the uploaded texture is reused.
@@ -29,6 +30,8 @@ pub struct GraphicDraw<'a> {
 pub(super) struct GraphicLayer {
     pipeline: wgpu::RenderPipeline,
     view_bind: wgpu::BindGroup,
+    /// The fabric maps of this frame, for the relief under the prints.
+    maps: Option<wgpu::BindGroup>,
     sampler: wgpu::Sampler,
     textures: HashMap<u64, wgpu::BindGroup>,
     vertices: wgpu::Buffer,
@@ -69,7 +72,10 @@ impl GraphicLayer {
             label: Some("cloth graphics"),
             source: wgpu::ShaderSource::Wgsl(include_str!("graphic.wgsl").into()),
         });
-        let attrs = wgpu::vertex_attr_array![0=>Float32x3,1=>Float32x3,2=>Float32x2,3=>Float32];
+        let attrs = wgpu::vertex_attr_array![
+            0=>Float32x3, 1=>Float32x3, 2=>Float32x2, 3=>Float32,
+            4=>Float32x2, 5=>Float32x3, 6=>Float32x2, 7=>Float32x4
+        ];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("cloth graphics"),
             layout: None,
@@ -141,6 +147,7 @@ impl GraphicLayer {
         Self {
             pipeline,
             view_bind,
+            maps: None,
             sampler,
             textures: HashMap::new(),
             vertices,
@@ -208,13 +215,27 @@ impl GraphicLayer {
         })
     }
 
-    /// Upload new images and this frame's triangles; images no longer drawn are released.
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, draws: &[GraphicDraw]) {
+    /// The layout the fabric maps are bound with (group 2).
+    pub fn maps_layout(&self) -> wgpu::BindGroupLayout {
+        self.pipeline.get_bind_group_layout(2)
+    }
+
+    /// Upload new images and this frame's triangles, each with the fabric look under it
+    /// (`looks`, per draw and triangle); images no longer drawn are released.
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        draws: &[GraphicDraw],
+        looks: &[Vec<Option<Surface>>],
+        maps: wgpu::BindGroup,
+    ) {
+        self.maps = Some(maps);
         self.textures
             .retain(|key, _| draws.iter().any(|d| d.image.key == *key));
         let mut data = Vec::<f32>::new();
         self.batches.clear();
-        for draw in draws {
+        for (d, draw) in draws.iter().enumerate() {
             if draw.image.size[0] == 0
                 || draw.image.size[1] == 0
                 || draw.image.rgba.len() != (draw.image.size[0] * draw.image.size[1] * 4) as usize
@@ -226,12 +247,25 @@ impl GraphicLayer {
                 self.textures.insert(draw.image.key, bind);
             }
             let start = (data.len() / GRAPHIC_FLOATS) as u32;
-            for t in draw.triangles {
+            for (i, t) in draw.triangles.iter().enumerate() {
+                let look = looks.get(d).and_then(|l| l.get(i).copied().flatten());
                 for k in 0..3 {
                     data.extend_from_slice(&t.points[k].as_vec3().to_array());
                     data.extend_from_slice(&t.normals[k].as_vec3().to_array());
                     data.extend_from_slice(&t.uv[k].as_vec2().to_array());
                     data.push(draw.opacity.clamp(0., 1.));
+                    match &look {
+                        Some(s) => {
+                            data.extend_from_slice(&s.uv[k]);
+                            data.extend_from_slice(&s.weave);
+                            data.extend_from_slice(&s.map_uv[k]);
+                            data.extend_from_slice(&s.map);
+                        }
+                        None => {
+                            data.extend_from_slice(&[0.; 7]);
+                            data.extend_from_slice(&[-1., 0., -1., -1.]);
+                        }
+                    }
                 }
             }
             let end = (data.len() / GRAPHIC_FLOATS) as u32;
@@ -259,8 +293,12 @@ impl GraphicLayer {
         if self.batches.is_empty() {
             return;
         }
+        let Some(maps) = &self.maps else {
+            return;
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.view_bind, &[]);
+        pass.set_bind_group(2, maps, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         for (key, range) in &self.batches {
             if let Some(bind) = self.textures.get(key) {

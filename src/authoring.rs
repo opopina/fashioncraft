@@ -249,6 +249,14 @@ pub enum Command {
         panel: String,
         line: String,
     },
+    /// A diamond-shaped hole whose upper and lower legs are sewn together: a dart that takes
+    /// in `width` at its middle and runs `height` along the material's vertical axis.
+    DiamondDart {
+        panel: String,
+        center: DVec2,
+        width: f64,
+        height: f64,
+    },
     /// Carry one end of an internal line on straight up to the outline or the nearest line.
     ExtendLine {
         panel: String,
@@ -3952,6 +3960,15 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
         Command::CutAndSew { panel, line } => {
             topology::cut_and_sew(&mut template, &panel, &line)?;
+            selected = Some(panel);
+        }
+        Command::DiamondDart {
+            panel,
+            center,
+            width,
+            height,
+        } => {
+            topology::diamond_dart(&mut template, &panel, center, width, height)?;
             selected = Some(panel);
         }
         Command::ExtendLine {

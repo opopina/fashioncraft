@@ -220,6 +220,22 @@ impl Atelier {
                 if ui.button("Add internal shape").clicked() && self.edit(command) {
                     self.status = "Internal shape added · select it to cut it out as a hole".into();
                 }
+                if ui
+                    .button("Add diamond dart")
+                    .on_hover_text(
+                        "A diamond hole of this width and height at Centre, its upper and lower \
+                         legs sewn together: it closes into a dart along the height",
+                    )
+                    .clicked()
+                    && self.edit(Command::DiamondDart {
+                        panel: panel.id.clone(),
+                        center: DVec2::from_array(centre) / 1000.,
+                        width: self.authoring.shapes.size_mm[0] / 1000.,
+                        height: self.authoring.shapes.size_mm[1] / 1000.,
+                    })
+                {
+                    self.status = "Diamond dart added and sewn".into();
+                }
                 if !others.is_empty() {
                     ui.separator();
                     let chosen = &mut self.authoring.segments.clone_source;

@@ -1029,6 +1029,84 @@ pub(super) fn split_line(
     Ok(())
 }
 
+/// Add a diamond dart to `panel`: a diamond-shaped hole `width × height` (along the material
+/// axes) centred on `center`, whose two upper legs are sewn together and whose two lower legs
+/// are sewn together, so the hole closes into a dart along its height. Returns the hole's name.
+pub(super) fn diamond_dart(
+    template: &mut GarmentTemplate,
+    panel: &str,
+    center: DVec2,
+    width: f64,
+    height: f64,
+) -> Result<String, String> {
+    if !center.is_finite()
+        || !(0.002..=0.2).contains(&width)
+        || !(0.01..=1.0).contains(&height)
+        || height < 2. * width
+    {
+        return Err(
+            "A diamond dart needs a 2–200 mm intake and a height of at least twice it, up to 1 m"
+                .into(),
+        );
+    }
+    let polygon = template
+        .panels
+        .iter_mut()
+        .find(|p| p.id == panel)
+        .ok_or("Panel not found")?
+        .polygon
+        .as_mut()
+        .ok_or("This panel has no editable contour")?;
+    let taken: BTreeSet<String> = polygon.paths()?.into_iter().map(|(n, _)| n).collect();
+    let base = (1..)
+        .map(|k| format!("diamond_{k}"))
+        .find(|b| (1..=4).all(|i| !taken.contains(&format!("{b}_{i}"))))
+        .unwrap();
+    let (w, h) = (width / 2., height / 2.);
+    let mut points = vec![
+        center + DVec2::new(0., -h),
+        center + DVec2::new(w, 0.),
+        center + DVec2::new(0., h),
+        center + DVec2::new(-w, 0.),
+    ];
+    // Holes run clockwise (negative area); the apexes are the points on the long axis.
+    if signed_area(&points) > 0. {
+        points.reverse();
+    }
+    let apexes = [center + DVec2::new(0., -h), center + DVec2::new(0., h)];
+    let edges: Vec<String> = (1..=4).map(|i| format!("{base}_{i}")).collect();
+    polygon.holes.push(crate::garment::domain::Hole {
+        points: points.clone(),
+        edges: edges.clone(),
+    });
+    // For each apex, the leg arriving at it is sewn to the leg leaving it, far ends together.
+    for apex in apexes {
+        let k = (0..4)
+            .find(|&k| points[(k + 1) % 4].distance(apex) < 1e-12)
+            .expect("the apex is a corner");
+        let side = |edge: &String| BoundaryRef {
+            reversed: false,
+            panel: panel.to_string(),
+            side: crate::garment::seam::Side::Top,
+            edge: Some(edge.clone()),
+            range: [0., 1.],
+        };
+        let id = unused_id("seam", template.seams.iter().map(|s| s.id.clone()));
+        template.seams.push(SeamSpec {
+            id,
+            a: side(&edges[k]),
+            b: side(&edges[(k + 1) % 4]),
+            a_tail: vec![],
+            b_tail: vec![],
+            reverse_b: true,
+            notches: vec![],
+            stiffness: 50_000.,
+            allow_ease: false,
+        });
+    }
+    Ok(base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -93,6 +93,7 @@ fn aliases(id: CommandId) -> &'static str {
         MergeAlongSeam => "merge join combine pieces seam",
         UnfoldPiece => "unfold mirror half symmetric fold open",
         ExtendLineEnds => "extend prolong internal line outline",
+        AddDiamondDart => "diamond dart fish eye waist shaping",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

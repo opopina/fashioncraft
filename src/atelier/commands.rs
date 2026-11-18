@@ -91,6 +91,7 @@ pub enum CommandId {
     MergeAlongSeam,
     UnfoldPiece,
     ExtendLineEnds,
+    AddDiamondDart,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -907,6 +908,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         TemplateHistory,
         NativeWorkspace
     ),
+    entry!(
+        AddDiamondDart,
+        "pattern.diamond_dart",
+        "Add a diamond dart to the selected piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
 ];
 
 impl CommandId {
@@ -994,6 +1004,7 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
             | CommandId::AddButtonhole
             | CommandId::AddGraphic
             | CommandId::ArchivePieces
+            | CommandId::AddDiamondDart
     ) && !ctx.selected_panel
     {
         return Err(UnavailableReason::NoSelectedPanel);

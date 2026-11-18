@@ -214,7 +214,7 @@ const PATTERN_2D: &[Item] = &[
             Run("Internal polygon or line", C::ToolInternalLine),
             Todo("Internal rectangle"),
             Todo("Internal ellipse"),
-            Todo("Dart"),
+            Run("Diamond dart", C::AddDiamondDart),
         ],
     ),
     Todo("Trace"),
@@ -618,7 +618,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 84, "{done} of {all}");
+        assert!(done >= 85, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

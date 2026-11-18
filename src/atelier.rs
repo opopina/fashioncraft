@@ -543,6 +543,26 @@ impl Atelier {
                 self.prefs.garment_display.schematic = !self.prefs.garment_display.schematic;
             }
             Id::ToggleLibrary => self.authoring.library.open = !self.authoring.library.open,
+            Id::AddDiamondDart => {
+                let panel = self
+                    .authoring
+                    .selected
+                    .clone()
+                    .ok_or("Select a panel first")?;
+                let center = self
+                    .piece_centre(&panel)
+                    .ok_or("The piece has no mesh yet")?;
+                if !self.edit(marvelous_cloth::authoring::Command::DiamondDart {
+                    panel,
+                    center,
+                    width: 0.03,
+                    height: 0.15,
+                }) {
+                    return Err(self.status.clone());
+                }
+                self.status =
+                    "Diamond dart (30 × 150 mm) added at the middle of the piece and sewn".into();
+            }
             Id::ExtendLineEnds => {
                 let (panel, line) = self
                     .authoring

@@ -30,6 +30,8 @@ fn the_mannequin_measures_like_a_body() {
     assert!((0.6..0.85).contains(&m.waist_m), "{m:?}");
     assert!((0.9..1.15).contains(&m.hip_m), "{m:?}");
     assert!(m.waist_m < m.bust_m && m.waist_m < m.hip_m);
+    assert!((0.45..0.7).contains(&m.arm_m), "{m:?}");
+    assert!((0.7..0.9).contains(&m.inseam_m), "{m:?}");
 }
 
 #[test]
@@ -42,12 +44,16 @@ fn reshaping_lands_on_the_asked_measurements() {
             bust_m: now.bust_m + 0.10,
             waist_m: now.waist_m - 0.05,
             hip_m: now.hip_m + 0.08,
+            arm_m: now.arm_m + 0.04,
+            inseam_m: now.inseam_m + 0.05,
         },
         BodyMeasurements {
             height_m: 1.60,
             bust_m: now.bust_m - 0.06,
             waist_m: now.waist_m + 0.06,
             hip_m: now.hip_m - 0.05,
+            arm_m: now.arm_m - 0.03,
+            inseam_m: now.inseam_m - 0.04,
         },
     ] {
         let (shaped, moved) = reshape(&body, &joints, &target).unwrap();
@@ -58,6 +64,8 @@ fn reshaping_lands_on_the_asked_measurements() {
             (got.bust_m, target.bust_m),
             (got.waist_m, target.waist_m),
             (got.hip_m, target.hip_m),
+            (got.arm_m, target.arm_m),
+            (got.inseam_m, target.inseam_m),
         ] {
             assert!((a - b).abs() < 0.01, "{got:?} for {target:?}");
         }

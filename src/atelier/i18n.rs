@@ -1586,6 +1586,9 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Replace the garment with these trousers" => "Sustituye la prenda por este pantalón",
         "Trousers drafted from the measurements" => "Pantalón trazado a partir de las medidas",
+        "Arm length" => "Largo de brazo",
+        "Inseam" => "Entrepierna",
+        "The legs do not part below the pelvis" => "Las piernas no se separan bajo la pelvis",
         _ => return None,
     })
 }

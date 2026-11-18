@@ -15,7 +15,7 @@ pub(super) struct AvatarShapeUi {
     /// The avatar measured, by its file: its body, joints and measurements.
     measured: Option<(PathBuf, Result<Measured, String>)>,
     /// The measurements asked for, centimetres.
-    target: Option<[f64; 4]>,
+    target: Option<[f64; 6]>,
     error: Option<String>,
 }
 
@@ -38,8 +38,11 @@ fn measure(path: &std::path::Path) -> Result<Measured, String> {
     Ok(Measured { body, joints, now })
 }
 
-fn centimetres(m: &BodyMeasurements) -> [f64; 4] {
-    [m.height_m, m.bust_m, m.waist_m, m.hip_m].map(|v| (v * 1000.).round() / 10.)
+fn centimetres(m: &BodyMeasurements) -> [f64; 6] {
+    [
+        m.height_m, m.bust_m, m.waist_m, m.hip_m, m.arm_m, m.inseam_m,
+    ]
+    .map(|v| (v * 1000.).round() / 10.)
 }
 
 impl Atelier {
@@ -83,12 +86,20 @@ impl Atelier {
                         ui.strong(i18n::tr(ui_lang, "Now"));
                         ui.strong(i18n::tr(ui_lang, "New"));
                         ui.end_row();
-                        for (k, name) in ["Height", "Bust", "Waist", "Hip"].iter().enumerate() {
+                        for (k, name) in ["Height", "Bust", "Waist", "Hip", "Arm length", "Inseam"]
+                            .iter()
+                            .enumerate()
+                        {
                             ui.label(i18n::tr(ui_lang, name));
                             ui.label(format!("{:.1} cm", now[k]));
                             ui.add(
                                 egui::DragValue::new(&mut target[k])
-                                    .range(if k == 0 { 50.0..=250.0 } else { 30.0..=220.0 })
+                                    .range(match k {
+                                        0 => 50.0..=250.0,
+                                        4 => 15.0..=120.0,
+                                        5 => 20.0..=140.0,
+                                        _ => 30.0..=220.0,
+                                    })
                                     .speed(0.5)
                                     .suffix(" cm"),
                             );
@@ -129,11 +140,13 @@ impl Atelier {
             bust_m: t[1] / 100.,
             waist_m: t[2] / 100.,
             hip_m: t[3] / 100.,
+            arm_m: t[4] / 100.,
+            inseam_m: t[5] / 100.,
         };
         let (body, joints) = avatar_shape::reshape(&measured.body, &measured.joints, &target)?;
         let dir = self.output.join(format!(
-            "avatar-{:.0}-{:.0}-{:.0}-{:.0}",
-            t[0], t[1], t[2], t[3]
+            "avatar-{:.0}-{:.0}-{:.0}-{:.0}-{:.0}-{:.0}",
+            t[0], t[1], t[2], t[3], t[4], t[5]
         ));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let obj = dir.join("avatar.obj");
@@ -154,8 +167,8 @@ impl Atelier {
         .map_err(|e| e.to_string())?;
         self.offer_avatar(&obj);
         self.status = format!(
-            "Avatar made to {:.1} / {:.1} / {:.1} / {:.1} cm · confirm to replace the current one",
-            t[0], t[1], t[2], t[3]
+            "Avatar made to {:.1} / {:.1} / {:.1} / {:.1} / {:.1} / {:.1} cm · confirm to replace the current one",
+            t[0], t[1], t[2], t[3], t[4], t[5]
         );
         Ok(())
     }

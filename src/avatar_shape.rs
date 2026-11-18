@@ -7,6 +7,12 @@
 //! runs smoothly through the bust, waist and hip levels and back to one at the shoulders and
 //! the knees. Skin weights carry the change to the limbs: arms move with their shoulder, legs
 //! with their hip joint. A few rounds of measuring and correcting land the girths on target.
+//!
+//! The arm is measured shoulder to elbow to wrist along the joints, the inseam from the floor
+//! up to the crotch, where the body's horizontal section near the spine splits into the two
+//! legs. Reshaping stretches the body vertically below and above the crotch, keeping the
+//! height, so the legs get the inseam asked for, and stretches each arm along itself from
+//! its shoulder.
 use crate::{avatar::SurfaceMesh, avatar_landmarks::sections, avatar_rig::Rig};
 use glam::{DVec2, DVec3};
 use std::collections::BTreeMap;
@@ -18,6 +24,10 @@ pub struct BodyMeasurements {
     pub bust_m: f64,
     pub waist_m: f64,
     pub hip_m: f64,
+    /// Shoulder to elbow to wrist, along the joints.
+    pub arm_m: f64,
+    /// Floor to crotch.
+    pub inseam_m: f64,
 }
 
 /// The levels the girths are taken at, metres above the floor's origin.
@@ -81,6 +91,35 @@ fn levels(
     ))
 }
 
+/// Height of the crotch: scanning down from the pelvis, the first level where the section
+/// nearest the spine is no longer around it but around a leg.
+fn crotch(surface: &SurfaceMesh, landmarks: &BTreeMap<String, DVec3>) -> Result<f64, String> {
+    let pelvis = joint(landmarks, "joint-pelvis")?;
+    let knee = joint(landmarks, "joint-l-knee")?;
+    let axis = DVec2::new(pelvis.x, pelvis.z);
+    let mut y = pelvis.y;
+    while y > knee.y {
+        let split = sections(surface, DVec3::new(axis.x, y, axis.y), DVec3::Y)
+            .into_iter()
+            .map(|s| DVec2::new(s.centre.x, s.centre.z).distance(axis))
+            .fold(f64::INFINITY, f64::min)
+            > 0.03;
+        if split {
+            return Ok(y);
+        }
+        y -= 0.002;
+    }
+    Err("The legs do not part below the pelvis".into())
+}
+
+/// Shoulder to elbow to wrist on one side, with that side's shoulder and hand joints.
+fn arm(landmarks: &BTreeMap<String, DVec3>, side: &str) -> Result<(f64, DVec3, DVec3), String> {
+    let s = joint(landmarks, &format!("joint-{side}-shoulder"))?;
+    let e = joint(landmarks, &format!("joint-{side}-elbow"))?;
+    let h = joint(landmarks, &format!("joint-{side}-hand"))?;
+    Ok((s.distance(e) + e.distance(h), s, h))
+}
+
 /// The avatar's height and girths.
 pub fn measure(
     surface: &SurfaceMesh,
@@ -94,6 +133,8 @@ pub fn measure(
         bust_m: at(l.bust)?,
         waist_m: at(l.waist)?,
         hip_m: at(l.hip)?,
+        arm_m: arm(landmarks, "l")?.0,
+        inseam_m: crotch(surface, landmarks)? - lo.y,
     })
 }
 
@@ -149,6 +190,14 @@ pub fn reshape(
     {
         return Err("Measurements must be a height of 50–250 cm and girths of 30–220 cm".into());
     }
+    if !valid(target.arm_m, 0.15, 1.2)
+        || !valid(target.inseam_m, 0.2, 1.4)
+        || target.inseam_m > target.height_m * 0.6
+    {
+        return Err(
+            "The arm must be 15–120 cm and the inseam 20–140 cm, below 60 % of the height".into(),
+        );
+    }
     let current = measure(surface, landmarks)?;
     // The whole body to the new height, about its feet.
     let (lo, _) = bounds(surface);
@@ -164,6 +213,29 @@ pub fn reshape(
         .iter()
         .map(|(id, p)| (id.clone(), grow(*p)))
         .collect();
+    // The legs to the inseam asked for, the rest above them taking up the difference so the
+    // height stays: one stretch below the crotch and another above it.
+    let floor = lo.y;
+    let fork = crotch(&body, &joints)?;
+    let below = target.inseam_m / (fork - floor);
+    let above = (target.height_m - target.inseam_m) / (floor + target.height_m - fork);
+    if !(0.5..=2.).contains(&below) || !(0.5..=2.).contains(&above) {
+        return Err("The inseam asked for is too far from the avatar's".into());
+    }
+    let stretch = |p: DVec3| {
+        let y = if p.y <= fork {
+            floor + (p.y - floor) * below
+        } else {
+            floor + target.inseam_m + (p.y - fork) * above
+        };
+        DVec3::new(p.x, y, p.z)
+    };
+    for p in &mut body.vertices {
+        *p = stretch(*p);
+    }
+    for p in joints.values_mut() {
+        *p = stretch(*p);
+    }
     let rig = Rig::new(&joints, &body)?;
     let rest = body.clone();
     let rest_joints = joints.clone();
@@ -240,6 +312,35 @@ pub fn reshape(
                 (id.clone(), *p + shift)
             })
             .collect();
+    }
+    // Each arm along itself, from its shoulder, to the length asked for.
+    for (side, bones) in [
+        ("l", ["upper_arm.L", "forearm.L", "hand.L"]),
+        ("r", ["upper_arm.R", "forearm.R", "hand.R"]),
+    ] {
+        let (length, shoulder, hand) = arm(&joints, side)?;
+        let k = target.arm_m / length;
+        if !(0.5..=2.).contains(&k) {
+            return Err("The arm length asked for is too far from the avatar's".into());
+        }
+        let along = (hand - shoulder).normalize_or_zero();
+        let reach = |p: DVec3| along * ((k - 1.) * (p - shoulder).dot(along).max(0.));
+        for (p, weights) in body.vertices.iter_mut().zip(&rig.weights) {
+            let w: f64 = weights
+                .iter()
+                .filter(|(bone, _)| bones.contains(&rig.bones[*bone].name))
+                .map(|(_, w)| *w)
+                .sum();
+            *p += reach(*p) * w;
+        }
+        for (id, p) in joints.iter_mut() {
+            let on_arm = ["elbow", "hand", "finger", "wrist"]
+                .iter()
+                .any(|part| id.contains(part));
+            if on_arm && id.contains(&format!("-{side}-")) {
+                *p += reach(*p);
+            }
+        }
     }
     body.validate()?;
     Ok((body, joints))

@@ -25,6 +25,7 @@ fn our_own_export_reads_back_with_the_avatar_in_metres() {
         state: &scene.state,
         images: &[],
         avatar: Some(&avatar),
+        take: None,
     };
     let (bytes, _) = fbx_export::fbx(&export, "tee").unwrap();
     let imported = fbx_import::fbx(&bytes).unwrap();

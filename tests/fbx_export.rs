@@ -97,6 +97,7 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
         state: &scene.state,
         images: &images,
         avatar: Some(&avatar),
+        take: None,
     };
     let path = dir.path().join("out").join("tee.fbx");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -160,4 +161,92 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
         3 * (pieces + 1) + 2,
         "models to root, geometry and material to model, video to texture to material"
     );
+}
+
+#[test]
+fn a_take_becomes_blend_shapes_keyed_frame_by_frame() {
+    use marvelous_cloth::avatar_animation::Take;
+    let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
+    let scene = project.compile().unwrap();
+    let avatar = SurfaceMesh::load_obj(&mannequin()).unwrap();
+    // Four frames at 10 fps, the cloth rising 1 cm a frame and the avatar going back 1 cm.
+    let frames: Vec<Vec<[f32; 3]>> = (0..4)
+        .map(|k| {
+            scene
+                .state
+                .x
+                .iter()
+                .map(|p| {
+                    (*p + glam::DVec3::Y * (0.01 * k as f64))
+                        .as_vec3()
+                        .to_array()
+                })
+                .collect()
+        })
+        .collect();
+    let take = Take { fps: 10., frames };
+    let bodies: Vec<Vec<glam::DVec3>> = (0..4)
+        .map(|k| {
+            avatar
+                .vertices
+                .iter()
+                .map(|p| *p - glam::DVec3::Z * (0.01 * k as f64))
+                .collect()
+        })
+        .collect();
+    let export = FbxScene {
+        template: &project.template,
+        garment: &scene.garment,
+        state: &scene.state,
+        images: &[],
+        avatar: Some(&avatar),
+        take: Some((&take, Some(bodies))),
+    };
+    let (bytes, _) = fbx_export::fbx(&export, "tee").unwrap();
+    let mut at = 27;
+    let mut top = Vec::new();
+    while let Some(n) = read(&bytes, &mut at) {
+        top.push(n);
+    }
+    let objects = &find(&top, "Objects")[0].children;
+    let meshes = scene.garment.panels.len() + 1;
+    // A blend shape per mesh, a channel and a shape per later frame, and their curves.
+    let deformers = find(objects, "Deformer");
+    assert_eq!(deformers.len(), meshes * 4);
+    assert_eq!(find(objects, "Geometry").len(), meshes * 4);
+    assert_eq!(find(objects, "AnimationStack").len(), 1);
+    assert_eq!(find(objects, "AnimationLayer").len(), 1);
+    assert_eq!(find(objects, "AnimationCurveNode").len(), meshes * 3);
+    let curves = find(objects, "AnimationCurve");
+    assert_eq!(curves.len(), meshes * 3);
+    // The last frame's channel has two keys (it rises from the frame before and stays);
+    // the others three.
+    let keys: Vec<usize> = curves
+        .iter()
+        .map(|c| array_len_any(find(&c.children, "KeyTime")[0]))
+        .collect();
+    assert_eq!(keys.iter().filter(|k| **k == 2).count(), meshes);
+    assert_eq!(keys.iter().filter(|k| **k == 3).count(), 2 * meshes);
+    // The file says its frame rate.
+    let settings = &find(&top, "GlobalSettings")[0].children;
+    let properties = &find(settings, "Properties70")[0].children;
+    let named = |name: &str| {
+        properties.iter().any(|p| {
+            let len = u32::from_le_bytes(p.props[1..5].try_into().unwrap()) as usize;
+            &p.props[5..5 + len] == name.as_bytes()
+        })
+    };
+    assert!(named("TimeMode") && named("CustomFrameRate") && named("TimeSpanStop"));
+    // Our own importer still reads the meshes, at the take's first frame.
+    let imported = marvelous_cloth::fbx_import::fbx(&bytes).unwrap();
+    assert_eq!(
+        imported.mesh.vertices.len(),
+        scene.garment.mesh.uv.len() + avatar.vertices.len()
+    );
+}
+
+/// The element count of any array property.
+fn array_len_any(node: &Node) -> usize {
+    assert!(matches!(node.props[0], b'i' | b'd' | b'l' | b'f'));
+    u32::from_le_bytes(node.props[1..5].try_into().unwrap()) as usize
 }

@@ -241,7 +241,8 @@ impl Atelier {
         Ok(())
     }
 
-    /// The garment, and the avatar when shown, as a binary FBX.
+    /// The garment, the avatar when shown, and the take when there is one (as blend shapes),
+    /// as a binary FBX.
     pub(super) fn export_fbx(&mut self) -> Result<(), String> {
         let Some(path) = FileDialog::new()
             .add_filter("FBX", &["fbx"])
@@ -249,6 +250,16 @@ impl Atelier {
             .save_file()
         else {
             return Ok(());
+        };
+        let take = self.current_take();
+        let bodies = match (take, &self.project.avatar_animation) {
+            (Some(take), Some(animation)) => Some(
+                avatar_animation::body_frames(&self.project, animation, take.frames.len())?
+                    .into_iter()
+                    .map(|b| b.vertices)
+                    .collect(),
+            ),
+            _ => None,
         };
         let images: Vec<(String, PathBuf)> = self
             .project
@@ -266,9 +277,18 @@ impl Atelier {
                 .garment_display
                 .avatar
                 .then_some(self.scene.collider.surface.as_ref()),
+            take: take.map(|t| (t, bodies)),
         };
         marvelous_cloth::fbx_export::write(&scene, &path)?;
-        self.status = format!("Exported {}", path.display());
+        self.status = format!(
+            "Exported {}{}",
+            path.display(),
+            if take.is_some() {
+                " with the take as an animation"
+            } else {
+                ""
+            }
+        );
         Ok(())
     }
 

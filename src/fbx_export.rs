@@ -7,8 +7,15 @@
 //! copied next to the file); the avatar is one more model. Positions are in centimetres, the
 //! file's declared unit, Y up. Polygons are wound counter-clockwise seen from the fabric's
 //! front face; normals and texture coordinates are given per polygon corner.
+//!
+//! A recorded take animates the cloth (and the avatar, given its frames) with blend shapes,
+//! as the glTF export does with morph targets: each mesh gets a `BlendShape` deformer with one
+//! channel per frame after the first, holding that frame's offsets from the first; the
+//! channel's `DeformPercent` rises from 0 to 100 at its frame and falls back at the next, so
+//! the mesh passes through every frame and blends linearly in between.
 use crate::{
     avatar::SurfaceMesh,
+    avatar_animation::Take,
     garment::{CompiledGarment, GarmentTemplate},
     gltf_export::{front_triangles, texture_coordinates},
     model::State,
@@ -30,6 +37,8 @@ enum Prop {
     Str(String),
     F64s(Vec<f64>),
     I32s(Vec<i32>),
+    I64s(Vec<i64>),
+    F32s(Vec<f32>),
 }
 
 /// A node with its properties and children.
@@ -106,6 +115,24 @@ impl Prop {
                     out.extend_from_slice(&x.to_le_bytes());
                 }
             }
+            Prop::I64s(v) => {
+                out.push(b'l');
+                out.extend_from_slice(&(v.len() as u32).to_le_bytes());
+                out.extend_from_slice(&0u32.to_le_bytes());
+                out.extend_from_slice(&((v.len() * 8) as u32).to_le_bytes());
+                for x in v {
+                    out.extend_from_slice(&x.to_le_bytes());
+                }
+            }
+            Prop::F32s(v) => {
+                out.push(b'f');
+                out.extend_from_slice(&(v.len() as u32).to_le_bytes());
+                out.extend_from_slice(&0u32.to_le_bytes());
+                out.extend_from_slice(&((v.len() * 4) as u32).to_le_bytes());
+                for x in v {
+                    out.extend_from_slice(&x.to_le_bytes());
+                }
+            }
         }
     }
 }
@@ -154,6 +181,179 @@ pub struct FbxScene<'a> {
     /// Image files of fabric textures, by asset ID.
     pub images: &'a [(String, PathBuf)],
     pub avatar: Option<&'a SurfaceMesh>,
+    /// A recorded take of the cloth, and the avatar's vertices at each of its frames.
+    pub take: Option<(&'a Take, Option<Vec<Vec<DVec3>>>)>,
+}
+
+/// FBX time units per second.
+const KTIME_PER_SECOND: i64 = 46_186_158_000;
+
+/// The blend shape deformer of mesh geometry `geometry`, with one channel per frame after the
+/// first holding that frame's offsets from `frames[0]` (metres, written in centimetres).
+/// Returns the channels' ids with their frame numbers.
+fn blend_shapes(
+    objects: &mut Vec<Node>,
+    connections: &mut Vec<Node>,
+    id: &mut impl FnMut() -> i64,
+    geometry: i64,
+    name: &str,
+    frames: &[Vec<DVec3>],
+) -> Vec<(i64, usize)> {
+    let deformer = id();
+    objects.push(with(
+        "Deformer",
+        vec![
+            Prop::I64(deformer),
+            object_name(name, "Deformer"),
+            s("BlendShape"),
+        ],
+        vec![node("Version", vec![Prop::I32(100)])],
+    ));
+    connections.push(connection(deformer, geometry));
+    let base = &frames[0];
+    let indexes: Vec<i32> = (0..base.len() as i32).collect();
+    let mut channels = vec![];
+    for (k, frame) in frames.iter().enumerate().skip(1) {
+        let (channel, shape) = (id(), id());
+        let label = format!("{name}_frame_{k}");
+        let offsets: Vec<f64> = frame
+            .iter()
+            .zip(base)
+            .flat_map(|(p, q)| ((*p - *q) * 100.).to_array())
+            .collect();
+        objects.push(with(
+            "Deformer",
+            vec![
+                Prop::I64(channel),
+                object_name(&label, "SubDeformer"),
+                s("BlendShapeChannel"),
+            ],
+            vec![
+                node("Version", vec![Prop::I32(100)]),
+                node("DeformPercent", vec![Prop::F64(0.)]),
+                node("FullWeights", vec![Prop::F64s(vec![100.])]),
+            ],
+        ));
+        objects.push(with(
+            "Geometry",
+            vec![
+                Prop::I64(shape),
+                object_name(&label, "Geometry"),
+                s("Shape"),
+            ],
+            vec![
+                node("Version", vec![Prop::I32(100)]),
+                node("Indexes", vec![Prop::I32s(indexes.clone())]),
+                node("Vertices", vec![Prop::F64s(offsets)]),
+                node("Normals", vec![Prop::F64s(vec![0.; base.len() * 3])]),
+            ],
+        ));
+        connections.push(connection(channel, deformer));
+        connections.push(connection(shape, channel));
+        channels.push((channel, k));
+    }
+    channels
+}
+
+/// The take's animation: each channel's `DeformPercent` keyed 0 at the frame before its own,
+/// 100 at its own and 0 at the next.
+fn take_animation(
+    objects: &mut Vec<Node>,
+    connections: &mut Vec<Node>,
+    id: &mut impl FnMut() -> i64,
+    channels: &[(i64, usize)],
+    frames: usize,
+    fps: f64,
+) -> usize {
+    let time = |k: usize| (k as f64 / fps * KTIME_PER_SECOND as f64).round() as i64;
+    let (stack, layer) = (id(), id());
+    let end = time(frames - 1);
+    objects.push(with(
+        "AnimationStack",
+        vec![
+            Prop::I64(stack),
+            object_name("Take 001", "AnimStack"),
+            s(""),
+        ],
+        vec![properties(vec![
+            p("LocalStart", "KTime", "Time", "", vec![Prop::I64(0)]),
+            p("LocalStop", "KTime", "Time", "", vec![Prop::I64(end)]),
+            p("ReferenceStart", "KTime", "Time", "", vec![Prop::I64(0)]),
+            p("ReferenceStop", "KTime", "Time", "", vec![Prop::I64(end)]),
+        ])],
+    ));
+    objects.push(with(
+        "AnimationLayer",
+        vec![
+            Prop::I64(layer),
+            object_name("BaseLayer", "AnimLayer"),
+            s(""),
+        ],
+        vec![],
+    ));
+    connections.push(connection(layer, stack));
+    for &(channel, k) in channels {
+        let (curve_node, curve) = (id(), id());
+        let keys: Vec<(usize, f32)> = [(k - 1, 0.), (k, 100.), (k + 1, 0.)]
+            .into_iter()
+            .filter(|(f, _)| *f < frames)
+            .collect();
+        objects.push(with(
+            "AnimationCurveNode",
+            vec![
+                Prop::I64(curve_node),
+                object_name("DeformPercent", "AnimCurveNode"),
+                s(""),
+            ],
+            vec![properties(vec![p(
+                "d|DeformPercent",
+                "Number",
+                "",
+                "A",
+                vec![Prop::F64(0.)],
+            )])],
+        ));
+        objects.push(with(
+            "AnimationCurve",
+            vec![Prop::I64(curve), object_name("", "AnimCurve"), s("")],
+            vec![
+                node("Default", vec![Prop::F64(0.)]),
+                node("KeyVer", vec![Prop::I32(4008)]),
+                node(
+                    "KeyTime",
+                    vec![Prop::I64s(keys.iter().map(|(f, _)| time(*f)).collect())],
+                ),
+                node(
+                    "KeyValueFloat",
+                    vec![Prop::F32s(keys.iter().map(|(_, v)| *v).collect())],
+                ),
+                // Linear interpolation between keys.
+                node("KeyAttrFlags", vec![Prop::I32s(vec![4])]),
+                node("KeyAttrDataFloat", vec![Prop::F32s(vec![0.; 4])]),
+                node("KeyAttrRefCount", vec![Prop::I32s(vec![keys.len() as i32])]),
+            ],
+        ));
+        connections.push(connection(curve_node, layer));
+        connections.push(node(
+            "C",
+            vec![
+                s("OP"),
+                Prop::I64(curve_node),
+                Prop::I64(channel),
+                s("DeformPercent"),
+            ],
+        ));
+        connections.push(node(
+            "C",
+            vec![
+                s("OP"),
+                Prop::I64(curve),
+                Prop::I64(curve_node),
+                s("d|DeformPercent"),
+            ],
+        ));
+    }
+    2 * channels.len()
 }
 
 /// A mesh's geometry node: centimetre positions, corners closing each triangle with a
@@ -334,7 +534,28 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
     let appearances = crate::garment::appearance::bind(scene.template, garment);
     let triangles = front_triangles(scene.template, garment);
     let uv = texture_coordinates(scene.template, garment);
-    let x = &scene.state.x;
+    let take = scene
+        .take
+        .as_ref()
+        .map(|(take, bodies)| (*take, bodies.as_ref()));
+    if let Some((take, bodies)) = take {
+        if take.frames.is_empty() || take.frames[0].len() != garment.mesh.uv.len() {
+            return Err("The take was recorded on another mesh".into());
+        }
+        if let (Some(bodies), Some(avatar)) = (bodies, scene.avatar)
+            && (bodies.len() != take.frames.len()
+                || bodies.iter().any(|b| b.len() != avatar.vertices.len()))
+        {
+            return Err("The avatar's frames do not match the take".into());
+        }
+    }
+    // With a take, the cloth starts at its first frame.
+    let cloth_frames: Option<Vec<Vec<DVec3>>> =
+        take.map(|(t, _)| (0..t.frames.len()).map(|k| t.positions(k)).collect());
+    let x = cloth_frames.as_ref().map_or(&scene.state.x, |f| &f[0]);
+    let animated = take.is_some_and(|(t, _)| t.frames.len() > 1);
+    let mut channels: Vec<(i64, usize)> = vec![];
+    let mut deformers = 0;
     let mut next_id = 1_000_000_i64;
     let mut id = || {
         next_id += 1;
@@ -432,17 +653,41 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
         connections.push(connection(material_id, m));
         models += 1;
         geometries += 1;
+        if animated && let Some(frames) = &cloth_frames {
+            let local_frames: Vec<Vec<DVec3>> = frames
+                .iter()
+                .map(|f| local.iter().map(|i| f[*i]).collect())
+                .collect();
+            let added = blend_shapes(
+                &mut objects,
+                &mut connections,
+                &mut id,
+                g,
+                &panel.id,
+                &local_frames,
+            );
+            deformers += 1 + added.len();
+            geometries += added.len();
+            channels.extend(added);
+        }
     }
     let mut avatar_material = 0;
     if let Some(avatar) = scene.avatar {
         let (m, g, mat) = (id(), id(), id());
+        let bodies = take.and_then(|(_, bodies)| bodies);
         objects.push(geometry(
             g,
             "avatar",
-            &avatar.vertices,
+            bodies.map_or(&avatar.vertices, |b| &b[0]),
             &avatar.triangles,
             None,
         ));
+        if animated && let Some(bodies) = bodies {
+            let added = blend_shapes(&mut objects, &mut connections, &mut id, g, "avatar", bodies);
+            deformers += 1 + added.len();
+            geometries += added.len();
+            channels.extend(added);
+        }
         objects.push(model(m, "avatar"));
         objects.push(material(mat, "avatar", [0.45, 0.45, 0.47]));
         connections.push(connection(m, 0));
@@ -451,6 +696,38 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
         models += 1;
         geometries += 1;
         avatar_material = 1;
+    }
+    let mut animation_objects = 0;
+    if let Some((take, _)) = take
+        && !channels.is_empty()
+    {
+        let curves = take_animation(
+            &mut objects,
+            &mut connections,
+            &mut id,
+            &channels,
+            take.frames.len(),
+            take.fps,
+        );
+        animation_objects = 2 + curves;
+    }
+    // The take's frame rate and span, so importers place its keys on its own frames.
+    let mut timing = vec![];
+    if let Some((take, _)) = take {
+        let end = (take.duration() * KTIME_PER_SECOND as f64).round() as i64;
+        timing = vec![
+            // Custom frame rate.
+            p("TimeMode", "enum", "", "", vec![Prop::I32(14)]),
+            p(
+                "CustomFrameRate",
+                "double",
+                "Number",
+                "",
+                vec![Prop::F64(take.fps)],
+            ),
+            p("TimeSpanStart", "KTime", "Time", "", vec![Prop::I64(0)]),
+            p("TimeSpanStop", "KTime", "Time", "", vec![Prop::I64(end)]),
+        ];
     }
     let count = |kind: &str, n: usize| {
         with(
@@ -464,7 +741,13 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
         node(
             "Count",
             vec![Prop::I32(
-                (1 + models + geometries + materials.len() + avatar_material + 2 * videos) as i32,
+                (1 + models
+                    + geometries
+                    + materials.len()
+                    + avatar_material
+                    + 2 * videos
+                    + deformers
+                    + animation_objects) as i32,
             )],
         ),
         count("GlobalSettings", 1),
@@ -475,6 +758,13 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
     if videos > 0 {
         definitions.push(count("Texture", videos));
         definitions.push(count("Video", videos));
+    }
+    if deformers > 0 {
+        definitions.push(count("Deformer", deformers));
+        definitions.push(count("AnimationStack", 1));
+        definitions.push(count("AnimationLayer", 1));
+        definitions.push(count("AnimationCurveNode", channels.len()));
+        definitions.push(count("AnimationCurve", channels.len()));
     }
     let top = vec![
         with(
@@ -492,28 +782,33 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             vec![],
             vec![
                 node("Version", vec![Prop::I32(1000)]),
-                properties(vec![
-                    p("UpAxis", "int", "Integer", "", vec![Prop::I32(1)]),
-                    p("UpAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
-                    p("FrontAxis", "int", "Integer", "", vec![Prop::I32(2)]),
-                    p("FrontAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
-                    p("CoordAxis", "int", "Integer", "", vec![Prop::I32(0)]),
-                    p("CoordAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
-                    p(
-                        "UnitScaleFactor",
-                        "double",
-                        "Number",
-                        "",
-                        vec![Prop::F64(1.)],
-                    ),
-                    p(
-                        "OriginalUnitScaleFactor",
-                        "double",
-                        "Number",
-                        "",
-                        vec![Prop::F64(1.)],
-                    ),
-                ]),
+                properties(
+                    vec![
+                        p("UpAxis", "int", "Integer", "", vec![Prop::I32(1)]),
+                        p("UpAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
+                        p("FrontAxis", "int", "Integer", "", vec![Prop::I32(2)]),
+                        p("FrontAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
+                        p("CoordAxis", "int", "Integer", "", vec![Prop::I32(0)]),
+                        p("CoordAxisSign", "int", "Integer", "", vec![Prop::I32(1)]),
+                        p(
+                            "UnitScaleFactor",
+                            "double",
+                            "Number",
+                            "",
+                            vec![Prop::F64(1.)],
+                        ),
+                        p(
+                            "OriginalUnitScaleFactor",
+                            "double",
+                            "Number",
+                            "",
+                            vec![Prop::F64(1.)],
+                        ),
+                    ]
+                    .into_iter()
+                    .chain(timing)
+                    .collect(),
+                ),
             ],
         ),
         with("Documents", vec![], vec![node("Count", vec![Prop::I32(0)])]),

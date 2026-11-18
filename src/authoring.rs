@@ -1568,6 +1568,10 @@ fn strip_graphic_frame_metadata(polygon: &mut serde_json::Value) {
             // The independently reviewed #1 proposal uses annotations for
             // text-only draft notes; they do not alter the material contour.
             "annotations",
+            // Internal lines and holes lie inside the outline: drawing, editing or cutting
+            // them leaves every material coordinate where it was.
+            "lines",
+            "holes",
         ] {
             fields.remove(key);
         }
@@ -1589,6 +1593,7 @@ mod graphic_frame_tests {
         let mut polygon = serde_json::json!({"points": [[0, 0]], "meshing": {}, "subdivisions": 1,
             "target_lengths": {}, "seam_allowances": {"edge": 0.01}, "notches": {"edge": []},
             "annotations": [{"text": "front", "position": [0.1, 0.2]}],
+            "lines": [{"id": "dart"}], "holes": [{"edges": ["eyelet"]}],
             "free_curve_points": {"edge": [[0.3, 0.4]]}, "future_geometry": [1, 2]});
         strip_graphic_frame_metadata(&mut polygon);
         assert_eq!(
@@ -2091,6 +2096,17 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
     let deletes_panels = matches!(
         &command,
         Command::RemovePanel { .. } | Command::RemovePanels { .. }
+    );
+    // Topology edits move graphics and trims with the material themselves, or leave the
+    // material frame where it was.
+    let carries_markings = matches!(
+        &command,
+        Command::CutAndSew { .. }
+            | Command::DiamondDart { .. }
+            | Command::ExtendLine { .. }
+            | Command::SplitLine { .. }
+            | Command::Unfold { .. }
+            | Command::MergeAlongSeam { .. }
     );
     let unsupported_graphic_mirror = match &command {
         Command::Mirror { panel, .. } | Command::LinkedMirror { panel, .. } => {
@@ -4422,11 +4438,11 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
     }
     linked::synchronize(source, &mut template)?;
-    // Placement coordinates refer to the existing material frame. Until topology
-    // remapping exists, reject edits that change that frame rather than shifting
+    // Placement coordinates refer to the existing material frame. Topology edits remap
+    // them themselves; other edits that change that frame are refused rather than shifting
     // artwork silently. Meshing density and length specifications do not change it.
     let mut checked_graphic_panels = std::collections::BTreeSet::new();
-    for graphic in &source.graphics {
+    for graphic in source.graphics.iter().filter(|_| !carries_markings) {
         if !checked_graphic_panels.insert(&graphic.panel_id) {
             continue;
         }
@@ -4446,7 +4462,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         }
     }
     let mut checked_trim_panels = std::collections::BTreeSet::new();
-    for trim in &source.trims {
+    for trim in source.trims.iter().filter(|_| !carries_markings) {
         if !checked_trim_panels.insert(&trim.panel_id) {
             continue;
         }

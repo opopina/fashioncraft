@@ -403,6 +403,17 @@ fn material_frame_changes_and_mirror_fail_atomically_but_remeshing_is_valid() {
         .contains("Remove graphics before changing")
     );
     assert_eq!(serde_json::to_vec(&source).unwrap(), before);
+    // Internal lines lie inside the outline and leave material coordinates alone.
+    let lined = authoring::apply(
+        &source,
+        Command::InternalLine {
+            panel: graphic.panel_id.clone(),
+            points: vec![DVec2::new(0.05, 0.1), DVec2::new(0.15, 0.1)],
+            tangents: vec![DVec2::ZERO; 2],
+        },
+    )
+    .expect("an internal line on a piece with a graphic");
+    assert_eq!(lined.template.graphics, source.graphics);
     let mut remeshed = source.clone();
     remeshed.panels[0]
         .polygon

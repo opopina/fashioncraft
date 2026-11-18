@@ -5,10 +5,12 @@ use marvelous_cloth::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
-        domain::InternalLine,
+        domain::{Hole, InternalLine},
+        graphics::{GraphicPlacement, GraphicSide},
         meshing::MeshingSettings,
         presets::{self, GarmentKind},
         shapes::Primitive,
+        template::{Tack, TackPoint},
     },
 };
 
@@ -150,4 +152,88 @@ fn a_sewn_or_missing_fold_is_refused() {
         )
         .is_err()
     );
+}
+
+/// Where a material point of the piece lies on the 2D board.
+fn on_board(t: &GarmentTemplate, p: DVec2) -> DVec2 {
+    let piece = &t.panels[0];
+    piece.layout_2d.unwrap_or_default() + authoring::rotate_2d(p, piece.layout_rotation_degrees)
+}
+
+#[test]
+fn graphics_tacks_and_holes_stay_put_and_holes_are_mirrored() {
+    let mut t = half();
+    let id = t.panels[0].id.clone();
+    let lo = t.panels[0]
+        .polygon
+        .as_ref()
+        .unwrap()
+        .points
+        .iter()
+        .fold(DVec2::MAX, |m, p| m.min(*p));
+    let corner = lo + DVec2::new(0.15, 0.35);
+    t.panels[0].polygon.as_mut().unwrap().holes.push(Hole {
+        points: vec![
+            corner,
+            corner + DVec2::new(0., 0.02),
+            corner + DVec2::new(0.02, 0.02),
+            corner + DVec2::new(0.02, 0.),
+        ],
+        edges: (0..4).map(|i| format!("eyelet_{i}")).collect(),
+    });
+    t.graphics.push(GraphicPlacement {
+        id: "logo".into(),
+        panel_id: id.clone(),
+        asset_id: "image_1".into(),
+        center_m: lo + DVec2::new(0.2, 0.25),
+        size_m: DVec2::splat(0.04),
+        rotation_degrees: 10.,
+        side: GraphicSide::Front,
+        opacity: 1.,
+    });
+    t.tacks.push(Tack {
+        id: "tack".into(),
+        a: TackPoint {
+            panel: id.clone(),
+            uv: lo + DVec2::new(0.1, 0.4),
+        },
+        b: TackPoint {
+            panel: id.clone(),
+            uv: lo + DVec2::new(0.2, 0.4),
+        },
+    });
+    let edge = left_edge(&t);
+    let board = |t: &GarmentTemplate| {
+        [
+            on_board(t, t.graphics[0].center_m),
+            on_board(t, t.tacks[0].a.uv),
+            on_board(t, t.tacks[0].b.uv),
+            on_board(t, t.panels[0].polygon.as_ref().unwrap().holes[0].points[0]),
+        ]
+    };
+    let before = board(&t);
+    let after = authoring::apply(&t, Command::Unfold { panel: id, edge })
+        .unwrap()
+        .template;
+    for (a, b) in before.iter().zip(board(&after)) {
+        assert!(a.distance(b) < 1e-9, "{a} moved to {b}");
+    }
+    assert_eq!(after.graphics[0].rotation_degrees, 10.);
+    // The hole gains its mirror image across the old fold line, with fresh names.
+    let whole = after.panels[0].polygon.as_ref().unwrap();
+    assert_eq!(whole.holes.len(), 2);
+    let fold_x = whole.points.iter().fold(f64::MAX, |m, p| m.min(p.x));
+    let fold_x = fold_x + (whole.points.iter().fold(f64::MIN, |m, p| m.max(p.x)) - fold_x) / 2.;
+    for p in &whole.holes[0].points {
+        let mirrored = DVec2::new(2. * fold_x - p.x, p.y);
+        assert!(
+            whole.holes[1]
+                .points
+                .iter()
+                .any(|q| q.distance(mirrored) < 1e-9),
+            "{p} has no mirror"
+        );
+    }
+    assert!(whole.holes[1].edges.iter().all(|e| e.ends_with("_mirror")));
+    after.compile().expect("the unfolded piece compiles");
 }

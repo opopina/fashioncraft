@@ -5,7 +5,14 @@ use glam::DVec2;
 use marvelous_cloth::{
     authoring::{self, Command, edge_length},
     fitting::FittingProject,
-    garment::{GarmentTemplate, domain::InternalLine, presets::GarmentKind},
+    garment::{
+        GarmentTemplate,
+        domain::{Hole, InternalLine},
+        graphics::{GraphicPlacement, GraphicSide},
+        presets::GarmentKind,
+        template::{Tack, TackPoint},
+        trims::{Trim, TrimKind},
+    },
 };
 
 fn tshirt() -> GarmentTemplate {
@@ -26,14 +33,20 @@ fn area(points: &[DVec2]) -> f64 {
         / 2.
 }
 
-/// A short horizontal line across the front's lower body, where only its two straight sides
+/// A short horizontal line across the front near its top, where only its two straight sides
 /// cross that height.
-fn with_cut_line(mut t: GarmentTemplate) -> (GarmentTemplate, String) {
+fn with_cut_line(t: GarmentTemplate) -> (GarmentTemplate, String) {
+    with_cut_line_at(t, &[0.1, 0.15, 0.2, 0.8, 0.85, 0.9])
+}
+
+/// A short horizontal line across the front at the first of `fractions` of its height where
+/// only two straight sides cross.
+fn with_cut_line_at(mut t: GarmentTemplate, fractions: &[f64]) -> (GarmentTemplate, String) {
     let polygon = t.panels[0].polygon.as_mut().expect("editable front");
     let lo = polygon.points.iter().fold(DVec2::MAX, |m, p| m.min(*p));
     let hi = polygon.points.iter().fold(DVec2::MIN, |m, p| m.max(*p));
     let n = polygon.points.len();
-    for f in [0.1, 0.15, 0.2, 0.8, 0.85, 0.9] {
+    for &f in fractions {
         let y = lo.y + f * (hi.y - lo.y);
         let mut xs = vec![];
         for k in 0..n {
@@ -68,6 +81,54 @@ fn sewn_length(t: &GarmentTemplate) -> f64 {
             (s.a.range[1] - s.a.range[0]) * edge_length(polygon, edge).unwrap()
         })
         .sum()
+}
+
+/// Heights across the front's body, well clear of the neckline.
+const BODY: [f64; 3] = [0.7, 0.6, 0.75];
+
+/// Where a material point of `panel` lies on the 2D board.
+fn on_board(t: &GarmentTemplate, panel: &str, p: DVec2) -> DVec2 {
+    let piece = t.panels.iter().find(|q| q.id == panel).unwrap();
+    piece.layout_2d.unwrap_or_default() + authoring::rotate_2d(p, piece.layout_rotation_degrees)
+}
+
+fn graphic(id: &str, panel: &str, center: DVec2) -> GraphicPlacement {
+    GraphicPlacement {
+        id: id.into(),
+        panel_id: panel.into(),
+        asset_id: "image_1".into(),
+        center_m: center,
+        size_m: DVec2::splat(0.02),
+        rotation_degrees: 0.,
+        side: GraphicSide::Front,
+        opacity: 1.,
+    }
+}
+
+/// The middle of the cut line `line` on the front.
+fn cut_middle(t: &GarmentTemplate, line: &str) -> DVec2 {
+    let l = t.panels[0]
+        .polygon
+        .as_ref()
+        .unwrap()
+        .lines
+        .iter()
+        .find(|l| l.id == line)
+        .unwrap();
+    (l.points[0] + l.points[1]) / 2.
+}
+
+/// The seam the cut sewed between the front and its new half.
+fn cut_seam(cut: &GarmentTemplate, front: &str, half: &str) -> String {
+    cut.seams
+        .iter()
+        .find(|s| {
+            [&s.a.panel, &s.b.panel] == [&front, &half]
+                || [&s.a.panel, &s.b.panel] == [&half, &front]
+        })
+        .expect("the cut seam joins the halves")
+        .id
+        .clone()
 }
 
 #[test]
@@ -146,32 +207,49 @@ fn a_piece_is_cut_in_two_and_stays_sewn() {
 
 #[test]
 fn what_cannot_be_carried_over_is_refused() {
-    let (t, line) = with_cut_line(tshirt());
+    let (t, line) = with_cut_line_at(tshirt(), &BODY);
     let panel = t.panels[0].id.clone();
-    // A graphic on the piece would need a new home.
+    // A graphic lying on both halves would have no single home.
     let mut with_graphic = t.clone();
-    with_graphic
-        .graphics
-        .push(marvelous_cloth::garment::graphics::GraphicPlacement {
-            id: "g".into(),
-            panel_id: panel.clone(),
-            asset_id: "image_1".into(),
-            center_m: DVec2::new(0.1, 0.1),
-            size_m: DVec2::splat(0.05),
-            rotation_degrees: 0.,
-            side: marvelous_cloth::garment::graphics::GraphicSide::Front,
-            opacity: 1.,
+    let mid = cut_middle(&t, &line);
+    with_graphic.graphics.push(graphic("g", &panel, mid));
+    let refused = authoring::apply(
+        &with_graphic,
+        Command::CutAndSew {
+            panel: panel.clone(),
+            line: line.clone(),
+        },
+    )
+    .err()
+    .expect("a graphic across the cut is refused");
+    assert!(refused.contains("across the cut"), "{refused}");
+    // So would a hole.
+    let mut with_hole = t.clone();
+    let corner = mid - DVec2::splat(0.01);
+    with_hole.panels[0]
+        .polygon
+        .as_mut()
+        .unwrap()
+        .holes
+        .push(Hole {
+            points: vec![
+                corner,
+                corner + DVec2::new(0., 0.02),
+                corner + DVec2::new(0.02, 0.02),
+                corner + DVec2::new(0.02, 0.),
+            ],
+            edges: (0..4).map(|i| format!("eyelet_{i}")).collect(),
         });
-    assert!(
-        authoring::apply(
-            &with_graphic,
-            Command::CutAndSew {
-                panel: panel.clone(),
-                line: line.clone()
-            }
-        )
-        .is_err()
-    );
+    let refused = authoring::apply(
+        &with_hole,
+        Command::CutAndSew {
+            panel: panel.clone(),
+            line: line.clone(),
+        },
+    )
+    .err()
+    .expect("a hole across the cut is refused");
+    assert!(refused.contains("hole"), "{refused}");
     // A bent line is not a straight cut.
     let mut bent = t.clone();
     let l = bent.panels[0]
@@ -293,4 +371,172 @@ fn merging_refuses_seams_it_cannot_close_flat() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn graphics_trims_tacks_and_holes_go_with_their_half_and_come_back_when_merged() {
+    let (mut t, line) = with_cut_line_at(tshirt(), &BODY);
+    let front = t.panels[0].id.clone();
+    let back = t.panels[1].id.clone();
+    let mid = cut_middle(&t, &line);
+    t.graphics
+        .push(graphic("below", &front, mid - DVec2::new(0., 0.03)));
+    t.graphics
+        .push(graphic("above", &front, mid + DVec2::new(0., 0.03)));
+    t.trims.push(Trim {
+        id: "button".into(),
+        panel_id: front.clone(),
+        kind: TrimKind::Button {
+            center_m: mid + DVec2::new(0.04, 0.03),
+            diameter_m: 0.01,
+        },
+    });
+    t.tacks.push(Tack {
+        id: "tack".into(),
+        a: TackPoint {
+            panel: front.clone(),
+            uv: mid - DVec2::new(0.04, 0.02),
+        },
+        b: TackPoint {
+            panel: back.clone(),
+            uv: DVec2::splat(0.1),
+        },
+    });
+    let corner = mid + DVec2::new(-0.06, 0.02);
+    t.panels[0].polygon.as_mut().unwrap().holes.push(Hole {
+        points: vec![
+            corner,
+            corner + DVec2::new(0., 0.02),
+            corner + DVec2::new(0.02, 0.02),
+            corner + DVec2::new(0.02, 0.),
+        ],
+        edges: (0..4).map(|i| format!("eyelet_{i}")).collect(),
+    });
+    // Two pinned outline corners, one at the top and one at the hem.
+    let pins = {
+        let poly = t.panels[0].polygon.as_ref().unwrap();
+        let lowest = |by: fn(&DVec2, &DVec2) -> std::cmp::Ordering| {
+            *poly.points.iter().min_by(|a, b| by(a, b)).unwrap()
+        };
+        vec![
+            lowest(|a, b| a.y.total_cmp(&b.y)),
+            lowest(|a, b| b.y.total_cmp(&a.y)),
+        ]
+    };
+    t.panels[0].pin_points = pins;
+    let pinned = |t: &GarmentTemplate| -> Vec<DVec2> {
+        let mut out: Vec<DVec2> = t
+            .panels
+            .iter()
+            .flat_map(|p| p.pin_points.iter().map(|q| on_board(t, &p.id, *q)))
+            .collect();
+        out.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        out
+    };
+    let same = |a: &[DVec2], b: &[DVec2]| {
+        a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 1e-9)
+    };
+    let pinned_before = pinned(&t);
+    let board = |t: &GarmentTemplate| {
+        let g = |id: &str| {
+            let g = t.graphics.iter().find(|g| g.id == id).unwrap();
+            on_board(t, &g.panel_id, g.center_m)
+        };
+        let button = &t.trims[0];
+        let TrimKind::Button { center_m, .. } = button.kind else {
+            unreachable!()
+        };
+        let tack = &t.tacks[0];
+        let (hole_panel, hole) = t
+            .panels
+            .iter()
+            .find_map(|p| Some((p, p.polygon.as_ref()?.holes.first()?)))
+            .unwrap();
+        [
+            g("below"),
+            g("above"),
+            on_board(t, &button.panel_id, center_m),
+            on_board(t, &tack.a.panel, tack.a.uv),
+            on_board(t, &tack.b.panel, tack.b.uv),
+            on_board(t, &hole_panel.id, hole.points[0]),
+        ]
+    };
+    let before = board(&t);
+    let cut = authoring::apply(
+        &t,
+        Command::CutAndSew {
+            panel: front.clone(),
+            line,
+        },
+    )
+    .unwrap()
+    .template;
+    let name = &t.panels[0].name;
+    let half = cut
+        .panels
+        .iter()
+        .find(|p| p.name == format!("{name} 2"))
+        .unwrap()
+        .id
+        .clone();
+    let on = |id: &str| {
+        cut.graphics
+            .iter()
+            .find(|g| g.id == id)
+            .unwrap()
+            .panel_id
+            .clone()
+    };
+    // Each item went to the half it lies on, and stays where it was on the board.
+    let (below, above) = (on("below"), on("above"));
+    assert!(below != above && [&front, &half].contains(&&below));
+    assert_eq!(cut.trims[0].panel_id, above);
+    assert_eq!(cut.tacks[0].a.panel, below);
+    assert_eq!(cut.tacks[0].b.panel, back);
+    let holder = |t: &GarmentTemplate| {
+        t.panels
+            .iter()
+            .filter(|p| !p.polygon.as_ref().unwrap().holes.is_empty())
+            .map(|p| p.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(holder(&cut), vec![above.clone()]);
+    for (a, b) in before.iter().zip(board(&cut)) {
+        assert!(a.distance(b) < 1e-9, "{a} moved to {b}");
+    }
+    assert!(same(&pinned(&cut), &pinned_before), "pins moved");
+    let holding: Vec<&str> = cut
+        .panels
+        .iter()
+        .filter(|p| p.pin_points.len() == 1)
+        .map(|p| p.id.as_str())
+        .collect();
+    assert_eq!(holding.len(), 2, "each half keeps its own pinned corner");
+    cut.compile().expect("the cut garment compiles");
+    // Merging the halves back puts everything on the whole piece where it was.
+    let merged = authoring::apply(
+        &cut,
+        Command::MergeAlongSeam {
+            seam: cut_seam(&cut, &front, &half),
+        },
+    )
+    .unwrap()
+    .template;
+    assert!(merged.graphics.iter().all(|g| g.panel_id == front));
+    assert_eq!(merged.trims[0].panel_id, front);
+    assert_eq!(merged.tacks[0].a.panel, front);
+    assert_eq!(holder(&merged), vec![front.clone()]);
+    for (a, b) in before.iter().zip(board(&merged)) {
+        assert!(a.distance(b) < 1e-9, "{a} moved to {b}");
+    }
+    for g in &merged.graphics {
+        let turn = g.rotation_degrees.to_radians();
+        assert!(
+            turn.sin().abs() < 1e-9 && turn.cos() > 0.,
+            "{}",
+            g.rotation_degrees
+        );
+    }
+    assert!(same(&pinned(&merged), &pinned_before), "pins moved");
+    merged.compile().expect("the merged garment compiles");
 }

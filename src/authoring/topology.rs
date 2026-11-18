@@ -1,9 +1,10 @@
 //! Edits that change a piece's topology, carrying along what points into it. Cut and sew
 //! splits a piece in two along a straight internal line carried on to the outline, sews the
 //! halves together along the cut and moves every seam, marking and setting to the half it
-//! belongs to; a seam that crosses the cut is split in two. Anything it cannot carry over
-//! unambiguously (curved or annotated cut boundaries, holes, pins, graphics…) is refused
-//! rather than dropped.
+//! belongs to; a seam that crosses the cut is split in two. Graphics, trims, tack ends and
+//! holes go with the half they lie in, and move with their piece when it is merged or
+//! unfolded. Anything it cannot carry over unambiguously (curved or annotated cut
+//! boundaries, pins, something lying across the cut…) is refused rather than dropped.
 use super::*;
 use crate::garment::seam::{BoundaryRef, SeamSpec};
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,6 +48,119 @@ fn cut_ends(points: &[DVec2], a: DVec2, b: DVec2) -> Result<[(usize, f64, DVec2)
         (Some(p), Some(q)) => Ok([(p.1, p.2, p.3), (q.1, q.2, q.3)]),
         _ => Err("The cut line must run across the piece from outline to outline".into()),
     }
+}
+
+/// Something lying on a piece outside its outline data: a graphic, a trim or one end of a tack.
+#[derive(Clone, Copy, Debug)]
+enum Carried {
+    Graphic(usize),
+    Trim(usize),
+    TackA(usize),
+    TackB(usize),
+}
+
+/// What lies on `panel`, each with the material points it covers.
+fn carried(template: &GarmentTemplate, panel: &str) -> Vec<(Carried, Vec<DVec2>)> {
+    use crate::garment::trims::TrimKind;
+    let mut out = vec![];
+    for (k, g) in template.graphics.iter().enumerate() {
+        if g.panel_id == panel {
+            let points = g.corners().map_or(vec![g.center_m], |c| c.to_vec());
+            out.push((Carried::Graphic(k), points));
+        }
+    }
+    for (k, t) in template.trims.iter().enumerate() {
+        if t.panel_id == panel {
+            let points = match &t.kind {
+                TrimKind::Button {
+                    center_m,
+                    diameter_m,
+                } => [DVec2::X, -DVec2::X, DVec2::Y, -DVec2::Y]
+                    .map(|d| *center_m + d * (diameter_m / 2.))
+                    .to_vec(),
+                TrimKind::Buttonhole { start_m, end_m, .. } => vec![*start_m, *end_m],
+                TrimKind::Zipper { path_m, .. } | TrimKind::Topstitch { path_m, .. } => {
+                    path_m.clone()
+                }
+            };
+            out.push((Carried::Trim(k), points));
+        }
+    }
+    for (k, t) in template.tacks.iter().enumerate() {
+        if t.a.panel == panel {
+            out.push((Carried::TackA(k), vec![t.a.uv]));
+        }
+        if t.b.panel == panel {
+            out.push((Carried::TackB(k), vec![t.b.uv]));
+        }
+    }
+    out
+}
+
+/// What `item` is, for messages.
+fn carried_name(template: &GarmentTemplate, item: Carried) -> String {
+    match item {
+        Carried::Graphic(k) => format!("Graphic {}", template.graphics[k].id),
+        Carried::Trim(k) => format!("Trim {}", template.trims[k].id),
+        Carried::TackA(k) | Carried::TackB(k) => format!("Tack {}", template.tacks[k].id),
+    }
+}
+
+/// Put `item` on piece `to`, its points mapped by `map` and graphics turned by `turn_degrees`.
+fn carry(
+    template: &mut GarmentTemplate,
+    item: Carried,
+    to: &str,
+    map: impl Fn(DVec2) -> DVec2,
+    turn_degrees: f64,
+) {
+    use crate::garment::trims::TrimKind;
+    match item {
+        Carried::Graphic(k) => {
+            let g = &mut template.graphics[k];
+            g.panel_id = to.to_string();
+            g.center_m = map(g.center_m);
+            if turn_degrees != 0. {
+                g.rotation_degrees = (g.rotation_degrees + turn_degrees).rem_euclid(360.);
+            }
+        }
+        Carried::Trim(k) => {
+            let t = &mut template.trims[k];
+            t.panel_id = to.to_string();
+            match &mut t.kind {
+                TrimKind::Button { center_m, .. } => *center_m = map(*center_m),
+                TrimKind::Buttonhole { start_m, end_m, .. } => {
+                    *start_m = map(*start_m);
+                    *end_m = map(*end_m);
+                }
+                TrimKind::Zipper { path_m, .. } | TrimKind::Topstitch { path_m, .. } => {
+                    for p in path_m {
+                        *p = map(*p);
+                    }
+                }
+            }
+        }
+        Carried::TackA(k) => {
+            let a = &mut template.tacks[k].a;
+            a.panel = to.to_string();
+            a.uv = map(a.uv);
+        }
+        Carried::TackB(k) => {
+            let b = &mut template.tacks[k].b;
+            b.panel = to.to_string();
+            b.uv = map(b.uv);
+        }
+    }
+}
+
+/// The corner `normalize` moves to the origin: the outline's lowest point and handle.
+fn outline_low(panel: &Panel) -> DVec2 {
+    let poly = panel.polygon.as_ref().expect("a polygon piece");
+    poly.points
+        .iter()
+        .chain(poly.curves.values().flatten())
+        .copied()
+        .fold(DVec2::splat(f64::INFINITY), DVec2::min)
 }
 
 /// Whether `p` lies inside the closed polygon `points` (even–odd rule).
@@ -175,15 +289,6 @@ pub(super) fn cut_and_sew(
     if held {
         return Err("Release pins, unfreeze and activate the piece before cutting it".into());
     }
-    if template.graphics.iter().any(|g| g.panel_id == panel)
-        || template.trims.iter().any(|t| t.panel_id == panel)
-        || template
-            .tacks
-            .iter()
-            .any(|t| t.a.panel == panel || t.b.panel == panel)
-    {
-        return Err("Remove the piece's graphics, trims and tacks before cutting it".into());
-    }
     if template
         .mirror_links
         .iter()
@@ -201,9 +306,7 @@ pub(super) fn cut_and_sew(
         .polygon
         .as_ref()
         .ok_or("Cutting needs an editable contour")?;
-    if !polygon.holes.is_empty() {
-        return Err("Pieces with holes cannot be cut yet".into());
-    }
+
     let cut_line = polygon
         .lines
         .iter()
@@ -305,8 +408,20 @@ pub(super) fn cut_and_sew(
     b_edges.push(cut_edge.clone());
 
     let b_id = unused_id("panel", template.panels.iter().map(|p| p.id.clone()));
+    // Holes go with the half they lie in; one across the cut is refused.
+    let (mut a_holes, mut b_holes) = (vec![], vec![]);
+    for hole in &polygon.holes {
+        if hole.points.iter().all(|p| inside(&a_points, *p)) {
+            a_holes.push(hole.clone());
+        } else if hole.points.iter().all(|p| inside(&b_points, *p)) {
+            b_holes.push(hole.clone());
+        } else {
+            return Err("A hole lies across the cut; move the cut line".into());
+        }
+    }
     // Which piece each original boundary name now belongs to (the cut parts are added below).
-    let in_b: BTreeSet<String> = b_edges.iter().cloned().collect();
+    let mut in_b: BTreeSet<String> = b_edges.iter().cloned().collect();
+    in_b.extend(b_holes.iter().flat_map(|h| h.edges.iter().cloned()));
 
     // Seams: split those crossing the cut, then move every reference to its piece and part.
     split_crossing_seams(&mut template.seams, panel, &[(&ei, ti), (&ej, tj)])?;
@@ -363,6 +478,20 @@ pub(super) fn cut_and_sew(
             }
         }
     }
+    // Graphics, trims and tack ends go with the half they lie on (a graphic may hang over the
+    // outline); one lying on both halves is refused.
+    let mut moving = vec![];
+    for (item, points) in carried(template, panel) {
+        let on_a = points.iter().any(|p| inside(&a_points, *p));
+        let on_b = points.iter().any(|p| inside(&b_points, *p));
+        if on_a && on_b {
+            return Err(format!(
+                "{} lies across the cut; move it first",
+                carried_name(template, item)
+            ));
+        }
+        moving.push((item, on_b));
+    }
     let b_line_ids: BTreeSet<String> = b_lines.iter().map(|l| l.id.clone()).collect();
     for s in &mut template.line_springs {
         if s.panel == panel && (b_line_ids.contains(&s.line) || in_b.contains(&s.line)) {
@@ -382,11 +511,14 @@ pub(super) fn cut_and_sew(
         a_poly.points = a_points.clone();
         a_poly.edges = a_names.to_vec();
         a_poly.lines = a_lines.clone();
+        a_poly.holes = a_holes.clone();
         b_poly.points = b_points.clone();
         b_poly.edges = b_names.to_vec();
         b_poly.lines = b_lines.clone();
+        b_poly.holes = b_holes.clone();
         for (poly, names) in [(&mut a_poly, a_names), (&mut b_poly, b_names)] {
-            let keep = |e: &String| names.contains(e);
+            let rims: Vec<String> = poly.holes.iter().flat_map(|h| h.edges.clone()).collect();
+            let keep = |e: &String| names.contains(e) || rims.contains(e);
             poly.curves.retain(|e, _| keep(e));
             poly.target_lengths.retain(|e, _| keep(e));
             poly.notches.retain(|e, _| keep(e));
@@ -408,14 +540,24 @@ pub(super) fn cut_and_sew(
         (a_poly, b_poly)
     };
     let (a_poly, b_poly) = split_maps(&a_edges, &b_edges);
+    // Pinned outline corners stay with the half whose outline holds them.
+    let pinned_on = |points: &[DVec2]| -> Vec<DVec2> {
+        source
+            .pin_points
+            .iter()
+            .filter(|pin| points.iter().any(|p| p.distance(**pin) < 1e-9))
+            .copied()
+            .collect()
+    };
     let mut a_panel = source.clone();
     a_panel.polygon = Some(a_poly);
-    a_panel.pin_points.clear();
+    a_panel.pin_points = pinned_on(&a_points);
     let mut b_panel = source.clone();
     b_panel.id = b_id.clone();
     b_panel.name = format!("{} 2", source.name);
     b_panel.polygon = Some(b_poly);
-    b_panel.pin_points.clear();
+    b_panel.pin_points = pinned_on(&b_points);
+    let (lo_a, lo_b) = (outline_low(&a_panel), outline_low(&b_panel));
     normalize(&mut a_panel);
     normalize(&mut b_panel);
     let index = template
@@ -467,6 +609,13 @@ pub(super) fn cut_and_sew(
         stiffness: 50_000.,
         allow_ease: false,
     });
+    for (item, to_b) in moving {
+        if to_b {
+            carry(template, item, &b_id, |p| p - lo_b, 0.);
+        } else {
+            carry(template, item, panel, |p| p - lo_a, 0.);
+        }
+    }
     Ok(b_id)
 }
 
@@ -530,17 +679,9 @@ pub(super) fn merge_along_seam(
             return Err("Unlink mirrored pieces before merging".into());
         }
     }
-    if template.graphics.iter().any(|g| g.panel_id == b_id)
-        || template.trims.iter().any(|t| t.panel_id == b_id)
-        || template
-            .tacks
-            .iter()
-            .any(|t| t.a.panel == b_id || t.b.panel == b_id)
-    {
-        return Err(
-            "Move the graphics, trims and tacks off the second piece before merging".into(),
-        );
-    }
+    // What lies on either piece moves with it into the merged one.
+    let on_a: Vec<Carried> = carried(template, &a_id).into_iter().map(|c| c.0).collect();
+    let on_b: Vec<Carried> = carried(template, &b_id).into_iter().map(|c| c.0).collect();
     let same = |a: Option<String>, b: Option<String>| a == b;
     let fmt = |v: Option<&[f64; 2]>| v.map(|v| format!("{v:?}"));
     if !same(
@@ -581,9 +722,6 @@ pub(super) fn merge_along_seam(
             .as_ref()
             .ok_or("Merging needs editable contours")?,
     );
-    if !pa.holes.is_empty() || !pb.holes.is_empty() {
-        return Err("Pieces with holes cannot be merged yet".into());
-    }
     let (ea, eb) = (seam.a.edge.clone().unwrap(), seam.b.edge.clone().unwrap());
     let ia = pa
         .edges
@@ -638,7 +776,13 @@ pub(super) fn merge_along_seam(
     let mut rename: BTreeMap<String, String> = BTreeMap::new();
     let mut taken: BTreeSet<String> = pa.edges.iter().cloned().collect();
     taken.extend(pa.lines.iter().map(|l| l.id.clone()));
-    for name in pb.edges.iter().chain(pb.lines.iter().map(|l| &l.id)) {
+    taken.extend(pa.holes.iter().flat_map(|h| h.edges.iter().cloned()));
+    for name in pb
+        .edges
+        .iter()
+        .chain(pb.lines.iter().map(|l| &l.id))
+        .chain(pb.holes.iter().flat_map(|h| h.edges.iter()))
+    {
         if name == &eb {
             continue;
         }
@@ -691,9 +835,28 @@ pub(super) fn merge_along_seam(
         l.tangents = l.tangents.iter().map(|t| rot.rotate(*t)).collect();
         merged.lines.push(l);
     }
+    for hole in &pb.holes {
+        let mut hole = hole.clone();
+        hole.points = hole.points.iter().map(|p| place(*p)).collect();
+        hole.edges = hole.edges.iter().map(|e| rename[e].clone()).collect();
+        merged.holes.push(hole);
+    }
     let mut kept = a.clone();
     kept.polygon = Some(merged);
+    for pin in &b.pin_points {
+        let pin = place(*pin);
+        if !kept.pin_points.iter().any(|p| p.distance(pin) < 1e-9) {
+            kept.pin_points.push(pin);
+        }
+    }
+    let lo = outline_low(&kept);
     normalize(&mut kept);
+    for item in on_a {
+        carry(template, item, &a_id, |p| p - lo, 0.);
+    }
+    for item in on_b {
+        carry(template, item, &a_id, |p| place(p) - lo, angle.to_degrees());
+    }
     let index = template.panels.iter().position(|p| p.id == a_id).unwrap();
     template.panels[index] = kept;
     template.panels.retain(|p| p.id != b_id);
@@ -754,13 +917,6 @@ pub(super) fn unfold(
     {
         return Err("Unlink the mirrored pair before unfolding".into());
     }
-    if template
-        .tacks
-        .iter()
-        .any(|t| t.a.panel == panel || t.b.panel == panel)
-    {
-        return Err("Remove the piece's tacks before unfolding it".into());
-    }
     if template.seams.iter().any(|s| {
         s.references()
             .any(|r| r.panel == panel && r.edge.as_deref() == Some(edge))
@@ -777,9 +933,6 @@ pub(super) fn unfold(
         .polygon
         .as_ref()
         .ok_or("Unfolding needs an editable contour")?;
-    if !polygon.holes.is_empty() {
-        return Err("Pieces with holes cannot be unfolded yet".into());
-    }
     let n = polygon.points.len();
     let i = polygon
         .edges
@@ -808,11 +961,13 @@ pub(super) fn unfold(
     let reflect = |x: DVec2| p0 + reflect_v(x - p0);
     let mut taken: BTreeSet<String> = polygon.edges.iter().cloned().collect();
     taken.extend(polygon.lines.iter().map(|l| l.id.clone()));
+    taken.extend(polygon.holes.iter().flat_map(|h| h.edges.iter().cloned()));
     let mut mirror_name = BTreeMap::new();
     for name in polygon
         .edges
         .iter()
         .chain(polygon.lines.iter().map(|l| &l.id))
+        .chain(polygon.holes.iter().flat_map(|h| h.edges.iter()))
     {
         let base = format!("{name}_mirror");
         let fresh = if taken.contains(&base) {
@@ -874,6 +1029,16 @@ pub(super) fn unfold(
         }
         whole.lines.push(m);
     }
+    // Each hole gains its mirror image, walked backwards to keep its winding.
+    for hole in &polygon.holes {
+        let m = hole.points.len();
+        whole.holes.push(crate::garment::domain::Hole {
+            points: (0..m).map(|j| reflect(hole.points[(m - j) % m])).collect(),
+            edges: (0..m)
+                .map(|j| mirror_name[&hole.edges[m - 1 - j]].clone())
+                .collect(),
+        });
+    }
     let springs: Vec<_> = template
         .line_springs
         .iter()
@@ -898,8 +1063,13 @@ pub(super) fn unfold(
     template.line_folds.extend(folds);
     let mut piece = source.clone();
     piece.polygon = Some(whole);
+    let lo = outline_low(&piece);
     normalize(&mut piece);
     template.panels[index] = piece;
+    // Graphics, trims and tack ends stay where they were on the original half.
+    for (item, _) in carried(template, panel) {
+        carry(template, item, panel, |p| p - lo, 0.);
+    }
     Ok(())
 }
 

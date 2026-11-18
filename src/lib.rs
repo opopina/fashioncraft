@@ -9,6 +9,7 @@ pub mod contact;
 pub mod document;
 pub mod energy;
 pub mod fabrics;
+pub mod fbx_export;
 pub mod fitting;
 pub mod garment;
 pub mod gltf_avatar;

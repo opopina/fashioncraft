@@ -80,7 +80,7 @@ const FILE: &[Item] = &[
             Run("Session files (OBJ, patterns, previews)", C::ExportSession),
             Run("OBJ…", C::ExportObj),
             Run("OBJ (selected)…", C::ExportObjSelected),
-            Todo("FBX…"),
+            Run("FBX…", C::ExportFbx),
             Run("glTF / GLB…", C::ExportGltf),
             Todo("Alembic…"),
             Todo("USD…"),
@@ -642,7 +642,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 104, "{done} of {all}");
+        assert!(done >= 105, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

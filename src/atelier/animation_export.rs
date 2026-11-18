@@ -241,6 +241,37 @@ impl Atelier {
         Ok(())
     }
 
+    /// The garment, and the avatar when shown, as a binary FBX.
+    pub(super) fn export_fbx(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .add_filter("FBX", &["fbx"])
+            .set_file_name("garment.fbx")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let images: Vec<(String, PathBuf)> = self
+            .project
+            .image_assets
+            .iter()
+            .map(|a| (a.id.clone(), a.path.clone()))
+            .collect();
+        let scene = marvelous_cloth::fbx_export::FbxScene {
+            template: &self.project.template,
+            garment: &self.scene.garment,
+            state: &self.scene.state,
+            images: &images,
+            avatar: self
+                .prefs
+                .garment_display
+                .avatar
+                .then_some(self.scene.collider.surface.as_ref()),
+        };
+        marvelous_cloth::fbx_export::write(&scene, &path)?;
+        self.status = format!("Exported {}", path.display());
+        Ok(())
+    }
+
     /// Open the OBJ export options, for every piece or only the selected ones.
     pub(super) fn open_obj_export(&mut self, selected_only: bool) -> Result<(), String> {
         if selected_only && self.selected_panels().is_empty() {

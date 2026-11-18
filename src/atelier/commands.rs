@@ -111,6 +111,7 @@ pub enum CommandId {
     ExportMdd,
     ExportMddZUp,
     ExportUsd,
+    ExportFbx,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1102,6 +1103,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ExportUsd,
         "export.usd",
         "Export USD / USDZ…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportFbx,
+        "export.fbx",
+        "Export FBX…",
         Simulation,
         None,
         NotUndoable,

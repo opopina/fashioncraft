@@ -427,6 +427,31 @@ pub fn surface_obj(surface: &SurfaceMesh) -> String {
     out
 }
 
+/// The avatar (with the scene objects) at each of `frames` frames of `animation`.
+pub fn body_frames(
+    project: &FittingProject,
+    animation: &AvatarAnimation,
+    frames: usize,
+) -> Result<Vec<SurfaceMesh>, String> {
+    animation.validate()?;
+    let avatar = match &project.avatar_pose {
+        Some(p) => p.clone(),
+        None => crate::fitting::AvatarPose::from_sidecar(&project.avatar_path)?,
+    };
+    let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
+    let rig = avatar.rig(&rest)?;
+    let props = crate::fitting::scene_objects_mesh(&project.scene_objects)?;
+    Ok((0..frames)
+        .map(|k| {
+            let body = rig.posed(&rest, &animation.pose_at(k as f64 / animation.fps));
+            match &props {
+                Some(props) => body.merged(props),
+                None => body,
+            }
+        })
+        .collect())
+}
+
 /// Write the avatar (with the scene objects) at each of `frames` frames of `animation` as
 /// `<stem>_0000.obj`… in `dir`. Returns how many files were written.
 pub fn write_body_sequence(
@@ -436,21 +461,10 @@ pub fn write_body_sequence(
     dir: &Path,
     stem: &str,
 ) -> Result<usize, String> {
-    animation.validate()?;
-    let avatar = match &project.avatar_pose {
-        Some(p) => p.clone(),
-        None => crate::fitting::AvatarPose::from_sidecar(&project.avatar_path)?,
-    };
-    let rest = SurfaceMesh::load_obj(&project.avatar_path)?;
-    let rig = avatar.rig(&rest)?;
-    let props = crate::fitting::scene_objects_mesh(&project.scene_objects)?;
+    let bodies = body_frames(project, animation, frames)?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    for k in 0..frames {
-        let mut body = rig.posed(&rest, &animation.pose_at(k as f64 / animation.fps));
-        if let Some(props) = &props {
-            body = body.merged(props);
-        }
-        std::fs::write(dir.join(format!("{stem}_{k:04}.obj")), surface_obj(&body))
+    for (k, body) in bodies.iter().enumerate() {
+        std::fs::write(dir.join(format!("{stem}_{k:04}.obj")), surface_obj(body))
             .map_err(|e| e.to_string())?;
     }
     Ok(frames)

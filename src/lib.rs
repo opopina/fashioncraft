@@ -12,6 +12,7 @@ pub mod fabrics;
 pub mod fitting;
 pub mod garment;
 pub mod gltf_avatar;
+pub mod gltf_export;
 #[cfg(feature = "desktop")]
 pub mod gpu_vbd;
 pub mod issue_report;

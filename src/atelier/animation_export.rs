@@ -132,6 +132,55 @@ impl Atelier {
         Ok(())
     }
 
+    /// The garment, the avatar and the take when there is one, as glTF or GLB.
+    pub(super) fn export_gltf(&mut self) -> Result<(), String> {
+        let Some(path) = FileDialog::new()
+            .add_filter("glTF binary", &["glb"])
+            .add_filter("glTF", &["gltf"])
+            .set_file_name("garment.glb")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let take = self.current_take();
+        let bodies = match (take, &self.project.avatar_animation) {
+            (Some(take), Some(animation)) => Some(
+                avatar_animation::body_frames(&self.project, animation, take.frames.len())?
+                    .into_iter()
+                    .map(|b| b.vertices)
+                    .collect(),
+            ),
+            _ => None,
+        };
+        // With a take, the avatar keeps these triangles and moves with the frames.
+        let avatar = self.scene.collider.surface.as_ref().clone();
+        let images: Vec<(String, PathBuf)> = self
+            .project
+            .image_assets
+            .iter()
+            .map(|a| (a.id.clone(), a.path.clone()))
+            .collect();
+        let scene = marvelous_cloth::gltf_export::GltfScene {
+            template: &self.project.template,
+            garment: &self.scene.garment,
+            state: &self.scene.state,
+            images: &images,
+            avatar: self.prefs.garment_display.avatar.then_some(&avatar),
+            take: take.map(|t| (t, bodies)),
+        };
+        marvelous_cloth::gltf_export::write(&scene, &path)?;
+        self.status = format!(
+            "Exported {}{}",
+            path.display(),
+            if take.is_some() {
+                " with the take as an animation"
+            } else {
+                ""
+            }
+        );
+        Ok(())
+    }
+
     /// Save the 3D view as a PNG, as it is on screen.
     pub(super) fn capture_view3d(&mut self) -> Result<(), String> {
         let Some(path) = FileDialog::new()

@@ -573,6 +573,7 @@ impl Atelier {
             Id::ExportObjSequence => self.export_obj_sequence()?,
             Id::CaptureView3d => self.capture_view3d()?,
             Id::CaptureVideo => self.capture_video()?,
+            Id::ExportGltf => self.export_gltf()?,
             Id::ClearSceneObjects => {
                 if self.project.scene_objects.is_empty() {
                     return Err("The scene has no objects".into());

@@ -105,6 +105,7 @@ pub enum CommandId {
     ExportObjSequence,
     CaptureView3d,
     CaptureVideo,
+    ExportGltf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1042,6 +1043,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         CaptureVideo,
         "animation.video",
         "Capture the take as a video…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ExportGltf,
+        "export.gltf",
+        "Export glTF / GLB…",
         Simulation,
         None,
         NotUndoable,

@@ -107,6 +107,7 @@ fn aliases(id: CommandId) -> &'static str {
         ExportObjSequence => "export obj sequence frames take animation",
         CaptureView3d => "snapshot capture png screenshot 3d view",
         CaptureVideo => "video capture mp4 movie take animation record",
+        ExportGltf => "export gltf glb 3d model web blender unity unreal",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

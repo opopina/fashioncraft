@@ -62,6 +62,8 @@ pub(super) struct Preferences {
     pub(super) keymap: super::keymap::KeymapName,
     /// Folder the library window shows; none uses `library` in the session folder.
     pub(super) library_dir: Option<std::path::PathBuf>,
+    /// Language of the menus and tool rows.
+    pub(super) language: super::i18n::Language,
 }
 
 impl Default for Preferences {
@@ -80,6 +82,7 @@ impl Default for Preferences {
             iterations: DEFAULT_ITERATIONS,
             keymap: Default::default(),
             library_dir: None,
+            language: Default::default(),
         }
     }
 }
@@ -161,6 +164,16 @@ pub(super) fn window(
                     .changed();
             });
             ui.small("Viewport appearance: use the gear above the 3D view. Pane sizes: drag a divider; double-click to reset.");
+            ui.horizontal(|ui| {
+                ui.label("Language");
+                for language in super::i18n::Language::ALL {
+                    edited |= ui
+                        .selectable_value(&mut prefs.language, language, language.name())
+                        .changed();
+                }
+            })
+            .response
+            .on_hover_text("Language of the menus and the tool rows of the views");
             ui.horizontal(|ui| {
                 ui.label("Keyboard map");
                 for map in super::keymap::KeymapName::ALL {

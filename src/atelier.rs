@@ -54,6 +54,8 @@ mod garment_display;
 mod gizmo;
 #[path = "atelier/graphics_ui.rs"]
 mod graphics_ui;
+#[path = "atelier/i18n.rs"]
+mod i18n;
 #[path = "atelier/icons.rs"]
 mod icons;
 #[path = "atelier/issue_ui.rs"]
@@ -999,21 +1001,29 @@ impl eframe::App for Atelier {
                 ui.label(egui::RichText::new("ALPHA").small().color(Color32::GRAY))
                     .on_hover_text("Research prototype · most production features remain to be built");
                 ui.separator();
-                if command_palette::launch_button(ui, can_open_palette) {
+                let language = self.prefs.language;
+                if command_palette::launch_button(
+                    ui,
+                    can_open_palette,
+                    i18n::tr(language, "Commands…"),
+                ) {
                     self.palette.begin();
                 }
-                let play = ui.button(if self.playing {
-                    "⏸ Pause"
-                } else if self.authoring.ends.len() == 2 && !self.authoring.sewing.chain_mode {
-                    "▶ Sew and simulate"
-                } else {
-                    "▶ Simulate"
-                });
+                let play = ui.button(i18n::tr(
+                    language,
+                    if self.playing {
+                        "⏸ Pause"
+                    } else if self.authoring.ends.len() == 2 && !self.authoring.sewing.chain_mode {
+                        "▶ Sew and simulate"
+                    } else {
+                        "▶ Simulate"
+                    },
+                ));
                 self.smoke_target("simulate", play.rect.center());
                 if play.clicked() {
                     self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
                 }
-                let export_button = ui.button("Export").on_hover_text("Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.");
+                let export_button = ui.button(i18n::tr(language, "Export")).on_hover_text("Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.");
                 self.smoke_target("export", export_button.rect.center());
                 if export_button.clicked() {
                     self.invoke_command(commands::CommandId::ExportSession, &ctx);

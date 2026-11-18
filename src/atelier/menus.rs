@@ -15,6 +15,7 @@ pub(super) enum Custom {
     Profiles,
     Coverage,
     Keymap,
+    Language,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -365,7 +366,7 @@ const SETTINGS: &[Item] = &[
     Todo("Grid properties…"),
     Todo("Camera properties…"),
     Todo("Simulation properties…"),
-    Sub("Language", &[Todo("English"), Todo("Español")]),
+    X(Custom::Language),
     X(Custom::Keymap),
     Run("Preferences…", C::OpenPreferences),
 ];
@@ -463,6 +464,7 @@ impl Atelier {
             match *item {
                 Item::Run(label, id) => {
                     let available = commands::availability(id, self.command_context());
+                    let label = i18n::tr(self.prefs.language, label);
                     let mut button = egui::Button::new(label).selected(self.command_checked(id));
                     let keys = keymap::label(self.prefs.keymap, id)
                         .or_else(|| id.descriptor().shortcut.map(String::from));
@@ -480,11 +482,12 @@ impl Atelier {
                     }
                 }
                 Item::Todo(label) => {
-                    ui.add_enabled(false, egui::Button::new(label))
-                        .on_disabled_hover_text("Not built yet");
+                    let language = self.prefs.language;
+                    ui.add_enabled(false, egui::Button::new(i18n::tr(language, label)))
+                        .on_disabled_hover_text(i18n::tr(language, "Not built yet"));
                 }
                 Item::Sub(label, inner) => {
-                    ui.menu_button(label, |ui| {
+                    ui.menu_button(i18n::tr(self.prefs.language, label), |ui| {
                         self.menu_items(ui, inner, ctx, can_open_palette)
                     });
                 }
@@ -501,7 +504,10 @@ impl Atelier {
             Custom::OnlinePatterns => self.online_patterns(ui),
             Custom::ExportInformation => self.export_information(ui),
             Custom::ToolRail => {
-                ui.checkbox(&mut self.tools_visible, "Tool rail");
+                ui.checkbox(
+                    &mut self.tools_visible,
+                    i18n::tr(self.prefs.language, "Tool rail"),
+                );
             }
             Custom::Presentation => {
                 stage_settings::menu_button().ui(ui, |ui| {
@@ -522,7 +528,10 @@ impl Atelier {
             }
             Custom::Profiles => {
                 if ui
-                    .add_enabled(can_open_palette, egui::Button::new("Workspace profiles…"))
+                    .add_enabled(
+                        can_open_palette,
+                        egui::Button::new(i18n::tr(self.prefs.language, "Workspace profiles…")),
+                    )
                     .clicked()
                 {
                     self.profiles
@@ -531,10 +540,14 @@ impl Atelier {
                 }
             }
             Custom::Keymap => {
-                ui.menu_button("Keyboard map", |ui| {
+                let language = self.prefs.language;
+                ui.menu_button(i18n::tr(language, "Keyboard map"), |ui| {
                     for map in keymap::KeymapName::ALL {
                         if ui
-                            .selectable_label(self.prefs.keymap == map, map.label())
+                            .selectable_label(
+                                self.prefs.keymap == map,
+                                i18n::tr(language, map.label()),
+                            )
                             .clicked()
                         {
                             self.prefs.keymap = map;
@@ -544,13 +557,24 @@ impl Atelier {
                     }
                 });
             }
+            Custom::Language => {
+                let language = self.prefs.language;
+                ui.menu_button(i18n::tr(language, "Language"), |ui| {
+                    for choice in i18n::Language::ALL {
+                        if ui
+                            .selectable_label(language == choice, choice.name())
+                            .clicked()
+                        {
+                            self.prefs.language = choice;
+                            self.prefs_dirty = true;
+                            ui.close();
+                        }
+                    }
+                });
+            }
             Custom::Coverage => {
                 let (done, all) = coverage();
-                ui.label(format!(
-                    "Menu coverage: {done} of {all} items work ({} %)",
-                    done * 100 / all.max(1)
-                ))
-                .on_hover_text("Items not built yet stay in the menus, greyed out");
+                ui.label(i18n::coverage_line(self.prefs.language, done, all));
             }
         }
     }
@@ -563,7 +587,8 @@ impl Atelier {
         can_open_palette: bool,
     ) {
         for (title, items) in MENUS {
-            ui.menu_button(*title, |ui| {
+            let title = i18n::tr(self.prefs.language, title);
+            ui.menu_button(title, |ui| {
                 self.menu_items(ui, items, ctx, can_open_palette)
             });
         }

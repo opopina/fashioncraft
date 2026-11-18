@@ -133,7 +133,7 @@ impl Atelier {
     pub(super) fn garment_header(&mut self, ui: &mut egui::Ui) {
         let header = view_header(
             ui,
-            "3D GARMENT",
+            i18n::tr(self.prefs.language, "3D GARMENT"),
             self.prefs.workspace.mode == ViewMode::Garment,
             true,
             view_controls::hint_3d(self.authoring.tool),
@@ -176,7 +176,7 @@ impl Atelier {
 
     pub(super) fn inspector(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.strong("PROPERTIES");
+            ui.strong(i18n::tr(self.prefs.language, "PROPERTIES"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("×")

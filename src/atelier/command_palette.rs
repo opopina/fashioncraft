@@ -216,9 +216,9 @@ pub(super) fn launch_shortcut(ctx: &egui::Context, enabled: bool) -> bool {
         })
 }
 
-pub(super) fn launch_button(ui: &mut egui::Ui, enabled: bool) -> bool {
+pub(super) fn launch_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> bool {
     let response = ui
-        .add_enabled(enabled, egui::Button::new("Commands…"))
+        .add_enabled(enabled, egui::Button::new(label))
         .on_hover_text("Search actions · Ctrl/Cmd+Shift+P");
     named(ui, &response, "palette.open");
     response.clicked()
@@ -636,7 +636,7 @@ mod tests {
         let mut count = 0;
         let mut h = Harness::new(egui::vec2(900., 900.));
         let mut draw = |ui: &mut egui::Ui, count: &mut usize| {
-            if launch_button(ui, true) {
+            if launch_button(ui, true, "Commands…") {
                 *count += 1;
             }
         };

@@ -1473,7 +1473,7 @@ impl Atelier {
     pub(super) fn patterns(&mut self, ui: &mut egui::Ui) {
         let header = super::chrome::view_header(
             ui,
-            "2D PATTERNS",
+            super::i18n::tr(self.prefs.language, "2D PATTERNS"),
             self.prefs.workspace.mode == super::layout::ViewMode::Patterns,
             false,
             super::view_controls::HINT_2D_VIEW,

@@ -66,6 +66,7 @@ impl Atelier {
                 let key = keymap::label(self.prefs.keymap, id)
                     .or_else(|| id.descriptor().shortcut.map(String::from))
                     .map_or_else(String::new, |k| format!(" · {k}"));
+                let label = i18n::tr(self.prefs.language, label);
                 let tip = match &available {
                     Ok(()) => format!("{label}{key}"),
                     Err(reason) => format!("{label}{key}\n{}", reason.message()),

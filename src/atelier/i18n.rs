@@ -2283,6 +2283,23 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Gizmo: the piece's local axes" => "Gizmo: ejes locales de la pieza",
         "Gizmo: screen axes" => "Gizmo: ejes de pantalla",
         "Camera properties" => "Propiedades de la cámara",
+        "Pleats along the selected segment" => "Pliegues a lo largo del segmento seleccionado",
+        "One pleat along the selected segment" => "Un pliegue a lo largo del segmento seleccionado",
+        "Select the segment the pleats start from (a waist, a yoke) on the board" => {
+            "Selecciona en el tablero el segmento del que salen los pliegues (una cintura, un canesú)"
+        }
+        "Number of pleats" => "Número de pliegues",
+        "Depth" => "Profundidad",
+        "Each pleat takes up twice its depth of fabric" => {
+            "Cada pliegue recoge el doble de su profundidad de tela"
+        }
+        "Kind" => "Tipo",
+        "Knife" => "Plano",
+        "Box pleat" => "Encontrado",
+        "Inverted box" => "Encontrado invertido",
+        "Close each pleat at the segment" => "Cerrar cada pliegue en el segmento",
+        "Lay pleats" => "Crear pliegues",
+        "pleats laid · simulate to fold them" => "pliegues creados · simula para plegarlos",
         "Free sewing: sew parts of segments" => "Costura libre: coser partes de segmentos",
         "M:N segment sewing: several segments per side" => {
             "Costura M:N por segmento: varios segmentos por lado"

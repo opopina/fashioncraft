@@ -243,7 +243,11 @@ const PATTERN_2D: &[Item] = &[
     Run("Measure on the board", C::ToolMeasure),
     Sub(
         "Pleats",
-        &[Todo("Pleats"), Todo("Single pleat"), Todo("Pleat sewing")],
+        &[
+            Run("Pleats", C::Pleats),
+            Run("Single pleat", C::SinglePleat),
+            Todo("Pleat sewing"),
+        ],
     ),
     Todo("Auto fit"),
 ];
@@ -508,6 +512,7 @@ impl Atelier {
             C::FreeSewing => self.in_sewing_mode(false, true),
             C::ChainSegmentSewing => self.in_sewing_mode(true, false),
             C::ChainFreeSewing => self.in_sewing_mode(true, true),
+            C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
@@ -710,7 +715,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 170, "{done} of {all}");
+        assert!(done >= 180, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

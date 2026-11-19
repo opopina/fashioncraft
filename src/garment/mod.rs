@@ -16,6 +16,7 @@ pub mod lines2d;
 pub mod markings;
 pub mod meshing;
 pub mod pins;
+pub mod pleats;
 pub mod polygon;
 pub mod presets;
 pub mod print_pdf;

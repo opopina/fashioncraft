@@ -98,6 +98,8 @@ mod perf;
 mod pin_tool;
 #[path = "atelier/pins_ui.rs"]
 mod pins_ui;
+#[path = "atelier/pleats_ui.rs"]
+mod pleats_ui;
 #[path = "atelier/pose_ui.rs"]
 mod pose_ui;
 #[path = "atelier/quick_actions.rs"]
@@ -645,6 +647,8 @@ impl Atelier {
             Id::CameraProperties => {
                 self.authoring.camera_props.open = !self.authoring.camera_props.open;
             }
+            Id::Pleats => self.open_pleats(false),
+            Id::SinglePleat => self.open_pleats(true),
             Id::FreeSewing => self.sewing_mode(false, true)?,
             Id::ChainSegmentSewing => self.sewing_mode(true, false)?,
             Id::ChainFreeSewing => self.sewing_mode(true, true)?,
@@ -1385,6 +1389,7 @@ impl eframe::App for Atelier {
             self.trousers_draft_window(&ctx);
             self.history_window(&ctx);
             self.camera_props_window(&ctx);
+            self.pleats_window(&ctx);
             self.object_browser_window(&ctx);
         }
         if changed {

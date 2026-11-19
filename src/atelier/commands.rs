@@ -179,6 +179,8 @@ pub enum CommandId {
     FreeSewing,
     ChainSegmentSewing,
     ChainFreeSewing,
+    Pleats,
+    SinglePleat,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1785,6 +1787,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        Pleats,
+        "pattern.pleats",
+        "Pleats along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SinglePleat,
+        "pattern.single_pleat",
+        "One pleat along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
 ];

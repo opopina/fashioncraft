@@ -63,6 +63,7 @@ pub(super) struct AuthoringUi {
     pub trousers_draft: super::avatar_shape_ui::TrousersDraftUi,
     pub history_ui: super::history_ui::HistoryUi,
     pub camera_props: super::camera_props_ui::CameraPropsUi,
+    pub pleats: super::pleats_ui::PleatsUi,
     pub object_browser: super::object_browser_ui::ObjectBrowserUi,
     pub arrangement: super::arrangement_ui::ArrangementUi,
     pub view3d: super::garment_display::View3d,

@@ -187,6 +187,8 @@ fn aliases(id: CommandId) -> &'static str {
         FreeSewing => "free sewing partial range part segment sew",
         ChainSegmentSewing => "m:n mn segment sewing chain several multiple edges sew",
         ChainFreeSewing => "m:n mn free sewing chain partial several multiple sew",
+        Pleats => "pleats pleat knife box inverted fold skirt waist",
+        SinglePleat => "single one pleat fold",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

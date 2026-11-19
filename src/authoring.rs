@@ -458,6 +458,17 @@ pub enum Command {
         length_m: Option<f64>,
         reverse: bool,
     },
+    /// Lay pleats across `panel` along its segment `edge`: `count` pleats of `kind`, each
+    /// hiding twice `depth_m` of fabric, as folded straight internal lines (one group) running
+    /// into the piece, with tacks closing each pleat at the segment when `tack`. One undo step.
+    AddPleats {
+        panel: String,
+        edge: String,
+        count: usize,
+        depth_m: f64,
+        kind: crate::garment::pleats::PleatKind,
+        tack: bool,
+    },
     /// Remove contour points that start a boundary shorter than `overlap_m`, and internal line
     /// anchors closer than that, on the given panels; with `straight_degrees`, also contour
     /// points between two straight boundaries turning less than that. Boundaries used by
@@ -652,6 +663,7 @@ impl Command {
             Self::ClonePanelAsShape { .. } => "Clone outline as shape",
             Self::OffsetAsLines { .. } => "Offset as lines",
             Self::PerpendicularLine { .. } => "Perpendicular line",
+            Self::AddPleats { .. } => "Pleats",
             Self::CleanUpPoints { .. } => "Clean up points",
             Self::GroupLines { .. } => "Group lines",
             Self::UngroupLines { .. } => "Ungroup lines",
@@ -2860,6 +2872,73 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 closed: false,
                 group: None,
             });
+            selected = Some(panel);
+        }
+        Command::AddPleats {
+            panel,
+            edge,
+            count,
+            depth_m,
+            kind,
+            tack,
+        } => {
+            use crate::garment::{lines2d, pleats, template::TackPoint};
+            /// How far inside the segment a pleat's tack holds the fabric, metres.
+            const TACK_INSET_M: f64 = 0.003;
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_mut()
+                .ok_or("Pleats require a drafted panel")?;
+            if !polygon.edges.contains(&edge) {
+                return Err(format!("Panel {panel} has no segment {edge}"));
+            }
+            let path = lines2d::path(polygon, &edge)?;
+            let length: f64 = path.points.windows(2).map(|w| w[0].distance(w[1])).sum();
+            let (creases, tacks) = pleats::layout(length, count, depth_m, kind)?;
+            let mut names: Vec<String> = polygon.paths()?.into_iter().map(|(n, _)| n).collect();
+            let group = unused_id(
+                "pleats",
+                polygon.lines.iter().filter_map(|l| l.group.clone()),
+            );
+            let mut folds = vec![];
+            for crease in &creases {
+                let [a, b] =
+                    lines2d::perpendicular_line(polygon, &edge, crease.at_m, 90., None, false)?;
+                let id = unused_id("pleat", names.iter().cloned());
+                names.push(id.clone());
+                polygon.lines.push(crate::garment::domain::InternalLine {
+                    id: id.clone(),
+                    points: vec![a, b],
+                    tangents: vec![DVec2::ZERO; 2],
+                    closed: false,
+                    group: Some(group.clone()),
+                });
+                folds.push(crate::garment::template::LineFold {
+                    panel: panel.clone(),
+                    line: id,
+                    angle: crease.angle,
+                    strength: pleats::PLEAT_FOLD_STRENGTH,
+                });
+            }
+            template.line_folds.extend(folds);
+            if tack {
+                let point = |at: f64| {
+                    let (p, tangent) = lines2d::point_at(&path.points, at);
+                    TackPoint {
+                        panel: panel.clone(),
+                        uv: p + tangent.normalize().perp() * path.inward * TACK_INSET_M,
+                    }
+                };
+                for [s, t] in tacks {
+                    let id = unused_id("pleat_tack", template.tacks.iter().map(|t| t.id.clone()));
+                    template.tacks.push(crate::garment::template::Tack {
+                        id,
+                        a: point(s),
+                        b: point(t),
+                    });
+                }
+            }
             selected = Some(panel);
         }
         Command::CleanUpPoints {

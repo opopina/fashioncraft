@@ -182,6 +182,8 @@ pub enum CommandId {
     Pleats,
     SinglePleat,
     FoldArrangement,
+    SelectAllSeams,
+    ActivateAllSeams,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1803,6 +1805,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         SinglePleat,
         "pattern.single_pleat",
         "One pleat along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SelectAllSeams,
+        "edit.select_all_seams",
+        "Select all seams",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ActivateAllSeams,
+        "sewing.activate_all",
+        "Switch every seam back on",
         Pattern,
         None,
         TemplateHistory,

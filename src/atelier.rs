@@ -649,6 +649,35 @@ impl Atelier {
             }
             Id::Pleats => self.open_pleats(false),
             Id::SinglePleat => self.open_pleats(true),
+            Id::SelectAllSeams => {
+                let count = self.project.template.seams.len();
+                if count == 0 {
+                    return Err("There are no seams".into());
+                }
+                self.authoring.selection.all_seams = true;
+                self.authoring.selection.seam = None;
+                self.prefs.workspace.inspector_open = true;
+                self.status = format!(
+                    "{} selected · switch them off, on or delete them under Existing seams",
+                    garment_display::counted(count, "seam", "seams")
+                );
+            }
+            Id::ActivateAllSeams => {
+                let seams: Vec<String> = self
+                    .project
+                    .template
+                    .inactive_seams
+                    .iter()
+                    .cloned()
+                    .collect();
+                if seams.is_empty() {
+                    return Err("Every seam is on already".into());
+                }
+                self.edit(fashioncraft::authoring::Command::SetSeamsActive {
+                    seams,
+                    active: true,
+                });
+            }
             Id::FoldArrangement => {
                 let (panel, line) = self
                     .selected_internal_line()

@@ -340,6 +340,10 @@ pub struct GarmentTemplate {
     /// sewn, from the seam's start.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_zippers: BTreeMap<String, SeamZipper>,
+    /// Seams switched off, by id: kept in the document but not sewn, with their folds and
+    /// zippers (Sewing › Activate all seams turns them back on).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub inactive_seams: BTreeSet<String>,
     /// Tacks: two points of the cloth held together (basting, or a button fastened to its
     /// buttonhole).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -765,6 +769,11 @@ impl GarmentTemplate {
                 return Err(format!("Flipped panel {id} is not in the template"));
             }
         }
+        for id in &self.inactive_seams {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Inactive seam {id} is not in the template"));
+            }
+        }
         for (id, fold) in &self.seam_folds {
             if !self.seams.iter().any(|s| &s.id == id) {
                 return Err(format!("Fold angle refers to unknown seam {id}"));
@@ -1138,8 +1147,11 @@ impl GarmentTemplate {
             if spec.a_tail.len() >= 128 || spec.b_tail.len() >= 128 {
                 return Err("Sewing side needs 1..128 segments".into());
             }
-            // Seams of a panel deactivated with its sewing stay in the document only.
-            if spec.references().any(|r| unsewn.contains(r.panel.as_str())) {
+            // Seams of a panel deactivated with its sewing, and seams switched off, stay in the
+            // document only.
+            if spec.references().any(|r| unsewn.contains(r.panel.as_str()))
+                || self.inactive_seams.contains(&spec.id)
+            {
                 continue;
             }
             // Reject overlapping seam ownership, including sewing an interval to itself.
@@ -1444,6 +1456,7 @@ impl GarmentTemplate {
             archive: Vec::new(),
             seam_folds: Default::default(),
             seam_zippers: Default::default(),
+            inactive_seams: Default::default(),
             tacks: vec![],
             line_folds: vec![],
             line_springs: vec![],

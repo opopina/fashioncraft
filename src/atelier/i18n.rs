@@ -2288,6 +2288,21 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Colocación plegada: empezar doblada por la línea interna seleccionada"
         }
         "Arrange folded" => "Colocar plegada",
+        "Switch every seam back on" => "Volver a activar todas las costuras",
+        "Active" => "Activa",
+        "An inactive seam stays in the document but is not sewn" => {
+            "Una costura inactiva sigue en el documento pero no se cose"
+        }
+        "seams selected" => "costuras seleccionadas",
+        "Switch off" => "Desactivar",
+        "Switch on" => "Activar",
+        "Delete them" => "Borrarlas",
+        "Delete every seam in one step; Ctrl+Z brings them back" => {
+            "Borra todas las costuras en un paso; Ctrl+Z las recupera"
+        }
+        "Clear selection" => "Quitar la selección",
+        "off" => "desactivada",
+        "Seams deleted · Ctrl+Z to undo" => "Costuras borradas · Ctrl+Z para deshacer",
         "Turn one side of the line in 3D to the fold angle (90° without a fold), so the simulation starts folded" => {
             "Gira en 3D un lado de la línea hasta el ángulo del doblez (90° si no tiene), para que la simulación empiece doblada"
         }

@@ -338,6 +338,16 @@ pub enum Command {
     RemoveSeam {
         seam: String,
     },
+    /// Delete several seams at once. One undo step.
+    RemoveSeams {
+        seams: Vec<String>,
+    },
+    /// Switch seams on or off: an inactive seam stays in the document but is not sewn.
+    /// One undo step.
+    SetSeamsActive {
+        seams: Vec<String>,
+        active: bool,
+    },
     FabricAppearance {
         fabric: String,
         appearance: Option<crate::garment::appearance::FabricAppearance>,
@@ -647,6 +657,9 @@ impl Command {
             Self::SewMany { .. } => "Auto sewing",
             Self::SewChain { .. } => "Sew segments",
             Self::RemoveSeam { .. } => "Remove seam",
+            Self::RemoveSeams { .. } => "Remove seams",
+            Self::SetSeamsActive { active: true, .. } => "Activate seams",
+            Self::SetSeamsActive { active: false, .. } => "Deactivate seams",
             Self::FabricAppearance { .. } => "Fabric appearance",
             Self::InternalShape { .. } => "Internal shape",
             Self::ConvertToHole { .. } => "Cut hole",
@@ -1536,6 +1549,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
         template.seams.iter().map(|s| s.id.clone()).collect();
     template.seam_folds.retain(|id, _| seams.contains(id));
     template.seam_zippers.retain(|id, _| seams.contains(id));
+    template.inactive_seams.retain(|id| seams.contains(id));
 }
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
@@ -4525,6 +4539,39 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 return Err("Seam not found".into());
             }
             template.seams.retain(|s| s.id != seam);
+        }
+        Command::RemoveSeams { seams } => {
+            if seams.is_empty() {
+                return Err("No seams to delete".into());
+            }
+            for id in &seams {
+                if !template.seams.iter().any(|s| &s.id == id) {
+                    return Err(format!("There is no seam {id}"));
+                }
+            }
+            template.seams.retain(|s| !seams.contains(&s.id));
+        }
+        Command::SetSeamsActive { seams, active } => {
+            for id in &seams {
+                if !template.seams.iter().any(|s| &s.id == id) {
+                    return Err(format!("There is no seam {id}"));
+                }
+            }
+            let mut changed = 0;
+            for id in seams {
+                changed += usize::from(if active {
+                    template.inactive_seams.remove(&id)
+                } else {
+                    template.inactive_seams.insert(id)
+                });
+            }
+            if changed == 0 {
+                return Err(if active {
+                    "Those seams are active already".into()
+                } else {
+                    "Those seams are off already".into()
+                });
+            }
         }
         Command::SetGraphic { placement } => {
             placement.validate_panel(&template)?;

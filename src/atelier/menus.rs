@@ -126,7 +126,7 @@ const EDIT: &[Item] = &[
     Run("Copy", C::CopyPieces),
     Run("Paste", C::PastePieces),
     Run("Select all", C::SelectAllPieces),
-    Todo("Select all seams"),
+    Run("Select all seams", C::SelectAllSeams),
     Run("Invert selection", C::InvertSelection),
     S,
     Sub(
@@ -259,7 +259,7 @@ const SEWING: &[Item] = &[
     Run("M:N free sewing", C::ChainFreeSewing),
     Run("Auto sewing", C::AutoSewing),
     Run("Check sewing length", C::CheckSewingLength),
-    Todo("Activate all seams"),
+    Run("Activate all seams", C::ActivateAllSeams),
 ];
 
 const MATERIALS: &[Item] = &[
@@ -513,6 +513,7 @@ impl Atelier {
             C::ChainSegmentSewing => self.in_sewing_mode(true, false),
             C::ChainFreeSewing => self.in_sewing_mode(true, true),
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
+            C::SelectAllSeams => self.authoring.selection.all_seams,
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
@@ -715,7 +716,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 181, "{done} of {all}");
+        assert!(done >= 183, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

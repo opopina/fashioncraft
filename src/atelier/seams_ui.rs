@@ -18,6 +18,14 @@ impl Atelier {
             .collect()
     }
     pub(super) fn seam_edge_highlighted(&self, edge: &BoundaryRef) -> bool {
+        if self.authoring.selection.all_seams {
+            return self
+                .project
+                .template
+                .seams
+                .iter()
+                .any(|s| s.references().any(|r| same_edge(edge, r)));
+        }
         if let Some(id) = &self.authoring.selection.seam
             && let Some(seam) = self.project.template.seams.iter().find(|s| &s.id == id)
         {
@@ -46,6 +54,8 @@ impl Atelier {
         let mut remove = None;
         let mut edit = None;
         let mut merge = None;
+        let mut switch: Option<(Vec<String>, bool)> = None;
+        let mut remove_all = false;
         for id in &selected {
             ui.colored_label(super::seam_links::seam_color(id), format!("Seam: {id}"));
             let button = ui.button(i18n::tr(ui_lang, "Edit ranges / chain…"));
@@ -69,6 +79,17 @@ impl Atelier {
             {
                 merge = Some(id.clone());
             }
+            let mut active = !self.project.template.inactive_seams.contains(id);
+            if ui
+                .checkbox(&mut active, i18n::tr(ui_lang, "Active"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "An inactive seam stays in the document but is not sewn",
+                ))
+                .changed()
+            {
+                switch = Some((vec![id.clone()], active));
+            }
             self.seam_fold_controls(ui, id);
             self.seam_zipper_controls(ui, id);
         }
@@ -80,9 +101,46 @@ impl Atelier {
         )))
         .id_salt("existing_seams")
         .default_open(false)
+        .open(self.authoring.selection.all_seams.then_some(true))
         .show(ui, |ui| {
             if self.project.template.seams.is_empty() {
                 ui.small(i18n::tr(ui_lang, "No seams. Sewing links two boundaries."));
+            }
+            if self.authoring.selection.all_seams && !self.project.template.seams.is_empty() {
+                let all: Vec<String> = self
+                    .project
+                    .template
+                    .seams
+                    .iter()
+                    .map(|s| s.id.clone())
+                    .collect();
+                ui.label(format!(
+                    "{} {}",
+                    all.len(),
+                    i18n::tr(ui_lang, "seams selected")
+                ));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(i18n::tr(ui_lang, "Switch off")).clicked() {
+                        switch = Some((all.clone(), false));
+                    }
+                    if ui.button(i18n::tr(ui_lang, "Switch on")).clicked() {
+                        switch = Some((all.clone(), true));
+                    }
+                    if ui
+                        .button(i18n::tr(ui_lang, "Delete them"))
+                        .on_hover_text(i18n::tr(
+                            ui_lang,
+                            "Delete every seam in one step; Ctrl+Z brings them back",
+                        ))
+                        .clicked()
+                    {
+                        remove_all = true;
+                    }
+                    if ui.button(i18n::tr(ui_lang, "Clear selection")).clicked() {
+                        self.authoring.selection.all_seams = false;
+                    }
+                });
+                ui.separator();
             }
             for seam in &self.project.template.seams {
                 ui.horizontal(|ui| {
@@ -96,10 +154,18 @@ impl Atelier {
                     if ui.small_button(i18n::tr(ui_lang, "Edit")).clicked() {
                         edit = Some(seam.id.clone());
                     }
+                    let off = self.project.template.inactive_seams.contains(&seam.id);
+                    let label = if off {
+                        egui::RichText::new(format!("{} ({})", seam.id, i18n::tr(ui_lang, "off")))
+                            .weak()
+                    } else {
+                        egui::RichText::new(&seam.id)
+                    };
                     if ui
                         .selectable_label(
-                            self.authoring.selection.seam.as_ref() == Some(&seam.id),
-                            &seam.id,
+                            self.authoring.selection.all_seams
+                                || self.authoring.selection.seam.as_ref() == Some(&seam.id),
+                            label,
                         )
                         .clicked()
                     {
@@ -130,7 +196,32 @@ impl Atelier {
             self.authoring.ends.clear();
             self.select_boundary(edge);
             self.authoring.selection.seam = Some(id);
+            self.authoring.selection.all_seams = false;
             self.authoring.selection.seam_card = None;
+        }
+        if let Some((seams, active)) = switch {
+            let count = seams.len();
+            if self.edit(Command::SetSeamsActive { seams, active }) {
+                self.status = format!(
+                    "{} {}",
+                    super::garment_display::counted(count, "seam", "seams"),
+                    if active { "on" } else { "off" }
+                );
+            }
+        }
+        if remove_all {
+            let seams: Vec<String> = self
+                .project
+                .template
+                .seams
+                .iter()
+                .map(|s| s.id.clone())
+                .collect();
+            if self.edit(Command::RemoveSeams { seams }) {
+                self.authoring.selection.all_seams = false;
+                self.authoring.selection.seam = None;
+                self.status = i18n::tr(ui_lang, "Seams deleted · Ctrl+Z to undo").into();
+            }
         }
         if let Some(seam) = remove {
             self.remove_seam(seam);

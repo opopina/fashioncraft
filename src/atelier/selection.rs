@@ -80,6 +80,8 @@ pub(super) struct Selection {
     pub target: BoxTarget,
     pub shape: SelectionShape,
     pub seam: Option<String>,
+    /// Every seam selected (Edit › Select all seams), for the bulk actions in the seam list.
+    pub all_seams: bool,
     pub seam_card: Option<egui::Pos2>,
     pub board_rect: Option<egui::Rect>,
     pub garment_rect: Option<egui::Rect>,

@@ -133,11 +133,22 @@ impl Atelier {
         let matrix = self.camera.matrix(rect.width() / rect.height());
         let project = |p| project_matrix(matrix, rect, p);
         let show = matches!(self.authoring.tool, Tool::Edit | Tool::Sew);
+        let lines_shown = self.prefs.garment_display.internal_lines;
         for panel in &self.scene.garment.panels {
             if !self.panel_shown_3d(&panel.id) {
                 continue;
             }
+            let internal: std::collections::BTreeSet<&str> = self
+                .project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == panel.id)
+                .and_then(|p| p.polygon.as_ref())
+                .map(|poly| poly.lines.iter().map(|l| l.id.as_str()).collect())
+                .unwrap_or_default();
             for (name, ids) in &panel.boundaries {
+                let hidden_line = !lines_shown && internal.contains(name.as_str());
                 let edge = BoundaryRef {
                     reversed: false,
                     panel: panel.id.clone(),
@@ -153,7 +164,8 @@ impl Atelier {
                     .is_some_and(|e| same_edge(e, &edge));
                 let endpoint = self.authoring.ends.iter().position(|e| same_edge(e, &edge));
                 let selected = self.panel_selected(&panel.id);
-                if !show && !active && !selected {
+                if (!show && !active && !selected) || (hidden_line && !active && endpoint.is_none())
+                {
                     continue;
                 }
                 let color = if endpoint.is_some() {

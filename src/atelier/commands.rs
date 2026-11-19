@@ -158,6 +158,11 @@ pub enum CommandId {
     MeasureBodyGirth,
     MeasureGarmentLine,
     MeasureGarmentGirth,
+    ShowInternalLines,
+    RefreshTextures,
+    SaveAvatar,
+    OpenUserManual,
+    OpenWhatsNew,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1572,6 +1577,51 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         MeasureGarmentGirth,
         "measure.garment_girth",
         "Measure around the garment",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowInternalLines,
+        "display.internal_lines",
+        "Show internal lines",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        RefreshTextures,
+        "materials.refresh_textures",
+        "Reload textures and graphics from their files",
+        Workspace,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        SaveAvatar,
+        "file.save_avatar",
+        "Save the posed avatar as OBJ…",
+        Simulation,
+        None,
+        NotUndoable,
+        LocalFilesystem
+    ),
+    entry!(
+        OpenUserManual,
+        "help.user_manual",
+        "User manual (web)",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenWhatsNew,
+        "help.whats_new",
+        "What's new (web)",
         Workspace,
         None,
         NotUndoable,

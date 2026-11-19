@@ -78,6 +78,8 @@ pub(super) struct GarmentDisplay {
     pub(super) graphics: bool,
     /// How the fabrics look.
     pub(super) style: GarmentStyle,
+    /// Show the pieces' internal lines on the 3D garment.
+    pub(super) internal_lines: bool,
     /// Technical-flat rendering (Alt+0).
     pub(super) schematic: bool,
     pub(super) schematic_line_px: f32,
@@ -107,6 +109,7 @@ impl Default for GarmentDisplay {
             trims: true,
             graphics: true,
             style: GarmentStyle::TexturedThick,
+            internal_lines: true,
             schematic: false,
             schematic_line_px: 1.5,
             schematic_line_color: [0x1E, 0x1E, 0x22],

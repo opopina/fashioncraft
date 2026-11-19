@@ -630,6 +630,26 @@ impl Atelier {
                     _ => GarmentStyle::Plain,
                 };
             }
+            Id::ShowInternalLines => {
+                let display = &mut self.prefs.garment_display;
+                display.internal_lines = !display.internal_lines;
+            }
+            Id::RefreshTextures => {
+                self.authoring.graphic_images = Default::default();
+                self.status = "Textures and graphics reloaded from their files".into();
+            }
+            Id::SaveAvatar => self.save_avatar()?,
+            Id::OpenUserManual | Id::OpenWhatsNew => {
+                let page = if id == Id::OpenUserManual {
+                    "#readme"
+                } else {
+                    "/commits/main"
+                };
+                ctx.open_url(egui::OpenUrl::new_tab(format!(
+                    "{}{page}",
+                    env!("CARGO_PKG_REPOSITORY")
+                )));
+            }
             Id::ShowPins => {
                 let display = &mut self.prefs.garment_display;
                 display.pins = !display.pins;

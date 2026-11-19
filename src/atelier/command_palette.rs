@@ -166,6 +166,11 @@ fn aliases(id: CommandId) -> &'static str {
         MeasureBodyGirth => "measure circumference girth around avatar body chest waist hip",
         MeasureGarmentLine => "measure linear length garment cloth distance",
         MeasureGarmentGirth => "measure circumference girth around garment cloth",
+        ShowInternalLines => "show hide internal lines 3d display",
+        RefreshTextures => "refresh reload textures graphics images files",
+        SaveAvatar => "save export avatar body posed obj mesh",
+        OpenUserManual => "help user manual documentation guide readme",
+        OpenWhatsNew => "help whats new changes changelog commits",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -931,7 +936,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::MeasureGarmentGirth
+            CommandId::OpenWhatsNew
         );
         h.key(
             "palette.query",

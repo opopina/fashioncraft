@@ -116,6 +116,32 @@ impl Atelier {
             .unwrap_or_default()
     }
 
+    /// File › Save as › Avatar: the avatar as it stands now (shaped and posed), as an OBJ mesh
+    /// the avatar importer reads back.
+    pub(super) fn save_avatar(&mut self) -> Result<(), String> {
+        let body = std::sync::Arc::clone(&self.scene.collider.surface);
+        if body.triangles.is_empty() {
+            return Err("There is no avatar to save".into());
+        }
+        let Some(path) = FileDialog::new()
+            .set_title("Save the avatar")
+            .add_filter("OBJ mesh", &["obj"])
+            .set_file_name("avatar.obj")
+            .save_file()
+        else {
+            return Ok(());
+        };
+        let text = body.to_obj("ClothCraft avatar, posed, metres, y up");
+        marvelous_cloth::document::atomic_write(&path, text.as_bytes())?;
+        self.status = format!(
+            "Avatar saved: {} vertices, {} triangles in {}",
+            body.vertices.len(),
+            body.triangles.len(),
+            path.display()
+        );
+        Ok(())
+    }
+
     pub(super) fn save_pose_file(&mut self) -> Result<(), String> {
         let pose = self.pose_on_show();
         let Some(path) = FileDialog::new()

@@ -93,6 +93,22 @@ impl SurfaceMesh {
         out
     }
 
+    /// The surface as Wavefront OBJ text (positions and triangles), which
+    /// [`SurfaceMesh::parse_obj`] reads back.
+    pub fn to_obj(&self, comment: &str) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+        for line in comment.lines() {
+            let _ = writeln!(out, "# {line}");
+        }
+        for v in &self.vertices {
+            let _ = writeln!(out, "v {} {} {}", v.x, v.y, v.z);
+        }
+        for t in &self.triangles {
+            let _ = writeln!(out, "f {} {} {}", t[0] + 1, t[1] + 1, t[2] + 1);
+        }
+        out
+    }
     pub fn with_floor(&self, height: f64) -> Self {
         let (lo, hi) = self.vertices.iter().fold(
             (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),

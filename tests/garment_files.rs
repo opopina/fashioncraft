@@ -81,3 +81,22 @@ fn a_pose_file_round_trips_and_refuses_strangers() {
     added.0.insert("bone_1".into(), [10., 0., 0.]);
     assert_eq!(Pose::from_file(&added.to_file().unwrap()).unwrap(), added);
 }
+
+#[test]
+fn a_saved_avatar_reads_back_as_the_same_mesh() {
+    let mannequin =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj");
+    let body = marvelous_cloth::avatar::SurfaceMesh::load_obj(&mannequin).unwrap();
+    let text = body.to_obj("posed avatar\nmetres");
+    assert!(text.starts_with("# posed avatar\n# metres\n"));
+    let back = marvelous_cloth::avatar::SurfaceMesh::parse_obj(&text).unwrap();
+    assert_eq!(back.triangles, body.triangles);
+    assert_eq!(back.vertices.len(), body.vertices.len());
+    // Positions print exactly: Rust writes the shortest text that reads back the same.
+    assert!(
+        back.vertices
+            .iter()
+            .zip(&body.vertices)
+            .all(|(a, b)| a == b)
+    );
+}

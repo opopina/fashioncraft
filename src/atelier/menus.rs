@@ -59,7 +59,7 @@ const FILE: &[Item] = &[
         &[
             Run("Project…", C::SaveProjectAs),
             Run("Garment…", C::SaveGarment),
-            Todo("Avatar…"),
+            Run("Avatar…", C::SaveAvatar),
             Run("Pose…", C::SavePoseFile),
         ],
     ),
@@ -264,7 +264,7 @@ const MATERIALS: &[Item] = &[
         &[
             Todo("Edit texture (2D)"),
             Todo("Edit texture (3D)"),
-            Todo("Refresh textures"),
+            Run("Refresh textures", C::RefreshTextures),
         ],
     ),
     Sub(
@@ -352,7 +352,7 @@ const DISPLAY: &[Item] = &[
             Run("Show garment", C::ToggleGarment),
             Run("Show pins", C::ShowPins),
             Todo("Show piece names"),
-            Todo("Show internal lines"),
+            Run("Show internal lines", C::ShowInternalLines),
             Run("Show graphics", C::ShowGraphics),
             Run("Show trims", C::ShowTrims),
         ],
@@ -425,8 +425,8 @@ const WINDOW: &[Item] = &[
 const HELP: &[Item] = &[
     X(Custom::Coverage),
     S,
-    Todo("User manual"),
-    Todo("What's new"),
+    Run("User manual", C::OpenUserManual),
+    Run("What's new", C::OpenWhatsNew),
 ];
 
 /// The menu bar, left to right.
@@ -484,6 +484,7 @@ impl Atelier {
         match id {
             C::ToggleAvatar => display.avatar,
             C::ShowPins => display.pins,
+            C::ShowInternalLines => display.internal_lines,
             C::MeasureBodyTape
             | C::MeasureBodyHeight
             | C::MeasureBodyGirth
@@ -696,7 +697,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 157, "{done} of {all}");
+        assert!(done >= 162, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

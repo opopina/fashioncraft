@@ -2283,6 +2283,16 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Measure around the body" => "Medir el contorno del cuerpo",
         "Measure along the garment" => "Medir a lo largo de la prenda",
         "Measure around the garment" => "Medir el contorno de la prenda",
+        "Reload textures and graphics from their files" => {
+            "Volver a cargar texturas y gráficos desde sus archivos"
+        }
+        "Textures and graphics reloaded from their files" => {
+            "Texturas y gráficos cargados de nuevo desde sus archivos"
+        }
+        "Save the posed avatar as OBJ…" => "Guardar el avatar con su pose como OBJ…",
+        "User manual (web)" => "Manual de usuario (web)",
+        "What's new (web)" => "Novedades (web)",
+        "There is no avatar to save" => "No hay avatar que guardar",
         "Click two points on the body · Esc stops measuring" => {
             "Haz clic en dos puntos del cuerpo · Esc deja de medir"
         }

@@ -163,6 +163,9 @@ pub enum CommandId {
     SaveAvatar,
     OpenUserManual,
     OpenWhatsNew,
+    ShowPieceNames,
+    SmoothCurve,
+    SplitSegment,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1625,6 +1628,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowPieceNames,
+        "display.piece_names_3d",
+        "Show piece names in 3D",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        SmoothCurve,
+        "pattern.smooth_curve",
+        "Round the selected points into a smooth curve",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SplitSegment,
+        "pattern.split_segment",
+        "Add a point at the middle of the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
 ];

@@ -219,8 +219,8 @@ const PATTERN_2D: &[Item] = &[
             Run("Merge pieces along seam", C::MergeAlongSeam),
             Run("Unfold across segment", C::UnfoldPiece),
             Run("Extend line to outline", C::ExtendLineEnds),
-            Todo("Add point / split line"),
-            Todo("Smooth curve"),
+            Run("Add point / split line", C::SplitSegment),
+            Run("Smooth curve", C::SmoothCurve),
             Todo("Cut and extend"),
         ],
     ),
@@ -351,7 +351,7 @@ const DISPLAY: &[Item] = &[
         &[
             Run("Show garment", C::ToggleGarment),
             Run("Show pins", C::ShowPins),
-            Todo("Show piece names"),
+            Run("Show piece names", C::ShowPieceNames),
             Run("Show internal lines", C::ShowInternalLines),
             Run("Show graphics", C::ShowGraphics),
             Run("Show trims", C::ShowTrims),
@@ -485,6 +485,7 @@ impl Atelier {
             C::ToggleAvatar => display.avatar,
             C::ShowPins => display.pins,
             C::ShowInternalLines => display.internal_lines,
+            C::ShowPieceNames => display.piece_names,
             C::MeasureBodyTape
             | C::MeasureBodyHeight
             | C::MeasureBodyGirth
@@ -697,7 +698,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 162, "{done} of {all}");
+        assert!(done >= 165, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

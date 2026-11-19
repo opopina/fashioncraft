@@ -220,6 +220,81 @@ impl Atelier {
         self.edit(Command::SetTrim { trim })
     }
 
+    /// Pattern 2D › Edit › Add point / split line: a new point at the middle of the selected
+    /// segment, which becomes two.
+    pub(super) fn split_selected_segment(&mut self) -> Result<(), String> {
+        let edge = self
+            .authoring
+            .edge
+            .clone()
+            .filter(|e| e.edge.is_some())
+            .ok_or("Select a segment or an internal line first")?;
+        let length = self
+            .sewing_curve(std::slice::from_ref(&edge), false)
+            .map(|c| c.length)
+            .filter(|l| *l > 0.)
+            .ok_or("The selected segment has no length")?;
+        if !self.edit(Command::SplitBoundary {
+            panel: edge.panel.clone(),
+            edge: edge.edge.clone().unwrap_or_default(),
+            at_m: length * 0.5,
+        }) {
+            return Err(self.status.clone());
+        }
+        self.status = format!(
+            "Point added at the middle of the segment ({:.1} mm from each end)",
+            length * 500.
+        );
+        Ok(())
+    }
+
+    /// Pattern 2D › Edit › Smooth curve: every selected outline point becomes a smooth one,
+    /// with collinear handles, as "Round this corner" does for one point.
+    pub(super) fn smooth_selected_points(&mut self) -> Result<(), String> {
+        let groups: Vec<(String, Vec<usize>)> = self
+            .authoring
+            .board
+            .point_selections()
+            .into_iter()
+            .filter(|(_, points)| !points.is_empty())
+            .collect();
+        if groups.is_empty() {
+            return Err("Select outline points on the board first (Points mode)".into());
+        }
+        let mut rounded = 0;
+        for (panel, points) in groups {
+            for anchor in points {
+                let curved = self
+                    .project
+                    .template
+                    .panels
+                    .iter()
+                    .find(|p| p.id == panel)
+                    .and_then(|p| p.polygon.as_ref())
+                    .is_some_and(|poly| {
+                        let n = poly.points.len();
+                        anchor < n
+                            && poly.curves.contains_key(&poly.edges[anchor])
+                            && poly.curves.contains_key(&poly.edges[(anchor + n - 1) % n])
+                    });
+                if !curved
+                    && self.edit(Command::CurvePoint {
+                        panel: panel.clone(),
+                        anchor,
+                        curved: true,
+                    })
+                {
+                    rounded += 1;
+                }
+            }
+        }
+        self.status = format!(
+            "{} rounded into a smooth curve",
+            super::garment_display::counted(rounded, "point", "points")
+        );
+        Ok(())
+    }
+
     /// The outline segment selected on the board, as (piece, segment name).
     pub(super) fn selected_segment(&self) -> Option<(String, String)> {
         let edge = self.authoring.edge.as_ref()?;

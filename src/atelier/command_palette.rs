@@ -171,6 +171,9 @@ fn aliases(id: CommandId) -> &'static str {
         SaveAvatar => "save export avatar body posed obj mesh",
         OpenUserManual => "help user manual documentation guide readme",
         OpenWhatsNew => "help whats new changes changelog commits",
+        ShowPieceNames => "show piece names labels 3d display",
+        SmoothCurve => "smooth curve round points bezier handles",
+        SplitSegment => "add point split line segment middle insert",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -936,7 +939,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::OpenWhatsNew
+            CommandId::ShowPieceNames
         );
         h.key(
             "palette.query",

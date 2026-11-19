@@ -2293,6 +2293,20 @@ fn spanish(text: &str) -> Option<&'static str> {
         "User manual (web)" => "Manual de usuario (web)",
         "What's new (web)" => "Novedades (web)",
         "There is no avatar to save" => "No hay avatar que guardar",
+        "Show piece names in 3D" => "Mostrar nombres de pieza en 3D",
+        "Round the selected points into a smooth curve" => {
+            "Redondear los puntos seleccionados en una curva suave"
+        }
+        "Add a point at the middle of the selected segment" => {
+            "Añadir un punto en el centro del segmento seleccionado"
+        }
+        "Select a segment or an internal line first" => {
+            "Selecciona antes un segmento o una línea interna"
+        }
+        "The selected segment has no length" => "El segmento seleccionado no tiene longitud",
+        "Select outline points on the board first (Points mode)" => {
+            "Selecciona antes puntos del contorno en el tablero (modo Puntos)"
+        }
         "Click two points on the body · Esc stops measuring" => {
             "Haz clic en dos puntos del cuerpo · Esc deja de medir"
         }

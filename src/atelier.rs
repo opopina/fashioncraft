@@ -630,6 +630,12 @@ impl Atelier {
                     _ => GarmentStyle::Plain,
                 };
             }
+            Id::ShowPieceNames => {
+                let display = &mut self.prefs.garment_display;
+                display.piece_names = !display.piece_names;
+            }
+            Id::SmoothCurve => self.smooth_selected_points()?,
+            Id::SplitSegment => self.split_selected_segment()?,
             Id::ShowInternalLines => {
                 let display = &mut self.prefs.garment_display;
                 display.internal_lines = !display.internal_lines;

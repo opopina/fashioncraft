@@ -614,6 +614,7 @@ impl Atelier {
             self.paint_pins_3d(ui, rect);
             self.paint_trace_pen(ui, rect);
             self.paint_measure3d(ui, rect);
+            self.paint_piece_names_3d(ui, rect);
             if self.authoring.tool == Tool::Grab
                 && !self.authoring.pin_tool.enabled
                 && let Some(p) = response.hover_pos()

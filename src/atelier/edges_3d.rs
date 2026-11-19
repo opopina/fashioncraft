@@ -128,6 +128,40 @@ impl Atelier {
             }
         }
     }
+    /// Each piece's name at the middle of its cloth, over the 3D view.
+    pub(super) fn paint_piece_names_3d(&self, ui: &egui::Ui, rect: egui::Rect) {
+        if !self.prefs.garment_display.piece_names {
+            return;
+        }
+        let painter = ui.painter().with_clip_rect(rect);
+        let matrix = self.camera.matrix(rect.width() / rect.height());
+        for panel in &self.scene.garment.panels {
+            if !self.panel_shown_3d(&panel.id) || panel.vertices.is_empty() {
+                continue;
+            }
+            let x = &self.scene.state.x[panel.vertices.clone()];
+            let middle = x.iter().sum::<glam::DVec3>() / x.len() as f64;
+            let Some(at) = project_matrix(matrix, rect, middle) else {
+                continue;
+            };
+            let name = self
+                .project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == panel.id)
+                .map_or(panel.id.as_str(), |p| p.name.as_str());
+            let galley = painter.layout_no_wrap(
+                name.to_string(),
+                egui::FontId::proportional(12.),
+                Color32::WHITE,
+            );
+            let place = egui::Rect::from_center_size(at, galley.size()).expand2(egui::vec2(5., 2.));
+            painter.rect_filled(place, 3., Color32::from_black_alpha(150));
+            painter.galley(place.min + egui::vec2(5., 2.), galley, Color32::WHITE);
+        }
+    }
+
     pub(super) fn paint_edges_3d(&mut self, ui: &egui::Ui, rect: egui::Rect) {
         let painter = ui.painter().with_clip_rect(rect);
         let matrix = self.camera.matrix(rect.width() / rect.height());

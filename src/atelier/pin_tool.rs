@@ -374,7 +374,7 @@ impl Atelier {
     }
 
     /// The cloth vertex nearest to where a ray through `pos` first meets visible cloth.
-    fn picked_vertex(&self, pos: egui::Pos2, rect: egui::Rect) -> Option<usize> {
+    pub(super) fn picked_vertex(&self, pos: egui::Pos2, rect: egui::Rect) -> Option<usize> {
         let (origin, dir) = self.camera.ray(pos, rect);
         let mut best = f64::INFINITY;
         let mut picked = None;

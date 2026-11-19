@@ -688,6 +688,7 @@ impl Atelier {
                 });
             }
             Id::Reset2dArrangement => self.reset_2d_arrangement(),
+            Id::GraphicOn3dGarment => self.start_graphic_3d(),
             Id::FoldArrangement => {
                 let (panel, line) = self
                     .selected_internal_line()

@@ -558,6 +558,86 @@ impl Atelier {
 
     /// Place the PNG at `path` at the middle of a piece, 12 cm wide.
     pub(super) fn add_graphic_from(&mut self, panel: &str, path: PathBuf) {
+        self.add_graphic_at(panel, path, None, GraphicSide::Front);
+    }
+
+    /// Graphic on the 3D garment: choose a PNG, then click the cloth where it goes.
+    pub(super) fn start_graphic_3d(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG image", &["png"])
+            .pick_file()
+        else {
+            return;
+        };
+        self.authoring.graphic_3d = Some(path);
+        self.status = i18n::tr(
+            self.prefs.language,
+            "Click the garment where the graphic goes · Esc cancels",
+        )
+        .into();
+    }
+
+    /// While a graphic waits for its place, a click on the cloth puts it there, on the side of
+    /// the cloth that faces the view. Takes every 3D click until then.
+    pub(super) fn graphic_3d_interaction(
+        &mut self,
+        response: &egui::Response,
+        rect: egui::Rect,
+    ) -> bool {
+        if self.authoring.graphic_3d.is_none() {
+            return false;
+        }
+        let ui_lang = self.prefs.language;
+        if response.ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.authoring.graphic_3d = None;
+            self.status = i18n::tr(ui_lang, "Graphic cancelled").into();
+            return true;
+        }
+        if !response.clicked_by(egui::PointerButton::Primary) {
+            return true;
+        }
+        let Some(pos) = response.interact_pointer_pos() else {
+            return true;
+        };
+        let Some(v) = self.picked_vertex(pos, rect) else {
+            self.status = i18n::tr(ui_lang, "Click on the cloth").into();
+            return true;
+        };
+        let g = self.scene.garment.clone();
+        let Some(range) = g.panels.iter().find(|r| r.vertices.contains(&v)) else {
+            return true;
+        };
+        let x = &self.scene.state.x;
+        let normal: glam::DVec3 = g.mesh.triangles[range.triangles.clone()]
+            .iter()
+            .filter(|t| t.vertices.contains(&v))
+            .map(|t| {
+                let [a, b, c] = t.vertices.map(|i| x[i]);
+                (b - a).cross(c - a)
+            })
+            .sum();
+        let facing = normal.dot(self.camera.eye().as_dvec3() - x[v]) > 0.;
+        let flipped = self.project.template.flipped_panels.contains(&range.id);
+        let side = if facing != flipped {
+            GraphicSide::Front
+        } else {
+            GraphicSide::Back
+        };
+        let (panel, uv) = (range.id.clone(), g.mesh.uv[v]);
+        let path = self.authoring.graphic_3d.take().expect("checked above");
+        self.add_graphic_at(&panel, path, Some(uv), side);
+        true
+    }
+
+    /// Place the PNG at `path` on a piece, 12 cm wide, centred at `centre` (material metres) or
+    /// at the middle of the piece, on `side` of the cloth.
+    pub(super) fn add_graphic_at(
+        &mut self,
+        panel: &str,
+        path: PathBuf,
+        centre: Option<DVec2>,
+        side: GraphicSide,
+    ) {
         let (w, h) = match image::image_dimensions(&path) {
             Ok(size) => size,
             Err(e) => {
@@ -565,7 +645,7 @@ impl Atelier {
                 return;
             }
         };
-        let Some(centre) = self.piece_centre(panel) else {
+        let Some(centre) = centre.or_else(|| self.piece_centre(panel)) else {
             return;
         };
         let asset_id = self.asset_for(path);
@@ -579,7 +659,7 @@ impl Atelier {
                 center_m: centre,
                 size_m: DVec2::new(width, height),
                 rotation_degrees: 0.,
-                side: GraphicSide::Front,
+                side,
                 opacity: 1.,
             },
         });

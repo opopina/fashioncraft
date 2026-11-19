@@ -194,6 +194,7 @@ fn aliases(id: CommandId) -> &'static str {
         ActivateAllSeams => "activate all seams sewing switch on inactive",
         PressureMap => "pressure map fit map tight contact kpa avatar",
         Reset2dArrangement => "reset 2d arrangement lay out flat board pieces",
+        GraphicOn3dGarment => "graphic print logo image png place click garment",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

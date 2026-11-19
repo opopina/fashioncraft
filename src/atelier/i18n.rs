@@ -2300,6 +2300,14 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Restablecer colocación 2D: colocar todas las piezas planas como en el tablero"
         }
         "There are no pieces to lay out" => "No hay piezas que colocar",
+        "Graphic by clicking the cloth: choose a PNG, then click where it goes" => {
+            "Gráfico con un clic en la tela: elige un PNG y haz clic donde va"
+        }
+        "Click the garment where the graphic goes · Esc cancels" => {
+            "Haz clic en la prenda donde va el gráfico · Esc cancela"
+        }
+        "Graphic cancelled" => "Gráfico cancelado",
+        "Click on the cloth" => "Haz clic sobre la tela",
         "Pieces laid out as on the board, in front of the avatar · Reset 3D arrangement puts them back" => {
             "Piezas colocadas como en el tablero, delante del avatar · Restablecer colocación 3D las devuelve"
         }

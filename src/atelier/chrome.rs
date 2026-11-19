@@ -440,6 +440,8 @@ impl Atelier {
                 // So does measuring.
             } else if self.ik_interaction(&response, rect) {
                 // A hand or foot of the pose being edited is being dragged.
+            } else if self.graphic_3d_interaction(&response, rect) {
+                // A graphic waiting for its place takes the click on the cloth.
             } else if self.arrangement_point_interaction(&response, rect) {
                 // A click on an arrangement point placed the selected piece.
             } else {

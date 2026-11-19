@@ -1,4 +1,5 @@
-//! World-axis placement handles. Preview is rigid; only release recompiles.
+//! Placement handles along the world's, the piece's or the screen's axes. Preview is rigid;
+//! only release recompiles.
 use super::{
     authoring_ui::{Tool, segment_distance},
     *,
@@ -7,6 +8,8 @@ use fashioncraft::{authoring, garment::template::Placement};
 use glam::{DQuat, DVec3, EulerRot};
 
 pub(super) struct Drag {
+    /// Which of the gizmo's three handles is held.
+    index: usize,
     axis: DVec3,
     pivot: DVec3,
     center: DVec3,
@@ -32,6 +35,32 @@ fn world_motion(start: &Placement, next: &Placement, center: DVec3) -> (DVec3, D
     (translation, rotation)
 }
 const AXES: [DVec3; 3] = [DVec3::X, DVec3::Y, DVec3::Z];
+
+/// Which axes the placement gizmo's arrows and rings follow (Settings › Gizmo).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum GizmoAxes {
+    /// The scene's X, Y and Z.
+    #[default]
+    World,
+    /// The selected piece's own axes, turned with it.
+    Local,
+    /// The view's right, up and toward-the-viewer directions.
+    Screen,
+}
+
+/// The gizmo's three unit axes for a piece at `placement` seen by `camera`.
+pub(super) fn gizmo_axes(mode: GizmoAxes, placement: &Placement, camera: &Camera) -> [DVec3; 3] {
+    match mode {
+        GizmoAxes::World => AXES,
+        GizmoAxes::Local => AXES.map(|a| (orientation(placement) * a).normalize()),
+        GizmoAxes::Screen => {
+            let forward = camera.forward().as_dvec3().normalize();
+            let up = camera.up().as_dvec3().normalize();
+            [forward.cross(up).normalize(), up, -forward]
+        }
+    }
+}
 const COLORS: [Color32; 3] = [
     Color32::from_rgb(248, 95, 94),
     Color32::from_rgb(104, 220, 134),
@@ -55,11 +84,12 @@ fn ring(
     camera: &Camera,
     rect: egui::Rect,
     center: DVec3,
+    axes: &[DVec3; 3],
     axis: usize,
     radius: f64,
 ) -> Vec<egui::Pos2> {
-    let a = AXES[(axis + 1) % 3];
-    let b = AXES[(axis + 2) % 3];
+    let a = axes[(axis + 1) % 3];
+    let b = axes[(axis + 2) % 3];
     (0..=64)
         .filter_map(|i| {
             let angle = i as f64 * std::f64::consts::TAU / 64.;
@@ -138,7 +168,8 @@ impl Atelier {
         {
             let mut best = 11.;
             let mut hit = None;
-            for (i, axis) in AXES.iter().enumerate() {
+            let axes = gizmo_axes(self.prefs.gizmo_axes, &start, &self.camera);
+            for (i, axis) in axes.iter().enumerate() {
                 let Some(tip) = project(&self.camera, rect, center + radius * axis) else {
                     continue;
                 };
@@ -149,7 +180,7 @@ impl Atelier {
                     .map(|p| p - center)
                     .unwrap_or_default();
                 let distance = if rotate {
-                    ring(&self.camera, rect, center, i, radius)
+                    ring(&self.camera, rect, center, &axes, i, radius)
                         .windows(2)
                         .map(|p| segment_distance(pointer, p[0], p[1]))
                         .fold(f32::INFINITY, f32::min)
@@ -162,6 +193,7 @@ impl Atelier {
                 if distance < best {
                     best = distance;
                     hit = Some(Drag {
+                        index: i,
                         axis: *axis,
                         pivot,
                         center,
@@ -382,24 +414,25 @@ impl Atelier {
             format!("{count} {}", super::i18n::tr(self.prefs.language, "selected · Shift-click: toggle · Shift-drag: add\nHold L + drag: lasso · Ctrl/Cmd: subtract · Alt: through\nMoved pieces keep their drape")),
             egui::FontId::proportional(12.), Color32::LIGHT_GRAY,
         );
-        let Some((_, _, center, radius)) = self.gizmo_basis() else {
+        let Some((placement, _, center, radius)) = self.gizmo_basis() else {
             return;
         };
+        let axes = gizmo_axes(self.prefs.gizmo_axes, &placement, &self.camera);
         let Some(screen_center) = project(&self.camera, rect, center) else {
             return;
         };
-        if let Some(tip) = project(&self.camera, rect, center + radius * DVec3::X) {
+        if let Some(tip) = project(&self.camera, rect, center + radius * axes[0]) {
             self.smoke_target("gizmo_x", screen_center + (tip - screen_center) * 0.70);
         }
         if self.authoring.rotate {
-            let target = center + radius * (DVec3::X + DVec3::Y) * std::f64::consts::FRAC_1_SQRT_2;
+            let target = center + radius * (axes[0] + axes[1]) * std::f64::consts::FRAC_1_SQRT_2;
             if let Some(p) = project(&self.camera, rect, target) {
                 self.smoke_target("ring_z", p);
             }
             for (i, key) in [(0, "ring_x"), (1, "ring_y")] {
                 let target = center
-                    + radius * AXES[(i + 1) % 3] * 0.65
-                    + radius * AXES[(i + 2) % 3] * (1. - 0.65_f64.powi(2)).sqrt();
+                    + radius * axes[(i + 1) % 3] * 0.65
+                    + radius * axes[(i + 2) % 3] * (1. - 0.65_f64.powi(2)).sqrt();
                 if let Some(p) = project(&self.camera, rect, target) {
                     self.smoke_target(key, p);
                 }
@@ -421,22 +454,17 @@ impl Atelier {
                 Color32::GOLD,
             );
         }
-        for (i, axis) in AXES.iter().enumerate() {
-            let color = if self
-                .authoring
-                .drag
-                .as_ref()
-                .is_some_and(|d| d.axis == *axis)
-            {
+        for (i, axis) in axes.iter().enumerate() {
+            let color = if self.authoring.drag.as_ref().is_some_and(|d| d.index == i) {
                 Color32::WHITE
             } else {
                 COLORS[i]
             };
             if self.authoring.rotate {
-                let points = ring(&self.camera, rect, center, i, radius);
+                let points = ring(&self.camera, rect, center, &axes, i, radius);
                 painter.add(egui::Shape::line(points, Stroke::new(2.5, color)));
                 if let Some(label) =
-                    project(&self.camera, rect, center + radius * AXES[(i + 1) % 3])
+                    project(&self.camera, rect, center + radius * axes[(i + 1) % 3])
                 {
                     painter.text(
                         label,
@@ -464,6 +492,36 @@ impl Atelier {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gizmo_axes_follow_the_world_the_piece_or_the_screen() {
+        let placement = Placement {
+            translation: DVec3::new(0.1, 1.0, 0.2),
+            rotation_degrees: DVec3::new(0., 90., 0.),
+        };
+        let camera = Camera::new(0.7, 0.3, 2.5, glam::Vec3::new(0., 1., 0.));
+        assert_eq!(gizmo_axes(GizmoAxes::World, &placement, &camera), AXES);
+        // The piece turned a quarter about Y: its X points along the world's -Z.
+        let local = gizmo_axes(GizmoAxes::Local, &placement, &camera);
+        assert!(local[0].distance(-DVec3::Z) < 1e-12);
+        assert!(local[1].distance(DVec3::Y) < 1e-12);
+        assert!(local[2].distance(DVec3::X) < 1e-12);
+        let screen = gizmo_axes(GizmoAxes::Screen, &placement, &camera);
+        for (i, axis) in screen.iter().enumerate() {
+            assert!((axis.length() - 1.).abs() < 1e-6);
+            assert!(axis.dot(screen[(i + 1) % 3]).abs() < 1e-6);
+        }
+        // Right-handed, with Z toward the viewer and X to the right on screen.
+        assert!(screen[0].cross(screen[1]).distance(screen[2]) < 1e-6);
+        assert!(screen[2].distance(-camera.forward().as_dvec3()) < 1e-6);
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800., 600.));
+        let center = camera.target.as_dvec3();
+        let (c, r) = (
+            project(&camera, rect, center).unwrap(),
+            project(&camera, rect, center + 0.1 * screen[0]).unwrap(),
+        );
+        assert!(r.x > c.x + 1. && (r.y - c.y).abs() < 0.5);
+    }
 
     #[test]
     fn rotated_primary_handle_defines_one_world_motion_for_the_whole_group() {

@@ -36,6 +36,8 @@ mod board_locks;
 mod board_measure;
 #[path = "atelier/board_media.rs"]
 mod board_media;
+#[path = "atelier/camera_props_ui.rs"]
+mod camera_props_ui;
 #[path = "atelier/camera_views.rs"]
 mod camera_views;
 #[path = "atelier/chrome.rs"]
@@ -200,9 +202,10 @@ pub fn run(
             ((1100..=3840).contains(&w) && (700..=2160).contains(&h))
                 .then_some([w as f32, h as f32])
         });
-    let icon =
-        eframe::icon_data::from_png_bytes(include_bytes!("../assets/branding/fashioncraft-icon.png"))
-            .map_err(|error| format!("Cannot decode the bundled app icon: {error}"))?;
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!(
+        "../assets/branding/fashioncraft-icon.png"
+    ))
+    .map_err(|error| format!("Cannot decode the bundled app icon: {error}"))?;
     let mut wgpu_options = eframe::egui_wgpu::WgpuConfiguration::default();
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup) = &mut wgpu_options.wgpu_setup {
         let base = setup.device_descriptor.clone();
@@ -622,13 +625,25 @@ impl Atelier {
                 let kind = measure3d_ui::MeasureKind::of(id).ok_or("Unknown measurement")?;
                 self.start_measuring(kind);
             }
-            Id::StyleTexturedThick | Id::StyleTextured | Id::StylePlain => {
+            Id::StyleTexturedThick | Id::StyleTextured | Id::StylePlain | Id::StyleTranslucent => {
                 use garment_display::GarmentStyle;
                 self.prefs.garment_display.style = match id {
                     Id::StyleTexturedThick => GarmentStyle::TexturedThick,
                     Id::StyleTextured => GarmentStyle::Textured,
+                    Id::StyleTranslucent => GarmentStyle::Translucent,
                     _ => GarmentStyle::Plain,
                 };
+            }
+            Id::GizmoWorldAxes | Id::GizmoLocalAxes | Id::GizmoScreenAxes => {
+                use gizmo::GizmoAxes;
+                self.prefs.gizmo_axes = match id {
+                    Id::GizmoLocalAxes => GizmoAxes::Local,
+                    Id::GizmoScreenAxes => GizmoAxes::Screen,
+                    _ => GizmoAxes::World,
+                };
+            }
+            Id::CameraProperties => {
+                self.authoring.camera_props.open = !self.authoring.camera_props.open;
             }
             Id::ShowPieceNames => {
                 let display = &mut self.prefs.garment_display;
@@ -1315,10 +1330,10 @@ impl eframe::App for Atelier {
             ui.horizontal(|ui| {
                 ui.colored_label(
                     workspace::ACCENT,
-                    egui::RichText::new("CLOTHCRAFT").strong().size(15.),
+                    egui::RichText::new("FASHIONCRAFT").strong().size(15.),
                 );
                 ui.label(egui::RichText::new("ALPHA").small().color(Color32::GRAY))
-                    .on_hover_text("Research prototype · most production features remain to be built");
+                    .on_hover_text("Early alpha · built on ClothCraft by erythrofr and contributors");
                 ui.separator();
                 let language = self.prefs.language;
                 if command_palette::launch_button(
@@ -1366,6 +1381,7 @@ impl eframe::App for Atelier {
             self.skirt_draft_window(&ctx);
             self.trousers_draft_window(&ctx);
             self.history_window(&ctx);
+            self.camera_props_window(&ctx);
             self.object_browser_window(&ctx);
         }
         if changed {

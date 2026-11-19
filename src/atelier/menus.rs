@@ -371,7 +371,7 @@ const DISPLAY: &[Item] = &[
             Run("Textured with thickness", C::StyleTexturedThick),
             Run("Textured", C::StyleTextured),
             Run("Plain colour", C::StylePlain),
-            Todo("Translucent"),
+            Run("Translucent", C::StyleTranslucent),
             Run("Random piece colours", C::RandomPieceColours),
         ],
     ),
@@ -389,7 +389,11 @@ const DISPLAY: &[Item] = &[
 const SETTINGS: &[Item] = &[
     Sub(
         "Gizmo",
-        &[Todo("Screen axes"), Todo("Local axes"), Todo("World axes")],
+        &[
+            Run("Screen axes", C::GizmoScreenAxes),
+            Run("Local axes", C::GizmoLocalAxes),
+            Run("World axes", C::GizmoWorldAxes),
+        ],
     ),
     Sub(
         "2D snapping",
@@ -400,7 +404,7 @@ const SETTINGS: &[Item] = &[
         ],
     ),
     Run("Grid properties…", C::OpenPreferences),
-    Todo("Camera properties…"),
+    Run("Camera properties…", C::CameraProperties),
     Run("Simulation properties…", C::SimulationProperties),
     X(Custom::Language),
     X(Custom::Keymap),
@@ -496,6 +500,11 @@ impl Atelier {
             C::StyleTexturedThick => display.style == GarmentStyle::TexturedThick,
             C::StyleTextured => display.style == GarmentStyle::Textured,
             C::StylePlain => display.style == GarmentStyle::Plain,
+            C::StyleTranslucent => display.style == GarmentStyle::Translucent,
+            C::GizmoWorldAxes => self.prefs.gizmo_axes == super::gizmo::GizmoAxes::World,
+            C::GizmoLocalAxes => self.prefs.gizmo_axes == super::gizmo::GizmoAxes::Local,
+            C::GizmoScreenAxes => self.prefs.gizmo_axes == super::gizmo::GizmoAxes::Screen,
+            C::CameraProperties => self.authoring.camera_props.open,
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,

@@ -85,6 +85,19 @@ fn weave_height(c: vec2f, kind: f32) -> vec3f {
 
 @fragment
 fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    return shade(in, front);
+}
+
+/// The garment drawn see-through (Display › Garment style › Translucent), blended over the
+/// avatar and the rest of the scene.
+@fragment
+fn fs_translucent(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    return vec4f(shade(in, front).rgb, TRANSLUCENT_ALPHA);
+}
+
+const TRANSLUCENT_ALPHA: f32 = 0.45;
+
+fn shade(in: VertexOut, front: bool) -> vec4<f32> {
     var n = in.normal / max(length(in.normal), 0.000001) * select(-1.0, 1.0, front);
     let derivative = max(fwidth(in.barycentric), vec3<f32>(0.00001));
     let edges = smoothstep(vec3<f32>(0.0), derivative * 1.2, in.barycentric);

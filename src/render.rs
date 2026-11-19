@@ -62,6 +62,8 @@ pub struct DisplayOptions<'a> {
     /// Contact map reach beyond the fabric's half thickness, in metres: cloth resting on a
     /// contact shell (a few millimetres off the skin) still counts as touching.
     pub contact_tolerance_m: f64,
+    /// Draw the garment see-through, blended over the avatar (Garment style › Translucent).
+    pub translucent: bool,
 }
 
 /// What the strain map measures.
@@ -139,6 +141,7 @@ impl Default for DisplayOptions<'_> {
             strain_mode: StrainMode::Global,
             schematic: None,
             contact_tolerance_m: 0.,
+            translucent: false,
         }
     }
 }
@@ -343,6 +346,8 @@ const NEAR: f32 = 0.01;
 const FAR: f32 = 100.;
 const MIN_DISTANCE: f32 = 0.15;
 const MAX_DISTANCE: f32 = 30.;
+/// Orbit distances the camera accepts, metres.
+pub const DISTANCE_RANGE: std::ops::RangeInclusive<f32> = MIN_DISTANCE..=MAX_DISTANCE;
 /// Orbit sensitivity: radians of rotation per pixel of pointer drag.
 const ORBIT_RADIANS_PER_PIXEL: f32 = 0.008;
 /// Orbit stops exactly at the poles. [`Camera::up`] stays defined there, so the
@@ -746,6 +751,8 @@ pub struct Viewport {
     timers: Option<Timers>,
     view_uniform: wgpu::Buffer,
     view_bind: wgpu::BindGroup,
+    /// The see-through garment pipeline and its camera binding, built on first use.
+    translucent: Option<(wgpu::RenderPipeline, wgpu::BindGroup)>,
     avatar_buffer: Option<wgpu::Buffer>,
     avatar_key: (usize, usize, [u32; 3]),
     avatar_count: u32,
@@ -779,14 +786,24 @@ impl Viewport {
             view_formats: &[],
         })
     }
-    fn mesh_pipeline(device: &wgpu::Device, samples: u32) -> wgpu::RenderPipeline {
+    /// The scene's mesh pipeline; `translucent` blends what it draws over the scene without
+    /// writing depth (the see-through garment style).
+    fn mesh_pipeline(
+        device: &wgpu::Device,
+        samples: u32,
+        translucent: bool,
+    ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("cloth-lit-wireframe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("cloth.wgsl").into()),
         });
         let attrs = wgpu::vertex_attr_array![0=>Float32x4,1=>Float32x3,2=>Float32x4,3=>Float32x3,4=>Float32,5=>Float32x3,6=>Float32x2,7=>Float32x3,8=>Float32x4,9=>Float32x2];
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("cloth-viewport"),
+            label: Some(if translucent {
+                "cloth-viewport-translucent"
+            } else {
+                "cloth-viewport"
+            }),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -800,11 +817,15 @@ impl Viewport {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some(if translucent {
+                    "fs_translucent"
+                } else {
+                    "fs_main"
+                }),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
-                    blend: None,
+                    blend: translucent.then_some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -814,7 +835,7 @@ impl Viewport {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
+                depth_write_enabled: Some(!translucent),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
                 bias: Default::default(),
@@ -846,7 +867,7 @@ impl Viewport {
         });
         let appearance = appearance::Appearance::default();
         let samples = appearance.samples(supports_msaa4);
-        let pipeline = Self::mesh_pipeline(device, samples);
+        let pipeline = Self::mesh_pipeline(device, samples, false);
         let environment = environment::Environment::new(device, samples);
         let msaa_color = (samples > 1)
             .then(|| Self::target(device, [1, 1], false, samples).create_view(&Default::default()));
@@ -903,6 +924,7 @@ impl Viewport {
             timers: None,
             view_uniform,
             view_bind,
+            translucent: None,
             avatar_buffer: None,
             avatar_key: (0, 0, [0; 3]),
             avatar_count: 0,
@@ -974,7 +996,8 @@ impl Viewport {
         let size = size.map(|s| s.clamp(1, max));
         let samples = self.appearance.samples(self.supports_msaa4);
         if samples != self.samples {
-            self.pipeline = Self::mesh_pipeline(device, samples);
+            self.pipeline = Self::mesh_pipeline(device, samples, false);
+            self.translucent = None;
             // Auto pipeline layouts are exclusive: rebuild the matching bind group.
             self.view_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("camera"),
@@ -1054,6 +1077,8 @@ impl Viewport {
         for n in &mut smooth {
             *n = n.normalize_or_zero();
         }
+        // Vertices emitted so far, read once the garment's faces and rims are in.
+        let emitted = std::cell::Cell::new(0_u32);
         let mut triangle = |points: [Vec3; 3],
                             color: [f32; 3],
                             wire: bool,
@@ -1090,6 +1115,7 @@ impl Viewport {
                 data.extend_from_slice(&surface.map_uv[i]);
                 data.extend_from_slice(&surface.map);
             }
+            emitted.set(emitted.get() + 3);
         };
         let mut rims: Vec<ThickFace> = vec![];
         for (face, t) in mesh.triangles.iter().enumerate() {
@@ -1244,6 +1270,8 @@ impl Viewport {
                 rim([ca, cb, ca]),
             );
         }
+        // Everything before this point is the garment (faces and thick rims).
+        let garment_vertices = emitted.get();
         if let Some(schematic) = display.schematic {
             let eye = camera.eye();
             let world_per_px = |p: Vec3| {
@@ -1436,6 +1464,24 @@ impl Viewport {
             .bind_for(device, &self.graphics.maps_layout());
         self.graphics
             .prepare(device, &self.render_state.queue, graphics, &looks, maps);
+        let translucent_maps = if display.translucent {
+            let (pipeline, _) = self.translucent.get_or_insert_with(|| {
+                let pipeline = Self::mesh_pipeline(device, self.samples, true);
+                let view = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("camera (translucent garment)"),
+                    layout: &pipeline.get_bind_group_layout(0),
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.view_uniform.as_entire_binding(),
+                    }],
+                });
+                (pipeline, view)
+            });
+            let layout = pipeline.get_bind_group_layout(1);
+            Some(self.fabric_maps.bind_for(device, &layout))
+        } else {
+            None
+        };
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("cloth-viewport"),
         });
@@ -1476,10 +1522,21 @@ impl Viewport {
             pass.set_bind_group(0, &self.view_bind, &[]);
             pass.set_bind_group(1, &self.fabric_maps.bind, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
-            pass.draw(0..(data.len() / VERTEX_FLOATS) as u32, 0..1);
+            // A see-through garment goes last, over everything else; the rest stays opaque.
+            let see_through = translucent_maps.as_ref().map_or(0, |_| garment_vertices);
+            pass.draw(see_through..(data.len() / VERTEX_FLOATS) as u32, 0..1);
             if let Some(body) = &self.avatar_buffer {
                 pass.set_vertex_buffer(0, body.slice(..));
                 pass.draw(0..self.avatar_count, 0..1);
+            }
+            if let (Some((pipeline, view)), Some(maps)) = (&self.translucent, &translucent_maps)
+                && see_through > 0
+            {
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, view, &[]);
+                pass.set_bind_group(1, maps, &[]);
+                pass.set_vertex_buffer(0, self.vertices.slice(..));
+                pass.draw(0..see_through, 0..1);
             }
             self.graphics.draw(&mut pass);
         }

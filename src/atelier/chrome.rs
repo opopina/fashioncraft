@@ -580,6 +580,7 @@ impl Atelier {
                     // The solver keeps cloth one contact radius off the avatar; 2 mm more covers
                     // cloth resting just above that shell.
                     contact_tolerance_m: self.settings.contact.radius + 0.002,
+                    translucent: display.style == super::garment_display::GarmentStyle::Translucent,
                 },
             },
             self.wire && !self.clean_view,

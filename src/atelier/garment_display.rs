@@ -25,6 +25,8 @@ pub(super) enum GarmentStyle {
     Textured,
     /// Each fabric's plain colour: no texture, weave or thickness.
     Plain,
+    /// Textures and weave on a thin surface, drawn see-through over the avatar.
+    Translucent,
 }
 
 impl GarmentStyle {
@@ -797,6 +799,8 @@ mod tests {
         let thin = thin[0].as_ref().unwrap();
         assert_eq!(thin.render_thickness_mm, 0.);
         assert_eq!(thin.weave, rich.weave);
+        // Translucent keeps the textured look on a thin surface; the renderer blends it.
+        assert_eq!(look(GarmentStyle::Translucent)[0].as_ref(), Some(thin));
         let plain = look(GarmentStyle::Plain);
         let plain = plain[0].as_ref().unwrap();
         assert_eq!(

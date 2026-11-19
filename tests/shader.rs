@@ -75,3 +75,17 @@ fn graphic_shader_shares_the_view_uniform_and_validates_without_gpu() {
     .validate(&module)
     .unwrap();
 }
+
+/// The see-through garment style has its own fragment entry next to the opaque one.
+#[test]
+fn viewport_shader_has_a_translucent_entry() {
+    let module = naga::front::wgsl::parse_str(include_str!("../src/cloth.wgsl")).unwrap();
+    let names: Vec<_> = module
+        .entry_points
+        .iter()
+        .map(|e| e.name.as_str())
+        .collect();
+    for entry in ["vs_main", "fs_main", "fs_translucent"] {
+        assert!(names.contains(&entry), "missing {entry}: {names:?}");
+    }
+}

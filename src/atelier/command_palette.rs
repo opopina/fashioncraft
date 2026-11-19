@@ -179,6 +179,11 @@ fn aliases(id: CommandId) -> &'static str {
         SeamlineTopstitch => "seamline topstitch stitch both sides seam",
         FreeTopstitch => "free topstitch stitch internal line path",
         AutoSewing => "auto sewing automatic seams match segments sew all",
+        StyleTranslucent => "garment style translucent transparent see through",
+        GizmoWorldAxes => "gizmo world axes global move rotate",
+        GizmoLocalAxes => "gizmo local axes piece own move rotate",
+        GizmoScreenAxes => "gizmo screen axes view camera move rotate",
+        CameraProperties => "camera properties field of view fov distance orthographic perspective",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -944,7 +949,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ShowPieceNames
+            CommandId::CameraProperties
         );
         h.key(
             "palette.query",

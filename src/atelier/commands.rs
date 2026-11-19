@@ -171,6 +171,11 @@ pub enum CommandId {
     SeamlineTopstitch,
     FreeTopstitch,
     AutoSewing,
+    StyleTranslucent,
+    GizmoWorldAxes,
+    GizmoLocalAxes,
+    GizmoScreenAxes,
+    CameraProperties,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1705,6 +1710,51 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleTranslucent,
+        "display.style_translucent",
+        "Garment style: translucent",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        GizmoWorldAxes,
+        "settings.gizmo_world",
+        "Gizmo: world axes",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        GizmoLocalAxes,
+        "settings.gizmo_local",
+        "Gizmo: the piece's local axes",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        GizmoScreenAxes,
+        "settings.gizmo_screen",
+        "Gizmo: screen axes",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        CameraProperties,
+        "view.camera_properties",
+        "Camera properties",
+        Workspace,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

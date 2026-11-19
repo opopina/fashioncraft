@@ -66,6 +66,8 @@ pub(super) struct Preferences {
     pub(super) language: super::i18n::Language,
     /// Poses the user saved, by name, offered in the pose window on every project.
     pub(super) user_poses: std::collections::BTreeMap<String, fashioncraft::avatar_rig::Pose>,
+    /// Which axes the placement gizmo follows (Settings › Gizmo).
+    pub(super) gizmo_axes: super::gizmo::GizmoAxes,
 }
 
 /// Most poses the user can keep, and the longest name one may have.
@@ -90,6 +92,7 @@ impl Default for Preferences {
             library_dir: None,
             language: Default::default(),
             user_poses: Default::default(),
+            gizmo_axes: Default::default(),
         }
     }
 }

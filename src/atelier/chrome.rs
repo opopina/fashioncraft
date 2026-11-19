@@ -555,11 +555,12 @@ impl Atelier {
                         .as_deref()
                         .unwrap_or(&self.scene.collider.surface),
                 ),
-                // The contact map asks the collider which cloth touches the avatar.
+                // The contact and pressure maps ask the collider which cloth touches the avatar.
                 collider:
-                    (display.contacts && !self.clean_view).then_some(
-                        self.scene.collider.as_ref() as &dyn fashioncraft::contact::Collider
-                    ),
+                    ((display.contacts || (self.heat && display.pressure)) && !self.clean_view)
+                        .then_some(
+                            self.scene.collider.as_ref() as &dyn fashioncraft::contact::Collider
+                        ),
                 seams: if self.seams && !self.clean_view && seams_shown {
                     &self.scene.garment.seams
                 } else {

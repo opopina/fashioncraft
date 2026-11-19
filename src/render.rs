@@ -75,6 +75,9 @@ pub enum StrainMode {
     /// direction) as a fraction of `reference_n_per_m`: 1 means that fabric reached the limit.
     /// A stiff fabric reaches it with little stretch, a supple one needs much more.
     Fabric { reference_n_per_m: f64 },
+    /// Pressure the garment puts on the avatar where it touches it, from [`membrane_pressure`],
+    /// against `max_pa`; zero where it does not touch.
+    Pressure { max_pa: f64 },
 }
 
 /// Technical-flat ("schematic") rendering options.
@@ -110,7 +113,51 @@ pub fn fit_value(
             let [warp, weft] = fibre_tension(stretch, material);
             (warp.max(weft) / reference_n_per_m.max(1e-9), 1.)
         }
+        // Pressure needs the surface's shape and the contact: see `membrane_pressure`.
+        StrainMode::Pressure { max_pa } => (0., max_pa),
     }
+}
+
+/// Pressure, in Pa, that a stretched piece of cloth resting on a body puts on it: each fibre's
+/// tension times the surface's curvature along that fibre (p = T·κ, summed over warp and
+/// weft), the load a curved membrane passes to what it lies on. `normals` are the triangle's
+/// corner normals (smoothed over the mesh). A flat or slack triangle gives zero.
+pub fn membrane_pressure(
+    x: &[glam::DVec3],
+    t: &crate::model::Triangle,
+    material: &Material,
+    normals: [glam::DVec3; 3],
+) -> f64 {
+    use glam::{DMat2, DVec2};
+    let frame = energy::fiber_frame(x, t, material);
+    if !frame.valid {
+        return 0.;
+    }
+    let tension = fibre_tension(frame.stretch, material);
+    if tension == [0.; 2] {
+        return 0.;
+    }
+    let [a, b, c] = t.vertices.map(|i| x[i]);
+    let (e1, e2) = (b - a, c - a);
+    let normal = e1.cross(e2);
+    if normal.length_squared() < 1e-24 {
+        return 0.;
+    }
+    let u = e1.normalize();
+    let v = normal.normalize().cross(u);
+    let flat = |d: glam::DVec3| DVec2::new(d.dot(u), d.dot(v));
+    // Shape operator in the triangle's plane: how the normal turns per unit of distance.
+    let edges = DMat2::from_cols(flat(e1), flat(e2));
+    if edges.determinant().abs() < 1e-18 {
+        return 0.;
+    }
+    let turns = DMat2::from_cols(flat(normals[1] - normals[0]), flat(normals[2] - normals[0]));
+    let shape = turns * edges.inverse();
+    let curvature = |fibre: glam::DVec3| {
+        let d = flat(fibre).normalize_or_zero();
+        d.dot(shape * d).abs()
+    };
+    tension[0] * curvature(frame.warp) + tension[1] * curvature(frame.weft)
 }
 
 /// Estimated tension in N/m along warp and weft: the fabric's tension modulus times the
@@ -1126,15 +1173,35 @@ impl Viewport {
                 continue;
             }
             let material = &materials[t.material];
-            let (strain, strain_max) = if heat {
-                fit_value(
+            let (strain, strain_max) = match display.strain_mode {
+                _ if !heat => (0., 1.),
+                StrainMode::Pressure { max_pa } => {
+                    let touching = collider.is_some_and(|s| {
+                        t.vertices.iter().any(|i| {
+                            s.penetration(
+                                state.x[*i],
+                                material.thickness + 2. * display.contact_tolerance_m.max(0.),
+                            ) > 0.0
+                        })
+                    });
+                    let pressure = if touching {
+                        membrane_pressure(
+                            &state.x,
+                            t,
+                            material,
+                            t.vertices.map(|i| smooth[i].as_dvec3()),
+                        )
+                    } else {
+                        0.
+                    };
+                    (pressure, max_pa)
+                }
+                mode => fit_value(
                     energy::stretches(&state.x, t, material),
                     material,
-                    display.strain_mode,
+                    mode,
                     display.strain_max,
-                )
-            } else {
-                (0., 1.)
+                ),
             };
             let contact = contacts
                 && collider.is_some_and(|s| {
@@ -2291,5 +2358,87 @@ mod face_tests {
         // A quarter-turned grain turns the repeat with it.
         let (_, s) = face_surface(&a, 90., uv, false, [Some(0), None, None]);
         assert!((s.map_uv[1][0]).abs() < 1e-6 && (s.map_uv[1][1] + 4.).abs() < 1e-5);
+    }
+}
+
+#[cfg(test)]
+mod pressure_tests {
+    use super::*;
+    use crate::{
+        authoring::{self, Command},
+        garment::{CompiledGarment, meshing::MeshingSettings, presets},
+    };
+    use glam::{DVec2, DVec3};
+
+    /// A 30 × 20 cm piece wrapped round a vertical cylinder of radius `r`, stretched by
+    /// `stretch` across its width, with the cylinder's exact normals.
+    fn wrapped(r: f64, stretch: f64) -> (CompiledGarment, Vec<DVec3>, Vec<DVec3>) {
+        let points = [[0., 0.], [0.3, 0.], [0.3, 0.2], [0., 0.2]];
+        let template = authoring::apply(
+            &presets::basic(presets::GarmentKind::Tshirt, 0),
+            Command::Polygon {
+                points: points.iter().map(|p| DVec2::from_array(*p)).collect(),
+                tangents: vec![DVec2::ZERO; 4],
+                meshing: MeshingSettings {
+                    target_edge_m: 0.01,
+                    ..Default::default()
+                },
+                fabric: "woven-reference".into(),
+                replace: true,
+            },
+        )
+        .unwrap()
+        .template;
+        let g = template.compile().unwrap();
+        let (x, n) = g
+            .mesh
+            .uv
+            .iter()
+            .map(|uv| {
+                let a = uv.x * stretch / r;
+                (
+                    DVec3::new(r * a.sin(), -uv.y, r * a.cos()),
+                    DVec3::new(a.sin(), 0., a.cos()),
+                )
+            })
+            .unzip();
+        (g, x, n)
+    }
+
+    fn mean_pressure(g: &CompiledGarment, x: &[DVec3], n: &[DVec3]) -> f64 {
+        let values: Vec<f64> = g
+            .mesh
+            .triangles
+            .iter()
+            .map(|t| membrane_pressure(x, t, &g.materials[t.material], t.vertices.map(|i| n[i])))
+            .collect();
+        values.iter().sum::<f64>() / values.len() as f64
+    }
+
+    #[test]
+    fn a_stretched_wrap_presses_with_its_tension_over_the_radius() {
+        let (g, x, n) = wrapped(0.1, 1.05);
+        // The width runs along the warp at grain 0°, along the weft at 90°.
+        let m = &g.materials[0];
+        let modulus = match m.grain_degrees.rem_euclid(180.) {
+            0. => m.warp,
+            90. => m.weft,
+            other => panic!("unexpected grain {other}°"),
+        };
+        let expected = modulus * 0.05 / 0.1;
+        let mean = mean_pressure(&g, &x, &n);
+        assert!(
+            (mean - expected).abs() < 0.03 * expected,
+            "{mean} Pa vs {expected} Pa"
+        );
+        // Twice the radius, half the pressure.
+        let (g, x, n) = wrapped(0.2, 1.05);
+        let wide = mean_pressure(&g, &x, &n);
+        assert!((wide / mean - 0.5).abs() < 0.03, "{wide} vs {mean}");
+        // Unstretched cloth presses next to nothing, however curved (the chords of the wrap
+        // are a hair shorter or longer than the arcs).
+        let (g, x, n) = wrapped(0.1, 1.0);
+        let slack = mean_pressure(&g, &x, &n);
+        assert!(slack < 0.01 * mean, "{slack} vs {mean}");
     }
 }

@@ -192,6 +192,7 @@ fn aliases(id: CommandId) -> &'static str {
         FoldArrangement => "fold arrangement arrange folded line crease pre fold",
         SelectAllSeams => "select all seams sewing every",
         ActivateAllSeams => "activate all seams sewing switch on inactive",
+        PressureMap => "pressure map fit map tight contact kpa avatar",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -957,7 +958,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::CameraProperties
+            CommandId::PressureMap
         );
         h.key(
             "palette.query",

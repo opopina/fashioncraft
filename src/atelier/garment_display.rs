@@ -70,6 +70,10 @@ pub(super) struct GarmentDisplay {
     /// Reference tension of the fabric mode, in N/m: the tension at which a fabric counts as
     /// stretched to its wearable limit.
     pub(super) reference_tension: f64,
+    /// The fit map shows the pressure on the avatar instead of strain or tension.
+    pub(super) pressure: bool,
+    /// Pressure that reaches the pressure map's last colour, kPa.
+    pub(super) pressure_max_kpa: f64,
     /// Show where the garment touches the avatar.
     pub(super) contacts: bool,
     /// Show the pins' heads on the cloth (always shown while pinning).
@@ -95,6 +99,8 @@ pub(super) struct GarmentDisplay {
 
 /// Reference-tension limits of the fabric strain mode, in N/m.
 pub(super) const REFERENCE_TENSION: std::ops::RangeInclusive<f64> = 1.0..=500.0;
+/// Pressure-map maxima accepted, kPa.
+pub(super) const PRESSURE_MAX_KPA: std::ops::RangeInclusive<f64> = 0.1..=50.0;
 
 impl Default for GarmentDisplay {
     fn default() -> Self {
@@ -108,6 +114,8 @@ impl Default for GarmentDisplay {
             strain_gradient: true,
             strain_fabric: false,
             reference_tension: 20.,
+            pressure: false,
+            pressure_max_kpa: 2.,
             contacts: false,
             pins: true,
             trims: true,
@@ -139,6 +147,12 @@ impl GarmentDisplay {
         self.reference_tension = self
             .reference_tension
             .clamp(*REFERENCE_TENSION.start(), *REFERENCE_TENSION.end());
+        if !self.pressure_max_kpa.is_finite() {
+            self.pressure_max_kpa = 2.;
+        }
+        self.pressure_max_kpa = self
+            .pressure_max_kpa
+            .clamp(*PRESSURE_MAX_KPA.start(), *PRESSURE_MAX_KPA.end());
         if !self.schematic_line_px.is_finite() {
             self.schematic_line_px = 1.5;
         }
@@ -355,7 +369,11 @@ impl Atelier {
     /// The renderer options these display choices amount to.
     pub(super) fn strain_mode(&self) -> render::StrainMode {
         let display = &self.prefs.garment_display;
-        if display.strain_fabric {
+        if display.pressure {
+            render::StrainMode::Pressure {
+                max_pa: display.pressure_max_kpa * 1000.,
+            }
+        } else if display.strain_fabric {
             render::StrainMode::Fabric {
                 reference_n_per_m: display.reference_tension,
             }
@@ -469,26 +487,57 @@ impl Atelier {
                 i18n::tr(ui_lang, "Bands"),
             );
             ui.separator();
-            ui.selectable_value(
-                &mut display.strain_fabric,
-                false,
-                i18n::tr(ui_lang, "Global"),
-            )
-            .on_hover_text(i18n::tr(
-                ui_lang,
-                "|stretch − 1| against the same range for every fabric",
-            ));
-            ui.selectable_value(
-                &mut display.strain_fabric,
-                true,
-                i18n::tr(ui_lang, "Fabric"),
-            )
-            .on_hover_text(i18n::tr(
-                ui_lang,
-                "Estimated tension against each fabric's limit: stiff fabrics reach it sooner",
-            ));
+            let (global, fabric) = (
+                !display.pressure && !display.strain_fabric,
+                !display.pressure && display.strain_fabric,
+            );
+            if ui
+                .selectable_label(global, i18n::tr(ui_lang, "Global"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "|stretch − 1| against the same range for every fabric",
+                ))
+                .clicked()
+            {
+                display.pressure = false;
+                display.strain_fabric = false;
+            }
+            if ui
+                .selectable_label(fabric, i18n::tr(ui_lang, "Fabric"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Estimated tension against each fabric's limit: stiff fabrics reach it sooner",
+                ))
+                .clicked()
+            {
+                display.pressure = false;
+                display.strain_fabric = true;
+            }
+            if ui
+                .selectable_label(display.pressure, i18n::tr(ui_lang, "Pressure"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Pressure on the avatar where the garment touches it: each fibre's tension times the curvature along it",
+                ))
+                .clicked()
+            {
+                display.pressure = true;
+            }
         });
-        if display.strain_fabric {
+        if display.pressure {
+            ui.horizontal(|ui| {
+                ui.add_space(22.);
+                ui.label(i18n::tr(ui_lang, "Last colour at"));
+                ui.add(
+                    egui::DragValue::new(&mut display.pressure_max_kpa)
+                        .range(PRESSURE_MAX_KPA)
+                        .speed(0.05)
+                        .fixed_decimals(2)
+                        .suffix(" kPa"),
+                );
+            });
+        }
+        if display.strain_fabric && !display.pressure {
             ui.horizontal(|ui| {
                 ui.add_space(22.);
                 ui.label(i18n::tr(ui_lang, "Limit tension"));
@@ -558,7 +607,13 @@ impl Atelier {
     /// or eight bands) with its 0 %, middle and maximum marks.
     pub(super) fn paint_strain_legend(&self, painter: &egui::Painter, rect: egui::Rect) {
         let display = &self.prefs.garment_display;
-        let (max, title, suffix) = if display.strain_fabric {
+        let (max, title, suffix) = if display.pressure {
+            (
+                display.pressure_max_kpa,
+                "Pressure on the body · tension × curvature",
+                " kPa",
+            )
+        } else if display.strain_fabric {
             (
                 100.,
                 "Fabric limit · tension ÷ limit tension",
@@ -566,6 +621,21 @@ impl Atelier {
             )
         } else {
             (display.strain_max_percent, "Strain |stretch − 1|", " %")
+        };
+        // Pressures are fractions of a kPa; strains whole percent.
+        let number = |v: f64| {
+            if display.pressure {
+                format!("{v:.2}")
+            } else {
+                format!("{v:.0}")
+            }
+        };
+        let tick = |v: f64| {
+            format!(
+                "{} {}",
+                number(v),
+                if display.pressure { "kPa" } else { "%" }
+            )
         };
         let bar = egui::vec2(176., 12.);
         let origin = rect.left_bottom() + egui::vec2(12., -12. - bar.y);
@@ -611,7 +681,7 @@ impl Atelier {
             painter.text(
                 origin + egui::vec2(bar.x * fraction, -2.),
                 align,
-                format!("{:.0} %", max * fraction as f64),
+                tick(max * fraction as f64),
                 font.clone(),
                 text,
             );
@@ -619,7 +689,7 @@ impl Atelier {
         painter.text(
             origin + egui::vec2(bar.x + 4., bar.y * 0.5),
             egui::Align2::LEFT_CENTER,
-            format!("≥ {max:.0}{suffix}"),
+            format!("≥ {}{suffix}", number(max)),
             font,
             text,
         );
@@ -685,6 +755,8 @@ pub(super) fn strain_readout(
     let (name, index) = match mode {
         render::StrainMode::Fabric { .. } if tension[1] > tension[0] => ("Weft", 1),
         render::StrainMode::Fabric { .. } => ("Warp", 0),
+        render::StrainMode::Pressure { .. } if tension[1] > tension[0] => ("Weft", 1),
+        render::StrainMode::Pressure { .. } => ("Warp", 0),
         render::StrainMode::Global if (stretch[1] - 1.).abs() > (stretch[0] - 1.).abs() => {
             ("Weft", 1)
         }
@@ -697,6 +769,10 @@ pub(super) fn strain_readout(
             tension[index] / reference_n_per_m.max(1e-9) * 100.
         ),
         render::StrainMode::Global => format!("{name} · stretch {elongation:+.1} %"),
+        render::StrainMode::Pressure { .. } => format!(
+            "{name} · stretch {elongation:+.1} % · tension {:.0} N/m",
+            tension[index]
+        ),
     }
 }
 

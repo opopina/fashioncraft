@@ -384,7 +384,7 @@ const DISPLAY: &[Item] = &[
         &[
             Run("Strain map", C::StrainMap),
             Run("Stress map", C::StressMap),
-            Todo("Pressure map"),
+            Run("Pressure map", C::PressureMap),
         ],
     ),
     Run("Isolate selection", C::IsolateSelection),
@@ -519,8 +519,9 @@ impl Atelier {
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
             C::LowResolution => (self.mesh_mm - LOW_RESOLUTION_MM).abs() < 1e-9,
             C::ToggleGarment => display.garment,
-            C::StrainMap => self.heat && !display.strain_fabric,
-            C::StressMap => self.heat && display.strain_fabric,
+            C::StrainMap => self.heat && !display.pressure && !display.strain_fabric,
+            C::StressMap => self.heat && !display.pressure && display.strain_fabric,
+            C::PressureMap => self.heat && display.pressure,
             C::ToggleSmartGuides => self.authoring.board.smart_guides,
             C::ToggleSnapToGrid => self.authoring.board.snap,
             C::ToggleSnapToPattern => self.authoring.board.snap_pattern,
@@ -716,7 +717,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 183, "{done} of {all}");
+        assert!(done >= 184, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

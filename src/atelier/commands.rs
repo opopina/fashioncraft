@@ -184,6 +184,7 @@ pub enum CommandId {
     FoldArrangement,
     SelectAllSeams,
     ActivateAllSeams,
+    PressureMap,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1826,6 +1827,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        PressureMap,
+        "display.pressure_map",
+        "Pressure map: what the garment presses on the avatar",
+        Workspace,
+        None,
+        Preference,
         NativeWorkspace
     ),
     entry!(

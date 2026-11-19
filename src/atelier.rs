@@ -572,15 +572,24 @@ impl Atelier {
                 self.prefs.garment_display.garment = !self.prefs.garment_display.garment;
             }
             Id::IsolateSelection => self.toggle_isolation(),
-            Id::StrainMap | Id::StressMap => {
-                // One fit map at a time: picking the other one switches to it.
-                let stress = id == Id::StressMap;
+            Id::StrainMap | Id::StressMap | Id::PressureMap => {
+                // One fit map at a time: picking another one switches to it.
                 let display = &mut self.prefs.garment_display;
-                if self.heat && display.strain_fabric == stress {
+                let shown = self.heat.then_some(if display.pressure {
+                    Id::PressureMap
+                } else if display.strain_fabric {
+                    Id::StressMap
+                } else {
+                    Id::StrainMap
+                });
+                if shown == Some(id) {
                     self.heat = false;
                 } else {
                     self.heat = true;
-                    display.strain_fabric = stress;
+                    display.pressure = id == Id::PressureMap;
+                    if id != Id::PressureMap {
+                        display.strain_fabric = id == Id::StressMap;
+                    }
                 }
             }
             Id::ImportPointCache => self.import_point_cache()?,

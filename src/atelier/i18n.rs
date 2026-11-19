@@ -2289,6 +2289,16 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Arrange folded" => "Colocar plegada",
         "Switch every seam back on" => "Volver a activar todas las costuras",
+        "Pressure map: what the garment presses on the avatar" => {
+            "Mapa de presión: lo que la prenda aprieta sobre el avatar"
+        }
+        "Pressure on the avatar where the garment touches it: each fibre's tension times the curvature along it" => {
+            "Presión sobre el avatar donde la prenda lo toca: la tensión de cada hilo por la curvatura a lo largo de él"
+        }
+        "Last colour at" => "Último color en",
+        "Pressure on the body · tension × curvature" => {
+            "Presión sobre el cuerpo · tensión × curvatura"
+        }
         "Active" => "Activa",
         "An inactive seam stays in the document but is not sewn" => {
             "Una costura inactiva sigue en el documento pero no se cose"

@@ -635,6 +635,10 @@ impl Atelier {
                 display.piece_names = !display.piece_names;
             }
             Id::SmoothCurve => self.smooth_selected_points()?,
+            Id::AddTape => self.tape_selected_line()?,
+            Id::SeamTaping => self.finish_selected_seam(true)?,
+            Id::SeamlineTopstitch => self.finish_selected_seam(false)?,
+            Id::FreeTopstitch => self.topstitch_selected_line()?,
             Id::SplitSegment => self.split_selected_segment()?,
             Id::ShowInternalLines => {
                 let display = &mut self.prefs.garment_display;

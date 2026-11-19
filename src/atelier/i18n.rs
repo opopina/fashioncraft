@@ -2294,6 +2294,27 @@ fn spanish(text: &str) -> Option<&'static str> {
         "What's new (web)" => "Novedades (web)",
         "There is no avatar to save" => "No hay avatar que guardar",
         "Show piece names in 3D" => "Mostrar nombres de pieza en 3D",
+        "Tape along the selected line" => "Cinta a lo largo de la línea seleccionada",
+        "Tape along both sides of the selected seam" => {
+            "Cinta a los dos lados de la costura seleccionada"
+        }
+        "Topstitch along both sides of the selected seam" => {
+            "Pespunte a los dos lados de la costura seleccionada"
+        }
+        "Topstitch along the selected internal line" => {
+            "Pespunte a lo largo de la línea interna seleccionada"
+        }
+        "Select a seam (or a sewn segment) first" => {
+            "Selecciona antes una costura (o un segmento cosido)"
+        }
+        "This seam joins parts of segments only; split them at the seam's ends first" => {
+            "Esta costura solo une partes de segmentos; pártelos antes en los extremos de la costura"
+        }
+        "This line is taped already" => "Esta línea ya tiene cinta",
+        "Select an internal line first" => "Selecciona antes una línea interna",
+        "Select an internal line to stitch along (for a segment, use Segment topstitch)" => {
+            "Selecciona una línea interna para pespuntear (para un segmento, usa Pespunte por segmento)"
+        }
         "Round the selected points into a smooth curve" => {
             "Redondear los puntos seleccionados en una curva suave"
         }

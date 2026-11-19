@@ -166,6 +166,10 @@ pub enum CommandId {
     ShowPieceNames,
     SmoothCurve,
     SplitSegment,
+    AddTape,
+    SeamTaping,
+    SeamlineTopstitch,
+    FreeTopstitch,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1652,6 +1656,42 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         SplitSegment,
         "pattern.split_segment",
         "Add a point at the middle of the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddTape,
+        "materials.tape",
+        "Tape along the selected line",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SeamTaping,
+        "materials.seam_taping",
+        "Tape along both sides of the selected seam",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SeamlineTopstitch,
+        "materials.seamline_topstitch",
+        "Topstitch along both sides of the selected seam",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FreeTopstitch,
+        "materials.free_topstitch",
+        "Topstitch along the selected internal line",
         Pattern,
         None,
         TemplateHistory,

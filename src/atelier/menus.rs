@@ -285,18 +285,18 @@ const MATERIALS: &[Item] = &[
     ),
     Run("Zipper", C::AddZipper),
     Todo("Piping"),
-    Todo("Tape"),
+    Run("Tape", C::AddTape),
     Sub(
         "Topstitch",
         &[
             Run("Segment topstitch", C::AddTopstitch),
-            Todo("Free topstitch"),
-            Todo("Seamline topstitch"),
+            Run("Free topstitch", C::FreeTopstitch),
+            Run("Seamline topstitch", C::SeamlineTopstitch),
         ],
     ),
     Todo("Puckering"),
     Todo("Steam"),
-    Todo("Seam taping"),
+    Run("Seam taping", C::SeamTaping),
 ];
 
 const AVATAR: &[Item] = &[
@@ -698,7 +698,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 165, "{done} of {all}");
+        assert!(done >= 169, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

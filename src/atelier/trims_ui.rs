@@ -295,6 +295,154 @@ impl Atelier {
         Ok(())
     }
 
+    /// The seam picked in the seam list, or else the one on the selected segment.
+    fn chosen_seam(&self) -> Option<marvelous_cloth::garment::seam::SeamSpec> {
+        let id = self
+            .authoring
+            .selection
+            .seam
+            .clone()
+            .or_else(|| self.edge_seams().into_iter().next())?;
+        self.project
+            .template
+            .seams
+            .iter()
+            .find(|s| s.id == id)
+            .cloned()
+    }
+
+    /// The whole segments a seam joins, as (piece, segment); parts of segments are left out.
+    fn seam_segments(
+        seam: &marvelous_cloth::garment::seam::SeamSpec,
+    ) -> (Vec<(String, String)>, usize) {
+        let mut whole = vec![];
+        let mut partial = 0;
+        for r in seam.references() {
+            match &r.edge {
+                Some(edge) if r.range[0] <= 1e-9 && r.range[1] >= 1. - 1e-9 => {
+                    whole.push((r.panel.clone(), edge.clone()));
+                }
+                _ => partial += 1,
+            }
+        }
+        (whole, partial)
+    }
+
+    /// Materials › Seamline topstitch and Seam taping: topstitching, or a tape, along both
+    /// sides of the selected seam.
+    pub(super) fn finish_selected_seam(&mut self, tape: bool) -> Result<(), String> {
+        let seam = self
+            .chosen_seam()
+            .ok_or("Select a seam (or a sewn segment) first")?;
+        let (segments, partial) = Self::seam_segments(&seam);
+        if segments.is_empty() {
+            return Err(
+                "This seam joins parts of segments only; split them at the seam's ends first"
+                    .into(),
+            );
+        }
+        let mut done = 0;
+        for (panel, edge) in &segments {
+            let ok = if tape {
+                self.edit(Command::SetLineSpring {
+                    panel: panel.clone(),
+                    line: edge.clone(),
+                    spring: Some(marvelous_cloth::garment::template::LineSpring::tape(
+                        panel, edge,
+                    )),
+                })
+            } else {
+                self.add_segment_trim(panel, edge, false)
+            };
+            done += usize::from(ok);
+        }
+        self.status = format!(
+            "{} along {} of seam {}{}",
+            if tape { "Tape" } else { "Topstitching" },
+            super::garment_display::counted(done, "segment", "segments"),
+            seam.id,
+            if partial > 0 {
+                " · parts of segments were left out"
+            } else {
+                ""
+            }
+        );
+        Ok(())
+    }
+
+    /// Materials › Tape: a tape along the selected segment or internal line, so it does not
+    /// stretch.
+    pub(super) fn tape_selected_line(&mut self) -> Result<(), String> {
+        let edge = self
+            .authoring
+            .edge
+            .clone()
+            .ok_or("Select a segment or an internal line first")?;
+        let line = edge
+            .edge
+            .clone()
+            .ok_or("Select a segment or an internal line first")?;
+        let taped = self.project.template.line_springs.iter().any(|s| {
+            s.panel == edge.panel
+                && s.line == line
+                && s.kind == marvelous_cloth::garment::template::LineKind::Tape
+        });
+        if taped {
+            return Err("This line is taped already".into());
+        }
+        if !self.edit(Command::SetLineSpring {
+            panel: edge.panel.clone(),
+            line: line.clone(),
+            spring: Some(marvelous_cloth::garment::template::LineSpring::tape(
+                &edge.panel,
+                &line,
+            )),
+        }) {
+            return Err(self.status.clone());
+        }
+        self.status = format!("Tape along {line}: it no longer stretches");
+        Ok(())
+    }
+
+    /// Materials › Free topstitch: topstitching along the selected open internal line.
+    pub(super) fn topstitch_selected_line(&mut self) -> Result<(), String> {
+        let edge = self
+            .authoring
+            .edge
+            .clone()
+            .ok_or("Select an internal line first")?;
+        let name = edge.edge.clone().ok_or("Select an internal line first")?;
+        let polygon = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == edge.panel)
+            .and_then(|p| p.polygon.clone())
+            .ok_or("The piece has no outline")?;
+        if !polygon.lines.iter().any(|l| l.id == name) {
+            return Err(
+                "Select an internal line to stitch along (for a segment, use Segment topstitch)"
+                    .into(),
+            );
+        }
+        let path_m = lines2d::path(&polygon, &name)?.points;
+        let trim = Trim {
+            id: self.new_trim_id(),
+            panel_id: edge.panel.clone(),
+            kind: TrimKind::Topstitch {
+                path_m,
+                rows: 1,
+                spacing_m: 0.002,
+            },
+        };
+        if !self.edit(Command::SetTrim { trim }) {
+            return Err(self.status.clone());
+        }
+        self.status = format!("Topstitching along {name}");
+        Ok(())
+    }
+
     /// The outline segment selected on the board, as (piece, segment name).
     pub(super) fn selected_segment(&self) -> Option<(String, String)> {
         let edge = self.authoring.edge.as_ref()?;

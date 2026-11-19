@@ -185,6 +185,7 @@ pub enum CommandId {
     SelectAllSeams,
     ActivateAllSeams,
     PressureMap,
+    Reset2dArrangement,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1836,6 +1837,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Workspace,
         None,
         Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        Reset2dArrangement,
+        "garment.reset_2d",
+        "Reset 2D arrangement: lay every piece out flat as on the board",
+        Pattern,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
     entry!(

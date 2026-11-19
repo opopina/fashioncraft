@@ -190,7 +190,7 @@ const GARMENT_3D: &[Item] = &[
     Run("3D pen", C::TracePen3d),
     S,
     Run("Fold arrangement", C::FoldArrangement),
-    Todo("Reset 2D arrangement (all)"),
+    Run("Reset 2D arrangement (all)", C::Reset2dArrangement),
     Run("Reset 3D arrangement (all)", C::ResetSimulation),
     Run("Reset 3D arrangement (selected)", C::ResetSelectedPieces3d),
     Todo("Re-drape 3D arrangement"),
@@ -717,7 +717,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 184, "{done} of {all}");
+        assert!(done >= 185, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

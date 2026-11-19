@@ -398,6 +398,56 @@ impl Atelier {
         self.status = format!("Folded at {angle:.0}° · simulate to settle");
     }
 
+    /// Reset 2D arrangement (3D Garment › Reset 2D arrangement): every piece laid flat in 3D as
+    /// it lies on the board, on an upright plane in front of the avatar, centred on it. Only the
+    /// draped positions change (Reset 3D arrangement brings the pieces back to their places);
+    /// refused while a step runs, or if the cloth would start intersecting.
+    pub(super) fn reset_2d_arrangement(&mut self) {
+        let ui_lang = self.prefs.language;
+        if self.pending {
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
+            return;
+        }
+        self.playing = false;
+        let garment = self.scene.garment.clone();
+        let laid = transfer::lay_out_as_board(
+            &self.project.template,
+            &garment,
+            &self.scene.collider.surface.vertices,
+        );
+        if laid.is_empty() {
+            self.status = i18n::tr(ui_lang, "There are no pieces to lay out").into();
+            return;
+        }
+        let mut candidate = self.scene.state.clone();
+        for (v, p) in laid {
+            candidate.x[v] = p;
+            candidate.v[v] = DVec3::ZERO;
+        }
+        if let Err(error) = fashioncraft::vbd::VbdSolver::new(
+            garment.clone(),
+            Some(&self.scene.collider.surface),
+            &candidate,
+        ) {
+            self.status = format!("Not laid out: the cloth would start intersecting ({error})");
+            return;
+        }
+        self.scene.state = candidate;
+        self.issue.invalidate();
+        self.generation += 1;
+        self.metrics = None;
+        self.grab = None;
+        self.status = i18n::tr(
+            ui_lang,
+            "Pieces laid out as on the board, in front of the avatar · Reset 3D arrangement puts them back",
+        )
+        .into();
+    }
+
     /// The internal line selected on the board, as (piece, line).
     pub(super) fn selected_internal_line(&self) -> Option<(String, String)> {
         let edge = self.authoring.edge.as_ref()?;

@@ -687,6 +687,7 @@ impl Atelier {
                     active: true,
                 });
             }
+            Id::Reset2dArrangement => self.reset_2d_arrangement(),
             Id::FoldArrangement => {
                 let (panel, line) = self
                     .selected_internal_line()

@@ -219,3 +219,55 @@ pub fn fold_about_line(
         moved
     })
 }
+
+/// Reset 2D arrangement: every piece of `garment` laid flat in 3D as it lies on the board of
+/// `template`, on an upright plane a hand's breadth in front of `body` (the avatar's
+/// vertices), centred on it, the board's downward y turned upward. Returns each vertex with
+/// its position.
+pub fn lay_out_as_board(
+    template: &super::GarmentTemplate,
+    garment: &super::CompiledGarment,
+    body: &[DVec3],
+) -> Vec<(usize, DVec3)> {
+    use crate::authoring::arrange2d::board_point;
+    let mut board: Vec<(usize, glam::DVec2)> = vec![];
+    for range in &garment.panels {
+        let Some(index) = template.panels.iter().position(|p| p.id == range.id) else {
+            continue;
+        };
+        for v in range.vertices.clone() {
+            board.push((v, board_point(template, index, garment.mesh.uv[v])));
+        }
+    }
+    let (lo, hi) = board.iter().fold(
+        (
+            glam::DVec2::splat(f64::INFINITY),
+            glam::DVec2::splat(f64::NEG_INFINITY),
+        ),
+        |(lo, hi), (_, b)| (lo.min(*b), hi.max(*b)),
+    );
+    let centre = (lo + hi) * 0.5;
+    let (body_lo, body_hi) = if body.is_empty() {
+        (DVec3::ZERO, DVec3::new(0., 1.7, 0.))
+    } else {
+        body.iter().fold(
+            (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
+            |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+        )
+    };
+    let body_centre = (body_lo + body_hi) * 0.5;
+    let front = body_hi.z + 0.25;
+    board
+        .into_iter()
+        .map(|(v, b)| {
+            (
+                v,
+                DVec3::new(
+                    body_centre.x + (b.x - centre.x),
+                    body_centre.y - (b.y - centre.y),
+                    front,
+                ),
+            )
+        })
+        .collect()
+}

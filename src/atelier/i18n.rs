@@ -2296,6 +2296,13 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Presión sobre el avatar donde la prenda lo toca: la tensión de cada hilo por la curvatura a lo largo de él"
         }
         "Last colour at" => "Último color en",
+        "Reset 2D arrangement: lay every piece out flat as on the board" => {
+            "Restablecer colocación 2D: colocar todas las piezas planas como en el tablero"
+        }
+        "There are no pieces to lay out" => "No hay piezas que colocar",
+        "Pieces laid out as on the board, in front of the avatar · Reset 3D arrangement puts them back" => {
+            "Piezas colocadas como en el tablero, delante del avatar · Restablecer colocación 3D las devuelve"
+        }
         "Pressure on the body · tension × curvature" => {
             "Presión sobre el cuerpo · tensión × curvatura"
         }

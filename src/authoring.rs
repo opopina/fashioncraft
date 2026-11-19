@@ -3666,6 +3666,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                         .into(),
                 );
             }
+            // The split re-anchors the outline: fix every board origin first, so a piece laid
+            // out automatically does not jump to the board's origin.
+            freeze_layouts(&mut template);
             let p = template
                 .panels
                 .iter_mut()

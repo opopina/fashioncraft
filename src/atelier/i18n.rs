@@ -2284,6 +2284,20 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Gizmo: screen axes" => "Gizmo: ejes de pantalla",
         "Camera properties" => "Propiedades de la cámara",
         "Pleats along the selected segment" => "Pliegues a lo largo del segmento seleccionado",
+        "Fold arrangement: start folded along the selected internal line" => {
+            "Colocación plegada: empezar doblada por la línea interna seleccionada"
+        }
+        "Arrange folded" => "Colocar plegada",
+        "Turn one side of the line in 3D to the fold angle (90° without a fold), so the simulation starts folded" => {
+            "Gira en 3D un lado de la línea hasta el ángulo del doblez (90° si no tiene), para que la simulación empiece doblada"
+        }
+        "Fold the other side of the line instead" => "Doblar el otro lado de la línea",
+        "Select an internal line on the board first" => {
+            "Primero selecciona una línea interna en el tablero"
+        }
+        "Release the pins on that side before folding it" => {
+            "Quita los alfileres de ese lado antes de doblarlo"
+        }
         "One pleat along the selected segment" => "Un pliegue a lo largo del segmento seleccionado",
         "Select the segment the pleats start from (a waist, a yoke) on the board" => {
             "Selecciona en el tablero el segmento del que salen los pliegues (una cintura, un canesú)"

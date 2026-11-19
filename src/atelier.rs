@@ -649,6 +649,12 @@ impl Atelier {
             }
             Id::Pleats => self.open_pleats(false),
             Id::SinglePleat => self.open_pleats(true),
+            Id::FoldArrangement => {
+                let (panel, line) = self
+                    .selected_internal_line()
+                    .ok_or("Select an internal line on the board first")?;
+                self.fold_arrange(&panel, &line, false);
+            }
             Id::FreeSewing => self.sewing_mode(false, true)?,
             Id::ChainSegmentSewing => self.sewing_mode(true, false)?,
             Id::ChainFreeSewing => self.sewing_mode(true, true)?,

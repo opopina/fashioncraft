@@ -321,6 +321,103 @@ impl Atelier {
     }
 }
 
+impl Atelier {
+    /// Fold arrangement (3D Garment › Fold arrangement): turn one side of internal line `line`
+    /// of `panel` about it as the piece lies, to the line's fold angle (90° without a fold), so
+    /// the simulation starts folded. Refused while a step runs, over pins, or if the cloth would
+    /// start intersecting.
+    pub(super) fn fold_arrange(&mut self, panel: &str, line: &str, other_side: bool) {
+        let ui_lang = self.prefs.language;
+        if self.pending {
+            self.status = i18n::tr(
+                ui_lang,
+                "Wait for the current step to finish, then try again",
+            )
+            .into();
+            return;
+        }
+        let Some(points) = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.as_ref())
+            .and_then(|poly| poly.lines.iter().find(|l| l.id == line))
+            .and_then(|l| Some([*l.points.first()?, *l.points.last()?]))
+        else {
+            self.status = i18n::tr(ui_lang, "Select an internal line on the board first").into();
+            return;
+        };
+        let angle = self
+            .project
+            .template
+            .line_folds
+            .iter()
+            .find(|f| f.panel == panel && f.line == line)
+            .map_or(90., |f| f.angle);
+        self.playing = false;
+        let garment = self.scene.garment.clone();
+        let moved = match transfer::fold_about_line(
+            &garment,
+            &self.scene.state.x,
+            panel,
+            points,
+            angle,
+            other_side,
+        ) {
+            Ok(moved) => moved,
+            Err(error) => {
+                self.status = error;
+                return;
+            }
+        };
+        if moved.iter().any(|(v, _)| garment.mesh.pins[*v].is_some()) {
+            self.status =
+                i18n::tr(ui_lang, "Release the pins on that side before folding it").into();
+            return;
+        }
+        let mut candidate = self.scene.state.clone();
+        for (v, p) in moved {
+            candidate.x[v] = p;
+            candidate.v[v] = DVec3::ZERO;
+        }
+        if let Err(error) = fashioncraft::vbd::VbdSolver::new(
+            garment.clone(),
+            Some(&self.scene.collider.surface),
+            &candidate,
+        ) {
+            self.status = format!("Not folded: the cloth would start intersecting ({error})");
+            return;
+        }
+        self.scene.state = candidate;
+        self.issue.invalidate();
+        self.generation += 1;
+        self.metrics = None;
+        self.grab = None;
+        self.status = format!("Folded at {angle:.0}° · simulate to settle");
+    }
+
+    /// The internal line selected on the board, as (piece, line).
+    pub(super) fn selected_internal_line(&self) -> Option<(String, String)> {
+        let edge = self.authoring.edge.as_ref()?;
+        let name = edge.edge.clone()?;
+        let panel = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == edge.panel)?;
+        panel
+            .polygon
+            .as_ref()?
+            .lines
+            .iter()
+            .any(|l| l.id == name)
+            .then(|| (edge.panel.clone(), name))
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Action {
     Deactivate(bool),

@@ -148,3 +148,74 @@ pub fn superimpose_positions(
         })
         .collect()
 }
+
+/// Fold arrangement: the part of `panel` on one side of the straight line through its
+/// material points `line` (left of it, looking from the first point to the second; right of it
+/// when `other_side`) turned about that line as it lies in `x`, so the piece starts folded
+/// there at `angle_degrees`, a line fold's angle: 180 is flat, less folds toward the side the
+/// piece's normal faces, more away from it. Returns the moved vertices and their positions.
+pub fn fold_about_line(
+    garment: &super::CompiledGarment,
+    x: &[DVec3],
+    panel: &str,
+    line: [glam::DVec2; 2],
+    angle_degrees: f64,
+    other_side: bool,
+) -> Result<Vec<(usize, DVec3)>, String> {
+    if !(0.0..=360.0).contains(&angle_degrees) {
+        return Err("A fold angle is between 0° and 360°".into());
+    }
+    let range = garment
+        .panels
+        .iter()
+        .find(|r| r.id == panel)
+        .ok_or_else(|| format!("There is no piece {panel}"))?;
+    let at = |uv: glam::DVec2| -> Result<DVec3, String> {
+        let weights = garment
+            .material_point(panel, uv)
+            .ok_or("The fold line must lie on the piece")?;
+        // The lookup falls back to the nearest face; a point off the piece is refused.
+        let found: glam::DVec2 = weights.iter().map(|&(v, w)| garment.mesh.uv[v] * w).sum();
+        if found.distance(uv) > 1e-3 {
+            return Err("The fold line must lie on the piece".into());
+        }
+        Ok(weights.iter().map(|&(v, w)| x[v] * w).sum())
+    };
+    let (a, b) = (at(line[0])?, at(line[1])?);
+    let along = line[1] - line[0];
+    if along.length() < 1e-6 || a.distance(b) < 1e-6 {
+        return Err("The fold line is too short".into());
+    }
+    let sign = if other_side { -1. } else { 1. };
+    let moving: Vec<usize> = range
+        .vertices
+        .clone()
+        .filter(|&v| sign * along.perp_dot(garment.mesh.uv[v] - line[0]) > 1e-9)
+        .collect();
+    if moving.is_empty() {
+        return Err("Nothing of the piece lies on that side of the line".into());
+    }
+    // The piece's front, as its faces wind, near where it is now.
+    let normal = garment.mesh.triangles[range.triangles.clone()]
+        .iter()
+        .map(|t| {
+            let [p, q, r] = t.vertices.map(|v| x[v]);
+            (q - p).cross(r - p)
+        })
+        .sum::<DVec3>()
+        .normalize_or_zero();
+    let axis = (b - a).normalize();
+    let turn = (180. - angle_degrees).to_radians();
+    let place = |turn: f64| -> Vec<(usize, DVec3)> {
+        let q = glam::DQuat::from_axis_angle(axis, turn);
+        moving.iter().map(|&v| (v, a + q * (x[v] - a))).collect()
+    };
+    let moved = place(turn);
+    let shift: DVec3 = moved.iter().map(|&(v, p)| p - x[v]).sum();
+    // Below 180° the moving part turns toward the front: pick the turn's sense accordingly.
+    Ok(if shift.dot(normal) * turn.signum() < 0. {
+        place(-turn)
+    } else {
+        moved
+    })
+}

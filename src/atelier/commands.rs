@@ -181,6 +181,7 @@ pub enum CommandId {
     ChainFreeSewing,
     Pleats,
     SinglePleat,
+    FoldArrangement,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1805,6 +1806,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FoldArrangement,
+        "garment.fold_arrangement",
+        "Fold arrangement: start folded along the selected internal line",
+        Pattern,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

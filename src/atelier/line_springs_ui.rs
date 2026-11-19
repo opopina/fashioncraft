@@ -138,5 +138,28 @@ impl Atelier {
                 fold,
             });
         }
+        let mut arrange = None;
+        ui.horizontal(|ui| {
+            if ui
+                .small_button(i18n::tr(ui_lang, "Arrange folded"))
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Turn one side of the line in 3D to the fold angle (90° without a fold), so the simulation starts folded",
+                ))
+                .clicked()
+            {
+                arrange = Some(false);
+            }
+            if ui
+                .small_button(i18n::tr(ui_lang, "Other side"))
+                .on_hover_text(i18n::tr(ui_lang, "Fold the other side of the line instead"))
+                .clicked()
+            {
+                arrange = Some(true);
+            }
+        });
+        if let Some(other_side) = arrange {
+            self.fold_arrange(panel, line, other_side);
+        }
     }
 }

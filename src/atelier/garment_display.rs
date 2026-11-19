@@ -15,6 +15,36 @@ const FROZEN_TINT: [f32; 3] = [0.42, 0.66, 0.92];
 /// Deactivated pieces look washed out, as they no longer take part in the simulation.
 const DEACTIVATED_TINT: [f32; 3] = [0.62, 0.62, 0.62];
 
+/// How the garment's fabrics look in the 3D view (Display › Garment style).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) enum GarmentStyle {
+    /// Textures, weave and each fabric's render thickness, as authored.
+    #[default]
+    TexturedThick,
+    /// Textures and weave on a thin surface.
+    Textured,
+    /// Each fabric's plain colour: no texture, weave or thickness.
+    Plain,
+}
+
+impl GarmentStyle {
+    /// The fabrics' looks as drawn in this style.
+    pub(super) fn apply(
+        self,
+        optics: &mut [Option<marvelous_cloth::garment::appearance::FabricAppearance>],
+    ) {
+        for look in optics.iter_mut().flatten() {
+            if self != Self::TexturedThick {
+                look.render_thickness_mm = 0.;
+            }
+            if self == Self::Plain {
+                look.texture = None;
+                look.weave = None;
+            }
+        }
+    }
+}
+
 /// What the 3D view draws. Stored in the preferences file.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -46,6 +76,8 @@ pub(super) struct GarmentDisplay {
     pub(super) trims: bool,
     /// Show the graphics printed on the garment.
     pub(super) graphics: bool,
+    /// How the fabrics look.
+    pub(super) style: GarmentStyle,
     /// Technical-flat rendering (Alt+0).
     pub(super) schematic: bool,
     pub(super) schematic_line_px: f32,
@@ -74,6 +106,7 @@ impl Default for GarmentDisplay {
             pins: true,
             trims: true,
             graphics: true,
+            style: GarmentStyle::TexturedThick,
             schematic: false,
             schematic_line_px: 1.5,
             schematic_line_color: [0x1E, 0x1E, 0x22],
@@ -734,6 +767,45 @@ impl Atelier {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn garment_styles_strip_thickness_then_textures_and_weave() {
+        use marvelous_cloth::garment::appearance::{FabricAppearance, Weave, WeaveKind};
+        let rich = FabricAppearance {
+            color_srgb: [200, 40, 40],
+            render_thickness_mm: 2.,
+            weave: Some(Weave {
+                kind: WeaveKind::Plain,
+                spacing_mm: 0.5,
+                contrast: 0.3,
+            }),
+            ..Default::default()
+        };
+        let look = |style: GarmentStyle| {
+            let mut optics = vec![Some(rich.clone()), None];
+            style.apply(&mut optics);
+            optics
+        };
+        assert_eq!(look(GarmentStyle::TexturedThick)[0], Some(rich.clone()));
+        let thin = look(GarmentStyle::Textured);
+        let thin = thin[0].as_ref().unwrap();
+        assert_eq!(thin.render_thickness_mm, 0.);
+        assert_eq!(thin.weave, rich.weave);
+        let plain = look(GarmentStyle::Plain);
+        let plain = plain[0].as_ref().unwrap();
+        assert_eq!(
+            (
+                plain.render_thickness_mm,
+                plain.weave.clone(),
+                plain.color_srgb
+            ),
+            (0., None, rich.color_srgb)
+        );
+        assert!(plain.texture.is_none());
+        // Fabrics without a look of their own stay without one.
+        assert!(look(GarmentStyle::Plain)[1].is_none());
+        assert_eq!(GarmentDisplay::default().style, GarmentStyle::TexturedThick);
+    }
     use std::collections::BTreeMap;
 
     fn panels() -> Vec<PanelRange> {

@@ -95,6 +95,8 @@ pub(super) struct AuthoringUi {
     pub drag: Option<super::gizmo::Drag>,
     pub drafting: super::drafting_ui::DraftingUi,
     pub shapes: super::shapes_ui::ShapesUi,
+    /// Measuring on the body or the garment in the 3D view.
+    pub measure3d: super::measure3d_ui::Measure3d,
     pub segments: super::segments_ui::SegmentsUi,
     pub pin_tool: super::pin_tool::PinTool,
     /// Contour point selected for numeric entry: (panel id, point index).

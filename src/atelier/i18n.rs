@@ -2275,6 +2275,39 @@ fn spanish(text: &str) -> Option<&'static str> {
         "That garment has no pieces" => "Esa prenda no tiene piezas",
         "High-resolution garment (10 mm mesh)" => "Prenda en alta resolución (malla de 10 mm)",
         "Low-resolution garment (30 mm mesh)" => "Prenda en baja resolución (malla de 30 mm)",
+        "Garment style: textured with thickness" => "Estilo de la prenda: texturizada con grosor",
+        "Garment style: textured" => "Estilo de la prenda: texturizada",
+        "Garment style: plain colour" => "Estilo de la prenda: color liso",
+        "Measure along the body" => "Medir a lo largo del cuerpo",
+        "Measure a height on the body" => "Medir una altura en el cuerpo",
+        "Measure around the body" => "Medir el contorno del cuerpo",
+        "Measure along the garment" => "Medir a lo largo de la prenda",
+        "Measure around the garment" => "Medir el contorno de la prenda",
+        "Click two points on the body · Esc stops measuring" => {
+            "Haz clic en dos puntos del cuerpo · Esc deja de medir"
+        }
+        "Click a point on the body · Esc stops measuring" => {
+            "Haz clic en un punto del cuerpo · Esc deja de medir"
+        }
+        "Click the body where to measure around it · Esc stops measuring" => {
+            "Haz clic en el cuerpo donde medir su contorno · Esc deja de medir"
+        }
+        "Click two points on the garment · Esc stops measuring" => {
+            "Haz clic en dos puntos de la prenda · Esc deja de medir"
+        }
+        "Click the garment where to measure around it · Esc stops measuring" => {
+            "Haz clic en la prenda donde medir su contorno · Esc deja de medir"
+        }
+        "Measuring stopped" => "Medición terminada",
+        "Stop measuring" => "Dejar de medir",
+        "Along the body" => "A lo largo del cuerpo",
+        "Height above the floor" => "Altura sobre el suelo",
+        "Around the body" => "Contorno del cuerpo",
+        "Along the garment" => "A lo largo de la prenda",
+        "Around the garment" => "Contorno de la prenda",
+        "Across the garment (it does not close here)" => {
+            "A través de la prenda (aquí no se cierra)"
+        }
         "Import a point cache…" => "Importar una caché de puntos…",
         "Add a spiral at the board centre" => "Añadir una espiral en el centro del tablero",
         "Add an internal rectangle to the selected piece" => {

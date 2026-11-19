@@ -82,6 +82,8 @@ mod library_ui;
 mod line_springs_ui;
 #[path = "atelier/measure.rs"]
 mod measure;
+#[path = "atelier/measure3d_ui.rs"]
+mod measure3d_ui;
 #[path = "atelier/menus.rs"]
 mod menus;
 #[path = "atelier/object_browser_ui.rs"]
@@ -612,6 +614,22 @@ impl Atelier {
             Id::AddGarment => self.add_garment()?,
             Id::SavePoseFile => self.save_pose_file()?,
             Id::LoadPoseFile => self.load_pose_file()?,
+            Id::MeasureBodyTape
+            | Id::MeasureBodyHeight
+            | Id::MeasureBodyGirth
+            | Id::MeasureGarmentLine
+            | Id::MeasureGarmentGirth => {
+                let kind = measure3d_ui::MeasureKind::of(id).ok_or("Unknown measurement")?;
+                self.start_measuring(kind);
+            }
+            Id::StyleTexturedThick | Id::StyleTextured | Id::StylePlain => {
+                use garment_display::GarmentStyle;
+                self.prefs.garment_display.style = match id {
+                    Id::StyleTexturedThick => GarmentStyle::TexturedThick,
+                    Id::StyleTextured => GarmentStyle::Textured,
+                    _ => GarmentStyle::Plain,
+                };
+            }
             Id::ShowPins => {
                 let display = &mut self.prefs.garment_display;
                 display.pins = !display.pins;

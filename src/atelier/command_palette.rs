@@ -158,6 +158,14 @@ fn aliases(id: CommandId) -> &'static str {
         ShowGraphics => "show hide graphics prints logos display",
         HighResolution => "high resolution fine mesh particle distance remesh final",
         LowResolution => "low resolution coarse mesh particle distance remesh draft fast",
+        StyleTexturedThick => "garment style textured thickness thick render look",
+        StyleTextured => "garment style textured thin render look",
+        StylePlain => "garment style plain colour color flat untextured look",
+        MeasureBodyTape => "measure tape avatar body length distance surface",
+        MeasureBodyHeight => "measure height avatar body floor",
+        MeasureBodyGirth => "measure circumference girth around avatar body chest waist hip",
+        MeasureGarmentLine => "measure linear length garment cloth distance",
+        MeasureGarmentGirth => "measure circumference girth around garment cloth",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -923,7 +931,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::ShowGraphics
+            CommandId::MeasureGarmentGirth
         );
         h.key(
             "palette.query",

@@ -412,6 +412,7 @@ impl Atelier {
         if self.authoring.trace_pen.is_some() {
             self.trace_pen_bar(ui);
         }
+        self.measure3d_bar(ui);
         ui.separator();
         self.viewport.appearance = self.prefs.viewport.clone();
         let (rect, response) = ui.allocate_exact_size(
@@ -435,6 +436,8 @@ impl Atelier {
                 self.eyedropper_interaction(&ctx, &response, rect);
             } else if self.trace_pen_interaction(&ctx, &response, rect) {
                 // The 3D pen takes clicks on the body while it is out.
+            } else if self.measure3d_interaction(&ctx, &response, rect) {
+                // So does measuring.
             } else if self.ik_interaction(&response, rect) {
                 // A hand or foot of the pose being edited is being dragged.
             } else if self.arrangement_point_interaction(&response, rect) {
@@ -483,8 +486,9 @@ impl Atelier {
         let live_state = self
             .animation_frame_state()
             .map(|shown| std::mem::replace(&mut self.scene.state, shown));
-        let optics =
+        let mut optics =
             marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
+        self.prefs.garment_display.style.apply(&mut optics);
         let (visible_faces, face_colors) = self.display_buffers();
         let flipped_faces = self.flipped_faces();
         // Trims of the pieces on show, lying on their front faces.
@@ -609,6 +613,7 @@ impl Atelier {
             self.paint_selected_points_3d(ui, rect);
             self.paint_pins_3d(ui, rect);
             self.paint_trace_pen(ui, rect);
+            self.paint_measure3d(ui, rect);
             if self.authoring.tool == Tool::Grab
                 && !self.authoring.pin_tool.enabled
                 && let Some(p) = response.hover_pos()

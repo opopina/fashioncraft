@@ -150,6 +150,14 @@ pub enum CommandId {
     ShowGraphics,
     HighResolution,
     LowResolution,
+    StyleTexturedThick,
+    StyleTextured,
+    StylePlain,
+    MeasureBodyTape,
+    MeasureBodyHeight,
+    MeasureBodyGirth,
+    MeasureGarmentLine,
+    MeasureGarmentGirth,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1493,6 +1501,78 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         "simulation.low_resolution",
         "Low-resolution garment (30 mm mesh)",
         Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleTexturedThick,
+        "display.style_textured_thick",
+        "Garment style: textured with thickness",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleTextured,
+        "display.style_textured",
+        "Garment style: textured",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        StylePlain,
+        "display.style_plain",
+        "Garment style: plain colour",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureBodyTape,
+        "measure.body_tape",
+        "Measure along the body",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureBodyHeight,
+        "measure.body_height",
+        "Measure a height on the body",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureBodyGirth,
+        "measure.body_girth",
+        "Measure around the body",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureGarmentLine,
+        "measure.garment_line",
+        "Measure along the garment",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureGarmentGirth,
+        "measure.garment_girth",
+        "Measure around the garment",
+        Workspace,
         None,
         NotUndoable,
         NativeWorkspace

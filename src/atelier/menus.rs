@@ -197,7 +197,10 @@ const GARMENT_3D: &[Item] = &[
     S,
     Sub(
         "Garment measurements",
-        &[Todo("Linear measure"), Todo("Circumference measure")],
+        &[
+            Run("Linear measure", C::MeasureGarmentLine),
+            Run("Circumference measure", C::MeasureGarmentGirth),
+        ],
     ),
     Sub("Tear", &[Todo("Edit tears"), Todo("Tear seam")]),
     S,
@@ -303,9 +306,9 @@ const AVATAR: &[Item] = &[
     Sub(
         "Avatar measurements",
         &[
-            Todo("Tape measure"),
-            Todo("Height measure"),
-            Todo("Circumference measure"),
+            Run("Tape measure", C::MeasureBodyTape),
+            Run("Height measure", C::MeasureBodyHeight),
+            Run("Circumference measure", C::MeasureBodyGirth),
         ],
     ),
     Run("Pose…", C::OpenPose),
@@ -365,9 +368,9 @@ const DISPLAY: &[Item] = &[
     Sub(
         "Garment style",
         &[
-            Todo("Textured with thickness"),
-            Todo("Textured"),
-            Todo("Plain colour"),
+            Run("Textured with thickness", C::StyleTexturedThick),
+            Run("Textured", C::StyleTextured),
+            Run("Plain colour", C::StylePlain),
             Todo("Translucent"),
             Run("Random piece colours", C::RandomPieceColours),
         ],
@@ -471,6 +474,8 @@ pub(super) fn coverage() -> (usize, usize) {
     (done, all)
 }
 
+use super::garment_display::GarmentStyle;
+
 impl Atelier {
     /// Whether a toggle command is on, for its menu item's highlight.
     fn command_checked(&self, id: CommandId) -> bool {
@@ -479,6 +484,16 @@ impl Atelier {
         match id {
             C::ToggleAvatar => display.avatar,
             C::ShowPins => display.pins,
+            C::MeasureBodyTape
+            | C::MeasureBodyHeight
+            | C::MeasureBodyGirth
+            | C::MeasureGarmentLine
+            | C::MeasureGarmentGirth => {
+                self.authoring.measure3d.kind == super::measure3d_ui::MeasureKind::of(id)
+            }
+            C::StyleTexturedThick => display.style == GarmentStyle::TexturedThick,
+            C::StyleTextured => display.style == GarmentStyle::Textured,
+            C::StylePlain => display.style == GarmentStyle::Plain,
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
@@ -681,7 +696,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 149, "{done} of {all}");
+        assert!(done >= 157, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -178,6 +178,7 @@ fn aliases(id: CommandId) -> &'static str {
         SeamTaping => "seam taping tape both sides seam",
         SeamlineTopstitch => "seamline topstitch stitch both sides seam",
         FreeTopstitch => "free topstitch stitch internal line path",
+        AutoSewing => "auto sewing automatic seams match segments sew all",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

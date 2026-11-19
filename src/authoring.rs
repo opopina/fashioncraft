@@ -322,6 +322,11 @@ pub enum Command {
         reverse: bool,
         ease: bool,
     },
+    /// Several 1:1 seams at once (automatic sewing): one undo step. Each entry is
+    /// `(a, b, reverse, ease)` as for `Sew`.
+    SewMany {
+        seams: Vec<(BoundaryRef, BoundaryRef, bool, bool)>,
+    },
     /// Replace an existing seam or create one ordered M:N rest-arclength relation.
     SewChain {
         seam: Option<String>,
@@ -628,6 +633,7 @@ impl Command {
             Self::RestoreArchived { .. } => "Restore archived",
             Self::DeleteArchived { .. } => "Delete archived",
             Self::Sew { .. } => "Sew",
+            Self::SewMany { .. } => "Auto sewing",
             Self::SewChain { .. } => "Sew segments",
             Self::RemoveSeam { .. } => "Remove seam",
             Self::FabricAppearance { .. } => "Fabric appearance",
@@ -4378,6 +4384,25 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 notches: vec![],
                 stiffness: 50_000.,
             });
+        }
+        Command::SewMany { seams } => {
+            if seams.is_empty() || seams.len() > 256 {
+                return Err("Sew 1..256 seams at once".into());
+            }
+            for (a, b, reverse, ease) in seams {
+                let id = unused_id("seam", template.seams.iter().map(|s| s.id.clone()));
+                template.seams.push(SeamSpec {
+                    a_tail: vec![],
+                    b_tail: vec![],
+                    id,
+                    a,
+                    b,
+                    reverse_b: reverse,
+                    allow_ease: ease,
+                    notches: vec![],
+                    stiffness: 50_000.,
+                });
+            }
         }
         Command::SewChain {
             seam,

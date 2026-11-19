@@ -170,6 +170,7 @@ pub enum CommandId {
     SeamTaping,
     SeamlineTopstitch,
     FreeTopstitch,
+    AutoSewing,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1692,6 +1693,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         FreeTopstitch,
         "materials.free_topstitch",
         "Topstitch along the selected internal line",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AutoSewing,
+        "sewing.auto",
+        "Sew matching segments automatically",
         Pattern,
         None,
         TemplateHistory,

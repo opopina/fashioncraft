@@ -253,7 +253,7 @@ const SEWING: &[Item] = &[
     Todo("Free sewing"),
     Todo("M:N segment sewing"),
     Todo("M:N free sewing"),
-    Todo("Auto sewing"),
+    Run("Auto sewing", C::AutoSewing),
     Run("Check sewing length", C::CheckSewingLength),
     Todo("Activate all seams"),
 ];
@@ -698,7 +698,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 169, "{done} of {all}");
+        assert!(done >= 170, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -636,6 +636,7 @@ impl Atelier {
             }
             Id::SmoothCurve => self.smooth_selected_points()?,
             Id::AddTape => self.tape_selected_line()?,
+            Id::AutoSewing => self.auto_sew()?,
             Id::SeamTaping => self.finish_selected_seam(true)?,
             Id::SeamlineTopstitch => self.finish_selected_seam(false)?,
             Id::FreeTopstitch => self.topstitch_selected_line()?,

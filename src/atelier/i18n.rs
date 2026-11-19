@@ -2295,6 +2295,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "There is no avatar to save" => "No hay avatar que guardar",
         "Show piece names in 3D" => "Mostrar nombres de pieza en 3D",
         "Tape along the selected line" => "Cinta a lo largo de la línea seleccionada",
+        "Sew matching segments automatically" => "Coser automáticamente los segmentos que casan",
+        "Nothing to sew: no unsewn segments of equal length face each other around the body (lay the pieces around it first)" => {
+            "Nada que coser: ningún par de segmentos sin coser de igual longitud se enfrenta alrededor del cuerpo (coloca antes las piezas a su alrededor)"
+        }
         "Tape along both sides of the selected seam" => {
             "Cinta a los dos lados de la costura seleccionada"
         }

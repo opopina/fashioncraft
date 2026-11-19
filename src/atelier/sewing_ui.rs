@@ -801,6 +801,48 @@ impl Atelier {
         }
         .into();
     }
+    /// Sewing › Auto sewing: sew the unsewn segments that pair up on the pieces as they are
+    /// laid around the body; openings the body passes through stay open.
+    pub(super) fn auto_sew(&mut self) -> Result<(), String> {
+        let found = marvelous_cloth::garment::auto_sew::auto_sew(
+            &self.project.template,
+            &self.scene.garment,
+            &self.scene.state.x,
+            &self.scene.collider.surface,
+        );
+        if found.is_empty() {
+            return Err(
+                "Nothing to sew: no unsewn segments of equal length face each other around the body (lay the pieces around it first)"
+                    .into(),
+            );
+        }
+        let added: Vec<String> = found
+            .iter()
+            .map(|seam| {
+                format!(
+                    "{} ↔ {}",
+                    seam.a.edge.clone().unwrap_or_default(),
+                    seam.b.edge.clone().unwrap_or_default()
+                )
+            })
+            .collect();
+        let seams = found
+            .into_iter()
+            .map(|seam| {
+                let ease = (seam.lengths_m[0] - seam.lengths_m[1]).abs() > 1e-6;
+                (seam.a, seam.b, seam.reverse, ease)
+            })
+            .collect();
+        if !self.edit(Command::SewMany { seams }) {
+            return Err(self.status.clone());
+        }
+        self.status = format!(
+            "Auto sewing: {} added ({}) · openings the body passes through stay open",
+            super::garment_display::counted(added.len(), "seam", "seams"),
+            added.join(", ")
+        );
+        Ok(())
+    }
     pub(super) fn begin_seam_edit(&mut self, id: &str) {
         let Some(s) = self
             .project

@@ -250,9 +250,9 @@ const PATTERN_2D: &[Item] = &[
 
 const SEWING: &[Item] = &[
     Run("Segment sewing", C::ToolSew),
-    Todo("Free sewing"),
-    Todo("M:N segment sewing"),
-    Todo("M:N free sewing"),
+    Run("Free sewing", C::FreeSewing),
+    Run("M:N segment sewing", C::ChainSegmentSewing),
+    Run("M:N free sewing", C::ChainFreeSewing),
     Run("Auto sewing", C::AutoSewing),
     Run("Check sewing length", C::CheckSewingLength),
     Todo("Activate all seams"),
@@ -505,6 +505,9 @@ impl Atelier {
             C::GizmoLocalAxes => self.prefs.gizmo_axes == super::gizmo::GizmoAxes::Local,
             C::GizmoScreenAxes => self.prefs.gizmo_axes == super::gizmo::GizmoAxes::Screen,
             C::CameraProperties => self.authoring.camera_props.open,
+            C::FreeSewing => self.in_sewing_mode(false, true),
+            C::ChainSegmentSewing => self.in_sewing_mode(true, false),
+            C::ChainFreeSewing => self.in_sewing_mode(true, true),
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,

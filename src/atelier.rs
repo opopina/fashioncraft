@@ -645,6 +645,9 @@ impl Atelier {
             Id::CameraProperties => {
                 self.authoring.camera_props.open = !self.authoring.camera_props.open;
             }
+            Id::FreeSewing => self.sewing_mode(false, true)?,
+            Id::ChainSegmentSewing => self.sewing_mode(true, false)?,
+            Id::ChainFreeSewing => self.sewing_mode(true, true)?,
             Id::ShowPieceNames => {
                 let display = &mut self.prefs.garment_display;
                 display.piece_names = !display.piece_names;

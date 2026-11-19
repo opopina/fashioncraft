@@ -861,6 +861,36 @@ impl Atelier {
         self.authoring.sewing = SewingDraft::from_spec(&s);
         self.prefs.workspace.inspector_open = true;
     }
+    /// Open the Sew tool in one of its modes: several segments per side (`chain`, the M:N
+    /// sewing) and/or two clicks per segment for a part of it (`partial`, the free sewing).
+    pub(super) fn sewing_mode(&mut self, chain: bool, partial: bool) -> Result<(), String> {
+        self.set_authoring_tool(Tool::Sew, false);
+        let sewing = &self.authoring.sewing;
+        if chain != sewing.chain_mode {
+            let sides = self.sewing_sides();
+            if chain {
+                self.authoring.sewing.sides = sides;
+            } else if sides.iter().any(|s| s.len() > 1) {
+                return Err("Remove extra segments before switching to single-edge sewing".into());
+            } else {
+                self.authoring.ends = sides.into_iter().flatten().collect();
+            }
+            self.authoring.sewing.chain_mode = chain;
+        }
+        if partial != self.authoring.sewing.partial {
+            self.authoring.sewing.partial = partial;
+            self.authoring.sewing.start = None;
+        }
+        Ok(())
+    }
+
+    /// Whether the Sew tool is open in this mode, for the Sewing menu's highlight.
+    pub(super) fn in_sewing_mode(&self, chain: bool, partial: bool) -> bool {
+        self.authoring.tool == Tool::Sew
+            && self.authoring.sewing.chain_mode == chain
+            && self.authoring.sewing.partial == partial
+    }
+
     pub(super) fn sewing_controls(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
         ui.heading(i18n::tr(ui_lang, "Sewing"));

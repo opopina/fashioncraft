@@ -2283,6 +2283,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Gizmo: the piece's local axes" => "Gizmo: ejes locales de la pieza",
         "Gizmo: screen axes" => "Gizmo: ejes de pantalla",
         "Camera properties" => "Propiedades de la cámara",
+        "Free sewing: sew parts of segments" => "Costura libre: coser partes de segmentos",
+        "M:N segment sewing: several segments per side" => {
+            "Costura M:N por segmento: varios segmentos por lado"
+        }
+        "M:N free sewing: several parts of segments per side" => {
+            "Costura M:N libre: varias partes de segmentos por lado"
+        }
         "Projection" => "Proyección",
         "Perspective" => "Perspectiva",
         "Orthographic" => "Ortográfica",

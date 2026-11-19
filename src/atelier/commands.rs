@@ -176,6 +176,9 @@ pub enum CommandId {
     GizmoLocalAxes,
     GizmoScreenAxes,
     CameraProperties,
+    FreeSewing,
+    ChainSegmentSewing,
+    ChainFreeSewing,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1753,6 +1756,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         "view.camera_properties",
         "Camera properties",
         Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        FreeSewing,
+        "sewing.free",
+        "Free sewing: sew parts of segments",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ChainSegmentSewing,
+        "sewing.chain_segments",
+        "M:N segment sewing: several segments per side",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ChainFreeSewing,
+        "sewing.chain_free",
+        "M:N free sewing: several parts of segments per side",
+        Pattern,
         None,
         NotUndoable,
         NativeWorkspace

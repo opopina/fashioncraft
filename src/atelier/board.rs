@@ -3,8 +3,7 @@ use super::{
     authoring_ui::{Tool, segment_distance},
     *,
 };
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         polygon::PolygonPattern,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
         template::Panel,
     },
 };
+use glam::DVec2;
 
 /// Board magnet step used when no preference has been applied, in millimetres.
 pub(super) const DEFAULT_SNAP_MM: f64 = 10.;
@@ -162,7 +162,7 @@ pub(super) struct SnapGeometry {
     /// Straight segments as `[start, end]`.
     pub segments: Vec<[DVec2; 2]>,
     /// Guidelines: the axis and the board coordinate of each line.
-    pub guides: Vec<(marvelous_cloth::fitting::GuideAxis, f64)>,
+    pub guides: Vec<(fashioncraft::fitting::GuideAxis, f64)>,
 }
 
 /// The boundary under the pointer, where a new point would be inserted.
@@ -229,7 +229,7 @@ impl FreehandDraft {
         if self.error.is_some() || self.samples.last() == Some(&point) {
             return;
         }
-        if self.samples.len() == marvelous_cloth::garment::freehand::MAX_INPUT_SAMPLES {
+        if self.samples.len() == fashioncraft::garment::freehand::MAX_INPUT_SAMPLES {
             self.overflow = true;
             self.error = Some("Stroke exceeds 4096 samples. Draw a shorter outline.".into());
             self.preview = None;
@@ -666,9 +666,9 @@ impl Board {
         rect: egui::Rect,
         pointer: egui::Pos2,
         raw: DVec2,
-        guides: &[(marvelous_cloth::fitting::GuideAxis, f64)],
+        guides: &[(fashioncraft::fitting::GuideAxis, f64)],
     ) -> Option<DVec2> {
-        use marvelous_cloth::fitting::GuideAxis;
+        use fashioncraft::fitting::GuideAxis;
         let mut horizontal: Option<(f32, f64)> = None;
         let mut vertical: Option<(f32, f64)> = None;
         for (axis, position) in guides {
@@ -842,7 +842,7 @@ pub(super) fn outline_bounds(panel: &Panel) -> (DVec2, DVec2) {
                 .map(|k| poly.edge_points(k))
                 .collect::<Result<Vec<_>, _>>()
                 .ok()?;
-            marvelous_cloth::authoring::arrange2d::bounds(&outline.concat())
+            fashioncraft::authoring::arrange2d::bounds(&outline.concat())
         })
         .unwrap_or((
             DVec2::ZERO,
@@ -918,7 +918,7 @@ impl Atelier {
         let result = authoring::freehand_contour(
             &draft.samples,
             draft.tolerance_mm * 0.001,
-            marvelous_cloth::garment::meshing::MeshingSettings {
+            fashioncraft::garment::meshing::MeshingSettings {
                 target_edge_m: self.mesh_mm * 0.001,
                 anisotropy: self.anisotropy,
                 axis_degrees: self.mesh_axis,
@@ -967,7 +967,7 @@ impl Atelier {
                         samples: draft.samples.clone(),
                         tolerance_m: draft.tolerance_mm * 0.001,
                         fabric: fabric.id.clone(),
-                        meshing: marvelous_cloth::garment::meshing::MeshingSettings {
+                        meshing: fashioncraft::garment::meshing::MeshingSettings {
                             target_edge_m: self.mesh_mm * 0.001,
                             anisotropy: self.anisotropy,
                             axis_degrees: self.mesh_axis,
@@ -3126,11 +3126,11 @@ impl Atelier {
                             Stroke::new(1., color.gamma_multiply(0.45)),
                         ));
                         if k == 0 {
-                            let p = marvelous_cloth::garment::curves::arclength_point(points, 0.5);
+                            let p = fashioncraft::garment::curves::arclength_point(points, 0.5);
                             smoke_targets.push((panel.id.clone(), point(p)));
                         }
                         if k == 1 {
-                            let p = marvelous_cloth::garment::curves::arclength_point(points, 0.5);
+                            let p = fashioncraft::garment::curves::arclength_point(points, 0.5);
                             smoke_targets.push((format!("next_edge_{}", panel.id), point(p)));
                         }
                     }
@@ -3372,7 +3372,7 @@ impl Atelier {
                 self.authoring.draft[k + 1] - self.authoring.tangents[k + 1],
                 self.authoring.draft[k + 1],
             ];
-            if let Ok(samples) = marvelous_cloth::garment::curves::flatten(p, 0.00025) {
+            if let Ok(samples) = fashioncraft::garment::curves::flatten(p, 0.00025) {
                 painter.add(egui::Shape::line(
                     samples.into_iter().map(point).collect(),
                     Stroke::new(2., Color32::LIGHT_BLUE),
@@ -3389,11 +3389,11 @@ impl Atelier {
         }
         if matches!(self.authoring.tool, Tool::Ellipse | Tool::Sector)
             && self.authoring.draft.len() == 4
-            && let Ok(poly) = marvelous_cloth::garment::shapes::primitive(
+            && let Ok(poly) = fashioncraft::garment::shapes::primitive(
                 if self.authoring.tool == Tool::Ellipse {
-                    marvelous_cloth::garment::shapes::Primitive::Ellipse
+                    fashioncraft::garment::shapes::Primitive::Ellipse
                 } else {
-                    marvelous_cloth::garment::shapes::Primitive::Sector
+                    fashioncraft::garment::shapes::Primitive::Sector
                 },
                 self.authoring.draft[2] - self.authoring.draft[0],
                 self.authoring.drafting.sweep,
@@ -3512,7 +3512,7 @@ impl Atelier {
                     draft[k + 1] - self.authoring.tangents[k + 1],
                     draft[k + 1],
                 ];
-                let length = marvelous_cloth::garment::curves::flatten(curve, 0.00025)
+                let length = fashioncraft::garment::curves::flatten(curve, 0.00025)
                     .map(|samples| polyline_length(&samples))
                     .unwrap_or_else(|_| draft[k].distance(draft[k + 1]));
                 painter.text(
@@ -3695,7 +3695,7 @@ impl Atelier {
         {
             let true_m = polyline_length(&points);
             let chord = poly.points[k].distance(poly.points[(k + 1) % poly.points.len()]);
-            let middle = marvelous_cloth::garment::curves::arclength_point(&points, 0.5);
+            let middle = fashioncraft::garment::curves::arclength_point(&points, 0.5);
             let centroid = poly.points.iter().fold(DVec2::ZERO, |sum, p| sum + *p)
                 / poly.points.len().max(1) as f64;
             let outward = (middle - centroid).normalize_or_zero();
@@ -4187,7 +4187,7 @@ mod tests {
 
     #[test]
     fn guides_snap_after_real_geometry_and_their_crossings_win() {
-        use marvelous_cloth::fitting::GuideAxis;
+        use fashioncraft::fitting::GuideAxis;
         let rect = canvas(800., 600.);
         let board = Board::default();
         let mut geometry = geometry(&[], &[]);

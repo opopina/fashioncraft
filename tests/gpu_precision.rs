@@ -1,11 +1,11 @@
 //! Opt-in precision regression. The fixture contains no user garment data.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 mod common;
 
 #[test]
@@ -112,7 +112,7 @@ fn subgroup_and_portable_paths_preserve_motion_and_bounds() {
         let mut sa = VbdSolver::new(g.clone(), Some(&avatar), &a).unwrap();
         let mut sb = VbdSolver::new(g.clone(), Some(&avatar), &b).unwrap();
         let tri = g.mesh.triangles[0].vertices;
-        let grab = marvelous_cloth::vbd::Grab {
+        let grab = fashioncraft::vbd::Grab {
             patch: Vec::new(),
             vertices: tri,
             weights: [1. / 3.; 3],

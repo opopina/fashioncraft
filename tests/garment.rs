@@ -1,5 +1,4 @@
-use glam::{DQuat, DVec3, EulerRot};
-use marvelous_cloth::{
+use fashioncraft::{
     energy,
     garment::{
         GarmentTemplate, export,
@@ -8,6 +7,7 @@ use marvelous_cloth::{
     },
     solver::{ReferenceSolver, SolverSettings},
 };
+use glam::{DQuat, DVec3, EulerRot};
 
 fn parallel(a: usize, b: usize) -> GarmentTemplate {
     let mut t = GarmentTemplate::two_panel_demo();

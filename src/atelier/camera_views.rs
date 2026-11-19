@@ -2,7 +2,7 @@
 //! F to frame, an adjustable field of view, named views saved with the project, and inverting
 //! the piece selection. Presentation only, apart from the views stored in the document.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::SavedView,
     render::{Camera, FOV_RANGE_DEGREES, PresetView},
 };

@@ -1,6 +1,6 @@
 //! A CPU-only frontend; never imports eframe/wgpu or opens a window.
 use clap::{Parser, Subcommand};
-use marvelous_cloth::{
+use fashioncraft::{
     garment::{GarmentTemplate, export, production_metrics},
     solver::{ReferenceSolver, SolverSettings},
 };
@@ -85,8 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // sewing error. Geometry validation remains inside the audit.
             let json = fs::read_to_string(template)?;
             let template: GarmentTemplate = if project {
-                let project: marvelous_cloth::fitting::FittingProject =
-                    serde_json::from_str(&json)?;
+                let project: fashioncraft::fitting::FittingProject = serde_json::from_str(&json)?;
                 if project.version != 1 {
                     return Err("Unsupported fitting project version".into());
                 }
@@ -94,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 serde_json::from_str(&json)?
             };
-            let report = marvelous_cloth::garment::seam::audit::report(&template)?;
+            let report = fashioncraft::garment::seam::audit::report(&template)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
             if !report.valid {
                 return Err("Invalid authored sewing; inspect the JSON diagnostics".into());

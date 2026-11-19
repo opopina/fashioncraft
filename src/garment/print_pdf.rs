@@ -368,7 +368,7 @@ pub fn print_pattern_pdf(
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
             .to_vec(),
     ];
-    let mut info = b"<< /Producer (ClothCraft) /Title ".to_vec();
+    let mut info = b"<< /Producer (FashionCraft) /Title ".to_vec();
     info.extend(pdf_string(&format!("{} at 1:1", template.name)));
     info.extend_from_slice(b" >>");
     objects.push(info);

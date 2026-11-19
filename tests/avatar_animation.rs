@@ -1,8 +1,7 @@
 //! Avatar animation: keyed poses run on smooth curves that start and stop at rest, ready-made
 //! motions return to where they began, and recording moves the body in short steps that push
 //! the cloth along, keeping one frame per tick of the frame rate.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     avatar_animation::{AvatarAnimation, MOTIONS, Marker, PoseKey, Recorder, Take, motion, run},
@@ -15,6 +14,7 @@ use marvelous_cloth::{
     },
     vbd::VbdSettings,
 };
+use glam::{DVec2, DVec3};
 use std::{path::PathBuf, sync::Arc};
 
 fn mannequin() -> PathBuf {
@@ -320,7 +320,7 @@ fn takes_and_the_moving_avatar_are_written_as_obj_sequences() {
 
     // The avatar along a motion, one file per frame, moving between them.
     let animation = motion("Raise arms", &Pose::default()).unwrap();
-    let n = marvelous_cloth::avatar_animation::write_body_sequence(
+    let n = fashioncraft::avatar_animation::write_body_sequence(
         &project,
         &animation,
         3,
@@ -366,7 +366,7 @@ fn a_take_is_read_back_from_its_point_cache_and_travels_with_the_project() {
 
     // Saved, the cache is copied next to the project and found again on opening it.
     let mut p = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
-    p.animation_take = Some(marvelous_cloth::fitting::AnimationTake {
+    p.animation_take = Some(fashioncraft::fitting::AnimationTake {
         path: cache.clone(),
         fps: 24.,
     });
@@ -383,7 +383,7 @@ fn a_take_is_read_back_from_its_point_cache_and_travels_with_the_project() {
 
 #[test]
 fn wind_and_gravity_keys_drive_each_recorded_step() {
-    use marvelous_cloth::avatar_animation::{VectorKey, set_vector_key};
+    use fashioncraft::avatar_animation::{VectorKey, set_vector_key};
     let mut animation = keyed(&[(0., 0.), (1., 0.)]);
     set_vector_key(&mut animation.gravity_keys, 1., DVec3::ZERO);
     set_vector_key(&mut animation.gravity_keys, 0., DVec3::new(0., -9.81, 0.));
@@ -511,7 +511,7 @@ fn pins_attached_to_the_avatar_go_with_it_while_recording() {
 
 #[test]
 fn fabric_keys_reshape_and_press_pieces_as_the_take_goes_on() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         avatar_animation::{FabricKey, run_stepping, set_fabric_key},
         garment::FabricValues,
     };
@@ -542,7 +542,7 @@ fn fabric_keys_reshape_and_press_pieces_as_the_take_goes_on() {
         .find(|p| p.id == "front")
         .unwrap()
         .clone();
-    let area = |g: &marvelous_cloth::garment::CompiledGarment| -> f64 {
+    let area = |g: &fashioncraft::garment::CompiledGarment| -> f64 {
         g.mesh.triangles[front.triangles.clone()]
             .iter()
             .map(|t| t.area)

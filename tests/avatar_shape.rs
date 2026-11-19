@@ -1,12 +1,12 @@
 //! Body measurements: the mannequin measures like a body, and reshaping it lands on the
 //! asked height and girths while keeping its mesh, moving its joints and staying riggable.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_rig::Rig,
     avatar_shape::{BodyMeasurements, measure, reshape},
     garment::arrangement::load_sidecar,
 };
+use glam::DVec3;
 use std::{collections::BTreeMap, path::PathBuf};
 
 fn mannequin() -> (SurfaceMesh, BTreeMap<String, DVec3>) {

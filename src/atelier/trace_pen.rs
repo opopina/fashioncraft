@@ -2,8 +2,8 @@
 //! flattens the part of the body it encloses into a new piece (see `trace3d`), which starts
 //! on the body where it was drawn.
 use super::*;
+use fashioncraft::{authoring::Command, garment::meshing::MeshingSettings, trace3d};
 use glam::{DVec2, DVec3};
-use marvelous_cloth::{authoring::Command, garment::meshing::MeshingSettings, trace3d};
 use std::collections::BTreeSet;
 
 /// Points picked so far on the body and the surface path through them, for drawing.
@@ -195,7 +195,7 @@ impl Atelier {
         let template = &self.project.template;
         let (mut right, mut top) = (0f64, f64::INFINITY);
         for (i, panel) in template.panels.iter().enumerate() {
-            let origin = marvelous_cloth::authoring::layout(template, i);
+            let origin = fashioncraft::authoring::layout(template, i);
             right = right.max(origin.x + panel.pattern.width);
             top = top.min(origin.y);
         }
@@ -245,11 +245,8 @@ impl Atelier {
             candidate.v[v] = DVec3::ZERO;
         }
         let stretch = traced.stretch_rms * 100.;
-        match marvelous_cloth::vbd::VbdSolver::new(
-            self.scene.garment.clone(),
-            Some(&body),
-            &candidate,
-        ) {
+        match fashioncraft::vbd::VbdSolver::new(self.scene.garment.clone(), Some(&body), &candidate)
+        {
             Ok(_) => {
                 self.scene.state = candidate;
                 self.issue.invalidate();

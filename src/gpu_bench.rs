@@ -1,7 +1,7 @@
 //! Opt-in renderer benchmark. Timestamp results exclude CPU preparation/readback.
 use crate::render::{Camera, DrawModel, Viewport};
 use eframe::{egui, egui_wgpu, wgpu};
-use marvelous_cloth::fitting::FittingScene;
+use fashioncraft::fitting::FittingScene;
 use std::{path::Path, sync::Arc, time::Instant};
 
 pub fn run(scene: &FittingScene, output: &Path) -> Result<(), Box<dyn std::error::Error>> {

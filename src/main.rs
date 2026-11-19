@@ -1,5 +1,5 @@
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     model::Scene,
     project::{self, Project},
     solver::ReferenceSolver,
@@ -13,12 +13,12 @@ use std::{
 #[cfg(feature = "desktop")]
 mod editor;
 #[cfg(feature = "desktop")]
-use marvelous_cloth::render;
+use fashioncraft::render;
 
 #[derive(Parser)]
 #[command(
     version,
-    about = "MARVELOUS CLOTH — CPU FEM reference and native pattern editor"
+    about = "FashionCraft — CPU FEM reference and native pattern editor"
 )]
 struct Args {
     /// Run CPU only. Does not initialize a window, graphics instance or GPU adapter.

@@ -2,8 +2,8 @@
 //! is sewn to. Deactivation is a document edit (one undo step); superimposing only moves the
 //! current 3D state, like resetting a piece.
 use super::*;
+use fashioncraft::{authoring, garment::transfer};
 use glam::DVec3;
-use marvelous_cloth::{authoring, garment::transfer};
 use std::collections::BTreeSet;
 
 impl Atelier {
@@ -11,7 +11,7 @@ impl Atelier {
     pub(super) fn activation_properties(
         &mut self,
         ui: &mut egui::Ui,
-        panel: &marvelous_cloth::garment::template::Panel,
+        panel: &fashioncraft::garment::template::Panel,
     ) {
         let ui_lang = self.prefs.language;
         let state = self
@@ -71,7 +71,7 @@ impl Atelier {
                         .selectable_label(strong, i18n::tr(ui_lang, "Strengthen"))
                         .on_hover_text(format!(
                             "Simulate the selected pieces {}× stiffer so they hold their shape while the garment settles; click again to return them to normal",
-                            marvelous_cloth::garment::template::STRENGTHEN_FACTOR
+                            fashioncraft::garment::template::STRENGTHEN_FACTOR
                         ))
                         .clicked()
                     {
@@ -302,7 +302,7 @@ impl Atelier {
             return;
         }
         if let Err(error) =
-            marvelous_cloth::vbd::VbdSolver::new(garment.clone(), Some(surface), &candidate)
+            fashioncraft::vbd::VbdSolver::new(garment.clone(), Some(surface), &candidate)
         {
             self.status =
                 format!("Not superimposed: the pieces would start intersecting ({error})");

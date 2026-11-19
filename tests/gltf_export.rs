@@ -1,8 +1,7 @@
 //! glTF export: a GLB or glTF that the glTF importer reads back with every triangle, the
 //! fabric's front faces as glTF's front faces, fabrics as materials with their embedded
 //! textures, and a take as morph targets driven by an animation of the weights.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_animation::Take,
     fitting::FittingProject,
@@ -13,6 +12,7 @@ use marvelous_cloth::{
     gltf_avatar,
     gltf_export::{self, GltfScene},
 };
+use glam::DVec3;
 use serde_json::Value;
 use std::path::PathBuf;
 

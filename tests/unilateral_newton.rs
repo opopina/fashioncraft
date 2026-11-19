@@ -1,11 +1,11 @@
-use marvelous_cloth::solver_lab::{
+use fashioncraft::solver_lab::{
     dense_contact::Row,
     unilateral_newton::{Problem, solve},
 };
 
 #[test]
 fn path_search_constraints_do_not_become_physical_reactions() {
-    use marvelous_cloth::solver_lab::unilateral_newton::{
+    use fashioncraft::solver_lab::unilateral_newton::{
         constrained_direction, constrained_direction_with_search_rows,
     };
     let make = || Problem {
@@ -45,7 +45,7 @@ fn path_search_constraints_do_not_become_physical_reactions() {
 
 #[test]
 fn natural_direction_linearizes_the_current_merit_branch() {
-    use marvelous_cloth::solver_lab::unilateral_newton::natural_direction;
+    use fashioncraft::solver_lab::unilateral_newton::natural_direction;
     for gap in [0.01, 0.00001] {
         let rows = [Row {
             jacobian: vec![1.],

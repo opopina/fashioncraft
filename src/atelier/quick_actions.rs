@@ -1,6 +1,6 @@
 //! Cursor-local commands backed by the same transactional authoring operations.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::shapes::{BooleanOp, MirrorAxis},
 };

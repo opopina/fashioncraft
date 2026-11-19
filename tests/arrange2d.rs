@@ -1,7 +1,6 @@
 //! Board arrangement of points and panels: transforms keep curves attached, alignment reads
 //! board coordinates (also on rotated panels), and panel moves never touch the material.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{
         self, Command,
         arrange2d::{self, AlignMode, Axis},
@@ -13,6 +12,7 @@ use marvelous_cloth::{
         shapes::Primitive,
     },
 };
+use glam::DVec2;
 
 fn square(size: f64) -> GarmentTemplate {
     authoring::apply(

@@ -1,8 +1,8 @@
 //! Board media: a reference image under the 2D board for tracing, and a PNG capture of the
 //! board as shown. Presentation only: neither touches the garment, the mesh or the history.
 use super::*;
+use fashioncraft::fitting::BoardBackground;
 use glam::DVec2;
-use marvelous_cloth::fitting::BoardBackground;
 use rfd::FileDialog;
 use std::path::PathBuf;
 
@@ -60,7 +60,7 @@ pub(super) fn background_corners(background: &BoardBackground, size: [usize; 2])
         DVec2::new(x, y + h),
     ]
     .map(|corner| {
-        centre + marvelous_cloth::authoring::rotate_2d(corner - centre, background.rotation_degrees)
+        centre + fashioncraft::authoring::rotate_2d(corner - centre, background.rotation_degrees)
     })
 }
 

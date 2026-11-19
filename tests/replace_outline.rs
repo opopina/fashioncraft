@@ -1,7 +1,6 @@
 //! Replace outline: a closed internal shape becomes the piece's outline, keeping in place what
 //! lies inside it and refusing whatever would be lost.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
     garment::{
@@ -14,6 +13,7 @@ use marvelous_cloth::{
         template::{Tack, TackPoint},
     },
 };
+use glam::DVec2;
 
 /// A lone 40 × 50 cm piece with a closed square shape in it, 10–30 cm across and 10–40 cm up.
 fn piece() -> GarmentTemplate {

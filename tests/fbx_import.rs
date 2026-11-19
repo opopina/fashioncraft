@@ -1,13 +1,13 @@
 //! FBX import: binary FBX 7.x meshes placed by their models, in metres and Y up — from our own
 //! FBX export and from a hand-made 7.5 file with compressed arrays, a metre unit and Z up.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     fbx_export::{self, FbxScene},
     fbx_import,
     fitting::FittingProject,
     garment::presets::GarmentKind,
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 fn mannequin() -> PathBuf {

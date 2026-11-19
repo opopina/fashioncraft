@@ -1,10 +1,10 @@
 //! Pieces traced on the body: a loop through picked points along the surface, the smaller
 //! side it encloses, flattened keeping lengths — exactly for developable patches.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     trace3d::{enclosed, flatten, surface_loop, trace},
 };
+use glam::{DVec2, DVec3};
 use std::path::PathBuf;
 
 /// A closed tube of `around` × `along` quads (two triangles each), radius `r`, length `h`,
@@ -213,7 +213,7 @@ fn a_piece_traced_on_the_mannequins_chest_lies_flat_with_its_lengths_kept() {
 
 #[test]
 fn a_traced_piece_is_drawn_and_starts_on_the_body_where_it_was_traced() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         fitting::FittingProject,
         garment::{meshing::MeshingSettings, presets::GarmentKind},

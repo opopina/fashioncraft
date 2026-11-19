@@ -1,7 +1,6 @@
 //! Internal line operations: carry an end on to the outline or the nearest line, and split a
 //! line in two at one of its inner points.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
         shapes::Primitive,
     },
 };
+use glam::DVec2;
 
 /// A 300 × 500 mm rectangle with a short horizontal line and a three-point line in it.
 fn sheet() -> GarmentTemplate {

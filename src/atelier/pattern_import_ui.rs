@@ -1,6 +1,6 @@
 //! DXF review modal. No garment mutation until the document adapter accepts Apply.
 use eframe::egui;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Edit,
     garment::{
         GarmentTemplate,
@@ -282,7 +282,7 @@ mod tests {
     use super::super::super::authoring_smoke::widget_harness::Harness;
     use super::super::{DocumentUi, prepare_pattern_edit};
     use super::*;
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::{FittingProject, FittingScene},
         garment::presets::GarmentKind,
     };

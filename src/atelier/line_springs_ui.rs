@@ -1,7 +1,7 @@
 //! Elastic and tape on the selected contour segment or internal line. An elastic gathers the
 //! line to a share of its cut length; a tape keeps it from stretching. One command each.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::template::{LineKind, LineSpring},
 };
@@ -76,7 +76,7 @@ impl Atelier {
     /// Fold of the selected internal line: on/off, its angle (180° flat) and strength.
     pub(super) fn line_fold_controls(&mut self, ui: &mut egui::Ui, panel: &str, line: &str) {
         let ui_lang = self.prefs.language;
-        use marvelous_cloth::garment::template::LineFold;
+        use fashioncraft::garment::template::LineFold;
         let current = self
             .project
             .template

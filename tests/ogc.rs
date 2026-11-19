@@ -1,5 +1,4 @@
-use glam::{DMat3, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::Jet,
     ogc::{
         OgcSettings, OgcWorld, geometry,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         topology::Topology,
     },
 };
+use glam::{DMat3, DVec3};
 fn settings(r: f64) -> OgcSettings {
     OgcSettings {
         radius: r,

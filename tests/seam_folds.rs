@@ -2,8 +2,7 @@
 //! triangle at the matching place on the other, with a rest angle. Two weightless squares
 //! sewn edge to edge meet at 90° when the seam is folded at 90°, and stay flat at 180°.
 //! Deleting a piece or a seam takes its simulation settings with it.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -13,6 +12,7 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 /// Two upright 10 cm squares side by side, the right side of the first sewn to the left side
@@ -23,7 +23,7 @@ fn sewn() -> GarmentTemplate {
     for (k, p) in t.panels.iter_mut().enumerate() {
         p.pins.clear();
         p.placement.rotation_degrees = DVec3::ZERO;
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.1,
             height: 0.1,
             nx: 5,

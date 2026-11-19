@@ -1,7 +1,6 @@
 //! Diamond dart: a diamond hole whose upper legs and lower legs are sewn together closes
 //! into a dart; its side corners come together when the cloth settles.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -12,6 +11,7 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::sync::Arc;
 
 fn sheet() -> GarmentTemplate {

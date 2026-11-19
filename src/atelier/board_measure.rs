@@ -65,7 +65,7 @@ impl Atelier {
             outline.extend(
                 points[..points.len() - 1]
                     .iter()
-                    .map(|uv| origin + marvelous_cloth::authoring::rotate_2d(*uv, angle)),
+                    .map(|uv| origin + fashioncraft::authoring::rotate_2d(*uv, angle)),
             );
         }
         (outline.len() >= 3).then_some(outline)
@@ -102,8 +102,7 @@ impl Atelier {
         );
         let centre = (lo + hi) * 0.5;
         Some((
-            self.board_origin(i)
-                + marvelous_cloth::authoring::rotate_2d(centre, self.board_angle(i)),
+            self.board_origin(i) + fashioncraft::authoring::rotate_2d(centre, self.board_angle(i)),
             i,
         ))
     }

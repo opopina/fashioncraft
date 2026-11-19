@@ -404,7 +404,7 @@ fn print_pattern_svg_validated(template: &GarmentTemplate) -> Result<String, Str
 }
 
 pub fn obj(garment: &CompiledGarment, state: &State) -> String {
-    let mut out = String::from("# MARVELOUS CLOTH garment; metres; UV=local rest pattern metres\n");
+    let mut out = String::from("# FashionCraft garment; metres; UV=local rest pattern metres\n");
     for p in &state.x {
         writeln!(out, "v {:.12} {:.12} {:.12}", p.x, p.y, p.z).unwrap();
     }

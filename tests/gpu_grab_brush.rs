@@ -1,11 +1,11 @@
 //! Optional brush-drag acceptance. Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     gpu_vbd::GpuVbd,
     vbd::{Grab, VbdSettings, VbdSolver, grab::surface_patch},
 };
+use glam::DVec3;
 mod common;
 
 #[test]

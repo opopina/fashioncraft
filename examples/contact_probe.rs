@@ -1,5 +1,5 @@
 //! Diagnose contact derivatives at a saved fitting state, CPU only.
-use marvelous_cloth::{contact::Collider, fitting::FittingProject};
+use fashioncraft::{contact::Collider, fitting::FittingProject};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).ok_or("Pass fitting-project.json")?;
     let s = FittingProject::load(std::path::Path::new(&path))?.compile()?;

@@ -2,8 +2,7 @@
 //! edits, splitting and rejoining a contour, corner/curve conversion and
 //! required boundary lengths. Property tests cover the failure mode that a
 //! contour is *almost* right.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate, curves,
@@ -14,6 +13,7 @@ use marvelous_cloth::{
         template::Panel,
     },
 };
+use glam::{DVec2, DVec3};
 use std::collections::BTreeSet;
 
 /// Deterministic xorshift, so every property test is reproducible.
@@ -1154,8 +1154,7 @@ fn one_action_is_one_undo_entry_for_every_command() {
 }
 
 mod numeric_construction_tests {
-    use glam::DVec2;
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, ConstructionRef, History, PointConstruction},
         garment::{
             GarmentTemplate,
@@ -1163,6 +1162,7 @@ mod numeric_construction_tests {
             presets::{self, GarmentKind},
         },
     };
+    use glam::DVec2;
 
     fn fixture() -> GarmentTemplate {
         let mut t = authoring::apply(

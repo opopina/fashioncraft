@@ -1,5 +1,5 @@
+use fashioncraft::authoring::constructions::{ConstructionError as Error, Line};
 use glam::DVec2;
-use marvelous_cloth::authoring::constructions::{ConstructionError as Error, Line};
 
 fn near(a: DVec2, b: DVec2) {
     assert!((a - b).length() < 1e-10, "{a:?} != {b:?}");

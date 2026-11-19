@@ -1,4 +1,4 @@
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -71,7 +71,7 @@ fn optics_are_validated_and_do_not_change_mechanics_or_legacy_bytes() {
 
 #[test]
 fn cached_drape_reopens_after_appearance_change_with_identical_signature() {
-    use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+    use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
     let dir = tempfile::tempdir().unwrap();
     let avatar = dir.path().join("avatar.obj");
     std::fs::write(&avatar, "v 10 0 -10\nv 11 0 -10\nv 10 1 -10\nf 1 2 3\n").unwrap();
@@ -104,7 +104,7 @@ fn cached_drape_reopens_after_appearance_change_with_identical_signature() {
 
 #[test]
 fn clipboard_keeps_optical_identity_and_material_split_inherits_it() {
-    use marvelous_cloth::authoring::clipboard::PatternClipboard;
+    use fashioncraft::authoring::clipboard::PatternClipboard;
     let source = GarmentTemplate::two_panel_demo();
     let id = source.fabrics[0].id.clone();
     let colored = authoring::apply(
@@ -164,8 +164,8 @@ fn clipboard_keeps_optical_identity_and_material_split_inherits_it() {
 
 #[test]
 fn fabric_textures_are_validated_and_turn_with_their_angle() {
+    use fashioncraft::garment::appearance::{FabricAppearance, FabricTexture};
     use glam::DVec2;
-    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
     let texture = FabricTexture {
         asset_id: "image_1".into(),
         width_mm: 40.,
@@ -211,7 +211,7 @@ fn fabric_textures_are_validated_and_turn_with_their_angle() {
 
 #[test]
 fn look_thickness_is_bounded_and_absent_by_default() {
-    use marvelous_cloth::garment::appearance::{FabricAppearance, MAX_RENDER_THICKNESS_MM};
+    use fashioncraft::garment::appearance::{FabricAppearance, MAX_RENDER_THICKNESS_MM};
     let mut a = FabricAppearance {
         render_thickness_mm: 3.,
         ..Default::default()

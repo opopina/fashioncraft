@@ -1,7 +1,7 @@
 //! The 2D board's reference image travels with the project like the avatar does: saving copies
 //! it into the `.assets` folder under a content hash, loading resolves it, and projects without
 //! one are written exactly as before.
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{BoardBackground, FittingProject},
     garment::presets::GarmentKind,
 };

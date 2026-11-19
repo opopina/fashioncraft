@@ -1,13 +1,13 @@
 //! CPU replay: contact churn/force jumps at motion hotspots and an interleaved
 //! scalar/SIMD detector comparison. No simulation, GPU, or document writes.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     model::State,
     ogc::{ContactSet, CpuContactKernel},
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
@@ -36,7 +36,7 @@ fn states(path: &Path) -> std::io::Result<impl Iterator<Item = Result<State, Str
         .map(|s| serde_json::from_str(&s.map_err(|e| e.to_string())?).map_err(|e| e.to_string())))
 }
 fn equal(a: &ContactSet, b: &ContactSet) -> bool {
-    let key = |c: &marvelous_cloth::ogc::potential::Contact| {
+    let key = |c: &fashioncraft::ogc::potential::Contact| {
         (c.kind, c.vertices, c.count, c.mollifier_epsilon.to_bits())
     };
     a.contacts.iter().map(key).eq(b.contacts.iter().map(key))

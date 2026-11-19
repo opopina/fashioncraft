@@ -1,13 +1,13 @@
 //! CPU-only settling experiments. No sleep, velocity clamp or collision bypass.
 //! A quiet observation is not a proof of equilibrium; see docs/settling-zoo.md.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{GarmentTemplate, template::Corner},
     model::State,
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{collections::VecDeque, fs, io::Write, path::Path, sync::Arc};
@@ -192,8 +192,8 @@ struct Observation {
     physical_force_rms_n: f64,
     fresh_contact_force_jump_rms_n: f64,
     contact_refresh_j: f64,
-    audit: marvelous_cloth::vbd::audit::StepEnergy,
-    metrics: marvelous_cloth::vbd::VbdMetrics,
+    audit: fashioncraft::vbd::audit::StepEnergy,
+    metrics: fashioncraft::vbd::VbdMetrics,
 }
 
 fn attachment(state: &State, vertices: [usize; 3]) -> DVec3 {

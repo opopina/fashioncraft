@@ -1,7 +1,6 @@
 //! A moving obstacle: the avatar can be moved while the cloth rests on it. Moved in steps
 //! smaller than the contact radius, it pushes the cloth along instead of passing through it.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::sync::Arc;
 
 #[test]

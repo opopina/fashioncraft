@@ -1,7 +1,7 @@
 //! Mesh import: STL and PLY in every encoding, scaled from their size when they declare no
 //! unit, and COLLADA scenes with their units, up axis, node transforms and skins.
+use fashioncraft::{avatar::SurfaceMesh, avatar_import::Candidate, mesh_import};
 use glam::DVec3;
-use marvelous_cloth::{avatar::SurfaceMesh, avatar_import::Candidate, mesh_import};
 
 /// A tetrahedron `size` units across, as loose triangles.
 fn tetrahedron(size: f32) -> Vec<[[f32; 3]; 3]> {
@@ -216,7 +216,7 @@ fn the_avatar_importer_takes_stl_ply_and_collada_files() {
 
 #[test]
 fn props_load_in_their_own_units_and_travel_with_the_project() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::{FittingProject, SceneObject},
         garment::presets::GarmentKind,
     };

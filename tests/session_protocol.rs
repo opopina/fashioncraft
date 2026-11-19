@@ -1,4 +1,4 @@
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     session_protocol::{MAX_MESSAGE_BYTES, PROTOCOL, Session, serve},
 };
@@ -452,7 +452,7 @@ fn cli_interactive_pipes_preserve_transactions_and_recover_framing() {
 
 #[test]
 fn mechanical_fabric_commands_preserve_transaction_and_shared_material_rules() {
-    use marvelous_cloth::authoring::{self, Command};
+    use fashioncraft::authoring::{self, Command};
     let mut session = Session::new().unwrap();
     let initial = open(&mut session);
     let hello = request(&mut session, json!({"op":"hello"}));

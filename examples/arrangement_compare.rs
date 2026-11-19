@@ -1,9 +1,9 @@
 //! Local comparison helper: arrange a 0.4 × 0.6 m panel on an anchor and write its sampled points as OBJ.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::arrangement::{arrange, load_sidecar},
 };
+use glam::{DVec2, DVec3};
 use std::{fmt::Write, path::Path};
 
 fn main() -> Result<(), String> {

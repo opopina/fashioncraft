@@ -1,13 +1,13 @@
 //! BVH import: a small skeleton written here (T pose at rest, the left arm lowered over one
 //! second, the hips turned) is read and its motion retargeted onto the mannequin's rig, whose
 //! arms rest lowered: the avatar's bones point where the file's do.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_rig::Rig,
     bvh_import::{parse, retarget},
     garment::arrangement::load_sidecar,
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 /// A T-pose skeleton facing +Z, centimetres, with `frames` lines of channel values.
@@ -180,7 +180,7 @@ fn a_bvh_motion_lands_on_the_avatar() {
     let animation = retarget(&bvh, &rig).unwrap();
     assert_eq!(animation.keys.len(), 31);
     assert!((animation.keys.last().unwrap().time_s - 1.).abs() < 1e-9);
-    let bone = |pose: &marvelous_cloth::avatar_rig::Pose, name: &str| {
+    let bone = |pose: &fashioncraft::avatar_rig::Pose, name: &str| {
         let k = rig.bone(name).unwrap();
         let (head, tail) = rig.posed_bones(pose)[k];
         (tail - head).normalize()

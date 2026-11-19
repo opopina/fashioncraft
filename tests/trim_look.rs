@@ -1,14 +1,14 @@
 //! The 3D look of trims: coloured triangles lying on a piece's front face, a little off the
 //! cloth so they draw over it. A button is a disc with four holes centred on its point; a
 //! buttonhole, zipper and topstitch follow their material paths.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     GarmentTemplate,
     trims::{TRIM_LIFT_M, Trim, TrimKind, trim_triangles},
 };
+use glam::{DVec2, DVec3};
 
 /// The demo's front panel (upright, facing ±z) with `kind` on it.
-fn with(kind: TrimKind) -> (marvelous_cloth::garment::CompiledGarment, Vec<Trim>) {
+fn with(kind: TrimKind) -> (fashioncraft::garment::CompiledGarment, Vec<Trim>) {
     let mut t = GarmentTemplate::two_panel_demo();
     t.panels.truncate(1);
     t.seams.clear();
@@ -25,7 +25,7 @@ fn with(kind: TrimKind) -> (marvelous_cloth::garment::CompiledGarment, Vec<Trim>
 }
 
 /// The front normal of the flat panel: away from its faces' winding normal.
-fn front(g: &marvelous_cloth::garment::CompiledGarment) -> (DVec3, DVec3) {
+fn front(g: &fashioncraft::garment::CompiledGarment) -> (DVec3, DVec3) {
     let x = &g.initial_state.x;
     let [a, b, c] = g.mesh.triangles[0].vertices;
     (x[a], -(x[b] - x[a]).cross(x[c] - x[a]).normalize())

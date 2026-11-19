@@ -5,7 +5,7 @@
 //! to where it ends. Nothing else shown on the timeline touches the live drape: closing the
 //! editor shows it again.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_animation::{self, AvatarAnimation, Recorder, Take},
     avatar_rig::Rig,
@@ -34,7 +34,7 @@ pub(super) struct AnimationUi {
     rig: Option<(String, Arc<Rig>, Arc<SurfaceMesh>)>,
     props: Option<(
         Vec<SceneObject>,
-        Option<Arc<marvelous_cloth::fitting::MovingProps>>,
+        Option<Arc<fashioncraft::fitting::MovingProps>>,
     )>,
     /// The avatar posed at a timeline time, keyed by that time and the animation.
     posed: Option<(u64, AvatarAnimation, Arc<SurfaceMesh>)>,
@@ -131,11 +131,11 @@ impl Atelier {
         };
         let text =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let bvh = marvelous_cloth::bvh_import::parse(&text)?;
+        let bvh = fashioncraft::bvh_import::parse(&text)?;
         let avatar = self.animated_avatar()?;
         let rest = SurfaceMesh::load_obj(&self.project.avatar_path)?;
         let rig = avatar.rig(&rest)?;
-        let imported = marvelous_cloth::bvh_import::retarget(&bvh, &rig)?;
+        let imported = fashioncraft::bvh_import::retarget(&bvh, &rig)?;
         let keys = imported.keys.len();
         let seconds = imported.keys.last().map_or(0., |k| k.time_s);
         let animation = match self.project.avatar_animation.take() {
@@ -252,8 +252,7 @@ impl Atelier {
                 .as_ref()
                 .is_none_or(|(objects, _)| *objects != self.project.scene_objects)
             {
-                let props =
-                    marvelous_cloth::fitting::MovingProps::new(&self.project.scene_objects)?;
+                let props = fashioncraft::fitting::MovingProps::new(&self.project.scene_objects)?;
                 state.props = Some((self.project.scene_objects.clone(), props.map(Arc::new)));
             }
             let (_, rig, rest) = state.rig.as_ref().unwrap();
@@ -328,11 +327,11 @@ impl Atelier {
             .stack_size(8 * 1024 * 1024)
             .spawn(move || {
                 let gpu =
-                    gpu.map(|(device, queue)| marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue));
+                    gpu.map(|(device, queue)| fashioncraft::gpu_vbd::GpuVbd::new(device, queue));
                 let step =
-                    |solver: &mut marvelous_cloth::vbd::VbdSolver,
-                     state: &mut marvelous_cloth::model::State,
-                     step: &marvelous_cloth::vbd::VbdSettings| match &gpu {
+                    |solver: &mut fashioncraft::vbd::VbdSolver,
+                     state: &mut fashioncraft::model::State,
+                     step: &fashioncraft::vbd::VbdSettings| match &gpu {
                         Some(gpu) => gpu.step(solver, state, step, None).map(|_| ()),
                         None => solver.step(state, step, None).map(|_| ()),
                     };
@@ -405,7 +404,7 @@ impl Atelier {
         let take = recorder.into_take();
         let frames = take.frames.len();
         if generation == self.generation && state.x.len() == self.scene.state.x.len() {
-            match marvelous_cloth::avatar::MeshCollider::with_clearance(
+            match fashioncraft::avatar::MeshCollider::with_clearance(
                 Arc::new(obstacle),
                 self.project.contact_stiffness,
                 self.project.contact_clearance,
@@ -489,17 +488,17 @@ impl Atelier {
     }
 
     /// The take to save with the project: its point cache and frame rate.
-    pub(super) fn take_to_save(&self) -> Option<marvelous_cloth::fitting::AnimationTake> {
+    pub(super) fn take_to_save(&self) -> Option<fashioncraft::fitting::AnimationTake> {
         let take = self.current_take()?;
         let path = self.authoring.animation.take_file.clone()?;
-        Some(marvelous_cloth::fitting::AnimationTake {
+        Some(fashioncraft::fitting::AnimationTake {
             path,
             fps: take.fps,
         })
     }
 
     /// Read back a take saved with the project, when it still fits the cloth on show.
-    pub(super) fn restore_take(&mut self, saved: Option<marvelous_cloth::fitting::AnimationTake>) {
+    pub(super) fn restore_take(&mut self, saved: Option<fashioncraft::fitting::AnimationTake>) {
         let a = &mut self.authoring.animation;
         a.take = None;
         a.take_file = None;
@@ -712,7 +711,7 @@ impl Atelier {
                 {
                     action = Some(|s, _| {
                         let time = s.authoring.animation.time;
-                        let wind = s.settings.wind.clone().unwrap_or(marvelous_cloth::vbd::Wind {
+                        let wind = s.settings.wind.clone().unwrap_or(fashioncraft::vbd::Wind {
                             velocity: glam::DVec3::ZERO,
                             ..Default::default()
                         });

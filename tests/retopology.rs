@@ -1,13 +1,13 @@
 //! Retopology: each piece remeshed as quads of a chosen size along its grain, with triangles
 //! only where the grid meets the outline, lying on the drape.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::presets::GarmentKind,
     gltf_export::front_triangles,
     obj_export::{self, ObjOptions, ObjScene},
     retopology::retopologize,
 };
+use glam::{DVec2, DVec3};
 use std::{collections::HashMap, path::PathBuf};
 
 fn shirt() -> FittingProject {

@@ -1,8 +1,7 @@
 //! Coupled two-layer cloth research. Hard VF/EE reactions on both surfaces,
 //! original OGC movement bounds, and conservative swept-clearance certificates.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     ogc::{OgcSettings, feature_hierarchy::Pair},
     solver_lab::{
         contact_qp::Settings,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
     },
     vbd::VbdSolver,
 };
+use glam::DVec3;
 use serde_json::json;
 use std::{fs, path::PathBuf, sync::Arc, time::Instant};
 #[path = "support/discrete_newton.rs"]

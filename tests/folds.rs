@@ -3,11 +3,11 @@
 //! angles; at 180° it stays flat; at 270° it folds the other way.
 #[path = "support/folds.rs"]
 mod support;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::template::LineFold,
 };
+use glam::DVec3;
 use support::{creased, folded, halves, settle};
 
 #[test]

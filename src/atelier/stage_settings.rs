@@ -105,7 +105,7 @@ pub(super) fn execute(
         Action::Save => {
             let value = Presentation::capture(camera, appearance)?;
             let bytes = serde_json::to_vec_pretty(&value).map_err(|e| e.to_string())?;
-            marvelous_cloth::document::atomic_write(path, &bytes)?;
+            fashioncraft::document::atomic_write(path, &bytes)?;
             Ok(format!("Presentation saved to {}", path.display()))
         }
         Action::Restore => {

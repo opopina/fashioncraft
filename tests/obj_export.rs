@@ -1,8 +1,7 @@
 //! OBJ export: the garment with its material library in the chosen units and up axis, thick
 //! or thin, one object or one per piece, packed or real-size texture coordinates, with the
 //! avatar; and MDD point caches of a take.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_animation::Take,
     fitting::FittingProject,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
     },
     obj_export::{self, ObjOptions, ObjScene, Units},
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 fn mannequin() -> PathBuf {
@@ -271,7 +271,7 @@ fn a_baked_look_is_one_material_with_its_image_and_coordinates() {
     let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
     let scene = project.compile().unwrap();
     let atlas =
-        marvelous_cloth::bake::bake(&project.template, &scene.garment, &Default::default(), 64)
+        fashioncraft::bake::bake(&project.template, &scene.garment, &Default::default(), 64)
             .unwrap();
     let export = ObjScene {
         template: &project.template,
@@ -310,8 +310,7 @@ fn a_baked_look_is_one_material_with_its_image_and_coordinates() {
 fn quads_join_triangle_pairs_without_losing_or_turning_any() {
     let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
     let scene = project.compile().unwrap();
-    let triangles =
-        marvelous_cloth::gltf_export::front_triangles(&project.template, &scene.garment);
+    let triangles = fashioncraft::gltf_export::front_triangles(&project.template, &scene.garment);
     let x = &scene.state.x;
     let piece = &scene.garment.panels[0];
     let tris = &triangles[piece.triangles.clone()];

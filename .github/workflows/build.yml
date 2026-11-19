@@ -97,7 +97,7 @@ jobs:
         if: steps.scope.outputs.mode != 'metadata'
         run: >
           cargo build --locked --release -j 2 --features desktop
-          --bin cloth-fit --bin marvelous-cloth --bin cloth-template --bin cloth-session
+          --bin cloth-fit --bin fashioncraft-reference --bin cloth-template --bin cloth-session
 
       # A binary that builds but cannot read a template is not a working build.
       - name: Validate a shipped template with the built binary
@@ -115,7 +115,7 @@ jobs:
           mkdir -p dist
           suffix=""
           if [ "${{ runner.os }}" = "Windows" ]; then suffix=".exe"; fi
-          for bin in cloth-fit marvelous-cloth cloth-template cloth-session; do
+          for bin in cloth-fit fashioncraft-reference cloth-template cloth-session; do
             cp "target/release/${bin}${suffix}" "dist/${bin}${suffix}"
           done
           mkdir -p dist/assets dist/examples

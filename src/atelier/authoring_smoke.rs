@@ -23,8 +23,8 @@ struct SvgProbe {
     tick: usize,
     origin: Option<egui::Pos2>,
     fixture: Option<std::path::PathBuf>,
-    before: Option<(serde_json::Value, marvelous_cloth::model::State, u64, bool)>,
-    installed: Option<(serde_json::Value, marvelous_cloth::model::State)>,
+    before: Option<(serde_json::Value, fashioncraft::model::State, u64, bool)>,
+    installed: Option<(serde_json::Value, fashioncraft::model::State)>,
     worker_time: Option<f64>,
     failure: Option<String>,
     observations: Vec<serde_json::Value>,
@@ -56,7 +56,7 @@ pub(super) fn svg_widget(ui: &egui::Ui, response: &egui::Response, name: &str) {
     }
 }
 
-fn same_svg_state(a: &marvelous_cloth::model::State, b: &marvelous_cloth::model::State) -> bool {
+fn same_svg_state(a: &fashioncraft::model::State, b: &fashioncraft::model::State) -> bool {
     a.x == b.x && a.v == b.v && a.time == b.time
 }
 
@@ -417,9 +417,9 @@ pub(super) struct Smoke {
     redo_observed: bool,
     mixed_sewing: bool,
     translation_before: Option<glam::DVec3>,
-    shape_before: Option<marvelous_cloth::garment::polygon::PolygonPattern>,
+    shape_before: Option<fashioncraft::garment::polygon::PolygonPattern>,
     layout_before: Option<(
-        marvelous_cloth::garment::template::GarmentTemplate,
+        fashioncraft::garment::template::GarmentTemplate,
         Vec<glam::DVec3>,
     )>,
     motion_start: Option<(f64, Vec<glam::DVec3>)>,
@@ -651,7 +651,7 @@ impl Smoke {
 }
 impl Atelier {
     fn workflow_smoke_tick(&mut self) {
-        use marvelous_cloth::{authoring::Command, garment::shapes::Primitive};
+        use fashioncraft::{authoring::Command, garment::shapes::Primitive};
         let Some(mut smoke) = self.authoring_smoke.take() else {
             return;
         };
@@ -730,7 +730,7 @@ impl Atelier {
         self.authoring_smoke = Some(smoke);
     }
     fn panel_smoke_tick(&mut self) {
-        use marvelous_cloth::{
+        use fashioncraft::{
             authoring::Command,
             garment::shapes::{MirrorAxis, Primitive},
         };
@@ -814,7 +814,7 @@ impl Atelier {
                     .find(|p| p.id == l.b)
                     .unwrap();
                 let mut poly = a.polygon.clone().unwrap();
-                marvelous_cloth::garment::shapes::mirror(
+                fashioncraft::garment::shapes::mirror(
                     &mut poly,
                     MirrorAxis::X,
                     glam::DVec2::new(a.pattern.width, a.pattern.height),
@@ -824,7 +824,7 @@ impl Atelier {
                     .zip(&b.polygon.as_ref().unwrap().points)
                     .all(|(a, b)| a.distance(*b) < 1e-12)
                     && a.polygon.as_ref().unwrap().points
-                        != marvelous_cloth::garment::shapes::primitive(
+                        != fashioncraft::garment::shapes::primitive(
                             Primitive::Rectangle,
                             glam::DVec2::splat(0.4),
                             180.,
@@ -851,7 +851,7 @@ impl Atelier {
         self.authoring_smoke = Some(smoke);
     }
     fn quick_smoke_tick(&mut self) {
-        use marvelous_cloth::{authoring::Command, garment::shapes::Primitive};
+        use fashioncraft::{authoring::Command, garment::shapes::Primitive};
         let Some(mut smoke) = self.authoring_smoke.take() else {
             return;
         };
@@ -1074,7 +1074,7 @@ impl Atelier {
         if key == Some("rotate_2d") && !smoke.layout_preserved_physics {
             smoke.layout_preserved_physics = smoke.layout_before.as_ref().is_some_and(|(t, x)| {
                 t.panels[0].layout_2d != panel.layout_2d
-                    && marvelous_cloth::authoring::same_physics(t, &self.project.template)
+                    && fashioncraft::authoring::same_physics(t, &self.project.template)
                     && x == &self.scene.state.x
             });
         }
@@ -1082,7 +1082,7 @@ impl Atelier {
             smoke.rotation_2d_preserved_physics =
                 smoke.layout_before.as_ref().is_some_and(|(t, x)| {
                     panel.layout_rotation_degrees.abs() > 1.
-                        && marvelous_cloth::authoring::same_physics(t, &self.project.template)
+                        && fashioncraft::authoring::same_physics(t, &self.project.template)
                         && x == &self.scene.state.x
                 });
         }
@@ -1206,7 +1206,7 @@ enum AppearanceCapture {
 // Capture fixture only: the public flat panel has a +Z normal. Put the
 // orthographic eye on the fixed key light's reflected direction so roughness
 // changes are visible instead of rounding to the same 8-bit front-view color.
-fn appearance_capture_camera(camera: &mut marvelous_cloth::render::Camera) {
+fn appearance_capture_camera(camera: &mut fashioncraft::render::Camera) {
     let direction = glam::Vec3::new(-0.4, -0.8, 0.6).normalize();
     camera.yaw = direction.x.atan2(direction.z);
     camera.pitch = direction.y.asin();
@@ -1229,10 +1229,10 @@ struct AppearanceProbe {
     text_focused: bool,
     origin: Option<egui::Pos2>,
     baseline: Option<(Vec<glam::DVec3>, Vec<glam::DVec3>, f64, u64)>,
-    garment: Option<std::sync::Arc<marvelous_cloth::garment::CompiledGarment>>,
+    garment: Option<std::sync::Arc<fashioncraft::garment::CompiledGarment>>,
     fabric: String,
-    original: Option<marvelous_cloth::garment::appearance::FabricAppearance>,
-    changed: Option<marvelous_cloth::garment::appearance::FabricAppearance>,
+    original: Option<fashioncraft::garment::appearance::FabricAppearance>,
+    changed: Option<fashioncraft::garment::appearance::FabricAppearance>,
     observations: Vec<serde_json::Value>,
 }
 impl AppearanceProbe {
@@ -1614,7 +1614,7 @@ mod appearance_probe_tests {
     }
     #[test]
     fn appearance_capture_camera_exposes_the_fixed_light_reflection() {
-        let mut camera = marvelous_cloth::render::Camera::default();
+        let mut camera = fashioncraft::render::Camera::default();
         let target = camera.target;
         let distance = camera.distance;
         appearance_capture_camera(&mut camera);

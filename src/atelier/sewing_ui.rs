@@ -1,6 +1,6 @@
 //! Shared sewing draft for 2D/3D: ranges and ordered sides remain material references.
 use super::{authoring_ui::Tool, board::same_edge, *};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::seam::{BoundaryCurve, BoundaryRef, audit},
 };
@@ -25,7 +25,7 @@ enum AuditAction {
 }
 
 impl SewingAuditUi {
-    fn refresh(&mut self, template: &marvelous_cloth::garment::GarmentTemplate, generation: u64) {
+    fn refresh(&mut self, template: &fashioncraft::garment::GarmentTemplate, generation: u64) {
         // Replace a previous successful report even when compilation fails.
         self.result = Some(audit::report(template));
         self.generation = Some(generation);
@@ -147,7 +147,7 @@ pub(super) struct SewingDraft {
     pub start: Option<(BoundaryRef, f64)>,
 }
 impl SewingDraft {
-    fn from_spec(seam: &marvelous_cloth::garment::seam::SeamSpec) -> Self {
+    fn from_spec(seam: &fashioncraft::garment::seam::SeamSpec) -> Self {
         Self {
             chain_mode: !seam.a_tail.is_empty() || !seam.b_tail.is_empty(),
             sides: [
@@ -541,7 +541,7 @@ impl Atelier {
                 Some(self.authoring.board.screen(
                     rect,
                     self.board_origin(i)
-                        + marvelous_cloth::authoring::rotate_2d(
+                        + fashioncraft::authoring::rotate_2d(
                             self.scene.garment.mesh.uv[id],
                             self.board_angle(i),
                         ),
@@ -640,7 +640,7 @@ impl Atelier {
                     Some(self.authoring.board.screen(
                         rect,
                         self.board_origin(i)
-                            + marvelous_cloth::authoring::rotate_2d(uv, self.board_angle(i)),
+                            + fashioncraft::authoring::rotate_2d(uv, self.board_angle(i)),
                     ))
                 }
             };
@@ -804,7 +804,7 @@ impl Atelier {
     /// Sewing › Auto sewing: sew the unsewn segments that pair up on the pieces as they are
     /// laid around the body; openings the body passes through stay open.
     pub(super) fn auto_sew(&mut self) -> Result<(), String> {
-        let found = marvelous_cloth::garment::auto_sew::auto_sew(
+        let found = fashioncraft::garment::auto_sew::auto_sew(
             &self.project.template,
             &self.scene.garment,
             &self.scene.state.x,
@@ -1095,14 +1095,14 @@ mod tests {
     fn named_widgets_audit_refresh_inspection_staleness_and_failure() {
         use super::super::authoring_smoke::widget_harness::Harness;
         struct Case {
-            template: marvelous_cloth::garment::GarmentTemplate,
+            template: fashioncraft::garment::GarmentTemplate,
             audit: SewingAuditUi,
             draft: SewingDraft,
             generation: u64,
             refreshes: usize,
         }
         let mut case = Case {
-            template: marvelous_cloth::garment::GarmentTemplate::two_panel_demo(),
+            template: fashioncraft::garment::GarmentTemplate::two_panel_demo(),
             audit: Default::default(),
             draft: Default::default(),
             generation: 1,
@@ -1169,7 +1169,7 @@ mod tests {
 
     #[test]
     fn sewing_audit_snapshot_preserves_document_and_replaces_success_on_error() {
-        let mut template = marvelous_cloth::garment::GarmentTemplate::two_panel_demo();
+        let mut template = fashioncraft::garment::GarmentTemplate::two_panel_demo();
         let before = serde_json::to_string(&template).unwrap();
         let mut cache = SewingAuditUi::default();
         assert!(!cache.is_current(0));
@@ -1186,7 +1186,7 @@ mod tests {
 
     #[test]
     fn sewing_audit_keeps_local_easing_even_with_equal_total_lengths() {
-        let mut template = marvelous_cloth::garment::GarmentTemplate::two_panel_demo();
+        let mut template = fashioncraft::garment::GarmentTemplate::two_panel_demo();
         template.seams[0].notches = vec![[0.25, 0.75]];
         let mut cache = SewingAuditUi::default();
         cache.refresh(&template, 1);

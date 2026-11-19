@@ -1,4 +1,4 @@
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     meshing::{self, MeshingSettings},
     presets::{self, GarmentKind},
 };

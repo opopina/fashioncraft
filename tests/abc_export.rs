@@ -1,8 +1,7 @@
 //! Alembic export: an Ogawa file whose tree holds the garment as a polygon mesh with its
 //! points at every frame of a take, its faces wound clockwise, its texture coordinates, and
 //! the avatar; read back here with a small Ogawa reader.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     abc_export::{self, AbcScene},
     avatar::SurfaceMesh,
     avatar_animation::Take,
@@ -10,6 +9,7 @@ use marvelous_cloth::{
     garment::presets::GarmentKind,
     gltf_export::front_triangles,
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 const DATA: u64 = 1 << 63;

@@ -5,7 +5,7 @@ use super::{
     gizmo::project_matrix,
     *,
 };
-use marvelous_cloth::garment::seam::{BoundaryRef, Side};
+use fashioncraft::garment::seam::{BoundaryRef, Side};
 
 impl Atelier {
     pub(super) fn edge_interaction(&mut self, response: &egui::Response, rect: egui::Rect) {

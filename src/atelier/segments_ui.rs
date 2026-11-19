@@ -2,14 +2,14 @@
 //! with another segment, match another piece up against it, or move it along its normal.
 //! "Match" actions wait for a click on the second segment; Esc cancels. One command each.
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{
         self, Command,
         arrange2d::{self, SegmentEnd},
     },
     garment::{polygon::PolygonPattern, template::Panel},
 };
+use glam::DVec2;
 
 /// What the next click on a contour segment does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

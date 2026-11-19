@@ -3,8 +3,8 @@ use super::{
     authoring_ui::{Tool, segment_distance},
     *,
 };
+use fashioncraft::{authoring, garment::template::Placement};
 use glam::{DQuat, DVec3, EulerRot};
-use marvelous_cloth::{authoring, garment::template::Placement};
 
 pub(super) struct Drag {
     axis: DVec3,

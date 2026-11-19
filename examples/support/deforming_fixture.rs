@@ -1,6 +1,6 @@
 //! Shared synthetic fixture; no private garment data.
+use fashioncraft::{avatar::SurfaceMesh, garment::GarmentTemplate, model::Pattern};
 use glam::DVec3;
-use marvelous_cloth::{avatar::SurfaceMesh, garment::GarmentTemplate, model::Pattern};
 pub const GAP: f64 = 0.001;
 pub fn template(ease: Option<f64>, fold_degrees: f64) -> Result<GarmentTemplate, String> {
     if !fold_degrees.is_finite()

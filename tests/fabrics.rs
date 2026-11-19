@@ -1,11 +1,11 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{Command, apply},
     energy,
     fabrics::{self, PRESETS, REFERENCE_TRACTION},
     garment::GarmentTemplate,
     model::{Pattern, Scene},
 };
+use glam::DVec3;
 
 #[test]
 fn preset_stretch_matches_actual_membrane_force_and_surface_mass() {

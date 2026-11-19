@@ -16,7 +16,7 @@ cargo test --locked --no-default-features -j 4
 cargo clippy --locked --all-targets -j 4 -- -D warnings
 cargo fmt --all -- --check
 .\scripts\bench-cpu.ps1 -Steps 120 -Resolution 10 -Threads 4
-.\target\release\marvelous-cloth.exe --headless --project output\cpu-suite\sphere\project.json --steps 1 --output output\reload-check
+.\target\release\fashioncraft-reference.exe --headless --project output\cpu-suite\sphere\project.json --steps 1 --output output\reload-check
 cargo tree --locked --no-default-features -e normal --prefix none
 ```
 
@@ -60,7 +60,7 @@ For the sphere: maximum vertex penetration over the trajectory **0.750330 mm**, 
 
 Bending energy was algebraically reformulated using differences of unit normals to avoid negative values around `1e-18 J` from cancellation in `1-cos(theta)` at rest. Tests and all four scenes were rerun afterward; the table is from the corrected version.
 
-Outputs include OBJ/UV, JSON projects, summaries and complete per-step metric series. The desktop binary was built at `target/debug/marvelous-cloth.exe`; the CPU-only binary at `target/release/marvelous-cloth.exe`.
+Outputs include OBJ/UV, JSON projects, summaries and complete per-step metric series. The desktop binary was built at `target/debug/fashioncraft-reference.exe`; the CPU-only binary at `target/release/fashioncraft-reference.exe`.
 
 ## What remained unvalidated at that stage
 

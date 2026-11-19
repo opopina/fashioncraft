@@ -519,7 +519,7 @@ pub fn write(scene: &AbcScene, path: &Path) -> Result<AbcSummary, String> {
     let version = w.data(&OGAWA_FILE_VERSION.to_le_bytes());
     let library = w.data(&LIBRARY_VERSION.to_le_bytes());
     let archive_meta = format!(
-        "FramesPerTimeUnit={fps:.6};_ai_Application=ClothCraft;_ai_Description=ClothCraft garment"
+        "FramesPerTimeUnit={fps:.6};_ai_Application=FashionCraft;_ai_Description=FashionCraft garment"
     );
     let archive_meta = w.data(archive_meta.as_bytes());
     let mut samplings = vec![];

@@ -65,7 +65,7 @@ pub(super) struct Preferences {
     /// Language of the menus and tool rows.
     pub(super) language: super::i18n::Language,
     /// Poses the user saved, by name, offered in the pose window on every project.
-    pub(super) user_poses: std::collections::BTreeMap<String, marvelous_cloth::avatar_rig::Pose>,
+    pub(super) user_poses: std::collections::BTreeMap<String, fashioncraft::avatar_rig::Pose>,
 }
 
 /// Most poses the user can keep, and the longest name one may have.
@@ -83,7 +83,7 @@ impl Default for Preferences {
             wireframe: false,
             pattern_display: Default::default(),
             garment_display: Default::default(),
-            camera_fov_degrees: marvelous_cloth::render::DEFAULT_FOV_DEGREES,
+            camera_fov_degrees: fashioncraft::render::DEFAULT_FOV_DEGREES,
             dt: DEFAULT_DT,
             iterations: DEFAULT_ITERATIONS,
             keymap: Default::default(),
@@ -101,11 +101,11 @@ impl Preferences {
         self.workspace.sanitize();
         self.viewport.sanitize();
         self.garment_display.sanitize();
-        let fov = marvelous_cloth::render::FOV_RANGE_DEGREES;
+        let fov = fashioncraft::render::FOV_RANGE_DEGREES;
         self.camera_fov_degrees = if self.camera_fov_degrees.is_finite() {
             self.camera_fov_degrees.clamp(*fov.start(), *fov.end())
         } else {
-            marvelous_cloth::render::DEFAULT_FOV_DEGREES
+            fashioncraft::render::DEFAULT_FOV_DEGREES
         };
         self.snap_mm = finite_or(self.snap_mm, DEFAULT_SNAP_MM).clamp(SNAP_MM_MIN, SNAP_MM_MAX);
         self.dt = finite_or(self.dt, DEFAULT_DT).clamp(DT_MIN, DT_MAX);
@@ -204,7 +204,7 @@ pub(super) fn window(
             .response
             .on_hover_text(
                 "Compatible: the single keys garment designers know (S rectangle, H polygon, \
-                 Cmd+K freeze…). ClothCraft classic: this editor's earlier keys (G, R, M, K, D)",
+                 Cmd+K freeze…). FashionCraft classic: this editor's earlier keys (G, R, M, K, D)",
             );
 
             ui.separator();
@@ -301,7 +301,7 @@ mod tests {
             iterations: 24,
             user_poses: [(
                 "Waving".to_string(),
-                marvelous_cloth::avatar_rig::preset("T-pose").unwrap(),
+                fashioncraft::avatar_rig::preset("T-pose").unwrap(),
             )]
             .into(),
             ..Default::default()
@@ -312,7 +312,7 @@ mod tests {
     fn broken_or_nameless_user_poses_are_dropped_on_load() {
         let path = scratch_path("user-poses");
         let mut prefs = sample();
-        let mut bad = marvelous_cloth::avatar_rig::Pose::default();
+        let mut bad = fashioncraft::avatar_rig::Pose::default();
         bad.0.insert("no-such-bone".into(), [10., 0., 0.]);
         prefs.user_poses.insert("Broken".into(), bad);
         prefs.user_poses.insert("  ".into(), Default::default());

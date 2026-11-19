@@ -1,7 +1,6 @@
 //! Internal lines from a piece's geometry: boundary and outline offsets, lines leaving a
 //! boundary at an angle, and the clean-up of overlapping and straight-through points.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate, domain,
@@ -11,6 +10,7 @@ use marvelous_cloth::{
         presets::{self, GarmentKind},
     },
 };
+use glam::DVec2;
 
 fn piece(points: &[[f64; 2]]) -> GarmentTemplate {
     authoring::apply(

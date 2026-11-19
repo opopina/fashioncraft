@@ -1,5 +1,4 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::{GarmentTemplate, template::Corner},
     ogc::{
         ContactSet, CpuContactKernel, OgcSettings, OgcWorld,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
     },
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn same(a: &ContactSet, b: &ContactSet) {
@@ -149,7 +149,7 @@ fn unequal_sewing_pull_hold_release_has_identical_trajectory() {
                 ..Default::default()
             };
             let vertices = g.mesh.triangles.last().unwrap().vertices;
-            let point = |s: &marvelous_cloth::model::State| {
+            let point = |s: &fashioncraft::model::State| {
                 vertices.iter().map(|&v| s.x[v] / 3.).sum::<DVec3>()
             };
             let mut anchor = DVec3::ZERO;

@@ -1,10 +1,10 @@
 //! A T-shirt drafted from measurements: its outline follows the girths, length, shoulders and
 //! sleeves asked for, it sews like the bundled one and starts clear of the mannequin.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{SurfaceMesh, diagnostics},
     garment::presets::{TshirtMeasurements, tshirt},
 };
+use glam::DVec2;
 use std::{path::Path, sync::Arc};
 
 fn width_at(points: &[DVec2], y: f64) -> f64 {
@@ -53,7 +53,7 @@ fn the_outline_follows_the_measurements() {
         2,
     )
     .unwrap();
-    let shoulder = |t: &marvelous_cloth::garment::GarmentTemplate| {
+    let shoulder = |t: &fashioncraft::garment::GarmentTemplate| {
         let p = &t.panels[0].polygon.as_ref().unwrap().points;
         p[4].x - p[13].x
     };

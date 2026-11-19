@@ -1,4 +1,4 @@
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::presets::GarmentKind,
     template_catalog::{ENTRIES, Selection},
@@ -77,7 +77,7 @@ fn candidate_uses_live_simulation_settings_and_rejects_invalid_ones() {
     std::fs::write(&avatar, "v 0 0 -10\nv 1 0 -10\nv 0 1 -10\nf 1 2 3\n").unwrap();
     let current = FittingProject::basic(GarmentKind::Dress, 1, avatar);
     let selection = Selection::bundled("two-panel").unwrap();
-    let mut settings = marvelous_cloth::vbd::VbdSettings {
+    let mut settings = fashioncraft::vbd::VbdSettings {
         iterations: 7,
         ..Default::default()
     };

@@ -1,6 +1,6 @@
 //! Structural factorization timing and exact-feature diagnostics; CPU only.
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::smooth_forest::{Link, evaluate, evaluate_monolithic, wire},
 };

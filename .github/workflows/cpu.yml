@@ -100,7 +100,7 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev \
             libgl1-mesa-dev libasound2-dev libssl-dev pkg-config
-      - run: cargo check --locked --features desktop -j 2 --bin cloth-fit --bin marvelous-cloth
+      - run: cargo check --locked --features desktop -j 2 --bin cloth-fit --bin fashioncraft-reference
         if: steps.scope.outputs.mode != 'metadata'
       - run: cargo clippy --locked --features desktop --all-targets -j 2 -- -D warnings
         if: steps.scope.outputs.mode != 'metadata'

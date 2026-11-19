@@ -1,11 +1,11 @@
 //! Reproducible CPU backend comparison. Rendering and auditing are outside step timings.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     solver_lab::{Algorithm, Backend},
     vbd::Grab,
 };
+use glam::DVec3;
 use serde_json::json;
 use std::{fs, io::Write, path::PathBuf, time::Instant};
 #[derive(Parser)]
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .vertices;
     let anchor = vertices.iter().map(|i| state.x[*i]).sum::<DVec3>() / 3.;
     fs::create_dir_all(&a.output)?;
-    project.avatar_path = marvelous_cloth::document::portable_avatar(
+    project.avatar_path = fashioncraft::document::portable_avatar(
         &project.avatar_path,
         &a.output.join("source.json"),
     )?;
@@ -143,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &settings.contact,
             )?;
             let [p95, max] =
-                marvelous_cloth::garment::diagnostics::extension_percent(&garment, &state);
+                fashioncraft::garment::diagnostics::extension_percent(&garment, &state);
             last = json!({"step":count,"intersection_check":intersections,"minimum_distance_m":c.minimum_distance,"max_seam_gap_m":garment.max_seam_gap(&state.x),"extension_p95_percent":p95,"extension_max_percent":max});
             writeln!(log, "{}", last)?;
             count += 1;
@@ -205,7 +205,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     & (wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::SUBGROUP),
                 ..Default::default()
             }))?;
-        Some(marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue))
+        Some(fashioncraft::gpu_vbd::GpuVbd::new(device, queue))
     } else {
         None
     };
@@ -375,10 +375,10 @@ mod lattice {
     use super::*;
     pub fn export(
         path: &std::path::Path,
-        g: &marvelous_cloth::garment::CompiledGarment,
-        s: &marvelous_cloth::model::State,
-        avatar: &marvelous_cloth::avatar::SurfaceMesh,
-        settings: &marvelous_cloth::vbd::VbdSettings,
+        g: &fashioncraft::garment::CompiledGarment,
+        s: &fashioncraft::model::State,
+        avatar: &fashioncraft::avatar::SurfaceMesh,
+        settings: &fashioncraft::vbd::VbdSettings,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut edges = std::collections::BTreeMap::new();
         for t in &g.mesh.triangles {

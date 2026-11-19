@@ -3,13 +3,13 @@
 //! image files themselves live in the project's asset table.
 use super::layers_ui::{Field, committed_value};
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     fitting::ImageAsset,
     garment::graphics::{GraphicPlacement, GraphicSide, GraphicTriangle, clip_to_image},
     render::GraphicImage,
 };
+use glam::DVec2;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -78,7 +78,7 @@ fn load(ctx: &egui::Context, path: &Path) -> Result<LoadedGraphic, String> {
 /// image coordinates, in board screen points.
 fn board_triangles(
     placement: &GraphicPlacement,
-    garment: &marvelous_cloth::garment::CompiledGarment,
+    garment: &fashioncraft::garment::CompiledGarment,
     point: &dyn Fn(DVec2) -> egui::Pos2,
 ) -> Vec<[(egui::Pos2, egui::Pos2); 3]> {
     let Ok(triangles) = placement.triangle_uvs(garment) else {
@@ -103,7 +103,7 @@ pub(super) fn paint_board_graphics(
     painter: &egui::Painter,
     placements: &[&GraphicPlacement],
     textures: &HashMap<String, egui::TextureId>,
-    garment: &marvelous_cloth::garment::CompiledGarment,
+    garment: &fashioncraft::garment::CompiledGarment,
     point: &dyn Fn(DVec2) -> egui::Pos2,
 ) {
     for placement in placements {
@@ -192,13 +192,10 @@ impl Atelier {
         let board = &self.authoring.board;
         Some((
             move |uv: DVec2| {
-                board.screen(
-                    rect,
-                    origin + marvelous_cloth::authoring::rotate_2d(uv, angle),
-                )
+                board.screen(rect, origin + fashioncraft::authoring::rotate_2d(uv, angle))
             },
             move |pos: egui::Pos2| {
-                marvelous_cloth::authoring::rotate_2d(board.world(rect, pos) - origin, -angle)
+                fashioncraft::authoring::rotate_2d(board.world(rect, pos) - origin, -angle)
             },
         ))
     }
@@ -500,7 +497,7 @@ impl Atelier {
     pub(super) fn fabric_images(
         &mut self,
         ctx: &egui::Context,
-        optics: &[Option<marvelous_cloth::garment::appearance::FabricAppearance>],
+        optics: &[Option<fashioncraft::garment::appearance::FabricAppearance>],
     ) -> Vec<[Option<Arc<GraphicImage>>; 3]> {
         optics
             .iter()
@@ -772,7 +769,7 @@ mod tests {
 
     #[test]
     fn board_cut_out_stays_inside_the_image_and_the_piece() {
-        let template = marvelous_cloth::garment::GarmentTemplate::two_panel_demo();
+        let template = fashioncraft::garment::GarmentTemplate::two_panel_demo();
         let garment = template.compile().unwrap();
         let panel = &garment.panels[0];
         let uv = &garment.mesh.uv[panel.vertices.clone()];

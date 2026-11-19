@@ -147,7 +147,7 @@ fn lock_profile(path: &Path) -> Result<std::fs::File, String> {
     match file.try_lock() {
         Ok(()) => Ok(file),
         Err(std::fs::TryLockError::WouldBlock) => {
-            Err("Another ClothCraft window is saving workspace profiles. Try again.".into())
+            Err("Another FashionCraft window is saving workspace profiles. Try again.".into())
         }
         Err(std::fs::TryLockError::Error(e)) => Err(format!("Cannot lock workspace profiles: {e}")),
     }
@@ -280,7 +280,7 @@ impl Store {
         if text.len() as u64 > MAX_BYTES {
             return Err("Workspace profiles exceed 256 KiB".into());
         }
-        marvelous_cloth::document::atomic_write(path, text.as_bytes())?;
+        fashioncraft::document::atomic_write(path, text.as_bytes())?;
         self.source_text = Some(text);
         Ok(())
     }
@@ -1282,7 +1282,7 @@ mod tests {
         let status = child.wait().unwrap();
         reader.join().unwrap();
         assert!(status.success());
-        assert!(result.unwrap_err().contains("Another ClothCraft window"));
+        assert!(result.unwrap_err().contains("Another FashionCraft window"));
         assert!(unchanged);
         store
             .save_profile(&path, "New", Snapshot::default(), false)
@@ -1318,7 +1318,7 @@ mod tests {
             c.ui.error
                 .as_deref()
                 .unwrap()
-                .contains("Another ClothCraft window")
+                .contains("Another FashionCraft window")
         );
         assert!(!path.exists());
         drop(guard);

@@ -1,7 +1,7 @@
 //! Scene and props: static mesh objects the cloth collides with (a stool, a table…), listed
 //! with their placement. Applying rebuilds the obstacle; the drape starts again.
 use super::*;
-use marvelous_cloth::fitting::SceneObject;
+use fashioncraft::fitting::SceneObject;
 use std::path::PathBuf;
 
 #[derive(Default)]
@@ -13,7 +13,7 @@ pub(super) struct SceneUi {
 /// A new object's scale from its size: files larger than 500 units are taken to be in
 /// millimetres, larger than 10 in centimetres, others in metres.
 fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
-    let mesh = marvelous_cloth::mesh_import::load(path)?;
+    let mesh = fashioncraft::mesh_import::load(path)?;
     let (lo, hi) = mesh.vertices.iter().fold(
         (
             glam::DVec3::splat(f64::INFINITY),
@@ -153,7 +153,7 @@ impl Atelier {
                             ))
                             .clicked()
                         {
-                            let key = marvelous_cloth::fitting::ObjectKey {
+                            let key = fashioncraft::fitting::ObjectKey {
                                 time_s: now,
                                 translation: object.translation,
                                 rotation_degrees: object.rotation_degrees,

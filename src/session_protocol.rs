@@ -310,7 +310,7 @@ impl Session {
             Operation::Snapshot {} => {}
             Operation::Open { guard, template } => {
                 self.guard(&guard)?;
-                if template.format != "marvelous-cloth-template"
+                if template.format != crate::garment::template::TEMPLATE_FORMAT
                     || !matches!(template.version, 1 | 2)
                 {
                     return Err(fail(

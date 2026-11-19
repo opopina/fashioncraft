@@ -1,11 +1,11 @@
 //! The avatar's skeleton and skin: built from its joint landmarks, it leaves the body as it
 //! is at rest and bends each limb about its joint without dragging the rest of the body.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_rig::{Pose, Rig, preset},
     garment::arrangement::load_sidecar,
 };
+use glam::DVec3;
 use std::{collections::BTreeMap, path::PathBuf};
 
 fn mannequin() -> (SurfaceMesh, BTreeMap<String, DVec3>) {
@@ -105,7 +105,7 @@ fn children_follow_their_parents_and_presets_are_valid() {
 
 #[test]
 fn a_posed_project_compiles_with_the_posed_body_and_keeps_it_when_saved() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::{AvatarPose, FittingProject},
         garment::presets::GarmentKind,
     };
@@ -116,7 +116,7 @@ fn a_posed_project_compiles_with_the_posed_body_and_keeps_it_when_saved() {
     pose.pose = preset("T-pose").unwrap();
     project.avatar_pose = Some(pose);
     let posed = project.compile().unwrap();
-    let highest = |s: &marvelous_cloth::avatar::SurfaceMesh| {
+    let highest = |s: &fashioncraft::avatar::SurfaceMesh| {
         s.vertices
             .iter()
             .filter(|v| v.x > 0.3)
@@ -138,7 +138,7 @@ fn a_posed_project_compiles_with_the_posed_body_and_keeps_it_when_saved() {
 
 #[test]
 fn a_hand_reaches_a_target_in_reach_and_points_at_one_out_of_reach() {
-    use marvelous_cloth::avatar_rig::LIMBS;
+    use fashioncraft::avatar_rig::LIMBS;
     let (surface, landmarks) = mannequin();
     let rig = Rig::new(&landmarks, &surface).unwrap();
     let rest = Pose::default();

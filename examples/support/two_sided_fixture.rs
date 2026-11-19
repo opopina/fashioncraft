@@ -1,4 +1,4 @@
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Scalar, cross, dot, sub},
     ogc::{
         feature_hierarchy::Pair,

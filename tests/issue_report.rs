@@ -1,9 +1,9 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::{GarmentTemplate, presets::GarmentKind},
     issue_report, picking,
 };
+use glam::DVec3;
 use std::{collections::BTreeSet, fs};
 
 #[test]
@@ -17,7 +17,7 @@ fn issue_capture_is_portable_material_based_and_preserves_the_accepted_state() {
     scene.state.time = 7.5;
     scene.state.v[0] = DVec3::new(0.1, 0.2, 0.3);
     let before = scene.state.clone();
-    let settings = marvelous_cloth::vbd::VbdSettings {
+    let settings = fashioncraft::vbd::VbdSettings {
         iterations: 23,
         ..Default::default()
     };

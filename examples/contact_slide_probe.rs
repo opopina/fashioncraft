@@ -1,7 +1,7 @@
 //! Static planar-slide falsification gate: no friction, constant true gap.
 use clap::Parser;
+use fashioncraft::ogc::{OgcSettings, OgcWorld};
 use glam::DVec3;
-use marvelous_cloth::ogc::{OgcSettings, OgcWorld};
 use serde_json::json;
 use std::{fs, path::PathBuf};
 
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let new = candidate.detect(&x, 2. * cfg.radius, &cfg)?;
         assert_eq!(old.radii, new.radii);
         assert_eq!(old.directional, new.directional);
-        let gradient = |set: &marvelous_cloth::ogc::ContactSet| {
+        let gradient = |set: &fashioncraft::ogc::ContactSet| {
             set.contacts
                 .iter()
                 .map(|c| c.block(&x, 0, cfg.radius, cfg.stiffness).1)

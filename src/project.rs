@@ -55,7 +55,7 @@ impl Project {
 
 pub fn obj(mesh: &Mesh, state: &State) -> String {
     let mut out = String::from(
-        "# MARVELOUS CLOTH; positions in metres; vt = pattern coordinates in metres\no cloth\n",
+        "# FashionCraft; positions in metres; vt = pattern coordinates in metres\no cloth\n",
     );
     for p in &state.x {
         writeln!(out, "v {:.12} {:.12} {:.12}", p.x, p.y, p.z).unwrap();

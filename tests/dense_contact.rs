@@ -1,5 +1,4 @@
-use glam::{DMat3, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     energy,
     garment::GarmentTemplate,
     solver_lab::{
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         dense_contact::{self, Row},
     },
 };
+use glam::{DMat3, DVec3};
 
 #[test]
 fn boundary_pivots_resolve_captured_sewn_contact_qp() {

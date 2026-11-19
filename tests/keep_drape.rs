@@ -1,7 +1,6 @@
 //! A 2D edit of a draped panel keeps its 3D shape instead of flattening it back to the
 //! arrangement; flat panels and re-placed panels behave as before.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, arrange2d::SegmentEnd},
     garment::{
         CompiledGarment, GarmentTemplate,
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     model::State,
 };
+use glam::{DVec2, DVec3};
 
 fn rectangle() -> GarmentTemplate {
     let mut t = authoring::apply(

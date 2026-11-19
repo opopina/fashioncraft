@@ -1,7 +1,6 @@
 //! Spiral strips, closed internal shapes with replication, and holes cut from or filled back
 //! into internal shapes.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
         shapes2d::{self, InternalShapeKind, Spiral},
     },
 };
+use glam::DVec2;
 use std::f64::consts::TAU;
 
 fn square(size: f64) -> GarmentTemplate {
@@ -48,7 +48,7 @@ fn analytic_edge(s: &Spiral, end: f64, side: f64) -> f64 {
         .sum()
 }
 
-fn perimeter(poly: &marvelous_cloth::garment::polygon::PolygonPattern) -> f64 {
+fn perimeter(poly: &fashioncraft::garment::polygon::PolygonPattern) -> f64 {
     poly.edges
         .iter()
         .map(|e| authoring::edge_length(poly, e).unwrap())
@@ -248,7 +248,7 @@ fn shapes_become_holes_and_holes_become_shapes() {
         "holes run clockwise"
     );
     // The hole removes material: less cloth area than the solid square.
-    let area = |g: &marvelous_cloth::garment::CompiledGarment| g.mesh.rest_area.iter().sum::<f64>();
+    let area = |g: &fashioncraft::garment::CompiledGarment| g.mesh.rest_area.iter().sum::<f64>();
     assert!(area(&holed.garment) < area(&with_shape.garment) - 0.04);
     let filled = authoring::apply(
         &holed.template,
@@ -290,7 +290,7 @@ fn shapes_become_holes_and_holes_become_shapes() {
 
 #[test]
 fn rectangular_holes_keep_their_corners_when_filled() {
-    let hole = marvelous_cloth::garment::domain::Hole {
+    let hole = fashioncraft::garment::domain::Hole {
         points: vec![
             DVec2::new(0.2, 0.2),
             DVec2::new(0.2, 0.4),
@@ -306,7 +306,7 @@ fn rectangular_holes_keep_their_corners_when_filled() {
         "sharp corners stay sharp"
     );
     // A dense round rim is thinned to 64 corners and smoothed.
-    let round = marvelous_cloth::garment::domain::Hole {
+    let round = fashioncraft::garment::domain::Hole {
         points: (0..200)
             .map(|k| {
                 let a = -(k as f64) / 200. * std::f64::consts::TAU;

@@ -4,7 +4,7 @@
 //! selects it in both views; picking a fabric selects the pieces cut from it and shows the
 //! fabric in the inspector.
 use super::*;
-use marvelous_cloth::garment::trims::TrimKind;
+use fashioncraft::garment::trims::TrimKind;
 
 #[derive(Default)]
 pub(super) struct ObjectBrowserUi {
@@ -18,8 +18,8 @@ enum Pick {
 
 /// One row of the piece list: its name, fabric and anything unusual about its state.
 fn piece_row(
-    t: &marvelous_cloth::garment::GarmentTemplate,
-    p: &marvelous_cloth::garment::template::Panel,
+    t: &fashioncraft::garment::GarmentTemplate,
+    p: &fashioncraft::garment::template::Panel,
     ui_lang: i18n::Language,
 ) -> String {
     let fabric = t

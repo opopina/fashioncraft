@@ -1,6 +1,5 @@
 //! Interactions between Firefly's point tools and ClothCraft's material domains.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -10,6 +9,7 @@ use marvelous_cloth::{
         shapes::{BooleanOp, MirrorAxis, Primitive},
     },
 };
+use glam::{DVec2, DVec3};
 
 fn rectangle() -> GarmentTemplate {
     authoring::apply(
@@ -106,7 +106,7 @@ fn split_and_mirror_preserve_internal_sewing_and_targets() {
         a.panels[0].boundaries.keys().collect::<Vec<_>>(),
         b.panels[0].boundaries.keys().collect::<Vec<_>>()
     );
-    let area = |g: &marvelous_cloth::garment::CompiledGarment| {
+    let area = |g: &fashioncraft::garment::CompiledGarment| {
         g.mesh.triangles.iter().map(|t| t.area).sum::<f64>()
     };
     assert!((area(&a) - area(&b)).abs() < 1e-10);
@@ -143,7 +143,7 @@ fn numeric_resize_scales_holes_and_internal_paths_with_the_material() {
     for (a, b) in old.lines[0].tangents.iter().zip(&new.lines[0].tangents) {
         assert!((*a * scale - *b).length() < 1e-14);
     }
-    let mass = |g: &marvelous_cloth::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
+    let mass = |g: &fashioncraft::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
     assert!((mass(&changed.garment) / mass(&before) - 1.125).abs() < 1e-3);
 }
 
@@ -214,7 +214,7 @@ fn boolean_rejects_discarding_a_target_specification() {
 
 #[test]
 fn target_metadata_does_not_invalidate_a_saved_physical_state() {
-    use marvelous_cloth::fitting::FittingProject;
+    use fashioncraft::fitting::FittingProject;
     let avatar =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj");
     let mut project = FittingProject::basic(GarmentKind::Tshirt, 0, avatar);

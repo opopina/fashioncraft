@@ -1,6 +1,6 @@
 //! CPU-only feature weight audit; does not assemble a force law or step cloth.
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     math::{Jet, Scalar},
     ogc::{

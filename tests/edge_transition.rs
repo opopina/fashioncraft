@@ -1,11 +1,11 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     ogc::{
         OgcSettings, OgcWorld, geometry,
         potential::{Contact, Kind},
     },
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::{DQuat, DVec3};
 mod common;
 
 // A local star rejects endpoint contact, while its neighboring edge accepts
@@ -48,7 +48,7 @@ fn endpoint_entry_reproduces_finite_jump_and_experiment_keeps_bounds_exact() {
         assert_eq!(old.radii, new.radii);
         assert_eq!(old.minimum_distance, new.minimum_distance);
         assert_eq!(old.directional, new.directional);
-        let pair_energy = |cs: &marvelous_cloth::ogc::ContactSet| {
+        let pair_energy = |cs: &fashioncraft::ogc::ContactSet| {
             cs.contacts
                 .iter()
                 .filter(|c| c.vertices == [0, 1, 2, 3])
@@ -107,7 +107,7 @@ fn concave_face_entry_is_a_separate_refresh_discontinuity() {
     assert!(!old.contacts.iter().any(|c| witness(&c)));
     let added = new.contacts.iter().find(witness).unwrap();
     assert!(added.value(&after, cfg.radius, cfg.stiffness) > 0.5);
-    let event = marvelous_cloth::ogc::diagnostics::refresh_event(
+    let event = fashioncraft::ogc::diagnostics::refresh_event(
         &old,
         &new,
         &after,

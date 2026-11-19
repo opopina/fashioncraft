@@ -1,11 +1,11 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     ogc::{
         OgcSettings, OgcWorld, geometry,
         potential::{Contact, Kind, activation},
     },
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::{DQuat, DVec3};
 mod common;
 
 fn contact(kind: Kind) -> Contact {
@@ -44,7 +44,7 @@ fn finite_distances_agree_with_geometry_and_differentiate_selected_coordinates()
                 };
                 let d = if kind == Kind::PointTriangle {
                     let top =
-                        marvelous_cloth::ogc::topology::Topology::new(4, vec![[1, 2, 3]]).unwrap();
+                        fashioncraft::ogc::topology::Topology::new(4, vec![[1, 2, 3]]).unwrap();
                     x[0].distance(geometry::closest_triangle(x[0], 0, &x, &top).0)
                 } else {
                     let (s, t) = geometry::closest_segments(x[0], x[1], x[2], x[3]);
@@ -204,7 +204,7 @@ fn force_halo_covers_pairs_that_enter_activation_inside_the_original_bounds() {
         let q = if frame < 20 { r } else { 2. * r };
         let cached = world.detect(&after, q, &cfg).unwrap();
         let fresh = seed.clone().detect(&after, q, &cfg).unwrap();
-        let keys = |c: &marvelous_cloth::ogc::ContactSet| {
+        let keys = |c: &fashioncraft::ogc::ContactSet| {
             c.contacts
                 .iter()
                 .map(|c| (c.kind, c.vertices))

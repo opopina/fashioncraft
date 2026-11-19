@@ -1,9 +1,9 @@
 //! CPU-only visibility benchmark; deliberately separate from solver/window FPS.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{MeshCollider, SurfaceMesh},
     picking::ray_triangle,
 };
+use glam::DVec3;
 use std::{hint::black_box, path::Path, sync::Arc, time::Instant};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let surface = Arc::new(SurfaceMesh::load_obj(Path::new(

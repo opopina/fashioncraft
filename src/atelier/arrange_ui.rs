@@ -2,11 +2,11 @@
 //! points; scale a piece; align pieces to the active one and distribute them with a fixed gap.
 //! Every action is one `Command`, so one undo step.
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::authoring::{
+use fashioncraft::authoring::{
     Command,
     arrange2d::{self, AlignMode, Axis},
 };
+use glam::DVec2;
 
 /// Values typed into the arrange bar.
 pub(super) struct ArrangeUi {

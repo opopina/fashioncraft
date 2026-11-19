@@ -1,6 +1,6 @@
 //! Named 3D views travel with the project, are validated on load and save, and projects
 //! without any are written exactly as before.
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{FittingProject, SavedView},
     garment::presets::GarmentKind,
 };

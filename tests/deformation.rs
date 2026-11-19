@@ -1,5 +1,5 @@
+use fashioncraft::garment::{GarmentTemplate, diagnostics};
 use glam::DVec3;
-use marvelous_cloth::garment::{GarmentTemplate, diagnostics};
 
 #[test]
 fn extension_diagnostic_uses_material_rest_and_is_rigid_motion_invariant() {

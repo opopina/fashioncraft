@@ -1,11 +1,11 @@
 //! Trousers drafted from measurements: four pieces whose waist and hip add up to the girths
 //! asked for, sewn down the sides, the inside legs, the centre front and the centre back, and
 //! starting clear of the mannequin.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{SurfaceMesh, diagnostics},
     garment::presets::{TrousersMeasurements, trousers},
 };
+use glam::DVec2;
 use std::{path::Path, sync::Arc};
 
 fn width_at(points: &[DVec2], y: f64) -> f64 {

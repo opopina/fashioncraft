@@ -360,7 +360,7 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         }
     }
     let mut obj = format!(
-        "# ClothCraft garment; units: {}\nmtllib {mtl_name}\n",
+        "# FashionCraft garment; units: {}\nmtllib {mtl_name}\n",
         options.units.label()
     );
     // Lines written so far of each kind: OBJ indices count from one across the file.
@@ -473,7 +473,7 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         }
         v_count += avatar.vertices.len();
     }
-    let mut mtl = String::from("# ClothCraft fabrics\n");
+    let mut mtl = String::from("# FashionCraft fabrics\n");
     let mut textures = 0;
     if let Some(atlas) = scene.atlas {
         let name = format!("{stem}_{BAKED}.png");

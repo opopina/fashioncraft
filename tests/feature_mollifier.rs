@@ -1,5 +1,4 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::{
         feature_mollifier as m,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         smooth_forest::{Link, evaluate},
     },
 };
+use glam::{DQuat, DVec3};
 
 #[test]
 fn support_and_parallel_limits_match_feature_hierarchy() {

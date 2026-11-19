@@ -223,7 +223,7 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
         )
         .unwrap();
     }
-    out.push_str("    doc = \"ClothCraft garment\"\n)\n\ndef Xform \"Root\"\n{\n");
+    out.push_str("    doc = \"FashionCraft garment\"\n)\n\ndef Xform \"Root\"\n{\n");
     let mut materials: BTreeMap<String, (usize, Option<String>)> = BTreeMap::new();
     let mut textures: Vec<(String, PathBuf)> = Vec::new();
     let mut names: HashMap<String, usize> = HashMap::new();

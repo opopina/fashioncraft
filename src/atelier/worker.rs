@@ -2,7 +2,7 @@
 //! state stays on the worker within a generation. Only one result snapshot is
 //! retained when the window is slow or hidden (no growing animation queue).
 use eframe::{egui, wgpu};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingScene,
     gpu_vbd::GpuVbd,
     model::State,
@@ -387,7 +387,7 @@ mod final_diagnostics_transport_tests {
 
     #[test]
     fn cpu_worker_keeps_generation_state_and_rejects_missing_gpu() {
-        use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+        use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
         let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         reset();
         let dir = tempfile::tempdir().unwrap();
@@ -454,7 +454,7 @@ mod final_diagnostics_transport_tests {
         let (mut metrics, mut grab, mut plane, mut error) = (None, None, None, None);
         let mut status = String::new();
         {
-            use marvelous_cloth::authoring::{self, Command};
+            use fashioncraft::authoring::{self, Command};
             let mut transition = super::super::authoring_ui::EditorTransition {
                 authoring: &mut authoring_ui,
                 project: &mut editor_project,
@@ -613,7 +613,7 @@ mod final_diagnostics_transport_tests {
 
     #[test]
     fn latest_mailbox_replaces_old_generation_after_inflight_step() {
-        use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+        use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
         let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         reset();
         let dir = tempfile::tempdir().unwrap();
@@ -711,7 +711,7 @@ mod final_diagnostics_transport_tests {
 
     #[test]
     fn real_worker_diagnostics_survive_steps_and_replace_errors() {
-        use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+        use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
         let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         reset();
         let dir = tempfile::tempdir().unwrap();

@@ -1,6 +1,6 @@
 //! Rulers and guidelines travel with the project, are validated, and projects without any are
 //! written exactly as before.
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{BoardGuides, FittingProject, GuideAxis, GuideLine},
     garment::presets::GarmentKind,
 };

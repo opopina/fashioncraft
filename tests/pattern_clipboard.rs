@@ -1,5 +1,4 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History, clipboard::PatternClipboard},
     garment::{
         GarmentTemplate,
@@ -7,11 +6,12 @@ use marvelous_cloth::{
         presets::{self, GarmentKind},
     },
 };
+use glam::{DVec2, DVec3};
 use std::collections::BTreeSet;
 
 #[test]
 fn unheld_selection_pastes_without_losing_unrelated_pin_or_freeze() {
-    use marvelous_cloth::authoring::{prepare_freeze_edit, prepare_pin_edit};
+    use fashioncraft::authoring::{prepare_freeze_edit, prepare_pin_edit};
     for freeze in [false, true] {
         let mut template = GarmentTemplate::two_panel_demo();
         template.seams.clear();

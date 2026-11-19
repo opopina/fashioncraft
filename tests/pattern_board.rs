@@ -1,5 +1,4 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
     garment::{
@@ -9,8 +8,9 @@ use marvelous_cloth::{
         seam::{BoundaryRef, Side},
     },
 };
+use glam::{DVec2, DVec3};
 
-fn drawing() -> marvelous_cloth::garment::GarmentTemplate {
+fn drawing() -> fashioncraft::garment::GarmentTemplate {
     authoring::apply(
         &presets::basic(GarmentKind::Tshirt, 0),
         Command::Polygon {
@@ -76,11 +76,11 @@ fn curved_boundaries_keep_ids_lengths_and_mass_under_remeshing() {
         .unwrap()
         .target_edge_m = 0.02;
     let b = fine.compile().unwrap();
-    let mass = |g: &marvelous_cloth::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
+    let mass = |g: &fashioncraft::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
     assert!((mass(&a) - mass(&b)).abs() < 1e-12);
     assert!(a.panels[0].boundaries["edge_1"].len() > 2);
     for name in &t.panels[0].polygon.as_ref().unwrap().edges {
-        let length = |g: &marvelous_cloth::garment::CompiledGarment| {
+        let length = |g: &fashioncraft::garment::CompiledGarment| {
             g.panels[0].boundaries[name]
                 .windows(2)
                 .map(|p| g.mesh.uv[p[0]].distance(g.mesh.uv[p[1]]))
@@ -89,8 +89,7 @@ fn curved_boundaries_keep_ids_lengths_and_mass_under_remeshing() {
         assert!((length(&a) - length(&b)).abs() < 1e-10);
     }
     let serialized = serde_json::to_string(&t).unwrap();
-    let read: marvelous_cloth::garment::GarmentTemplate =
-        serde_json::from_str(&serialized).unwrap();
+    let read: fashioncraft::garment::GarmentTemplate = serde_json::from_str(&serialized).unwrap();
     assert_eq!(a.mesh.uv, read.compile().unwrap().mesh.uv);
 }
 #[test]
@@ -226,7 +225,7 @@ fn multi_panel_point_move_uses_one_board_delta_and_one_undo() {
         .template;
     t.panels[1].layout_rotation_degrees = 90.;
     let other = t.panels[1].id.clone();
-    let position = |t: &marvelous_cloth::garment::GarmentTemplate, i, k| {
+    let position = |t: &fashioncraft::garment::GarmentTemplate, i, k| {
         let p = &t.panels[i];
         authoring::layout(t, i)
             + authoring::rotate_2d(
@@ -335,7 +334,7 @@ fn multi_panel_edits_fail_atomically_and_remove_owned_seams() {
 
 #[test]
 fn group_move_preserves_linked_mirror_contract() {
-    use marvelous_cloth::garment::shapes::MirrorAxis;
+    use fashioncraft::garment::shapes::MirrorAxis;
     let t = drawing();
     let id = t.panels[0].id.clone();
     let t = authoring::apply(

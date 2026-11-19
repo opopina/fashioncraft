@@ -2,11 +2,11 @@
 //! bounds (not only the subset of contacts that currently exert a force).
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     gpu_vbd::contact_filter::GpuContactFilter,
     ogc::{ContactSet, OgcSettings, OgcWorld},
 };
+use glam::DVec3;
 
 fn equal(a: &ContactSet, b: &ContactSet) {
     assert_eq!(a.radii, b.radii);

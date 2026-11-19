@@ -1,6 +1,6 @@
 //! Review SVG outlines before preparing one atomic authoring edit.
 use eframe::egui;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Edit,
     garment::{
         GarmentTemplate,
@@ -307,7 +307,7 @@ mod tests {
     use super::super::super::authoring_smoke::widget_harness::Harness;
     use super::super::{DocumentUi, prepare_svg_edit};
     use super::*;
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::{FittingProject, FittingScene},
         garment::presets::GarmentKind,
     };
@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(next.time, state.time);
         assert_eq!(serde_json::to_vec(&c.project).unwrap(), before);
         assert!(!c.document.dirty);
-        let mut history = marvelous_cloth::authoring::History::default();
+        let mut history = fashioncraft::authoring::History::default();
         history.record(c.project.template.clone());
         let undo = history.restore(&edit.template, false).unwrap();
         assert_eq!(

@@ -1,10 +1,10 @@
 //! Scene objects: static OBJ props the cloth collides with, placed in the scene, merged with
 //! the avatar into one obstacle and kept with the project when it is saved.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{AvatarPose, FittingProject, SceneObject},
     garment::presets::GarmentKind,
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 /// A 1 m cube OBJ centred on its origin.
@@ -85,7 +85,7 @@ fn a_prop_joins_the_obstacle_where_it_is_placed_and_travels_with_the_project() {
     // With a posed avatar the prop still comes after the body.
     let mut posed = reopened.clone();
     let mut pose = AvatarPose::from_sidecar(&p.avatar_path).unwrap();
-    pose.pose = marvelous_cloth::avatar_rig::preset("T-pose").unwrap();
+    pose.pose = fashioncraft::avatar_rig::preset("T-pose").unwrap();
     posed.avatar_pose = Some(pose);
     let scene = posed.compile().unwrap();
     assert_eq!(scene.collider.surface.vertices.len(), body + 8);
@@ -97,7 +97,7 @@ fn a_prop_joins_the_obstacle_where_it_is_placed_and_travels_with_the_project() {
 
 #[test]
 fn keyed_objects_move_between_their_keys() {
-    use marvelous_cloth::fitting::ObjectKey;
+    use fashioncraft::fitting::ObjectKey;
     let dir = tempfile::tempdir().unwrap();
     let object = SceneObject {
         id: "object_1".into(),
@@ -135,7 +135,7 @@ fn keyed_objects_move_between_their_keys() {
 
 #[test]
 fn recording_carries_keyed_objects_in_small_steps() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         avatar_animation::{AvatarAnimation, PoseKey, Recorder},
         fitting::ObjectKey,
     };
@@ -179,7 +179,7 @@ fn recording_carries_keyed_objects_in_small_steps() {
     let mut recorder = Recorder::new(&p, &animation).unwrap();
     let cloth = p.compile().unwrap().state.x.clone();
     recorder.begin(&cloth);
-    let top = |mesh: &marvelous_cloth::avatar::SurfaceMesh| {
+    let top = |mesh: &fashioncraft::avatar::SurfaceMesh| {
         mesh.vertices[mesh.vertices.len() - 8..]
             .iter()
             .map(|v| v.y)

@@ -1,5 +1,5 @@
 {
-  "format": "marvelous-cloth-template",
+  "format": "clothcraft-template",
   "version": 2,
   "name": "Partial M:N sewing / native editor fixture",
   "fabrics": [

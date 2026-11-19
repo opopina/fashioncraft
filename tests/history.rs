@@ -1,6 +1,6 @@
 //! Undo history: every step keeps the name of its edit, the steps can be listed, and going
 //! back or forward several at once lands where single steps would, or changes nothing.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::GarmentTemplate,
 };

@@ -1,21 +1,21 @@
 //! A physical floor: dropped cloth comes to rest on it, inside the contact shell, without
 //! passing through; without a floor it keeps falling. Gravity and the floor are settings.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 /// A 12 cm square of cloth lying flat, `height` above y = 0.
-fn patch(height: f64) -> Arc<marvelous_cloth::garment::CompiledGarment> {
+fn patch(height: f64) -> Arc<fashioncraft::garment::CompiledGarment> {
     let mut t = GarmentTemplate::two_panel_demo();
     t.panels.truncate(1);
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,

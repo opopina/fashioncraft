@@ -1,6 +1,6 @@
 //! The pattern archive: pieces taken off the board and out of the simulation, kept in the
 //! document with their seams, and brought back where they were.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
     garment::{GarmentTemplate, presets::GarmentKind},

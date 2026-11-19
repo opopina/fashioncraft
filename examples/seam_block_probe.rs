@@ -1,13 +1,13 @@
 //! Matched-control baseline/block-refinement experiment. CPU by default; GPU
 //! explicitly opt-in. Private input geometry and simulation settings are kept.
 use clap::Parser;
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::{GarmentTemplate, template::Corner},
     model::State,
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -248,7 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     & (wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::SUBGROUP),
                 ..Default::default()
             }))?;
-        let mut gpu = marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue);
+        let mut gpu = fashioncraft::gpu_vbd::GpuVbd::new(device, queue);
         gpu.check_contacts = args.check_gpu_contacts;
         Some(gpu)
     } else {

@@ -14,7 +14,7 @@ cargo run --locked --release --no-default-features -j 2 --bin cloth-template -- 
 
 ## Panels and fabrics
 
-The root contains `format: "marvelous-cloth-template"`, `version: 1`, `name`, `fabrics`, `panels`, `seams`. IDs are unique within each family: 1–80 ASCII alphanumeric, `_` or `-` characters. Current limits: 1–128 panels and at most 512 seams. Every `fabric` reference must resolve.
+The root contains `format: "clothcraft-template"` (files saved by earlier builds say `"marvelous-cloth-template"`; they still open and are saved with the current tag), `version: 1`, `name`, `fabrics`, `panels`, `seams`. IDs are unique within each family: 1–80 ASCII alphanumeric, `_` or `-` characters. Current limits: 1–128 panels and at most 512 seams. Every `fabric` reference must resolve.
 
 Each panel supplies a rectangular `pattern` (`width`, `height` in metres; `nx`, `ny` cells), `fabric`, `grain_degrees`, `placement` and optional `pins` (`top_left`, `top_right`, `bottom_right`, `bottom_left`). Dimensions: 0.01–100 m; resolution: 1–128 cells per axis. Resolution changes do not change seam definitions.
 

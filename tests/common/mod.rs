@@ -1,8 +1,8 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 pub fn resting_patch(offset: DVec3) -> (Arc<CompiledGarment>, SurfaceMesh) {
@@ -11,7 +11,7 @@ pub fn resting_patch(offset: DVec3) -> (Arc<CompiledGarment>, SurfaceMesh) {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,

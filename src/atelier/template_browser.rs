@@ -1,6 +1,6 @@
 //! Modal template selection; production controls are driven by the CPU harness.
 use eframe::egui;
-use marvelous_cloth::template_catalog::{ENTRIES, Selection};
+use fashioncraft::template_catalog::{ENTRIES, Selection};
 
 #[derive(Default)]
 pub(super) struct Browser {

@@ -38,7 +38,7 @@ foreach ($path in @($stage, $zip, $zipHash)) {
 if ($Verify -and (Test-Path -LiteralPath $verifyRoot)) {
     throw "Refusing to overwrite verification directory: $verifyRoot"
 }
-foreach ($binary in @('cloth-fit.exe', 'marvelous-cloth.exe', 'cloth-template.exe', 'cloth-session.exe')) {
+foreach ($binary in @('cloth-fit.exe', 'fashioncraft-reference.exe', 'cloth-template.exe', 'cloth-session.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path $binDir $binary) -PathType Leaf)) {
         throw "Missing Windows release binary: $binary in $binDir. Run cargo build --locked --release --features desktop first."
     }
@@ -48,7 +48,7 @@ foreach ($path in @('assets/makehuman', 'examples/templates', 'LICENSE', 'README
 }
 
 $null = New-Item -ItemType Directory -Path $stage -Force
-foreach ($binary in @('cloth-fit.exe', 'marvelous-cloth.exe', 'cloth-template.exe', 'cloth-session.exe')) {
+foreach ($binary in @('cloth-fit.exe', 'fashioncraft-reference.exe', 'cloth-template.exe', 'cloth-session.exe')) {
     Copy-Item -LiteralPath (Join-Path $binDir $binary) -Destination (Join-Path $stage $binary)
 }
 $null = New-Item -ItemType Directory -Path (Join-Path $stage 'assets') -Force

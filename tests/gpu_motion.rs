@@ -1,12 +1,12 @@
 //! Explicit hardware regression. Never run as part of ordinary CPU checks.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 mod common;
 
@@ -78,7 +78,7 @@ fn supported_cloth_does_not_accumulate_artificial_gravity_stretch() {
     t.panels.truncate(1);
     t.seams.clear();
     let panel = &mut t.panels[0];
-    panel.pattern = marvelous_cloth::model::Pattern {
+    panel.pattern = fashioncraft::model::Pattern {
         width: 0.2,
         height: 0.4,
         nx: 4,
@@ -104,7 +104,7 @@ fn supported_cloth_does_not_accumulate_artificial_gravity_stretch() {
         .enumerate()
         .filter_map(|(i, uv)| (uv.y > 0.399).then_some(i))
         .collect();
-    let extension = |s: &marvelous_cloth::model::State| {
+    let extension = |s: &fashioncraft::model::State| {
         hem.iter()
             .map(|i| (g.initial_state.x[*i].y - s.x[*i].y) / 0.4)
             .sum::<f64>()
@@ -224,7 +224,7 @@ fn supported_piece_does_not_delay_an_unrelated_free_fall() {
     let mut t = GarmentTemplate::two_panel_demo();
     for (i, p) in t.panels.iter_mut().enumerate() {
         p.pins.clear();
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.12,
             height: 0.12,
             nx: 3,

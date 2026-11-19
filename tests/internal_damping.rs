@@ -1,13 +1,13 @@
 //! Internal damping per fabric: the force −(k_d/dt)(∇E(x) − ∇E(xᵗ)) resists stretching and
 //! bending motion but no rigid motion. A stretched, weightless square released in still air
 //! rings on without it and settles with it; a falling square falls exactly as fast either way.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate, template::FabricProperties},
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn far_away() -> SurfaceMesh {
@@ -32,7 +32,7 @@ fn square(damping: f64) -> Arc<CompiledGarment> {
     };
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,

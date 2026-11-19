@@ -2,13 +2,13 @@
 //! in tests/wind.rs, on the GPU solver. Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver, Wind},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]
@@ -29,7 +29,7 @@ fn gpu_wind_carries_a_sheet_as_the_closed_form() {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,
@@ -45,7 +45,7 @@ fn gpu_wind_carries_a_sheet_as_the_closed_form() {
         ],
         triangles: vec![[0, 1, 2]],
     };
-    let mean = |s: &marvelous_cloth::model::State| s.v.iter().sum::<DVec3>() / s.v.len() as f64;
+    let mean = |s: &fashioncraft::model::State| s.v.iter().sum::<DVec3>() / s.v.len() as f64;
 
     // Weightless, broadside to a 1 m/s wind: v(t) = V − V / (1 + k V t / (m/A)). The GPU
     // moves a vertex within one detection's bounds per step: small steps and a light breeze

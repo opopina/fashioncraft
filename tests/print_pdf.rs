@@ -1,6 +1,6 @@
 //! Patterns at 1:1 as a PDF: the print sheet's layout on one page, or tiled over framed pages
 //! of A4, Letter or A3, at 72/25.4 points per millimetre.
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::{
         export,
@@ -17,7 +17,7 @@ fn project() -> FittingProject {
 }
 
 /// The print SVG's sheet size, mm.
-fn sheet(template: &marvelous_cloth::garment::GarmentTemplate) -> (f64, f64) {
+fn sheet(template: &fashioncraft::garment::GarmentTemplate) -> (f64, f64) {
     let svg = export::print_pattern_svg(template).unwrap();
     let number = |key: &str| -> f64 {
         let at = svg.find(key).unwrap() + key.len();

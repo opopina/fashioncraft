@@ -1,6 +1,6 @@
 //! 2D board locks are a selection aid: one undo step, no physical effect, older documents
 //! unchanged, and stale ids never survive.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate,

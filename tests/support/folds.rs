@@ -1,7 +1,6 @@
 //! Shared fixture for the fold tests: a creased rectangle, its fold, its settling and the
 //! mean normals of its halves.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::sync::Arc;
 
 /// A 40 × 30 cm rectangle with an internal line `crease` down the middle.

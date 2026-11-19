@@ -1,9 +1,9 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     picking,
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 mod common;
 #[test]
@@ -32,7 +32,7 @@ fn contact_activates_during_the_step_and_settles_without_a_sawtooth() {
     }
     assert!(max_delta < 1e-6, "normal contact motion {max_delta} m");
 }
-fn fixture() -> Arc<marvelous_cloth::garment::CompiledGarment> {
+fn fixture() -> Arc<fashioncraft::garment::CompiledGarment> {
     let mut t = GarmentTemplate::two_panel_demo();
     t.panels.truncate(1);
     t.seams.clear();

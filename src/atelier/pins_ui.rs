@@ -1,11 +1,11 @@
 //! Hold controls prepare and validate before changing history or live state.
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring,
     garment::{CompiledGarment, GarmentTemplate},
     model::State,
 };
+use glam::DVec2;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -168,7 +168,7 @@ fn prepare(
     template: &GarmentTemplate,
     garment: &CompiledGarment,
     state: &State,
-    avatar: Option<&marvelous_cloth::avatar::SurfaceMesh>,
+    avatar: Option<&fashioncraft::avatar::SurfaceMesh>,
     request: (&str, &BTreeMap<String, Vec<DVec2>>, &[String], Action),
 ) -> Result<authoring::Edit, String> {
     let (panel, points, selected_panels, action) = request;
@@ -245,10 +245,9 @@ fn prepare(
 pub(super) fn validate(
     edit: &authoring::Edit,
     candidate: &State,
-    avatar: Option<&marvelous_cloth::avatar::SurfaceMesh>,
+    avatar: Option<&fashioncraft::avatar::SurfaceMesh>,
 ) -> Result<(), String> {
-    marvelous_cloth::vbd::VbdSolver::new(Arc::new(edit.garment.clone()), avatar, candidate)
-        .map(|_| ())
+    fashioncraft::vbd::VbdSolver::new(Arc::new(edit.garment.clone()), avatar, candidate).map(|_| ())
 }
 
 /// Resolve every selected contour index or reject the entire selection.
@@ -321,7 +320,7 @@ impl Atelier {
     pub(super) fn pin_properties(
         &mut self,
         ui: &mut egui::Ui,
-        panel: &marvelous_cloth::garment::template::Panel,
+        panel: &fashioncraft::garment::template::Panel,
     ) {
         let ui_lang = self.prefs.language;
         let mut groups = self.authoring.board.point_selections();
@@ -662,7 +661,7 @@ mod tests {
     fn intersecting_avatar_is_rejected_before_edit_commit() {
         let c = case();
         let tri = c.garment.mesh.triangles[0].vertices;
-        let avatar = marvelous_cloth::avatar::SurfaceMesh {
+        let avatar = fashioncraft::avatar::SurfaceMesh {
             vertices: tri.map(|i| c.state.x[i]).to_vec(),
             triangles: vec![[0, 1, 2]],
         };
@@ -688,7 +687,7 @@ mod tests {
     }
     #[test]
     fn grouped_widget_action_and_contour_resolution_are_atomic() {
-        use marvelous_cloth::garment::shapes::{Primitive, primitive};
+        use fashioncraft::garment::shapes::{Primitive, primitive};
         let mut c = case();
         c.template.version = 2;
         for panel in &mut c.template.panels {

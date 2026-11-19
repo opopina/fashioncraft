@@ -4,13 +4,13 @@
 //! otherwise. Air damping is off so the analytic motion applies unchanged, and the step is
 //! small with enough iterations for the local solves to converge: the comparison is with
 //! the physics, not with an unconverged iterate.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate},
     model::State,
     vbd::{VbdSettings, VbdSolver, friction},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 const G: f64 = 9.81;
@@ -23,7 +23,7 @@ fn resting_patch() -> (Arc<CompiledGarment>, SurfaceMesh) {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,
@@ -156,9 +156,9 @@ fn friction_terms_carry_the_normal_force() {
 #[test]
 fn the_friction_force_is_coulomb_once_sliding() {
     // Gradient of μ λ f0(|P u|) by autodiff, against the closed form μ λ P u / |P u|.
-    use marvelous_cloth::math::Jet;
+    use fashioncraft::math::Jet;
     let t = friction::FrictionTerm {
-        kind: marvelous_cloth::ogc::potential::Kind::PointFace,
+        kind: fashioncraft::ogc::potential::Kind::PointFace,
         vertices: [0, 1, 2, 3],
         count: 1,
         weights: [1., 0., 0., 0.],

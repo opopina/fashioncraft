@@ -1,7 +1,6 @@
 //! Drafting tools only issue CPU transactions; they never touch the solver.
 use super::{authoring_ui::Tool, *};
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, SpreadSide},
     garment::{
         meshing::MeshingSettings,
@@ -9,6 +8,7 @@ use marvelous_cloth::{
         template::Panel,
     },
 };
+use glam::DVec2;
 
 pub(super) struct DraftingUi {
     kind: Primitive,
@@ -286,11 +286,11 @@ impl Atelier {
                 .id
                 .clone();
             self.set_authoring_tool(Tool::Edit, false);
-            self.authoring.edge = Some(marvelous_cloth::garment::seam::BoundaryRef {
+            self.authoring.edge = Some(fashioncraft::garment::seam::BoundaryRef {
                 reversed: false,
                 panel,
                 edge: Some(line),
-                side: marvelous_cloth::garment::seam::Side::Top,
+                side: fashioncraft::garment::seam::Side::Top,
                 range: [0., 1.],
             });
             self.status =

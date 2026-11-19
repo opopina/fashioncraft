@@ -1,11 +1,11 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     GarmentTemplate,
     domain::Hole,
     meshing::MeshingSettings,
     production_metrics::report,
     shapes::{self, Primitive},
 };
+use glam::{DVec2, DVec3};
 
 fn close(actual: f64, expected: f64) {
     assert!((actual - expected).abs() < 1e-11, "{actual} != {expected}");

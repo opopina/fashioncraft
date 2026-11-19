@@ -1,6 +1,18 @@
-# ClothCraft artwork
+# Artwork
 
-`clothcraft-icon.png` is the original generated ClothCraft ram icon, used by the README and the native atelier window. The ram and fleece refer to wool and textile craft. The PNG is 1254 × 1254 RGBA with transparent corners around a turquoise rounded tile. Native window icons are supplied through eframe; this does not embed a Windows Explorer icon resource or provide an installer.
+## FashionCraft icon
+
+`fashioncraft-icon.png` is the native window icon. It is drawn by hand as vector shapes in
+`fashioncraft-icon.svg` (a dress on a hanger, white on a raspberry square, with dashed stitch lines) and
+rendered to a 1024 × 1024 PNG with macOS Quick Look (`qlmanage -t -s 1024`). It is original to this
+repository and distributed under its [MIT License](../../LICENSE).
+
+It is a placeholder: the ArtCraft apps share a style of engraved animals on a saturated square (see
+below), and a FashionCraft icon in that style is still to be made.
+
+## ClothCraft icon (inherited)
+
+`clothcraft-icon.png` is the original generated ClothCraft ram icon, used by ClothCraft's README and native window; FashionCraft keeps the file for the record but no longer uses it. The ram and fleece refer to wool and textile craft. The PNG is 1254 × 1254 RGBA with transparent corners around a turquoise rounded tile. Native window icons are supplied through eframe; this does not embed a Windows Explorer icon resource or provide an installer.
 
 ## Visual references
 

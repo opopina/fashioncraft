@@ -1,15 +1,15 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     contact::Sphere,
     energy::{self, Element},
     model::{Material, Pattern, Scene},
     project::{self, Project},
     solver::{ReferenceSolver, SolverSettings},
 };
+use glam::{DQuat, DVec3};
 
 fn fixture() -> (
-    marvelous_cloth::model::Mesh,
-    marvelous_cloth::model::State,
+    fashioncraft::model::Mesh,
+    fashioncraft::model::State,
     Material,
 ) {
     let m = Material::default();

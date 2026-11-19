@@ -1,7 +1,7 @@
 //! Garment workspace: library | 3D | 2D patterns | properties.
 use crate::render::{Camera, DrawModel, Viewport};
 use eframe::egui::{self, Color32, Stroke, Vec2};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{FittingProject, FittingScene},
     garment::{export, presets::GarmentKind},
     picking,
@@ -201,8 +201,8 @@ pub fn run(
                 .then_some([w as f32, h as f32])
         });
     let icon =
-        eframe::icon_data::from_png_bytes(include_bytes!("../assets/branding/clothcraft-icon.png"))
-            .map_err(|error| format!("Cannot decode the bundled ClothCraft icon: {error}"))?;
+        eframe::icon_data::from_png_bytes(include_bytes!("../assets/branding/fashioncraft-icon.png"))
+            .map_err(|error| format!("Cannot decode the bundled app icon: {error}"))?;
     let mut wgpu_options = eframe::egui_wgpu::WgpuConfiguration::default();
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup) = &mut wgpu_options.wgpu_setup {
         let base = setup.device_descriptor.clone();
@@ -223,7 +223,7 @@ pub fn run(
         ..Default::default()
     };
     eframe::run_native(
-        "ClothCraft | Simulation Studio",
+        "FashionCraft",
         options,
         Box::new(move |cc| {
             let render = cc.wgpu_render_state.clone().ok_or("wgpu unavailable")?;
@@ -586,12 +586,12 @@ impl Atelier {
             }
             Id::AddInternalRectangle => {
                 self.add_internal_shape(
-                    marvelous_cloth::garment::shapes2d::InternalShapeKind::Rectangle,
+                    fashioncraft::garment::shapes2d::InternalShapeKind::Rectangle,
                 )?;
             }
             Id::AddInternalEllipse => {
                 self.add_internal_shape(
-                    marvelous_cloth::garment::shapes2d::InternalShapeKind::Ellipse,
+                    fashioncraft::garment::shapes2d::InternalShapeKind::Ellipse,
                 )?;
             }
             Id::CheckSewingLength => self.check_sewing_lengths()?,
@@ -742,7 +742,7 @@ impl Atelier {
             Id::ImportBvh => self.import_bvh()?,
             Id::AttachPins | Id::DetachPins => {
                 let attached = matches!(id, Id::AttachPins);
-                if self.edit(marvelous_cloth::authoring::Command::AttachPins { attached }) {
+                if self.edit(fashioncraft::authoring::Command::AttachPins { attached }) {
                     self.status = if attached {
                         "Pins attached to the avatar · they follow it while an animation records"
                     } else {
@@ -794,7 +794,7 @@ impl Atelier {
                 let center = self
                     .piece_centre(&panel)
                     .ok_or("The piece has no mesh yet")?;
-                if !self.edit(marvelous_cloth::authoring::Command::DiamondDart {
+                if !self.edit(fashioncraft::authoring::Command::DiamondDart {
                     panel,
                     center,
                     width: 0.03,
@@ -814,7 +814,7 @@ impl Atelier {
                     .ok_or("Select an internal line first")?;
                 let mut extended = false;
                 for at_start in [true, false] {
-                    extended |= self.edit(marvelous_cloth::authoring::Command::ExtendLine {
+                    extended |= self.edit(fashioncraft::authoring::Command::ExtendLine {
                         panel: panel.clone(),
                         line: line.clone(),
                         at_start,
@@ -856,7 +856,7 @@ impl Atelier {
             }
             Id::ArchivePieces => {
                 let panels = self.selected_panels();
-                self.edit(marvelous_cloth::authoring::Command::ArchivePanels { panels });
+                self.edit(fashioncraft::authoring::Command::ArchivePanels { panels });
             }
             Id::RandomPieceColours => {
                 self.prefs.garment_display.piece_colors = !self.prefs.garment_display.piece_colors;
@@ -874,7 +874,7 @@ impl Atelier {
             }
             Id::DeletePieces => {
                 let panels = self.selected_panels();
-                self.edit(marvelous_cloth::authoring::Command::RemovePanels { panels });
+                self.edit(fashioncraft::authoring::Command::RemovePanels { panels });
             }
             Id::DuplicatePiece => {
                 let panel = self
@@ -882,7 +882,7 @@ impl Atelier {
                     .selected
                     .clone()
                     .ok_or("Select a panel first")?;
-                self.edit(marvelous_cloth::authoring::Command::Duplicate { panel });
+                self.edit(fashioncraft::authoring::Command::Duplicate { panel });
             }
             Id::DeactivatePieces | Id::DeactivatePiecesWithSeams | Id::ActivatePieces => {
                 let ids = self.selected_panels();
@@ -900,7 +900,7 @@ impl Atelier {
                 let on = !panels
                     .iter()
                     .all(|p| self.project.template.strengthened_panels.contains(p));
-                self.edit(marvelous_cloth::authoring::Command::Strengthen { panels, on });
+                self.edit(fashioncraft::authoring::Command::Strengthen { panels, on });
             }
             Id::SolidifyPieces => {
                 let ids = self.selected_panels();
@@ -915,7 +915,7 @@ impl Atelier {
             }
             Id::FlipPieceNormals => {
                 let panels = self.selected_panels();
-                self.edit(marvelous_cloth::authoring::Command::FlipNormals { panels });
+                self.edit(fashioncraft::authoring::Command::FlipNormals { panels });
             }
             Id::SuperimposeOver | Id::SuperimposeUnder => {
                 let ids = self.selected_panels();
@@ -1135,7 +1135,7 @@ impl Atelier {
                     .iter()
                     .find(|panel| panel.vertices.contains(&vertices[0]))
                     .map_or_else(Vec::new, |panel| {
-                        marvelous_cloth::vbd::grab::surface_patch(
+                        fashioncraft::vbd::grab::surface_patch(
                             &self.scene.garment.mesh,
                             &self.scene.state.x,
                             panel.triangles.clone(),

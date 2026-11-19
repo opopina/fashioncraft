@@ -1,12 +1,14 @@
-# ClothCraft
+# FashionCraft
 
-An open-source garment editor and cloth simulation prototype, written in Rust.
+Open-source 3D garment design and cloth simulation, written in Rust.
 
-Draw patterns, sew them together, place them around an avatar and simulate the result. Most work so far has gone into building a physics foundation that can handle difficult contact. The editor, interchange formats and material calibration need substantial work.
+Draw patterns, sew them together, place them around an avatar, simulate the drape and export the result to other 3D tools.
 
-**This is a research prototype, not a production garment tool.** Expect unfinished interactions, residual oscillation, slow simulation on dense meshes and cases that still fail. Help is welcome with the interface, physics, testing, documentation and file formats. You do not need to be a programmer to contribute a useful reproduction, workflow sketch or testable hypothesis.
+FashionCraft is built on [ClothCraft](https://github.com/erythrofr/ClothCraft), created by erythrofr with the ClothCraft contributors under the MIT license. Its physics engine, document model and first editor come from there; see [CONTRIBUTORS.md](CONTRIBUTORS.md) for who did what.
 
-![ClothCraft workspace](docs/screenshots/workspace.png)
+**FashionCraft is early alpha, not a production garment tool.** Expect unfinished interactions, residual oscillation, slow simulation on dense meshes and cases that still fail. Help is welcome with the interface, physics, testing, documentation and file formats. You do not need to be a programmer to contribute a useful reproduction, workflow sketch or testable hypothesis.
+
+![FashionCraft workspace](docs/screenshots/workspace.png)
 
 ## Try it
 
@@ -31,7 +33,7 @@ Use **Space** to start or pause, **Grab** to pull the cloth and **Ctrl+S** to sa
 - **Patterns:** rectangles, ellipses, arc sectors, Bézier contours, point editing, holes and internal sewing paths; independent and paired linked mirrors; two-piece booleans.
 - **Sewing:** whole boundaries, partial ranges and ordered multi-edge chains, with direction, explicit easing and editable relationships.
 - **Arrangement:** translation and rotation in 3D; a separate 2D board layout; undo/redo and semantic copy/paste.
-- **Simulation:** CPU and hybrid GPU VBD with OGC contact, mouse grabbing and passive motion diagnostics. The floor is currently a visual reference, not a physical collider.
+- **Simulation:** CPU and hybrid GPU VBD with OGC contact, smoothed Coulomb friction, a physical floor, gravity and quality presets, mouse grabbing and passive motion diagnostics.
 - **Documents:** Open, Save, Save As, portable avatar assets and local recovery. Keep a saved JSON and its adjacent `.assets` folder together.
 - **Starting assets:** six bundled pattern templates, native template JSON import, and static OBJ/glTF/GLB avatars through File → Import avatar. Avatar replacement preserves authored patterns but resets the drape and undo history; [supported geometry and limits](docs/avatar-import.md).
 - **Avatar inspection:** Properties → Simulation reports the actual collision mesh and can check the current arrangement through the CPU solver's initialization gate. [Coverage and limits](docs/avatar-diagnostics.md): topology warnings are not an intersection or global containment certificate.
@@ -42,6 +44,15 @@ Use **Space** to start or pause, **Grab** to pull the cloth and **Ctrl+S** to sa
   purchasing consumption; see [units and limits](docs/production-metrics.md).
 
 Select two boundaries in Sew, then confirm the nearby proposal; unequal lengths offer an explicit easing action. In Edit, box/lasso can select contour points across patterns for one group move; Delete removes selected pieces when no point, seam or text field owns the action. See [editing and inspection controls](docs/editor-basics.md).
+
+Added in FashionCraft on top of ClothCraft:
+
+- **Export:** OBJ with a material library, glTF 2.0 / GLB (optionally with the avatar and a recorded take), FBX 7.4, Alembic and USD / USDZ; quad retopology along the grain and welded seams for export.
+- **Avatar:** FBX import of static meshes, an automatic skeleton with skin weights, keyed poses and ready-made motions, and BVH motion retargeted onto the avatar.
+- **Body tools:** measurements along the body or the draped garment, and patterns traced directly on the avatar.
+- **Sewing:** automatic sewing of unsewn segments that pair up around the body.
+- **Production:** a 1:1 print sheet as PDF.
+- **Interface:** English and Spanish.
 
 These are implemented foundations, not completed production workflows. See the [workspace guide](docs/workspace-ui.md), [document and sewing guide](docs/documents-and-sewing.md) and [authoring reference](docs/authoring.md) for controls and limitations.
 
@@ -61,13 +72,14 @@ The long-term goal is interchangeable physics behind a stable document and autho
 
 | Data | Input | Output |
 |---|---|---|
-| Editable garment | ClothCraft project / template JSON | Project / template JSON |
-| Static avatar | OBJ, static glTF / GLB geometry | — |
-| Simulated garment mesh | — | OBJ geometry and material-space UVs |
+| Editable garment | Project / template JSON (also files saved by ClothCraft) | Project / template JSON |
+| Avatar | OBJ, static glTF / GLB, static FBX meshes; BVH motion | glTF / GLB, FBX |
+| Simulated garment mesh | — | OBJ + MTL, glTF / GLB, FBX, Alembic, USD / USDZ |
+| Print | — | 1:1 PDF sheet |
 | 2D patterns | Selected closed outlines from generic planar ASCII DXF and physically scaled SVG subsets | Annotated SVG preview and millimetre-scale sewing outlines with a 100 mm ruler; no allowances or tiling |
 | Research data | — | Metrics, fiber frames and geometric grain guides |
 
-DXF-AAMA/ASTM, MTL round trips, glTF/GLB export, animated avatars, Alembic, USD, FBX, PDF printing and grading rules remain planned. CLO and Marvelous Designer project files are not supported. Save preserves the editable document; Export writes separate interchange artifacts. See the [input/output contracts](docs/interoperability.md).
+DXF-AAMA/ASTM, Alembic and USD import and grading rules remain planned. CLO and Marvelous Designer project files are not supported. Save preserves the editable document; Export writes separate interchange artifacts. See the [input/output contracts](docs/interoperability.md).
 
 ## Help build it
 
@@ -113,6 +125,6 @@ The [architecture](docs/architecture.md), [handoff](docs/handoff.md) and [solver
 
 Original source and documentation are [MIT-licensed](LICENSE). The bundled MakeHuman assets retain their [CC0 notice and provenance](assets/makehuman/LICENSE.ASSETS.md); dependencies retain their own licenses. The project icon is documented in the [artwork record](assets/branding/README.md).
 
-Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork; the [integration notes](docs/firefly-integration.md) record provenance and fixes.
+FashionCraft is built on ClothCraft by erythrofr and the ClothCraft contributors; their copyright notice is kept in [LICENSE](LICENSE) and [CONTRIBUTORS.md](CONTRIBUTORS.md) lists the people involved. Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork; the [integration notes](docs/firefly-integration.md) record provenance and fixes.
 
-ClothCraft is independent of CLO, Marvelous Designer and ArtCraft. Public manuals inform workflow research; proprietary code, icons and garment examples are not included. The [manual study](docs/manual-study.md) records the references consulted.
+FashionCraft is not affiliated with CLO or Marvelous Designer; those names are trademarks of their owners. Public manuals inform workflow research; proprietary code, icons and garment examples are not included. The [manual study](docs/manual-study.md) records the references consulted.

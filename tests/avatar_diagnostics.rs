@@ -1,8 +1,8 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{SurfaceMesh, diagnostics},
     garment::GarmentTemplate,
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn tetra() -> SurfaceMesh {

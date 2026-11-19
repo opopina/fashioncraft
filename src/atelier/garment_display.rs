@@ -2,7 +2,7 @@
 //! colour, isolating the selected pieces, per-piece colours, state tints and the strain-map
 //! range with its legend. Hidden or isolated-away cloth is also left out of 3D picking.
 use super::*;
-use marvelous_cloth::{garment::template::PanelRange, render};
+use fashioncraft::{garment::template::PanelRange, render};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -31,7 +31,7 @@ impl GarmentStyle {
     /// The fabrics' looks as drawn in this style.
     pub(super) fn apply(
         self,
-        optics: &mut [Option<marvelous_cloth::garment::appearance::FabricAppearance>],
+        optics: &mut [Option<fashioncraft::garment::appearance::FabricAppearance>],
     ) {
         for look in optics.iter_mut().flatten() {
             if self != Self::TexturedThick {
@@ -638,7 +638,7 @@ impl Atelier {
             if !self.cloth_face_shown(face) {
                 continue;
             }
-            if let Some((d, _)) = marvelous_cloth::picking::ray_triangle(
+            if let Some((d, _)) = fashioncraft::picking::ray_triangle(
                 origin,
                 dir,
                 t.vertices.map(|i| self.scene.state.x[i]),
@@ -661,7 +661,7 @@ impl Atelier {
         let t = &garment.mesh.triangles[face];
         let material = &garment.materials[t.material];
         let text = strain_readout(
-            marvelous_cloth::energy::stretches(&self.scene.state.x, t, material),
+            fashioncraft::energy::stretches(&self.scene.state.x, t, material),
             material,
             self.strain_mode(),
         );
@@ -676,7 +676,7 @@ impl Atelier {
 /// "Weft · stretch 4.2 % · 61 % of limit": the most stretched direction and its values.
 pub(super) fn strain_readout(
     stretch: [f64; 2],
-    material: &marvelous_cloth::model::Material,
+    material: &fashioncraft::model::Material,
     mode: render::StrainMode,
 ) -> String {
     let tension = render::fibre_tension(stretch, material);
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn garment_styles_strip_thickness_then_textures_and_weave() {
-        use marvelous_cloth::garment::appearance::{FabricAppearance, Weave, WeaveKind};
+        use fashioncraft::garment::appearance::{FabricAppearance, Weave, WeaveKind};
         let rich = FabricAppearance {
             color_srgb: [200, 40, 40],
             render_thickness_mm: 2.,
@@ -869,7 +869,7 @@ mod tests {
 
     #[test]
     fn readout_names_the_most_stretched_direction() {
-        let material = marvelous_cloth::model::Material {
+        let material = fashioncraft::model::Material {
             warp: 400.,
             weft: 100.,
             ..Default::default()

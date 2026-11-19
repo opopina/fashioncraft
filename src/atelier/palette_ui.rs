@@ -1,7 +1,7 @@
 //! Colours for fabrics: the project palette (saved swatches) and the eyedropper, which takes
 //! the colour a piece shows at a point of the 3D view, its texture included.
 use super::*;
-use marvelous_cloth::{garment::appearance::FabricAppearance, picking};
+use fashioncraft::{garment::appearance::FabricAppearance, picking};
 
 /// Side of a palette swatch, points.
 const SWATCH: f32 = 18.;

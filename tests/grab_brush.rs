@@ -1,12 +1,12 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     vbd::{Grab, VbdSettings, VbdSolver, grab::surface_patch},
 };
+use glam::DVec3;
 use std::sync::Arc;
 mod common;
 
-fn fixture() -> Arc<marvelous_cloth::garment::CompiledGarment> {
+fn fixture() -> Arc<fashioncraft::garment::CompiledGarment> {
     let mut t = GarmentTemplate::two_panel_demo();
     t.seams.clear();
     for p in &mut t.panels {

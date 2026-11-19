@@ -1,13 +1,13 @@
 //! CPU-only, opt-in energy audit and scripted pull/hold/release. Not a benchmark
 //! of interactive performance. Never modifies the input document or executable.
 use clap::{Parser, ValueEnum};
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::{GarmentTemplate, template::Corner},
     model::State,
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use serde_json::json;
 use std::{
     fs,

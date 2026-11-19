@@ -17,7 +17,7 @@ try {
     )
     $rows = foreach ($case in $cases) {
         $destination = Join-Path 'output/cpu-suite' $case.Name
-        & '.\target\release\marvelous-cloth.exe' --headless --scene $case.Scene --grain $case.Grain --resolution $Resolution --steps $Steps --threads $Threads --output $destination | Out-Host
+        & '.\target\release\fashioncraft-reference.exe' --headless --scene $case.Scene --grain $case.Grain --resolution $Resolution --steps $Steps --threads $Threads --output $destination | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "CPU run failed: $($case.Name)" }
         $summary = Get-Content -LiteralPath (Join-Path $destination 'summary.json') -Raw | ConvertFrom-Json
         [PSCustomObject]@{

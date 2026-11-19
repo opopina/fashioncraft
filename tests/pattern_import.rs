@@ -1,5 +1,4 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::History,
     garment::{
         GarmentTemplate,
@@ -8,6 +7,7 @@ use marvelous_cloth::{
     },
     pattern_import::{self, Source},
 };
+use glam::DVec3;
 
 fn template() -> GarmentTemplate {
     serde_json::from_str(include_str!("../examples/templates/two-panel.json")).unwrap()
@@ -30,7 +30,7 @@ fn prepare(
     t: &GarmentTemplate,
     entities: &str,
     selected: &[usize],
-) -> Result<marvelous_cloth::authoring::Edit, String> {
+) -> Result<fashioncraft::authoring::Edit, String> {
     let d = read_ascii(&document(entities), Options::default()).unwrap();
     pattern_import::prepare(
         t,

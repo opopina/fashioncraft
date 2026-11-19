@@ -1,12 +1,12 @@
 //! Deactivated pieces stay put and take part in no contact; superimposed pieces start on
 //! the piece they are sewn to, outside or inside it.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring,
     garment::{GarmentTemplate, transfer},
     ogc::{OgcSettings, OgcWorld},
     vbd::VbdSolver,
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 /// Two flat panels lying on top of each other, `gap` apart, both facing +y.
@@ -50,7 +50,7 @@ fn a_deactivated_piece_may_start_inside_another() {
     // Two panels crossing each other: no simulation may start from this.
     let mut t = stacked(0.0);
     t.panels[1].placement.rotation_degrees = DVec3::ZERO;
-    let bounds = |g: &marvelous_cloth::garment::CompiledGarment, i: usize| {
+    let bounds = |g: &fashioncraft::garment::CompiledGarment, i: usize| {
         g.initial_state.x[g.panels[i].vertices.clone()].iter().fold(
             (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
             |(lo, hi), p| (lo.min(*p), hi.max(*p)),

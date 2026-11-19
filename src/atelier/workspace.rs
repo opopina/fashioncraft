@@ -164,12 +164,12 @@ impl Atelier {
                         .on_hover_text(i18n::tr(ui_lang, "Bring them back where they were, sewn to the pieces still on the board"))
                         .clicked()
                     {
-                        command = Some(marvelous_cloth::authoring::Command::RestoreArchived {
+                        command = Some(fashioncraft::authoring::Command::RestoreArchived {
                             id: entry.id.clone(),
                         });
                     }
                     if ui.small_button(i18n::tr(ui_lang, "Delete")).clicked() {
-                        command = Some(marvelous_cloth::authoring::Command::DeleteArchived {
+                        command = Some(fashioncraft::authoring::Command::DeleteArchived {
                             id: entry.id.clone(),
                         });
                     }
@@ -184,7 +184,7 @@ impl Atelier {
         let ui_lang = self.prefs.language;
         ui.collapsing(section(i18n::tr(ui_lang, "Files & formats")), |ui| {
             ui.label(i18n::tr(ui_lang, "Import"));
-            ui.small(i18n::tr(ui_lang, "ClothCraft project and template JSON"));
+            ui.small(i18n::tr(ui_lang, "FashionCraft project and template JSON"));
             ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX"));
             ui.small(i18n::tr(ui_lang, "Pattern outlines: generic ASCII DXF · physical SVG subsets"));
             ui.label(i18n::tr(ui_lang, "Export"));

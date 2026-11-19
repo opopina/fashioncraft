@@ -1,7 +1,6 @@
 //! Graphics on the 3D cloth: clipped to their image rectangle and to the piece, lifted a
 //! little off the side they are printed on, and their image files kept with the project.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::{FittingProject, ImageAsset},
     garment::{
         CompiledGarment, GarmentTemplate,
@@ -9,6 +8,7 @@ use marvelous_cloth::{
         presets::GarmentKind,
     },
 };
+use glam::{DVec2, DVec3};
 
 fn project() -> FittingProject {
     FittingProject::basic(
@@ -216,7 +216,7 @@ fn duplicate_image_asset_ids_are_refused() {
 
 #[test]
 fn images_used_by_fabric_textures_are_kept_with_the_project() {
-    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
+    use fashioncraft::garment::appearance::{FabricAppearance, FabricTexture};
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("plaid.png");
     std::fs::write(&image, b"pixels").unwrap();
@@ -250,7 +250,7 @@ fn images_used_by_fabric_textures_are_kept_with_the_project() {
 
 #[test]
 fn a_fabric_textures_normal_and_roughness_maps_travel_with_it() {
-    use marvelous_cloth::garment::appearance::{FabricAppearance, FabricTexture};
+    use fashioncraft::garment::appearance::{FabricAppearance, FabricTexture};
     let dir = tempfile::tempdir().unwrap();
     let mut assets = vec![];
     for (id, bytes) in [

@@ -1,6 +1,5 @@
 //! Prototype checks for landmark-referenced arrangement anchors (EXO-AV-002 scope review).
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::{SurfaceMesh, diagnostics},
     avatar_measurements::{AvatarFrame, Landmark},
@@ -11,6 +10,7 @@ use marvelous_cloth::{
         template::PanelWrap,
     },
 };
+use glam::{DVec2, DVec3};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 fn frame() -> AvatarFrame {
@@ -201,7 +201,7 @@ fn placement_never_changes_rest_geometry() {
         serde_json::to_string(&before.mesh.uv).unwrap(),
         serde_json::to_string(&after.mesh.uv).unwrap()
     );
-    let tris = |g: &marvelous_cloth::garment::CompiledGarment| {
+    let tris = |g: &fashioncraft::garment::CompiledGarment| {
         g.mesh
             .triangles
             .iter()

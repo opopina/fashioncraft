@@ -1,7 +1,6 @@
 //! Slash and spread: a piece slashed along a straight internal line and one part (or both)
 //! turned about the far end of the slash, opening a wedge; what lies on each part turns with it.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, SpreadSide},
     fitting::FittingProject,
     garment::{
@@ -13,6 +12,7 @@ use marvelous_cloth::{
         shapes::Primitive,
     },
 };
+use glam::DVec2;
 
 /// A lone 40 × 60 cm piece with a vertical slash line up its middle, from 20 cm to 40 cm.
 fn piece() -> GarmentTemplate {

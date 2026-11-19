@@ -1,12 +1,12 @@
 //! Pattern display overlays for the 2D board: piece names, outline segment lengths, the grid and
 //! the avatar's front silhouette. Everything here is presentation only: it reads the template and
 //! the collider surface and never writes a material coordinate, a placement or the history.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring,
     avatar::SurfaceMesh,
     garment::{curves, polygon::PolygonPattern, template::Placement},
 };
+use glam::DVec2;
 use serde::{Deserialize, Serialize};
 
 /// What the pattern board draws besides the pieces. Stored in the preferences file.

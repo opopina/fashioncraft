@@ -1,5 +1,5 @@
+use fashioncraft::solver_lab::{contact_newton, dense_contact::Row};
 use glam::DVec3;
-use marvelous_cloth::solver_lab::{contact_newton, dense_contact::Row};
 
 #[derive(Clone, Copy)]
 pub enum Method {
@@ -152,7 +152,7 @@ fn unilateral_direction(
     method: Method,
     search_rows: &[Row],
 ) -> Result<(Vec<DVec3>, Vec<f64>), String> {
-    use marvelous_cloth::solver_lab::unilateral_newton::{Problem, solve};
+    use fashioncraft::solver_lab::unilateral_newton::{Problem, solve};
     let n = 3 * x.len();
     let balance = residual(x, history)?;
     let gradient = residual(x, &vec![0.; history.len()])?;
@@ -189,7 +189,7 @@ fn unilateral_direction(
             rows: &geometry,
         };
         let (dx, reactions) = if matches!(method, Method::Constrained) {
-            let report = marvelous_cloth::solver_lab::unilateral_newton::constrained_direction_with_search_rows(
+            let report = fashioncraft::solver_lab::unilateral_newton::constrained_direction_with_search_rows(
                 problem, &selected, search_rows,
             )?;
             *capture = Some(
@@ -209,9 +209,8 @@ fn unilateral_direction(
                 report.solution[n..].iter().map(|v| v.max(0.)).collect(),
             )
         } else if matches!(method, Method::Bounded) {
-            let report = marvelous_cloth::solver_lab::unilateral_newton::bounded_direction(
-                problem, &selected,
-            )?;
+            let report =
+                fashioncraft::solver_lab::unilateral_newton::bounded_direction(problem, &selected)?;
             // Keep the current bounded linearization so a failed nonlinear
             // iteration can be checked independently, not only the first one.
             *capture = Some(
@@ -222,7 +221,7 @@ fn unilateral_direction(
             );
             (report.solution[..n].to_vec(), report.solution[n..].to_vec())
         } else {
-            marvelous_cloth::solver_lab::unilateral_newton::natural_direction(problem, &selected)?
+            fashioncraft::solver_lab::unilateral_newton::natural_direction(problem, &selected)?
         };
         let mut lambda = vec![0.; history.len()];
         for ((id, _), l) in rows.iter().zip(reactions) {

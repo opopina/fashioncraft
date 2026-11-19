@@ -3,7 +3,7 @@
 //! A selection aid only: the 3D view, the inspector and scripts still reach a locked piece, and
 //! nothing physical depends on the locks. Every change is one `Command::SetBoardLocks` step.
 use super::*;
-use marvelous_cloth::authoring::Command;
+use fashioncraft::authoring::Command;
 use std::collections::BTreeSet;
 
 /// The lock state a lock action leads to, from the current one. Pure, so it can be tested

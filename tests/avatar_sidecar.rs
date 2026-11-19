@@ -1,6 +1,6 @@
 //! An avatar's own anchors and joints travel with it: through the import confirmation and
 //! into a saved project's assets, so they are not estimated again from its shape.
-use marvelous_cloth::{
+use fashioncraft::{
     avatar_import::Candidate,
     document::portable_avatar,
     fitting::FittingProject,

@@ -1,5 +1,4 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::Jet,
     ogc::{
         feature_hierarchy::Pair,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         two_sided_contact::{Feature, MinimumContact, Settings, smooth_minimum},
     },
 };
+use glam::{DQuat, DVec3};
 
 fn settings() -> Settings {
     Settings {

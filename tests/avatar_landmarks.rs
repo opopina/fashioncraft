@@ -1,14 +1,14 @@
 //! Joints estimated from an avatar's shape land near the real ones on the bundled mannequin,
 //! scaled, moved or in a T pose; anything that is not a standing body is refused; and an
 //! avatar without anchors becomes arrangeable and poseable.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_landmarks::{JOINTS, estimate},
     avatar_rig::{Rig, preset},
     fitting::AvatarPose,
     garment::arrangement::load_sidecar,
 };
+use glam::DVec3;
 use std::{collections::BTreeMap, path::PathBuf};
 
 fn mannequin() -> PathBuf {

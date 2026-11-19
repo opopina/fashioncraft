@@ -1,13 +1,13 @@
 //! Welded seams: every seam's two edges become one, vertex to vertex, by adding each side's
 //! vertices to the other side's edge and merging what is sewn together.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     garment::presets::GarmentKind,
     gltf_export::front_triangles,
     obj_export::{self, ObjOptions, ObjScene},
     weld::{Welded, weld},
 };
+use glam::{DVec2, DVec3};
 use std::{
     collections::{BTreeSet, HashMap},
     path::PathBuf,

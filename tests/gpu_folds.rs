@@ -6,12 +6,12 @@
 #[allow(dead_code)]
 mod folds;
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]

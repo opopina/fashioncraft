@@ -1,8 +1,7 @@
 //! Segment editing on the 2D board: changing a boundary's length from either end or both,
 //! matching two lengths, laying one piece's boundary along another's, and copying closed
 //! internal shapes as pieces and pieces as internal shapes.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{
         self, Command,
         arrange2d::{self, SegmentEnd},
@@ -17,6 +16,7 @@ use marvelous_cloth::{
         shapes2d::{self, InternalShapeKind},
     },
 };
+use glam::DVec2;
 
 fn meshing() -> MeshingSettings {
     MeshingSettings {

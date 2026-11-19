@@ -1,5 +1,4 @@
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History, clipboard::PatternClipboard},
     garment::{
         GarmentTemplate,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         shapes::{self, MirrorAxis, Primitive},
     },
 };
+use glam::DVec2;
 
 fn fixture() -> GarmentTemplate {
     let t = authoring::apply(
@@ -191,7 +191,7 @@ fn topology_edits_are_rejected_until_unlinked_and_delete_cleans_relation() {
 
 #[test]
 fn sewing_ranges_keep_their_direction_during_linked_edits() {
-    use marvelous_cloth::garment::seam::{BoundaryRef, Side};
+    use fashioncraft::garment::seam::{BoundaryRef, Side};
     let t = fixture();
     let edge = |panel: &str| BoundaryRef {
         panel: panel.into(),

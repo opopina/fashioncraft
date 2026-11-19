@@ -3,7 +3,7 @@
 //! captures of the 3D view: one PNG, or every frame of the take encoded as a video with
 //! ffmpeg when it is installed (otherwise the PNG frames stay).
 use super::*;
-use marvelous_cloth::avatar_animation;
+use fashioncraft::avatar_animation;
 use rfd::FileDialog;
 use std::{
     path::{Path, PathBuf},
@@ -43,7 +43,7 @@ pub(super) struct Media3d {
 #[derive(Default)]
 struct PrintDialog {
     open: bool,
-    paper: marvelous_cloth::garment::print_pdf::Paper,
+    paper: fashioncraft::garment::print_pdf::Paper,
 }
 
 /// The OBJ export options, kept between exports.
@@ -52,7 +52,7 @@ struct ObjDialog {
     open: bool,
     selected_only: bool,
     avatar: bool,
-    options: marvelous_cloth::obj_export::ObjOptions,
+    options: fashioncraft::obj_export::ObjOptions,
     /// Bake colours, fabric textures and prints into one image of this many pixels a side.
     bake: Option<u32>,
 }
@@ -194,7 +194,7 @@ impl Atelier {
             .iter()
             .map(|a| (a.id.clone(), a.path.clone()))
             .collect();
-        let scene = marvelous_cloth::gltf_export::GltfScene {
+        let scene = fashioncraft::gltf_export::GltfScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
@@ -202,7 +202,7 @@ impl Atelier {
             avatar: self.prefs.garment_display.avatar.then_some(&avatar),
             take: take.map(|t| (t, bodies)),
         };
-        marvelous_cloth::gltf_export::write(&scene, &path)?;
+        fashioncraft::gltf_export::write(&scene, &path)?;
         self.status = format!(
             "Exported {}{}",
             path.display(),
@@ -243,7 +243,7 @@ impl Atelier {
             .iter()
             .map(|a| (a.id.clone(), a.path.clone()))
             .collect();
-        let scene = marvelous_cloth::usd_export::UsdScene {
+        let scene = fashioncraft::usd_export::UsdScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
@@ -251,7 +251,7 @@ impl Atelier {
             avatar: self.prefs.garment_display.avatar.then_some(&avatar),
             take: take.map(|t| (t, bodies)),
         };
-        marvelous_cloth::usd_export::write(&scene, &path)?;
+        fashioncraft::usd_export::write(&scene, &path)?;
         self.status = format!(
             "Exported {}{}",
             path.display(),
@@ -290,7 +290,7 @@ impl Atelier {
             .iter()
             .map(|a| (a.id.clone(), a.path.clone()))
             .collect();
-        let scene = marvelous_cloth::fbx_export::FbxScene {
+        let scene = fashioncraft::fbx_export::FbxScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
@@ -302,7 +302,7 @@ impl Atelier {
                 .then_some(self.scene.collider.surface.as_ref()),
             take: take.map(|t| (t, bodies)),
         };
-        marvelous_cloth::fbx_export::write(&scene, &path)?;
+        fashioncraft::fbx_export::write(&scene, &path)?;
         self.status = format!(
             "Exported {}{}",
             path.display(),
@@ -335,7 +335,7 @@ impl Atelier {
             ),
             _ => None,
         };
-        let scene = marvelous_cloth::abc_export::AbcScene {
+        let scene = fashioncraft::abc_export::AbcScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
@@ -346,7 +346,7 @@ impl Atelier {
                 .then_some(self.scene.collider.surface.as_ref()),
             take: take.map(|t| (t, bodies)),
         };
-        let summary = marvelous_cloth::abc_export::write(&scene, &path)?;
+        let summary = fashioncraft::abc_export::write(&scene, &path)?;
         self.status = format!(
             "Alembic saved: {} frames in {}",
             summary.frames,
@@ -378,7 +378,7 @@ impl Atelier {
                     egui::ComboBox::from_id_salt("print.paper")
                         .selected_text(i18n::tr(ui_lang, paper.label()))
                         .show_ui(ui, |ui| {
-                            for p in marvelous_cloth::garment::print_pdf::Paper::ALL {
+                            for p in fashioncraft::garment::print_pdf::Paper::ALL {
                                 ui.selectable_value(paper, p, i18n::tr(ui_lang, p.label()));
                             }
                         });
@@ -422,10 +422,10 @@ impl Atelier {
         let (bytes, pages) = if pdf {
             let paper = self.authoring.media3d.print.paper;
             let (bytes, summary) =
-                marvelous_cloth::garment::print_pdf::print_pattern_pdf(template, paper)?;
+                fashioncraft::garment::print_pdf::print_pattern_pdf(template, paper)?;
             (bytes, summary.pages)
         } else {
-            let svg = marvelous_cloth::garment::export::print_pattern_svg(template)?;
+            let svg = fashioncraft::garment::export::print_pattern_svg(template)?;
             (svg.into_bytes(), 1)
         };
         std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -484,20 +484,19 @@ impl Atelier {
                         decoded.push((asset, loaded.image.clone()));
                     }
                 }
-                let pixels: std::collections::HashMap<String, marvelous_cloth::bake::Image> =
-                    decoded
-                        .iter()
-                        .map(|(id, image)| {
-                            (
-                                id.clone(),
-                                marvelous_cloth::bake::Image {
-                                    size: image.size,
-                                    rgba: &image.rgba,
-                                },
-                            )
-                        })
-                        .collect();
-                Some(marvelous_cloth::bake::bake(
+                let pixels: std::collections::HashMap<String, fashioncraft::bake::Image> = decoded
+                    .iter()
+                    .map(|(id, image)| {
+                        (
+                            id.clone(),
+                            fashioncraft::bake::Image {
+                                size: image.size,
+                                rgba: &image.rgba,
+                            },
+                        )
+                    })
+                    .collect();
+                Some(fashioncraft::bake::bake(
                     &self.project.template,
                     &self.scene.garment,
                     &pixels,
@@ -506,7 +505,7 @@ impl Atelier {
             }
             None => None,
         };
-        let scene = marvelous_cloth::obj_export::ObjScene {
+        let scene = fashioncraft::obj_export::ObjScene {
             template: &self.project.template,
             garment: &self.scene.garment,
             state: &self.scene.state,
@@ -514,7 +513,7 @@ impl Atelier {
             avatar: avatar.then_some(self.scene.collider.surface.as_ref()),
             atlas: atlas.as_ref(),
         };
-        let summary = marvelous_cloth::obj_export::write(&scene, &options, &path)?;
+        let summary = fashioncraft::obj_export::write(&scene, &options, &path)?;
         self.status = format!(
             "Exported {}: {} vertices, {} faces, {} textures",
             path.display(),
@@ -597,7 +596,7 @@ impl Atelier {
                 egui::ComboBox::from_id_salt("obj.units")
                     .selected_text(o.units.label())
                     .show_ui(ui, |ui| {
-                        for u in marvelous_cloth::obj_export::Units::ALL {
+                        for u in fashioncraft::obj_export::Units::ALL {
                             ui.selectable_value(&mut o.units, u, u.label());
                         }
                     });

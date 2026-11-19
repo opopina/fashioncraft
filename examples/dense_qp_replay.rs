@@ -1,6 +1,6 @@
 //! Replay an actual failed dense contact QP without advancing a simulation.
 use clap::Parser;
-use marvelous_cloth::solver_lab::{
+use fashioncraft::solver_lab::{
     contact_qp::Settings,
     dense_contact::{self, DualMethod, Row},
 };

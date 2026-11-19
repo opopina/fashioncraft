@@ -2,14 +2,14 @@
 //! stretches far less under its own weight. A solidified piece is drawn to its captured shape
 //! fitted (rotated and moved) to where it is heading: a square held at its centre stays flat
 //! instead of drooping, while a solidified square still falls exactly as fast as a free one.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{GarmentTemplate, pins::MaterialPinTarget},
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn far_away() -> SurfaceMesh {
@@ -88,7 +88,7 @@ fn umbrella(held: bool) -> GarmentTemplate {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.24,
         height: 0.24,
         nx: 6,

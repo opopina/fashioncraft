@@ -773,10 +773,10 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             vec![
                 node("FBXHeaderVersion", vec![Prop::I32(1003)]),
                 node("FBXVersion", vec![Prop::I32(VERSION as i32)]),
-                node("Creator", vec![s("ClothCraft")]),
+                node("Creator", vec![s("FashionCraft")]),
             ],
         ),
-        node("Creator", vec![s("ClothCraft")]),
+        node("Creator", vec![s("FashionCraft")]),
         with(
             "GlobalSettings",
             vec![],

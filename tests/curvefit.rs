@@ -1,6 +1,5 @@
 //! Fewer curve points for the same curve, and groups of internal lines.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate, curvefit,
@@ -11,6 +10,7 @@ use marvelous_cloth::{
         presets::{self, GarmentKind},
     },
 };
+use glam::DVec2;
 use std::f64::consts::TAU;
 
 /// A drafted piece through `points` with Catmull–Rom pen tangents where `smooth` says so.

@@ -1,4 +1,4 @@
-use marvelous_cloth::solver_lab::bounded_least_squares::solve;
+use fashioncraft::solver_lab::bounded_least_squares::solve;
 
 #[test]
 fn bound_release_and_inconsistent_residual_are_explicit() {

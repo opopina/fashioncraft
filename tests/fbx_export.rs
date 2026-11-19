@@ -1,6 +1,6 @@
 //! FBX export: a binary FBX 7.4 whose node records nest and close properly, with a mesh model
 //! per piece in centimetres, its material and texture, and the avatar.
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     fbx_export::{self, FbxScene},
     fitting::FittingProject,
@@ -165,7 +165,7 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
 
 #[test]
 fn a_take_becomes_blend_shapes_keyed_frame_by_frame() {
-    use marvelous_cloth::avatar_animation::Take;
+    use fashioncraft::avatar_animation::Take;
     let project = FittingProject::basic(GarmentKind::Tshirt, 1, mannequin());
     let scene = project.compile().unwrap();
     let avatar = SurfaceMesh::load_obj(&mannequin()).unwrap();
@@ -238,7 +238,7 @@ fn a_take_becomes_blend_shapes_keyed_frame_by_frame() {
     };
     assert!(named("TimeMode") && named("CustomFrameRate") && named("TimeSpanStop"));
     // Our own importer still reads the meshes, at the take's first frame.
-    let imported = marvelous_cloth::fbx_import::fbx(&bytes).unwrap();
+    let imported = fashioncraft::fbx_import::fbx(&bytes).unwrap();
     assert_eq!(
         imported.mesh.vertices.len(),
         scene.garment.mesh.uv.len() + avatar.vertices.len()

@@ -1,5 +1,5 @@
 //! CPU-only evidence export from a saved garment, without advancing simulation.
-use marvelous_cloth::{fitting::FittingProject, issue_report};
+use fashioncraft::{fitting::FittingProject, issue_report};
 use std::{collections::BTreeSet, path::Path};
 fn main() -> Result<(), String> {
     rayon::ThreadPoolBuilder::new()

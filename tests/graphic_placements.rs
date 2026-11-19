@@ -1,5 +1,5 @@
+use fashioncraft::garment::graphics::{GraphicPlacement, GraphicSide};
 use glam::DVec2;
-use marvelous_cloth::garment::graphics::{GraphicPlacement, GraphicSide};
 
 fn placement() -> GraphicPlacement {
     GraphicPlacement {
@@ -16,7 +16,7 @@ fn placement() -> GraphicPlacement {
 
 #[test]
 fn persistent_placements_validate_and_keep_legacy_and_physics() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::GarmentTemplate,
     };
@@ -80,7 +80,7 @@ fn persistent_placements_validate_and_keep_legacy_and_physics() {
 
 #[test]
 fn placement_limit_and_invalid_edits_are_rejected_atomically() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::GarmentTemplate,
     };
@@ -143,7 +143,7 @@ fn placement_limit_and_invalid_edits_are_rejected_atomically() {
 
 #[test]
 fn saved_drape_reopens_after_graphic_metadata_change() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::FittingProject,
         garment::{GarmentTemplate, presets::GarmentKind},
     };
@@ -195,7 +195,7 @@ fn saved_drape_reopens_after_graphic_metadata_change() {
 
 #[test]
 fn graphic_edit_and_removal_survive_project_save_and_reopen() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         fitting::FittingProject,
         garment::{GarmentTemplate, presets::GarmentKind},
@@ -252,7 +252,7 @@ fn graphic_edit_and_removal_survive_project_save_and_reopen() {
 
 #[test]
 fn copy_paste_and_delete_preserve_graphic_identity_and_ownership() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, clipboard::PatternClipboard},
         garment::GarmentTemplate,
     };
@@ -316,7 +316,7 @@ fn copy_paste_and_delete_preserve_graphic_identity_and_ownership() {
 
 #[test]
 fn material_frame_changes_and_mirror_fail_atomically_but_remeshing_is_valid() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::{
             GarmentTemplate,
@@ -540,7 +540,7 @@ fn roundtrip_is_data_only_and_rejects_unknown_fields() {
 
 #[test]
 fn panel_references_are_checked_without_mutating_template() {
-    use marvelous_cloth::garment::GarmentTemplate;
+    use fashioncraft::garment::GarmentTemplate;
     let template = GarmentTemplate::two_panel_demo();
     let before = serde_json::to_vec(&template).unwrap();
     let p = GraphicPlacement {
@@ -584,7 +584,7 @@ fn extreme_position_and_aspect_ratio_do_not_silently_collapse_uv() {
 
 #[test]
 fn triangle_uvs_follow_named_panel_rest_coordinates_and_rebuild_after_remeshing() {
-    use marvelous_cloth::garment::GarmentTemplate;
+    use fashioncraft::garment::GarmentTemplate;
     let mut template = GarmentTemplate::two_panel_demo();
     assert_eq!(template.panels[0].fabric, template.panels[1].fabric);
     let p = GraphicPlacement {
@@ -639,7 +639,7 @@ fn triangle_uvs_follow_named_panel_rest_coordinates_and_rebuild_after_remeshing(
 
 #[test]
 fn triangle_uvs_reject_missing_or_malformed_compiled_data() {
-    use marvelous_cloth::garment::GarmentTemplate;
+    use fashioncraft::garment::GarmentTemplate;
     let template = GarmentTemplate::two_panel_demo();
     let garment = template.compile().unwrap();
     let mut p = GraphicPlacement {
@@ -666,7 +666,7 @@ fn triangle_uvs_reject_missing_or_malformed_compiled_data() {
 
 #[test]
 fn triangle_uv_conversion_preserves_detail_before_f32_cast() {
-    use marvelous_cloth::garment::GarmentTemplate;
+    use fashioncraft::garment::GarmentTemplate;
     let mut template = GarmentTemplate::two_panel_demo();
     template.panels.truncate(1);
     template.seams.clear();

@@ -4,8 +4,8 @@
 //! Pins are authored targets in material coordinates (`pin_targets`), so each action is one
 //! validated undo step; frozen pieces keep their own hold and are skipped.
 use super::*;
+use fashioncraft::{authoring, picking};
 use glam::{DVec2, DVec3};
-use marvelous_cloth::{authoring, picking};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The Grab tool's pin mode and its box gesture.
@@ -202,7 +202,7 @@ impl Atelier {
         let g = &self.scene.garment;
         let point = |v: usize| {
             g.panels.iter().find(|r| r.vertices.contains(&v)).map(|r| {
-                marvelous_cloth::garment::template::TackPoint {
+                fashioncraft::garment::template::TackPoint {
                     panel: r.id.clone(),
                     uv: g.mesh.uv[v],
                 }
@@ -225,7 +225,7 @@ impl Atelier {
                     .any(|t| t.id == format!("tack_{k}"))
             })
             .unwrap_or(1);
-        let tack = marvelous_cloth::garment::template::Tack {
+        let tack = fashioncraft::garment::template::Tack {
             id: format!("tack_{n}"),
             a,
             b,
@@ -687,8 +687,8 @@ impl Atelier {
 /// skipped (their count is returned); pinning leaves out points already pinned and releasing
 /// leaves out points that are not.
 fn pin_selections(
-    garment: &marvelous_cloth::garment::CompiledGarment,
-    template: &marvelous_cloth::garment::GarmentTemplate,
+    garment: &fashioncraft::garment::CompiledGarment,
+    template: &fashioncraft::garment::GarmentTemplate,
     vertices: &[usize],
     hold: bool,
 ) -> (BTreeMap<String, Vec<DVec2>>, usize) {
@@ -721,7 +721,7 @@ fn pin_selections(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use marvelous_cloth::garment::GarmentTemplate;
+    use fashioncraft::garment::GarmentTemplate;
 
     #[test]
     fn interior_points_pin_where_they_are_and_release() {

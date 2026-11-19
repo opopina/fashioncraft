@@ -1,7 +1,7 @@
 //! Transient selection and system clipboard adapters, separate from the document.
 use super::*;
+use fashioncraft::authoring::{Command, clipboard::PatternClipboard};
 use glam::DVec2;
-use marvelous_cloth::authoring::{Command, clipboard::PatternClipboard};
 use std::collections::BTreeSet;
 
 #[derive(Default, PartialEq, Eq, Clone, Copy)]
@@ -223,19 +223,16 @@ fn apply_marquee_selection<T: Ord>(
 /// Visibility broad phase, refitted from the current draped positions.
 /// This is only for editor markers; it is not used by collision detection.
 struct ClothVisibility {
-    tree: marvelous_cloth::ogc::bvh::Bvh,
-    nodes: Vec<marvelous_cloth::ogc::bvh::NodeView>,
+    tree: fashioncraft::ogc::bvh::Bvh,
+    nodes: Vec<fashioncraft::ogc::bvh::NodeView>,
 }
 // Extreme coordinates fall back to the existing exhaustive query, avoiding
 // unbounded cancellation in the optional visibility accelerator.
 const MAX_VISIBILITY_COORD: f64 = 1e6;
 impl ClothVisibility {
-    fn new(
-        positions: &[glam::DVec3],
-        triangles: &[marvelous_cloth::model::Triangle],
-    ) -> Option<Self> {
+    fn new(positions: &[glam::DVec3], triangles: &[fashioncraft::model::Triangle]) -> Option<Self> {
         let boxes = visibility_bounds(positions, triangles)?;
-        let tree = marvelous_cloth::ogc::bvh::Bvh::new(&boxes, &vec![true; boxes.len()]);
+        let tree = fashioncraft::ogc::bvh::Bvh::new(&boxes, &vec![true; boxes.len()]);
         let nodes = tree.nodes().collect();
         Some(Self { tree, nodes })
     }
@@ -245,7 +242,7 @@ impl ClothVisibility {
         direction: glam::DVec3,
         max_t: f64,
         positions: &[glam::DVec3],
-        triangles: &[marvelous_cloth::model::Triangle],
+        triangles: &[fashioncraft::model::Triangle],
     ) -> bool {
         self.any_candidate(origin, direction, max_t, |i| {
             picking::ray_triangle(
@@ -285,9 +282,9 @@ impl ClothVisibility {
 
 fn visibility_bounds(
     positions: &[glam::DVec3],
-    triangles: &[marvelous_cloth::model::Triangle],
-) -> Option<Vec<marvelous_cloth::ogc::bvh::Bounds>> {
-    use marvelous_cloth::ogc::bvh::Bounds;
+    triangles: &[fashioncraft::model::Triangle],
+) -> Option<Vec<fashioncraft::ogc::bvh::Bounds>> {
+    use fashioncraft::ogc::bvh::Bounds;
     let mut boxes = Vec::with_capacity(triangles.len());
     for triangle in triangles {
         let [a, b, c] = triangle.vertices;
@@ -311,11 +308,7 @@ pub(super) struct ClothVisibilityCache {
     positions: Vec<glam::DVec3>,
 }
 impl ClothVisibilityCache {
-    fn prepare(
-        &mut self,
-        positions: &[glam::DVec3],
-        triangles: &[marvelous_cloth::model::Triangle],
-    ) {
+    fn prepare(&mut self, positions: &[glam::DVec3], triangles: &[fashioncraft::model::Triangle]) {
         let same_topology = self.tree.is_some()
             && self.topology.len() == triangles.len()
             && self
@@ -355,7 +348,7 @@ impl ClothVisibilityCache {
 /// avoids building for cheap early occluders and adapts to mixed visibility.
 pub(super) struct ClothVisibilityQueries<'a> {
     positions: &'a [glam::DVec3],
-    triangles: &'a [marvelous_cloth::model::Triangle],
+    triangles: &'a [fashioncraft::model::Triangle],
     eligible: bool,
     attempted: bool,
     scanned: usize,
@@ -364,7 +357,7 @@ pub(super) struct ClothVisibilityQueries<'a> {
 impl<'a> ClothVisibilityQueries<'a> {
     pub(super) fn new(
         positions: &'a [glam::DVec3],
-        triangles: &'a [marvelous_cloth::model::Triangle],
+        triangles: &'a [fashioncraft::model::Triangle],
         point_count: usize,
         cache: &'a mut ClothVisibilityCache,
     ) -> Self {
@@ -421,7 +414,7 @@ fn ray_hits_bounds(
     origin: glam::DVec3,
     direction: glam::DVec3,
     max_t: f64,
-    bounds: marvelous_cloth::ogc::bvh::Bounds,
+    bounds: fashioncraft::ogc::bvh::Bounds,
 ) -> bool {
     if max_t <= 0. {
         return false;
@@ -841,7 +834,7 @@ impl Atelier {
                 let selected = groups.entry(panel.id.clone()).or_insert_with(Vec::new);
                 for (k, uv) in poly.points.iter().enumerate() {
                     let q = self.board_origin(index)
-                        + marvelous_cloth::authoring::rotate_2d(*uv, self.board_angle(index));
+                        + fashioncraft::authoring::rotate_2d(*uv, self.board_angle(index));
                     if region.contains(self.authoring.board.screen(canvas, q))
                         && !selected.contains(&k)
                     {
@@ -885,7 +878,7 @@ impl Atelier {
                     self.authoring.board.screen(
                         canvas,
                         self.board_origin(i)
-                            + marvelous_cloth::authoring::rotate_2d(uv, self.board_angle(i)),
+                            + fashioncraft::authoring::rotate_2d(uv, self.board_angle(i)),
                     )
                 };
                 let range = &self.scene.garment.panels[i];
@@ -1187,8 +1180,8 @@ mod tests {
 
     #[test]
     fn cloth_visibility_bvh_matches_exhaustive_queries_and_prunes_work() {
+        use fashioncraft::model::Triangle;
         use glam::{DMat2, DVec3};
-        use marvelous_cloth::model::Triangle;
         let mut positions = Vec::new();
         let mut triangles = Vec::new();
         for y in 0..32 {

@@ -1,10 +1,10 @@
-use glam::DVec3;
-use marvelous_cloth::ogc::{
+use fashioncraft::ogc::{
     OgcSettings, OgcWorld,
     feature_hierarchy::{Hierarchy, Pair},
     geometry::{closest_segments, closest_triangle},
     topology::Topology,
 };
+use glam::DVec3;
 use std::collections::BTreeSet;
 
 fn distance(pair: Pair, top: &Topology, x: &[DVec3]) -> f64 {

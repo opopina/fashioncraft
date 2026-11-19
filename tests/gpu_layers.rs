@@ -2,14 +2,14 @@
 //! GPU solver, as in tests/layers.rs. Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]
@@ -34,7 +34,7 @@ fn gpu_inner_layer_keeps_still_when_the_outer_one_hits_it() {
         p.id = format!("square{k}");
         p.name = p.id.clone();
         p.pins.clear();
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.12,
             height: 0.12,
             nx: 3,

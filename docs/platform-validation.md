@@ -40,7 +40,7 @@ Local equivalent:
 
 ```sh
 cargo test --locked --no-default-features -j 2 -- --test-threads=2
-cargo build --locked --release -j 2 --features desktop --bin cloth-fit --bin marvelous-cloth --bin cloth-template
+cargo build --locked --release -j 2 --features desktop --bin cloth-fit --bin fashioncraft-reference --bin cloth-template
 ```
 
 ## Named-platform result, 23 October 2026

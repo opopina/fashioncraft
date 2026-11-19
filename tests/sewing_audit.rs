@@ -1,4 +1,4 @@
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     GarmentTemplate,
     seam::{BoundaryRef, Side, audit::report},
 };
@@ -200,11 +200,11 @@ fn unsupported_geometry_and_excessive_counts_fail_explicitly() {
 
 #[test]
 fn polygon_named_edges_and_missing_edges_are_resolved_like_compiler() {
-    use glam::DVec2;
-    use marvelous_cloth::garment::{
+    use fashioncraft::garment::{
         meshing::MeshingSettings,
         shapes::{self, Primitive},
     };
+    use glam::DVec2;
     let mut t = GarmentTemplate::two_panel_demo();
     t.version = 2;
     for p in &mut t.panels {
@@ -314,11 +314,11 @@ fn audit_validity_agrees_with_compiler_across_sewing_policies() {
 
 #[test]
 fn curved_boundary_audit_matches_compiler_and_finds_local_mismatch() {
-    use glam::DVec2;
-    use marvelous_cloth::garment::{
+    use fashioncraft::garment::{
         meshing::MeshingSettings,
         shapes::{self, Primitive},
     };
+    use glam::DVec2;
     let mut t = GarmentTemplate::two_panel_demo();
     t.version = 2;
     for p in &mut t.panels {
@@ -355,7 +355,7 @@ fn curved_boundary_audit_matches_compiler_and_finds_local_mismatch() {
 
 #[test]
 fn cli_project_mode_reads_rest_template_without_loading_avatar() {
-    use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+    use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("Garment.clothcraft");
     let mut p = FittingProject::basic(

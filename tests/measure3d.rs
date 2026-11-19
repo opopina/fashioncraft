@@ -1,7 +1,7 @@
 //! Measuring on meshes: a level plane cuts closed loops around tubes and open chains across
 //! sheets, the girth through a point is the loop nearest to it, and paths add up their legs.
+use fashioncraft::measure3d::{girth, level_cuts, path_length};
 use glam::DVec3;
-use marvelous_cloth::measure3d::{girth, level_cuts, path_length};
 use std::f64::consts::TAU;
 
 /// An open tube along y: `n` sides of radius `r`, from y 0 to `h`, centred at `x`.

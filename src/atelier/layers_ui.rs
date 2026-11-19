@@ -2,7 +2,7 @@
 //! outer (higher) one gives way, so a jacket settles over a shirt without pressing it in. As
 //! in other cloth tools, layers help a layered garment settle and are then reset to 0.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::template::{MAX_LAYER, MAX_PRESSURE, SHRINK_RANGE},
 };

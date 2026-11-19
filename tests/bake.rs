@@ -1,7 +1,6 @@
 //! Baking a garment's look into one image: each piece packed into the unit square and painted
 //! with its fabric's colour, times its texture, with the front prints over it.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     bake::{self, Image},
     garment::{
@@ -13,6 +12,7 @@ use marvelous_cloth::{
         shapes::Primitive,
     },
 };
+use glam::DVec2;
 use std::collections::HashMap;
 
 /// A lone 40 × 60 cm piece of red fabric with a 10 cm blue print in its middle.

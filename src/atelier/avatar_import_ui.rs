@@ -1,7 +1,7 @@
 //! Static avatar import confirmation, driven by the named-widget CPU harness.
 use super::super::i18n::{self, Language};
 use eframe::egui;
-use marvelous_cloth::avatar_import::Candidate;
+use fashioncraft::avatar_import::Candidate;
 
 #[derive(Default)]
 pub(super) struct ImportUi {
@@ -106,7 +106,7 @@ mod tests {
     use super::super::super::{AuthoringUi, authoring_smoke::widget_harness::Harness};
     use super::super::{DocumentUi, install_avatar};
     use super::*;
-    use marvelous_cloth::{
+    use fashioncraft::{
         fitting::{FittingProject, FittingScene},
         garment::presets::GarmentKind,
         vbd::VbdSettings,
@@ -273,7 +273,7 @@ mod tests {
         );
         let staged = case.project.avatar_path.clone();
         drop(candidate);
-        let template = marvelous_cloth::template_catalog::Selection::bundled("two-panel").unwrap();
+        let template = fashioncraft::template_catalog::Selection::bundled("two-panel").unwrap();
         let prepared = template.prepare(&case.project).unwrap();
         super::super::install_template(
             prepared,

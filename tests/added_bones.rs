@@ -1,10 +1,10 @@
 //! Bones added to the avatar's skeleton and skin weights painted by hand.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_rig::{AddedBone, Pose, paint_weights},
     fitting::AvatarPose,
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 fn mannequin() -> PathBuf {
@@ -207,7 +207,7 @@ fn painted_weights_make_skin_follow_another_bone() {
 
 #[test]
 fn poses_and_recordings_may_turn_only_bones_the_skeleton_has() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         avatar_animation::{AvatarAnimation, PoseKey, Recorder},
         fitting::FittingProject,
         garment::presets::GarmentKind,

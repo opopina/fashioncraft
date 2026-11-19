@@ -1,5 +1,5 @@
 //! Replay public constrained-search captures without running the cloth model.
-use marvelous_cloth::solver_lab::{constrained_least_squares, dense_contact::Row};
+use fashioncraft::solver_lab::{constrained_least_squares, dense_contact::Row};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 3 {

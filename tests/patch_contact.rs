@@ -1,11 +1,11 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::{
         patch_contact::{face_pair, wire_pair},
         potential::{Contact, Kind, activation},
     },
 };
+use glam::{DQuat, DVec3};
 
 fn energy<S: Scalar>(wire: bool, x: [[S; 3]; 5]) -> S {
     if wire {

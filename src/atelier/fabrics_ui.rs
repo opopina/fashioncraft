@@ -1,6 +1,6 @@
 //! Fabric controls convert user units to the existing SI material model.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     fabrics::{self, PRESETS},
     garment::template::{FabricProperties, Panel},
@@ -13,7 +13,7 @@ pub(super) struct FabricDraft {
     extension: [f64; 2],
     preset: Option<usize>,
     all_panels: bool,
-    pub(super) appearance: Option<marvelous_cloth::garment::appearance::FabricAppearance>,
+    pub(super) appearance: Option<fashioncraft::garment::appearance::FabricAppearance>,
 }
 impl Atelier {
     pub(super) fn fabric_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
@@ -296,7 +296,7 @@ impl Atelier {
         };
         let width_mm = appearance.texture.as_ref().map_or(100., |t| t.width_mm);
         let previous = appearance.texture.take();
-        appearance.texture = Some(marvelous_cloth::garment::appearance::FabricTexture {
+        appearance.texture = Some(fashioncraft::garment::appearance::FabricTexture {
             asset_id,
             width_mm,
             height_mm: (width_mm * f64::from(h) / f64::from(w.max(1))).clamp(1., 5000.),
@@ -349,10 +349,10 @@ struct AppearanceExtras<'a> {
 
 fn appearance_controls(
     ui: &mut egui::Ui,
-    draft: &mut Option<marvelous_cloth::garment::appearance::FabricAppearance>,
+    draft: &mut Option<fashioncraft::garment::appearance::FabricAppearance>,
     targets: &mut Vec<(&'static str, egui::Rect)>,
     extras: &mut AppearanceExtras,
-) -> Option<Option<marvelous_cloth::garment::appearance::FabricAppearance>> {
+) -> Option<Option<fashioncraft::garment::appearance::FabricAppearance>> {
     let lang = extras.language;
     let tr = |text: &'static str| super::i18n::tr(lang, text);
     ui.strong(tr("Fabric appearance"));
@@ -430,7 +430,7 @@ fn appearance_controls(
                 ui.color_edit_button_srgb(color);
             }
         });
-        use marvelous_cloth::garment::appearance::{Weave, WeaveKind};
+        use fashioncraft::garment::appearance::{Weave, WeaveKind};
         ui.horizontal(|ui| {
             ui.label(tr("Weave"));
             let label = value
@@ -474,7 +474,7 @@ fn appearance_controls(
             ui.label(tr("Look thickness"));
             ui.add(
                 egui::DragValue::new(&mut value.render_thickness_mm)
-                    .range(0.0..=marvelous_cloth::garment::appearance::MAX_RENDER_THICKNESS_MM)
+                    .range(0.0..=fashioncraft::garment::appearance::MAX_RENDER_THICKNESS_MM)
                     .speed(0.05)
                     .fixed_decimals(2)
                     .suffix(" mm"),
@@ -533,7 +533,7 @@ fn appearance_controls(
             ui.add(
                 egui::Slider::new(
                     &mut t.relief_mm,
-                    0.0..=marvelous_cloth::garment::appearance::MAX_TEXTURE_RELIEF_MM,
+                    0.0..=fashioncraft::garment::appearance::MAX_TEXTURE_RELIEF_MM,
                 )
                 .text(tr("Relief (mm)")),
             )
@@ -589,12 +589,12 @@ mod appearance_tests {
     use super::*;
     #[test]
     fn color_channel_drag_stages_only_that_channel_until_apply() {
-        let initial = marvelous_cloth::garment::appearance::FabricAppearance::default();
+        let initial = fashioncraft::garment::appearance::FabricAppearance::default();
         let mut state = (Some(initial.clone()), Vec::new());
         let mut draw = |ui: &mut egui::Ui,
                         state: &mut (
-            Option<marvelous_cloth::garment::appearance::FabricAppearance>,
-            Vec<Option<marvelous_cloth::garment::appearance::FabricAppearance>>,
+            Option<fashioncraft::garment::appearance::FabricAppearance>,
+            Vec<Option<fashioncraft::garment::appearance::FabricAppearance>>,
         )| {
             if let Some(value) =
                 appearance_controls(ui, &mut state.0, &mut Vec::new(), &mut Default::default())
@@ -625,8 +625,8 @@ mod appearance_tests {
         let mut state = (None, Vec::new());
         let mut draw = |ui: &mut egui::Ui,
                         state: &mut (
-            Option<marvelous_cloth::garment::appearance::FabricAppearance>,
-            Vec<Option<marvelous_cloth::garment::appearance::FabricAppearance>>,
+            Option<fashioncraft::garment::appearance::FabricAppearance>,
+            Vec<Option<fashioncraft::garment::appearance::FabricAppearance>>,
         )| {
             if let Some(value) =
                 appearance_controls(ui, &mut state.0, &mut Vec::new(), &mut Default::default())

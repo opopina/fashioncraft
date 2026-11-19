@@ -281,9 +281,24 @@ pub struct ArchivedPieces {
     pub pieces: crate::authoring::clipboard::PatternClipboard,
 }
 
+/// Format tag of a native garment template.
+pub const TEMPLATE_FORMAT: &str = "clothcraft-template";
+/// The same format as written by earlier builds of this editor; read as [`TEMPLATE_FORMAT`].
+const LEGACY_TEMPLATE_FORMAT: &str = "marvelous-cloth-template";
+
+fn template_format<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let tag = String::deserialize(d)?;
+    Ok(if tag == LEGACY_TEMPLATE_FORMAT {
+        TEMPLATE_FORMAT.into()
+    } else {
+        tag
+    })
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GarmentTemplate {
+    #[serde(deserialize_with = "template_format")]
     pub format: String,
     pub version: u32,
     pub name: String,
@@ -878,7 +893,7 @@ impl GarmentTemplate {
                 ));
             }
         }
-        if self.format != "marvelous-cloth-template" || !(1..=2).contains(&self.version) {
+        if self.format != TEMPLATE_FORMAT || !(1..=2).contains(&self.version) {
             return Err("Unsupported garment template format/version".into());
         }
         if self.version == 1
@@ -1418,7 +1433,7 @@ impl GarmentTemplate {
     pub fn two_panel_demo() -> Self {
         let properties = FabricProperties::default();
         Self {
-            format: "marvelous-cloth-template".into(),
+            format: TEMPLATE_FORMAT.into(),
             version: 1,
             name: "Two panels / nonmatching seam".into(),
             mirror_links: vec![],

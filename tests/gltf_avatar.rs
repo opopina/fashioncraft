@@ -1,5 +1,5 @@
+use fashioncraft::gltf_avatar::{Limits, import, load};
 use glam::DVec3;
-use marvelous_cloth::gltf_avatar::{Limits, import, load};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -43,7 +43,7 @@ fn glb(doc: &Value, bin: &[u8]) -> Vec<u8> {
     out.extend(binary);
     out
 }
-fn parse(doc: &Value, bin: &[u8]) -> Result<marvelous_cloth::gltf_avatar::ImportedAvatar, String> {
+fn parse(doc: &Value, bin: &[u8]) -> Result<fashioncraft::gltf_avatar::ImportedAvatar, String> {
     import(&glb(doc, bin), Path::new("unused"), None, Limits::default())
 }
 #[test]

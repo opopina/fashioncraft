@@ -1,6 +1,6 @@
 //! Hand-authored fixtures following Autodesk group-code tables, not our exporter.
+use fashioncraft::garment::dxf_import::{Options, read_ascii};
 use glam::DVec2;
-use marvelous_cloth::garment::dxf_import::{Options, read_ascii};
 
 fn document(units: Option<i32>, entities: &str) -> String {
     let header = units

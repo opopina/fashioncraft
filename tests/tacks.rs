@@ -2,8 +2,7 @@
 //! as a one-sample seam. Two separate weightless squares tacked edge to edge are drawn
 //! together; a button fastened to the buttonhole on an overlapping flap meets it; unfastening
 //! releases them.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -14,6 +13,7 @@ use marvelous_cloth::{
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::sync::Arc;
 
 /// Two upright 10 cm squares, the second `dx` to the right and `dz` in front of the first.
@@ -23,7 +23,7 @@ fn pair(dx: f64, dz: f64) -> GarmentTemplate {
     for (k, p) in t.panels.iter_mut().enumerate() {
         p.pins.clear();
         p.placement.rotation_degrees = DVec3::ZERO;
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.1,
             height: 0.1,
             nx: 5,

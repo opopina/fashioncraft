@@ -1,8 +1,8 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     ogc::{feature_hierarchy::Pair, topology::Topology},
     solver_lab::deforming_contact::{self, Certificate},
 };
+use glam::{DQuat, DVec3};
 fn fixture() -> (Vec<DVec3>, Topology, Pair, Pair) {
     let x = vec![
         DVec3::new(-0.5, 0., 1.),

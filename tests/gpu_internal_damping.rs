@@ -3,13 +3,13 @@
 //! runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate, template::FabricProperties},
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn square(damping: f64) -> Arc<CompiledGarment> {
@@ -22,7 +22,7 @@ fn square(damping: f64) -> Arc<CompiledGarment> {
     };
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,

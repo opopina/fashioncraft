@@ -2,8 +2,7 @@
 //! Garment and File › Open › Pose. A garment file is the pattern template the template browser
 //! opens; a pose file holds the joint rotations only, so it fits any avatar with those bones.
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{
         Command,
         clipboard::{self, PatternClipboard},
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     avatar_rig::Pose,
     garment::GarmentTemplate,
 };
+use glam::DVec2;
 use rfd::FileDialog;
 use std::{io::Read, path::Path};
 
@@ -40,7 +40,7 @@ impl Atelier {
     pub(super) fn save_garment(&mut self) -> Result<(), String> {
         let Some(path) = FileDialog::new()
             .set_title("Save the garment")
-            .add_filter("ClothCraft template JSON", &["json"])
+            .add_filter("FashionCraft template JSON", &["json"])
             .set_file_name("garment.json")
             .save_file()
         else {
@@ -48,7 +48,7 @@ impl Atelier {
         };
         let text =
             serde_json::to_string_pretty(&self.project.template).map_err(|e| e.to_string())?;
-        marvelous_cloth::document::atomic_write(&path, text.as_bytes())?;
+        fashioncraft::document::atomic_write(&path, text.as_bytes())?;
         self.status = format!(
             "Garment saved: {} in {} · open it from the garment templates or add it to another project",
             super::garment_display::pieces(self.project.template.panels.len()),
@@ -60,7 +60,7 @@ impl Atelier {
     pub(super) fn add_garment(&mut self) -> Result<(), String> {
         let Some(path) = FileDialog::new()
             .set_title("Add a garment")
-            .add_filter("ClothCraft garment or project", &["json"])
+            .add_filter("FashionCraft garment or project", &["json"])
             .pick_file()
         else {
             return Ok(());
@@ -131,8 +131,8 @@ impl Atelier {
         else {
             return Ok(());
         };
-        let text = body.to_obj("ClothCraft avatar, posed, metres, y up");
-        marvelous_cloth::document::atomic_write(&path, text.as_bytes())?;
+        let text = body.to_obj("FashionCraft avatar, posed, metres, y up");
+        fashioncraft::document::atomic_write(&path, text.as_bytes())?;
         self.status = format!(
             "Avatar saved: {} vertices, {} triangles in {}",
             body.vertices.len(),
@@ -146,13 +146,13 @@ impl Atelier {
         let pose = self.pose_on_show();
         let Some(path) = FileDialog::new()
             .set_title("Save the pose")
-            .add_filter("ClothCraft pose", &["json"])
+            .add_filter("FashionCraft pose", &["json"])
             .set_file_name("pose.json")
             .save_file()
         else {
             return Ok(());
         };
-        marvelous_cloth::document::atomic_write(&path, pose.to_file()?.as_bytes())?;
+        fashioncraft::document::atomic_write(&path, pose.to_file()?.as_bytes())?;
         self.status = format!(
             "Pose saved: {} rotated bones in {}",
             pose.0.len(),
@@ -164,7 +164,7 @@ impl Atelier {
     pub(super) fn load_pose_file(&mut self) -> Result<(), String> {
         let Some(path) = FileDialog::new()
             .set_title("Open a pose")
-            .add_filter("ClothCraft pose", &["json"])
+            .add_filter("FashionCraft pose", &["json"])
             .pick_file()
         else {
             return Ok(());

@@ -1,11 +1,11 @@
-use glam::DVec2;
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     GarmentTemplate,
     domain::{Hole, InternalLine},
     export,
     meshing::MeshingSettings,
     shapes::{self, Primitive},
 };
+use glam::DVec2;
 
 #[test]
 fn root_units_match_material_metres_and_include_100mm_ruler() {

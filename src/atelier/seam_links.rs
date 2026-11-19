@@ -1,7 +1,7 @@
 //! Sparse correspondence overlays. Geometry comes from material-space attachments.
 use super::{board::same_edge, *};
+use fashioncraft::garment::seam::{BoundaryCurve, BoundaryRef, StitchGuide};
 use glam::{DVec2, DVec3};
-use marvelous_cloth::garment::seam::{BoundaryCurve, BoundaryRef, StitchGuide};
 
 pub(super) fn seam_color(id: &str) -> Color32 {
     const COLORS: [Color32; 8] = [
@@ -83,7 +83,7 @@ impl Atelier {
                 Some(self.authoring.board.screen(
                     rect,
                     self.board_origin(i)
-                        + marvelous_cloth::authoring::rotate_2d(uv, self.board_angle(i)),
+                        + fashioncraft::authoring::rotate_2d(uv, self.board_angle(i)),
                 ))
             }
         };
@@ -159,7 +159,7 @@ impl Atelier {
             self.sewing_curve(&sides[0], false),
             self.sewing_curve(&sides[1], self.authoring.reverse),
         ) {
-            let spec = marvelous_cloth::garment::seam::SeamSpec {
+            let spec = fashioncraft::garment::seam::SeamSpec {
                 id: "preview".into(),
                 a: sides[0][0].clone(),
                 b: sides[1][0].clone(),
@@ -176,7 +176,7 @@ impl Atelier {
                     .and_then(|id| self.project.template.seams.iter().find(|s| &s.id == id))
                     .map_or_else(Vec::new, |s| s.notches.clone()),
             };
-            let guides = marvelous_cloth::garment::seam::CompiledSeam::compile(&spec, a, b)
+            let guides = fashioncraft::garment::seam::CompiledSeam::compile(&spec, a, b)
                 .map_or_else(|_| Vec::new(), |s| s.guides);
             draw(
                 &guides,

@@ -1,7 +1,6 @@
 //! Trim a line: one segment of an internal line removed. An open line keeps the parts on either
 //! side; a closed shape opens there into one line.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -11,6 +10,7 @@ use marvelous_cloth::{
         shapes::Primitive,
     },
 };
+use glam::DVec2;
 
 /// A lone 40 × 60 cm piece with a three-segment zigzag "zig" and a closed square "box".
 fn piece() -> GarmentTemplate {

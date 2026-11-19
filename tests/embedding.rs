@@ -1,10 +1,10 @@
+use fashioncraft::garment::{GarmentTemplate, embedding::MaterialPath, export};
 use glam::{DVec2, DVec3};
-use marvelous_cloth::garment::{GarmentTemplate, embedding::MaterialPath, export};
 
 /// Diagnostic only: reproduce the prior output breakpoint count without its
 /// interval probes; not a correctness oracle for coverage or deformation.
 fn legacy_output_count(
-    garment: &marvelous_cloth::garment::CompiledGarment,
+    garment: &fashioncraft::garment::CompiledGarment,
     path: &MaterialPath,
 ) -> usize {
     let panel = garment.panels.iter().find(|p| p.id == path.panel).unwrap();
@@ -211,7 +211,7 @@ fn bounded_path_matches_exhaustive_on_edges_interior_and_dense_mesh() {
 
 #[test]
 fn bounded_path_rejects_crossing_panel_holes() {
-    use marvelous_cloth::garment::{
+    use fashioncraft::garment::{
         domain::Hole,
         shapes::{Primitive, primitive},
     };
@@ -247,7 +247,7 @@ fn bounded_path_rejects_crossing_panel_holes() {
 
 #[test]
 fn paths_reject_crossing_narrow_rotated_holes_but_allow_nearby_material() {
-    use marvelous_cloth::garment::{
+    use fashioncraft::garment::{
         domain::Hole,
         shapes::{Primitive, primitive},
     };

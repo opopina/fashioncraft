@@ -1,6 +1,6 @@
 //! Automatic sewing finds the T-shirt's eight seams again once they are removed, and leaves
 //! its openings (hem, neckline, cuffs) open because the body passes through them.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     fitting::FittingProject,

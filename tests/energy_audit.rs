@@ -1,8 +1,8 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 mod common;
 

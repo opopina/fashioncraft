@@ -3,14 +3,14 @@
 //! Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{GarmentTemplate, seam::Side, template::LineSpring},
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]
@@ -32,7 +32,7 @@ fn gpu_elastic_draws_a_free_edge_in() {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.2,
         height: 0.2,
         nx: 8,

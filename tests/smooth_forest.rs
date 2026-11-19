@@ -1,8 +1,8 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::smooth_forest::{Link, evaluate, wire},
 };
+use glam::{DQuat, DVec3};
 
 // Independent exhaustive rooted-forest oracle; no matrix formulas.
 fn enumerate(nodes: &[f64], links: &[Link<f64>], tau: f64) -> (f64, Vec<f64>) {
@@ -268,7 +268,7 @@ fn inactive_nodes_and_zero_links_preserve_value_without_clamping() {
 
 #[test]
 fn flat_junction_cancels_shared_feature_before_second_derivatives() {
-    use marvelous_cloth::ogc::potential::activation;
+    use fashioncraft::ogc::potential::activation;
     for tau in [1e-3, 1e-5, 1e-7, 1e-9, 1e-11] {
         let sample = |offset: f64| {
             let p = [

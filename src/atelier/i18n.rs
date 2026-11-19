@@ -539,7 +539,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Tool rail" => "Barra lateral de herramientas",
         "Workspace profiles…" => "Perfiles del espacio de trabajo…",
         "Compatible" => "Compatible",
-        "ClothCraft classic" => "ClothCraft clásico",
+        "FashionCraft classic" => "FashionCraft clásico",
         "Not built yet" => "Aún no está hecho",
         "Cut and sew along line" => "Cortar y coser por la línea",
         "Replace outline with shape" => "Reemplazar contorno por la forma",
@@ -756,7 +756,7 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Formas internas cerradas que siguen todo el contorno"
         }
         "Cloth touching the avatar, in red" => "Tela que toca al avatar, en rojo",
-        "ClothCraft project and template JSON" => "Proyecto ClothCraft y plantilla JSON",
+        "FashionCraft project and template JSON" => "Proyecto FashionCraft y plantilla JSON",
         "Collecting physical-step history…" => "Reuniendo el historial de pasos físicos…",
         "Collision distance" => "Distancia de colisión",
         "Contact points" => "Puntos de contacto",

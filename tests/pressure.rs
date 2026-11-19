@@ -1,13 +1,13 @@
 //! Pressure per piece: each triangle is pushed with p·A along its winding normal. A free,
 //! weightless sheet accelerates at exactly p/ρ_A (ρ_A its mass per area) along its normal; a
 //! sheet held by its corners bulges along its normal, the other way under negative pressure.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate},
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn far_away() -> SurfaceMesh {
@@ -28,7 +28,7 @@ fn sheet(held: bool, pressure: f64) -> GarmentTemplate {
     t.seams.clear();
     let p = &mut t.panels[0];
     if held {
-        use marvelous_cloth::garment::template::Corner;
+        use fashioncraft::garment::template::Corner;
         p.pins = vec![
             Corner::TopLeft,
             Corner::TopRight,
@@ -38,7 +38,7 @@ fn sheet(held: bool, pressure: f64) -> GarmentTemplate {
     } else {
         p.pins.clear();
     }
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 4,

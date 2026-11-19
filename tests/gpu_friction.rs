@@ -3,13 +3,13 @@
 //! Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]
@@ -31,7 +31,7 @@ fn gpu_friction_matches_the_inclined_plane() {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,
@@ -68,7 +68,7 @@ fn gpu_friction_matches_the_inclined_plane() {
             gravity: DVec3::new(g_acc * a.sin(), -g_acc * a.cos(), 0.),
             ..rest.clone()
         };
-        let mean_vx = |s: &marvelous_cloth::model::State| {
+        let mean_vx = |s: &fashioncraft::model::State| {
             s.v.iter().map(|v| v.x).sum::<f64>() / s.v.len() as f64
         };
         let mut samples = vec![];

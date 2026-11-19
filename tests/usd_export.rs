@@ -1,8 +1,7 @@
 //! USD export: a text layer with a mesh per piece, preview-surface materials, the avatar and
 //! a take as time samples; and a USDZ package that stores its files uncompressed on 64-byte
 //! boundaries, root layer first.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_animation::Take,
     fitting::FittingProject,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
     },
     usd_export::{self, UsdScene},
 };
+use glam::DVec3;
 use std::path::PathBuf;
 
 fn mannequin() -> PathBuf {

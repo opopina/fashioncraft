@@ -1,8 +1,7 @@
 //! Small sewn-cloth floor experiment, using production material/seam energies.
 //! Hard floor contact + unchanged OGC guards. Dense research solve, no GPU.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     model::Pattern,
@@ -13,6 +12,7 @@ use marvelous_cloth::{
     },
     vbd::VbdSolver,
 };
+use glam::DVec3;
 use serde_json::json;
 use std::{fs, path::PathBuf, sync::Arc, time::Instant};
 const GAP: f64 = 0.001;
@@ -56,7 +56,7 @@ fn run(
     };
     let mut state = g.initial_state.clone();
     let mut reference = VbdSolver::new(g.clone(), Some(&floor), &state)?;
-    let cfg = marvelous_cloth::ogc::OgcSettings::default();
+    let cfg = fashioncraft::ogc::OgcSettings::default();
     let n = state.x.len();
     let dofs = 3 * n;
     let inertia: Vec<_> = g.mesh.masses.iter().map(|m| m / (DT * DT)).collect();

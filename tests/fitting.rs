@@ -1,9 +1,9 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{MeshCollider, SurfaceMesh},
     contact::Collider,
     garment::presets::{self, GarmentKind},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn cube() -> Arc<SurfaceMesh> {
@@ -71,7 +71,7 @@ fn avatar_ray_bvh_matches_exhaustive_visibility_including_parallel_and_boundary_
         ] {
             for max_t in [0.1, 1., 3., f64::INFINITY] {
                 let expected = surface.triangles.iter().any(|tri| {
-                    marvelous_cloth::picking::ray_triangle(
+                    fashioncraft::picking::ray_triangle(
                         origin,
                         direction,
                         tri.map(|v| surface.vertices[v]),
@@ -176,7 +176,7 @@ fn polygons_reject_crossings_reversed_winding_and_v1_schema() {
 
 #[test]
 fn fitting_cache_rejects_remeshed_state_and_failed_step_is_transactional() {
-    use marvelous_cloth::fitting::FittingProject;
+    use fashioncraft::fitting::FittingProject;
     let avatar =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj");
     let mut project = FittingProject::basic(GarmentKind::Tshirt, 0, avatar);

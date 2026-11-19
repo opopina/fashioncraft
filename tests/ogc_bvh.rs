@@ -1,5 +1,5 @@
+use fashioncraft::ogc::bvh::{Bounds, Bvh};
 use glam::DVec3;
-use marvelous_cloth::ogc::bvh::{Bounds, Bvh};
 
 #[test]
 fn dual_tree_pairs_match_exhaustive_search_without_duplicates() {
@@ -68,7 +68,7 @@ fn dual_tree_pairs_match_exhaustive_search_without_duplicates() {
 
 #[test]
 fn bounds_distance_never_discards_a_close_primitive_pair() {
-    use marvelous_cloth::ogc::{
+    use fashioncraft::ogc::{
         geometry::{closest_segments, closest_triangle},
         topology::Topology,
     };

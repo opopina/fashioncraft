@@ -115,7 +115,7 @@ impl PatternClipboard {
             return Err("Pattern clipboard exceeds 2 MiB".into());
         }
         let clip: Self = serde_json::from_str(text)
-            .map_err(|_| "Clipboard does not contain ClothCraft panels".to_string())?;
+            .map_err(|_| "Clipboard does not contain FashionCraft panels".to_string())?;
         clip.validate()?;
         Ok(clip)
     }

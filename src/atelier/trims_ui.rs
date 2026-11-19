@@ -2,14 +2,14 @@
 //! the selected segment, list them and remove them. Trims only change the look; each change
 //! is one command.
 use super::*;
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::{
         lines2d,
         trims::{Trim, TrimKind},
     },
 };
+use glam::DVec2;
 
 impl Atelier {
     /// A trim id not used yet in the document.
@@ -296,7 +296,7 @@ impl Atelier {
     }
 
     /// The seam picked in the seam list, or else the one on the selected segment.
-    fn chosen_seam(&self) -> Option<marvelous_cloth::garment::seam::SeamSpec> {
+    fn chosen_seam(&self) -> Option<fashioncraft::garment::seam::SeamSpec> {
         let id = self
             .authoring
             .selection
@@ -313,7 +313,7 @@ impl Atelier {
 
     /// The whole segments a seam joins, as (piece, segment); parts of segments are left out.
     fn seam_segments(
-        seam: &marvelous_cloth::garment::seam::SeamSpec,
+        seam: &fashioncraft::garment::seam::SeamSpec,
     ) -> (Vec<(String, String)>, usize) {
         let mut whole = vec![];
         let mut partial = 0;
@@ -347,7 +347,7 @@ impl Atelier {
                 self.edit(Command::SetLineSpring {
                     panel: panel.clone(),
                     line: edge.clone(),
-                    spring: Some(marvelous_cloth::garment::template::LineSpring::tape(
+                    spring: Some(fashioncraft::garment::template::LineSpring::tape(
                         panel, edge,
                     )),
                 })
@@ -385,7 +385,7 @@ impl Atelier {
         let taped = self.project.template.line_springs.iter().any(|s| {
             s.panel == edge.panel
                 && s.line == line
-                && s.kind == marvelous_cloth::garment::template::LineKind::Tape
+                && s.kind == fashioncraft::garment::template::LineKind::Tape
         });
         if taped {
             return Err("This line is taped already".into());
@@ -393,7 +393,7 @@ impl Atelier {
         if !self.edit(Command::SetLineSpring {
             panel: edge.panel.clone(),
             line: line.clone(),
-            spring: Some(marvelous_cloth::garment::template::LineSpring::tape(
+            spring: Some(fashioncraft::garment::template::LineSpring::tape(
                 &edge.panel,
                 &line,
             )),

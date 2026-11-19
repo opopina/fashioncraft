@@ -3,8 +3,7 @@
 //! the anchor axis. Rest geometry is untouched. A placement is only committed after the existing
 //! VBD initialization gate accepts the resulting state.
 use super::*;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::diagnostics,
     garment::{
@@ -12,6 +11,7 @@ use marvelous_cloth::{
         template::{Panel, PanelWrap, Placement},
     },
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 /// An avatar file and its pose, as JSON.
@@ -59,7 +59,7 @@ fn arrangements(
     panel: &Panel,
     clearance_m: f64,
     max_wrap_degrees: Option<f64>,
-    surface: &marvelous_cloth::avatar::SurfaceMesh,
+    surface: &fashioncraft::avatar::SurfaceMesh,
 ) -> Vec<Result<Arrangement, String>> {
     let frame = match sidecar.frame(anchor) {
         Ok(frame) => frame,

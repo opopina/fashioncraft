@@ -24,7 +24,7 @@ or import behavior. No EXO implementation has been copied.
   | Native item | Actual accepted version | Authority / limitations |
   | --- | --- | --- |
   | `Project` in `project.rs` | `version: 1` | Historical one-panel pattern/scene; not EXO multi-piece project, no native mesh cache in file |
-  | `GarmentTemplate` | `format: "marvelous-cloth-template"`, `version: 1` or `2` | Editable fabric IDs, panel IDs, material rest geometry, seam references; v2 supports named polygon edges, holes and internal lines; rectangle v1 remains readable |
+  | `GarmentTemplate` | `format: "clothcraft-template"`, `version: 1` or `2` | Editable fabric IDs, panel IDs, material rest geometry, seam references; v2 supports named polygon edges, holes and internal lines; rectangle v1 remains readable |
   | `FittingProject` | `version: 1` | Wraps a `GarmentTemplate`, avatar path, solver/interactive settings and optional cached `State`/`mesh_signature` |
   | EXO JavaScript document / simulation request | evolving JS object; separately `garment-studio.simulation` v1 | **Different models**; no native EXO interchange reader in ClothCraft and no automatic one-to-one field transfer |
 
@@ -172,7 +172,7 @@ boundaries, and reversed B matches opposing boundary directions.
   "expectedRevision": 0,
   "units": "m",
   "template": {
-    "format": "marvelous-cloth-template",
+    "format": "clothcraft-template",
     "version": 2,
     "name": "Synthetic twin panels",
     "fabrics": [{

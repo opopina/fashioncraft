@@ -1,6 +1,6 @@
 //! CPU fitting run; optional GPU view/benchmark will be handled explicitly.
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     contact::Collider,
     fitting::FittingProject,
     garment::{export, presets::GarmentKind},
@@ -13,7 +13,7 @@ mod fitting_editor;
 #[path = "../gpu_bench.rs"]
 mod gpu_bench;
 #[cfg(feature = "desktop")]
-use marvelous_cloth::render;
+use fashioncraft::render;
 
 #[derive(Parser)]
 #[command(about = "Fit simple test garments on a static OBJ mannequin")]
@@ -77,9 +77,9 @@ struct Args {
 fn run_ogc(
     args: &Args,
     mut project: FittingProject,
-    mut scene: marvelous_cloth::fitting::FittingScene,
+    mut scene: fashioncraft::fitting::FittingScene,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use marvelous_cloth::vbd::{VbdSettings, VbdSolver};
+    use fashioncraft::vbd::{VbdSettings, VbdSolver};
     let floored = project
         .simulation
         .as_ref()
@@ -122,7 +122,7 @@ fn run_ogc(
                     & (wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::SUBGROUP),
                 ..Default::default()
             }))?;
-        let mut gpu = marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue);
+        let mut gpu = fashioncraft::gpu_vbd::GpuVbd::new(device, queue);
         gpu.check_gradients = args.check_gpu_gradients;
         gpu.check_contacts = args.check_gpu_contacts;
         gpu.filter_contacts = !args.cpu_contact_filter;
@@ -318,7 +318,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let meshes: Vec<_> = project.template.panels.iter().zip(&scene.garment.panels).map(|(panel,range)| {
         let settings=panel.polygon.as_ref().map(|p|p.meshing_settings()).unwrap_or_default();
         serde_json::json!({"panel":panel.id,"vertices":range.vertices.len(),"settings":settings,
-            "quality":marvelous_cloth::garment::meshing::quality(&scene.garment.mesh.triangles[range.triangles.clone()],&settings)})
+            "quality":fashioncraft::garment::meshing::quality(&scene.garment.mesh.triangles[range.triangles.clone()],&settings)})
     }).collect();
     let report = serde_json::json!({
         "status":if failure.is_some() {"failed"} else {"completed"},

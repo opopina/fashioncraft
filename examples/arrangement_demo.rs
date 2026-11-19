@@ -1,7 +1,6 @@
 //! Local demo for the EXO-AV-002 prototype: writes a fitting project whose T-shirt panels are placed
 //! with landmark-referenced anchors, ready to open with `cloth-fit --project <file> --steps 0 --view`.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{SurfaceMesh, diagnostics},
     avatar_measurements::{AvatarFrame, Landmark},
     fitting::FittingProject,
@@ -10,6 +9,7 @@ use marvelous_cloth::{
         presets::GarmentKind,
     },
 };
+use glam::DVec3;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 fn main() -> Result<(), String> {

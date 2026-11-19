@@ -1,7 +1,6 @@
 //! Local-field accuracy and micro-cost audit. No cloth stepping or GPU use.
 use clap::Parser;
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     math::{Jet, Scalar},
     ogc::{
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     vbd::VbdSolver,
 };
+use glam::{DQuat, DVec3};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, BTreeSet},

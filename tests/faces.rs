@@ -1,7 +1,7 @@
 //! Front and back faces and the procedural weave: document-level checks. Flipping a piece's
 //! normal only changes its look (no new simulation), toggles back, and goes with the piece;
 //! weaves are validated and old documents stay unchanged.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,

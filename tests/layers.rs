@@ -1,8 +1,7 @@
 //! Simulation layers: where pieces of different layers touch, only the outer one gives way.
 //! Weightless sheets thrown at each other show it plainly: without layers they shove each
 //! other, with layers the inner one ignores the outer, which yields, and they never cross.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn floor() -> SurfaceMesh {
@@ -35,7 +35,7 @@ fn squares(layers: &[(f64, f64)]) -> GarmentTemplate {
         p.id = format!("square{k}");
         p.name = p.id.clone();
         p.pins.clear();
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.12,
             height: 0.12,
             nx: 3,

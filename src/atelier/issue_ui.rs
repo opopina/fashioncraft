@@ -117,9 +117,9 @@ impl Atelier {
         self.pending = false;
         self.submit(ctx, false);
         let root = PathBuf::from("output/diagnostics");
-        let result = marvelous_cloth::issue_report::export(
+        let result = fashioncraft::issue_report::export(
             &root,
-            marvelous_cloth::issue_report::Capture {
+            fashioncraft::issue_report::Capture {
                 project: &self.project,
                 scene: &self.scene,
                 settings: &self.settings,
@@ -165,7 +165,7 @@ impl Atelier {
                     && rect.shrink(30.).contains(at)
                 {
                     let (origin, direction) = self.camera.ray(at, rect);
-                    if marvelous_cloth::picking::visible_cloth_face(&self.scene, origin, direction)
+                    if fashioncraft::picking::visible_cloth_face(&self.scene, origin, direction)
                         .is_some()
                     {
                         self.smoke_target("issue_face", at);
@@ -228,7 +228,7 @@ impl Atelier {
                 }
                 let (origin, direction) = self.camera.ray(at, rect);
                 if let Some(face) =
-                    marvelous_cloth::picking::visible_cloth_face(&self.scene, origin, direction)
+                    fashioncraft::picking::visible_cloth_face(&self.scene, origin, direction)
                 {
                     if erase {
                         self.issue.faces.remove(&face);

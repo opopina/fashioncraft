@@ -2,7 +2,7 @@
 //! other ones. The reshaped body is written next to the session's other files with its joints
 //! and anchors, then goes through the usual avatar import confirmation.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     avatar_shape::{self, BodyMeasurements},
     garment::arrangement,
@@ -150,7 +150,7 @@ impl Atelier {
         ));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let obj = dir.join("avatar.obj");
-        std::fs::write(&obj, marvelous_cloth::avatar_animation::surface_obj(&body))
+        std::fs::write(&obj, fashioncraft::avatar_animation::surface_obj(&body))
             .map_err(|e| e.to_string())?;
         let landmarks: BTreeMap<&String, [f64; 3]> =
             joints.iter().map(|(id, p)| (id, p.to_array())).collect();
@@ -183,7 +183,7 @@ pub(super) struct DraftUi {
 
 impl Default for DraftUi {
     fn default() -> Self {
-        let m = marvelous_cloth::garment::presets::TshirtMeasurements::default();
+        let m = fashioncraft::garment::presets::TshirtMeasurements::default();
         Self {
             open: false,
             values: [
@@ -299,7 +299,7 @@ impl Atelier {
         }
         if create {
             let v = self.authoring.shirt_draft.values.map(|x| x / 100.);
-            let m = marvelous_cloth::garment::presets::TshirtMeasurements {
+            let m = fashioncraft::garment::presets::TshirtMeasurements {
                 bust_m: v[0],
                 hip_m: v[1],
                 ease_m: v[2],
@@ -309,7 +309,7 @@ impl Atelier {
                 cuff_m: v[6],
                 top_m: v[7],
             };
-            match marvelous_cloth::garment::presets::tshirt(&m, 2) {
+            match fashioncraft::garment::presets::tshirt(&m, 2) {
                 Ok(template) => {
                     let mut project = FittingProject::basic(
                         GarmentKind::Tshirt,
@@ -342,7 +342,7 @@ pub(super) struct SkirtDraftUi {
 
 impl Default for SkirtDraftUi {
     fn default() -> Self {
-        let m = marvelous_cloth::garment::presets::SkirtMeasurements::default();
+        let m = fashioncraft::garment::presets::SkirtMeasurements::default();
         Self {
             open: false,
             values: [
@@ -455,7 +455,7 @@ impl Atelier {
         }
         if create {
             let v = self.authoring.skirt_draft.values.map(|x| x / 100.);
-            let m = marvelous_cloth::garment::presets::SkirtMeasurements {
+            let m = fashioncraft::garment::presets::SkirtMeasurements {
                 waist_m: v[0],
                 hip_m: v[1],
                 ease_m: v[2],
@@ -464,7 +464,7 @@ impl Atelier {
                 flare_m: v[5],
                 waist_height_m: v[6],
             };
-            match marvelous_cloth::garment::presets::skirt(&m, 2) {
+            match fashioncraft::garment::presets::skirt(&m, 2) {
                 Ok(template) => {
                     let mut project = FittingProject::basic(
                         GarmentKind::Tshirt,
@@ -497,7 +497,7 @@ pub(super) struct TrousersDraftUi {
 
 impl Default for TrousersDraftUi {
     fn default() -> Self {
-        let m = marvelous_cloth::garment::presets::TrousersMeasurements::default();
+        let m = fashioncraft::garment::presets::TrousersMeasurements::default();
         Self {
             open: false,
             values: [
@@ -614,7 +614,7 @@ impl Atelier {
         }
         if create {
             let v = self.authoring.trousers_draft.values.map(|x| x / 100.);
-            let m = marvelous_cloth::garment::presets::TrousersMeasurements {
+            let m = fashioncraft::garment::presets::TrousersMeasurements {
                 waist_m: v[0],
                 hip_m: v[1],
                 ease_m: v[2],
@@ -624,7 +624,7 @@ impl Atelier {
                 hem_m: v[6],
                 waist_height_m: v[7],
             };
-            match marvelous_cloth::garment::presets::trousers(&m, 2) {
+            match fashioncraft::garment::presets::trousers(&m, 2) {
                 Ok(template) => {
                     let mut project = FittingProject::basic(
                         GarmentKind::Tshirt,

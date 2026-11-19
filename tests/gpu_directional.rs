@@ -1,13 +1,13 @@
 //! Hardware acceptance gates for sparse directional contacts. Explicit opt-in.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     gpu_vbd::GpuVbd,
     model::Pattern,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 mod common;
 
@@ -75,7 +75,7 @@ fn collapsed_patch_preserves_initial_tangential_velocity_and_rejoins_ordinary_pa
             assert!((contacts.minimum_distance - gap).abs() < 1e-12);
             assert_eq!(contacts.directional.vertex_count(), 4);
             let total_mass: f64 = g.mesh.masses.iter().sum();
-            let center = |state: &marvelous_cloth::model::State| -> f64 {
+            let center = |state: &fashioncraft::model::State| -> f64 {
                 state
                     .x
                     .iter()

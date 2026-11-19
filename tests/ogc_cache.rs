@@ -1,5 +1,5 @@
+use fashioncraft::ogc::{OgcSettings, OgcWorld};
 use glam::DVec3;
-use marvelous_cloth::ogc::{OgcSettings, OgcWorld};
 
 #[test]
 fn temporal_candidates_match_fresh_detection_through_motion_and_radius_changes() {
@@ -45,9 +45,8 @@ fn temporal_candidates_match_fresh_detection_through_motion_and_radius_changes()
         assert_eq!(a.minimum_distance, b.minimum_distance);
         assert_eq!(a.vertex_face_candidates, b.vertex_face_candidates);
         assert_eq!(a.edge_edge_candidates, b.edge_edge_candidates);
-        let key = |c: &marvelous_cloth::ogc::potential::Contact| {
-            (c.kind, c.vertices, c.mollifier_epsilon)
-        };
+        let key =
+            |c: &fashioncraft::ogc::potential::Contact| (c.kind, c.vertices, c.mollifier_epsilon);
         assert_eq!(
             a.contacts.iter().map(key).collect::<Vec<_>>(),
             b.contacts.iter().map(key).collect::<Vec<_>>()
@@ -114,7 +113,7 @@ fn wider_cache_covers_two_primitives_moving_towards_each_other() {
     assert!(a.vertex_face_candidates > 0);
     assert_eq!(a.radii, b.radii);
     assert_eq!(a.minimum_distance, b.minimum_distance);
-    let key = |s: &marvelous_cloth::ogc::ContactSet| {
+    let key = |s: &fashioncraft::ogc::ContactSet| {
         s.contacts
             .iter()
             .map(|c| (c.kind, c.vertices, c.mollifier_epsilon))

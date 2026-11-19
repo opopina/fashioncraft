@@ -171,7 +171,7 @@ pub fn export(root: &Path, capture: Capture<'_>) -> Result<PathBuf, String> {
         &folder.path().join("report.json"),
         &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
     )?;
-    atomic_write(&folder.path().join("README.txt"), b"ClothCraft local issue capture\n\nOpen project.clothcraft.json with File > Open, or:\ncargo run --release --locked -j 2 --bin cloth-fit -- --project PATH/project.clothcraft.json --steps 0 --view\n\nreport.json stores marked faces by panel and material-space triangle, plus deformation/contact evidence. No persistent mesh indices. Keep this entire folder together. To ask for debugging, share the folder path or the whole folder. Exporting does not contact an AI or upload files.\n")?;
+    atomic_write(&folder.path().join("README.txt"), b"FashionCraft local issue capture\n\nOpen project.clothcraft.json with File > Open, or:\ncargo run --release --locked -j 2 --bin cloth-fit -- --project PATH/project.clothcraft.json --steps 0 --view\n\nreport.json stores marked faces by panel and material-space triangle, plus deformation/contact evidence. No persistent mesh indices. Keep this entire folder together. To ask for debugging, share the folder path or the whole folder. Exporting does not contact an AI or upload files.\n")?;
     Ok(folder.keep())
 }
 

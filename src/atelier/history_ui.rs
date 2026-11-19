@@ -2,7 +2,7 @@
 //! a step goes back, or forward, to just after it in one move: only the template reached is
 //! rebuilt and checked, and a step that cannot be reached leaves everything as it was.
 use super::*;
-use marvelous_cloth::authoring::HISTORY_STEPS;
+use fashioncraft::authoring::HISTORY_STEPS;
 
 #[derive(Default)]
 pub(super) struct HistoryUi {

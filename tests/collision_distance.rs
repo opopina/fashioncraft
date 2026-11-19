@@ -2,8 +2,7 @@
 //! A contact keeps the mean of its two sides' distances; the avatar and the floor use the
 //! scene's. Cloth resting under gravity sits just inside that gap, where the barrier carries
 //! its weight, so the resting height tells which radius a contact used.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{
         CompiledGarment, GarmentTemplate,
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 const SCENE: f64 = 0.003;
@@ -38,7 +38,7 @@ fn squares(layers: &[(f64, Option<f64>)]) -> Arc<CompiledGarment> {
         p.id = format!("square{k}");
         p.name = p.id.clone();
         p.pins.clear();
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.12,
             height: 0.12,
             nx: 3,

@@ -1,4 +1,4 @@
-use marvelous_cloth::solver_lab::{constrained_least_squares::solve, dense_contact::Row};
+use fashioncraft::solver_lab::{constrained_least_squares::solve, dense_contact::Row};
 
 #[test]
 fn manufactured_convex_kkt_optima_cover_working_set_changes() {

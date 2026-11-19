@@ -1,8 +1,7 @@
 //! Spiral patterns, closed internal shapes with replication, and holes: the Shapes menu entry
 //! and the piece inspector section. Every action is one `Command`, so one undo step.
 use super::{authoring_ui::Tool, *};
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::Command,
     garment::{
         meshing::MeshingSettings,
@@ -10,6 +9,7 @@ use marvelous_cloth::{
         template::Panel,
     },
 };
+use glam::DVec2;
 
 /// Values typed into the spiral and internal-shape forms, in millimetres and degrees.
 pub(super) struct ShapesUi {

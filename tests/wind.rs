@@ -3,13 +3,13 @@
 //! damping is off so the drag is the only force besides gravity. The solver moves a vertex at
 //! most a fraction of its contact query radius per detection, so the steps are small enough
 //! for the speeds here to stay well inside that bound.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate},
     model::State,
     vbd::{VbdSettings, VbdSolver, Wind},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 const G: f64 = 9.81;
@@ -23,7 +23,7 @@ fn patch(rotation: DVec3) -> Arc<CompiledGarment> {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 3,

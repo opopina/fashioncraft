@@ -6,7 +6,7 @@
 //!
 //! ```
 //! use glam::DVec2;
-//! use marvelous_cloth::authoring::constructions::Line;
+//! use fashioncraft::authoring::constructions::Line;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // A 25 mm construction from the beginning of a horizontal pattern edge.
 //! let edge = Line::through(DVec2::ZERO, DVec2::new(0.3, 0.0))?;

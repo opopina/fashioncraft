@@ -1,5 +1,4 @@
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate,
@@ -7,6 +6,7 @@ use marvelous_cloth::{
         presets::{self, GarmentKind},
     },
 };
+use glam::DVec2;
 
 fn settings() -> MeshingSettings {
     MeshingSettings {

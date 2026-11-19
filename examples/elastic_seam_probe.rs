@@ -1,10 +1,10 @@
 //! CPU-only investigation of geometric easing. No production law is changed.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::{GarmentTemplate, template::Corner},
     vbd::{Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use serde_json::json;
 use std::{
     fs,
@@ -57,7 +57,7 @@ struct Control {
     grab_target_m: Option<DVec3>,
 }
 
-fn validate_state(state: &marvelous_cloth::model::State) -> Result<(), &'static str> {
+fn validate_state(state: &fashioncraft::model::State) -> Result<(), &'static str> {
     if !state.time.is_finite()
         || state.x.is_empty()
         || state.x.len() != state.v.len()
@@ -75,7 +75,7 @@ fn validate_state(state: &marvelous_cloth::model::State) -> Result<(), &'static 
 fn write_captured_state(
     writer: &mut impl Write,
     step: usize,
-    state: &marvelous_cloth::model::State,
+    state: &fashioncraft::model::State,
 ) -> Result<(), Box<dyn std::error::Error>> {
     validate_state(state)
         .map_err(|error| format!("Invalid captured state at step {step}: {error}"))?;
@@ -87,10 +87,10 @@ fn write_captured_state(
 #[derive(serde::Deserialize)]
 struct CapturedState {
     step: usize,
-    state: marvelous_cloth::model::State,
+    state: fashioncraft::model::State,
 }
 
-fn capture_topology(garment: &marvelous_cloth::garment::CompiledGarment) -> serde_json::Value {
+fn capture_topology(garment: &fashioncraft::garment::CompiledGarment) -> serde_json::Value {
     json!({
         "uv": garment.mesh.uv,
         "triangles": garment.mesh.triangles.iter().map(|t| t.vertices).collect::<Vec<_>>(),
@@ -134,7 +134,7 @@ fn vector_difference(a: &[DVec3], b: &[DVec3]) -> Result<(f64, f64), &'static st
 impl StateComparison {
     fn sample(
         &mut self,
-        state: &marvelous_cloth::model::State,
+        state: &fashioncraft::model::State,
     ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         let clock = Instant::now();
         let mut source = None;
@@ -185,12 +185,12 @@ impl StateComparison {
 }
 
 struct IntersectionAudit {
-    world: marvelous_cloth::ogc::OgcWorld,
+    world: fashioncraft::ogc::OgcWorld,
     samples: usize,
     elapsed_ms: f64,
 }
 impl IntersectionAudit {
-    fn sample(&mut self, state: &marvelous_cloth::model::State, label: &str) -> Result<(), String> {
+    fn sample(&mut self, state: &fashioncraft::model::State, label: &str) -> Result<(), String> {
         let clock = Instant::now();
         let result = self.world.validate_start(&self.world.positions(&state.x));
         self.elapsed_ms += clock.elapsed().as_secs_f64() * 1000.;
@@ -358,11 +358,11 @@ fn thread_law(length: f64, rest: f64, ea: f64) -> (f64, f64) {
 /// Reconcile independently evaluated models without attributing contact or
 /// user-control changes to the mechanical work of the frozen model.
 fn reconcile(
-    previous: Option<&marvelous_cloth::vbd::audit::Energy>,
-    prior: &marvelous_cloth::vbd::audit::Energy,
+    previous: Option<&fashioncraft::vbd::audit::Energy>,
+    prior: &fashioncraft::vbd::audit::Energy,
     next_control_j: f64,
-    balance: &marvelous_cloth::vbd::audit::StepEnergy,
-    final_energy: &marvelous_cloth::vbd::audit::Energy,
+    balance: &fashioncraft::vbd::audit::StepEnergy,
+    final_energy: &fashioncraft::vbd::audit::Energy,
 ) -> (f64, f64, f64, f64) {
     let start_refresh = previous.map_or(0., |old| prior.contact_j - old.contact_j);
     let prior_total = previous.map_or_else(|| prior.total_j(), |old| old.total_j());
@@ -597,7 +597,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // refreshed contact model at the accepted position.
     let mut detector = solver.world.clone();
     let mut previous_grab: Option<Grab> = None;
-    let mut previous_energy: Option<marvelous_cloth::vbd::audit::Energy> = None;
+    let mut previous_energy: Option<fashioncraft::vbd::audit::Energy> = None;
     let mut tail_residual = Vec::new();
     let mut maximum_balance_error = 0_f64;
     let mut maximum_contact_refresh = 0_f64;
@@ -800,7 +800,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("states.jsonl");
         let mut output = fs::File::create(&path).unwrap();
-        let mut source = marvelous_cloth::model::State {
+        let mut source = fashioncraft::model::State {
             x: vec![DVec3::ZERO],
             v: vec![DVec3::ZERO],
             time: 1. / 120.,
@@ -823,7 +823,7 @@ mod tests {
             final_velocity_rms_m_s: 0.,
             elapsed_ms: 0.,
         };
-        let target = marvelous_cloth::model::State {
+        let target = fashioncraft::model::State {
             x: vec![DVec3::new(0.003, 0., 0.)],
             v: vec![DVec3::new(0., 0.2, 0.)],
             time: 1. / 60.,
@@ -881,7 +881,7 @@ mod tests {
     }
     #[test]
     fn captured_state_roundtrips_and_rejects_nonfinite_input() {
-        let state = marvelous_cloth::model::State {
+        let state = fashioncraft::model::State {
             x: vec![DVec3::new(0.1, 0.2, 0.3)],
             v: vec![DVec3::new(-1., 0., 2.)],
             time: 0.5,
@@ -890,7 +890,7 @@ mod tests {
         write_captured_state(&mut bytes, 29, &state).unwrap();
         let record: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(record["step"], 29);
-        let restored: marvelous_cloth::model::State =
+        let restored: fashioncraft::model::State =
             serde_json::from_value(record["state"].clone()).unwrap();
         assert_eq!(restored.x, state.x);
         assert_eq!(restored.v, state.v);
@@ -963,7 +963,7 @@ mod tests {
     }
     #[test]
     fn moving_patch_observes_natural_contact_refresh() {
-        use marvelous_cloth::{avatar::SurfaceMesh, model::Pattern};
+        use fashioncraft::{avatar::SurfaceMesh, model::Pattern};
         use std::collections::BTreeSet;
         let mut template = GarmentTemplate::two_panel_demo();
         template.panels.truncate(1);
@@ -1003,7 +1003,7 @@ mod tests {
             stiffness: 100.,
         };
         let mut detector = solver.world.clone();
-        let keys = |set: &marvelous_cloth::ogc::ContactSet| -> BTreeSet<_> {
+        let keys = |set: &fashioncraft::ogc::ContactSet| -> BTreeSet<_> {
             set.contacts
                 .iter()
                 .map(|c| (c.kind, c.vertices, c.count))
@@ -1072,7 +1072,7 @@ mod tests {
     }
     #[test]
     fn accounting_separates_changed_contacts_from_grab_and_step_work() {
-        use marvelous_cloth::{avatar::SurfaceMesh, model::Pattern};
+        use fashioncraft::{avatar::SurfaceMesh, model::Pattern};
         let mut template = GarmentTemplate::two_panel_demo();
         template.panels.truncate(1);
         template.seams.clear();
@@ -1115,7 +1115,7 @@ mod tests {
         // bookkeeping adversary, not a real collision detector transition.
         no_contacts.contacts.clear();
         no_contacts.incident =
-            marvelous_cloth::ogc::ContactIncidence::new(before.x.len(), &no_contacts.contacts);
+            fashioncraft::ogc::ContactIncidence::new(before.x.len(), &no_contacts.contacts);
         let previous = solver
             .audit_energy(&before, &settings, &no_contacts, None)
             .unwrap();

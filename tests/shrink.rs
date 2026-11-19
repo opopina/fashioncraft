@@ -3,13 +3,13 @@
 //! at 80 % of its cut size along the warp and keeps its size along the weft; turning the
 //! grain a quarter turn swaps the directions. Lengths are measured along the piece's edges:
 //! block descent does not conserve angular momentum exactly, so a free piece may turn.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::GarmentTemplate,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn far_away() -> SurfaceMesh {
@@ -31,7 +31,7 @@ fn square(grain: f64, shrink: [f64; 2]) -> GarmentTemplate {
     let p = &mut t.panels[0];
     p.pins.clear();
     p.grain_degrees = grain;
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.12,
         height: 0.12,
         nx: 6,
@@ -108,9 +108,9 @@ fn the_grain_decides_which_way_it_shrinks() {
 fn shrinkage_keeps_the_mass_and_is_validated() {
     let plain = square(0., [100., 100.]).compile().unwrap();
     let shrunk = square(0., [80., 90.]).compile().unwrap();
-    let mass = |g: &marvelous_cloth::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
+    let mass = |g: &fashioncraft::garment::CompiledGarment| g.mesh.masses.iter().sum::<f64>();
     assert!((mass(&plain) - mass(&shrunk)).abs() < 1e-15);
-    let area = |g: &marvelous_cloth::garment::CompiledGarment| {
+    let area = |g: &fashioncraft::garment::CompiledGarment| {
         g.mesh.triangles.iter().map(|t| t.area).sum::<f64>()
     };
     assert!((area(&shrunk) / area(&plain) - 0.72).abs() < 1e-12);

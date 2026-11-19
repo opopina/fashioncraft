@@ -1,5 +1,5 @@
 //! Zippers on seams: only the share the slider has closed is sewn; open, the sides are apart.
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
     garment::{GarmentTemplate, template::SeamZipper, trims::TrimKind},
@@ -7,7 +7,7 @@ use marvelous_cloth::{
 
 fn tshirt() -> GarmentTemplate {
     FittingProject::basic(
-        marvelous_cloth::garment::presets::GarmentKind::Tshirt,
+        fashioncraft::garment::presets::GarmentKind::Tshirt,
         1,
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj"),
     )
@@ -116,7 +116,7 @@ fn the_width_is_only_a_look_and_deleting_the_seam_drops_the_zipper() {
 #[test]
 fn it_draws_a_tape_on_each_side_and_the_slider_where_it_stops() {
     let t = zipped(&tshirt(), 0.25);
-    let trims = marvelous_cloth::garment::trims::zipper_trims(&t);
+    let trims = fashioncraft::garment::trims::zipper_trims(&t);
     let tapes = trims
         .iter()
         .filter(|t| matches!(t.kind, TrimKind::Zipper { .. }))
@@ -158,9 +158,9 @@ fn it_draws_a_tape_on_each_side_and_the_slider_where_it_stops() {
 fn the_zipper_shows_on_the_cloth() {
     let t = zipped(&tshirt(), 0.4);
     let garment = t.compile().unwrap();
-    let trims = marvelous_cloth::garment::trims::zipper_trims(&t);
+    let trims = fashioncraft::garment::trims::zipper_trims(&t);
     let triangles =
-        marvelous_cloth::garment::trims::trim_triangles(&trims, &garment, &garment.initial_state.x);
+        fashioncraft::garment::trims::trim_triangles(&trims, &garment, &garment.initial_state.x);
     assert!(triangles.len() > 50, "{} triangles", triangles.len());
 }
 
@@ -181,8 +181,8 @@ fn every_seam_of_the_tee_can_show_a_zipper() {
         .unwrap()
         .template;
         let garment = t.compile().unwrap();
-        let trims = marvelous_cloth::garment::trims::zipper_trims(&t);
-        let triangles = marvelous_cloth::garment::trims::trim_triangles(
+        let trims = fashioncraft::garment::trims::zipper_trims(&t);
+        let triangles = fashioncraft::garment::trims::trim_triangles(
             &trims,
             &garment,
             &garment.initial_state.x,

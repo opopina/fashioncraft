@@ -1,7 +1,6 @@
 //! First isolated EXO-REV-002 slice: cut-and-sewn dart identity and transactions.
 //! Persistent POM migration is not implemented by these tests.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate,
@@ -10,6 +9,7 @@ use marvelous_cloth::{
         seam::{BoundaryRef, SeamSpec, Side},
     },
 };
+use glam::DVec2;
 
 fn fixture() -> GarmentTemplate {
     authoring::apply(
@@ -227,7 +227,7 @@ fn linked_mirror_and_curved_boundary_are_rejected_without_editing() {
         &t,
         Command::LinkedMirror {
             panel: t.panels[0].id.clone(),
-            axis: marvelous_cloth::garment::shapes::MirrorAxis::X,
+            axis: fashioncraft::garment::shapes::MirrorAxis::X,
         },
     )
     .unwrap()

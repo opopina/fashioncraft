@@ -1,11 +1,11 @@
 //! CPU-only, fresh-geometry reproduction of EE/PF feature transitions.
 use clap::Parser;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     ogc::{OgcSettings, OgcWorld, geometry, potential::Kind},
     vbd::VbdSolver,
 };
+use glam::DVec3;
 use serde_json::{Value, json};
 use std::{fs, path::PathBuf};
 
@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "violating_neighbors":world.topology.neighbors[v].iter().filter(|j| (p-x[v]).dot(x[v]-x[**j]) < -1e-14).collect::<Vec<_>>() })).collect::<Vec<_>>();
             json!({"s":s,"t":t,"distance_m":pa.distance(pb),"endpoint_tests":endpoint_feasible})
         };
-        let pair = |set: &marvelous_cloth::ogc::ContactSet| {
+        let pair = |set: &fashioncraft::ogc::ContactSet| {
             let contact = set.contacts.iter().find(|c| {
                 (if a.point_face {
                     matches!(c.kind, Kind::PointFace | Kind::PointTriangle)

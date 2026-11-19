@@ -3,8 +3,8 @@
 //! and the girth of the body or the garment where it is clicked (the level cut around it).
 //! Read-only: nothing is added to the garment.
 use super::*;
+use fashioncraft::{avatar::SurfaceMesh, measure3d, trace3d};
 use glam::DVec3;
-use marvelous_cloth::{avatar::SurfaceMesh, measure3d, trace3d};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum MeasureKind {

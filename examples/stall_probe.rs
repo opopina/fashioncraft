@@ -1,5 +1,5 @@
 //! CPU investigation of the geometric pairs restricting a saved cloth state.
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     ogc::geometry::{self, Feature},
     vbd::VbdSolver,

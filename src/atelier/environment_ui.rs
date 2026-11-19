@@ -2,8 +2,8 @@
 //! wind, the collision distance, and time-step / iteration presets like a CAD cloth tool's
 //! Normal / Animation / Fitting.
 use super::*;
+use fashioncraft::vbd::Wind;
 use glam::DVec3;
-use marvelous_cloth::vbd::Wind;
 
 /// Friction of new documents: a typical value for cotton on skin and on cotton.
 pub(super) const DEFAULT_FRICTION: f64 = 0.3;

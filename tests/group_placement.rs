@@ -1,8 +1,8 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::GarmentTemplate,
 };
+use glam::{DQuat, DVec3};
 
 fn template() -> GarmentTemplate {
     serde_json::from_str(include_str!("../examples/templates/two-panel.json")).unwrap()
@@ -31,11 +31,11 @@ fn zero_motion_does_not_reset_drape_or_rewrite_angles() {
 
 #[test]
 fn linked_pair_keeps_its_relation_and_independent_material_geometry() {
-    use glam::DVec2;
-    use marvelous_cloth::garment::{
+    use fashioncraft::garment::{
         meshing::MeshingSettings,
         shapes::{MirrorAxis, Primitive},
     };
+    use glam::DVec2;
     let t = authoring::apply(
         &template(),
         Command::Primitive {

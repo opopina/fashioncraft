@@ -1,7 +1,7 @@
 //! VRM avatars: GLB files with the VRM extension, whose skinned and morphed meshes are read in
 //! their bind pose; VRM 0.x avatars are turned to face +Z.
+use fashioncraft::gltf_avatar::{self, Limits};
 use glam::DVec3;
-use marvelous_cloth::gltf_avatar::{self, Limits};
 use std::path::Path;
 
 /// A GLB with one skinned, morphed triangle under a node moved 5 m along X (which glTF ignores

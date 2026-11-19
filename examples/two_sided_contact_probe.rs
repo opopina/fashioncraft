@@ -1,7 +1,6 @@
 //! Static flat-patch force gate for an independent two-sided contact trial.
 use clap::Parser;
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::{
         feature_hierarchy::{Hierarchy, Pair},
@@ -10,6 +9,7 @@ use marvelous_cloth::{
         two_sided_contact::{MinimumContact, Settings},
     },
 };
+use glam::{DQuat, DVec3};
 use serde_json::json;
 use std::{fs, path::PathBuf};
 #[path = "support/two_sided_fixture.rs"]

@@ -110,7 +110,7 @@ jobs:
         if: steps.scope.outputs.mode != 'metadata'
         run: >-
           cargo build --locked --release -j 2 --features desktop
-          --bin cloth-fit --bin marvelous-cloth --bin cloth-template --bin cloth-session
+          --bin cloth-fit --bin fashioncraft-reference --bin cloth-template --bin cloth-session
       - name: Package, verify hashes and run native editor launch/capture from a path with spaces
         if: steps.scope.outputs.mode != 'metadata'
         timeout-minutes: 10

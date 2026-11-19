@@ -1,8 +1,7 @@
 //! Split steps: a step whose motion its contacts cannot allow at once (about 0.3 m/s at
 //! 1/60 s) is split into shorter whole steps, so free cloth falls as fast as gravity takes
 //! it while contacts and sewing stay as safe as ever. Off unless asked for.
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
     garment::{
@@ -12,14 +11,15 @@ use marvelous_cloth::{
     },
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::{path::PathBuf, sync::Arc};
 
 /// A 30 cm square of cloth, flat and level, its centre at `height`.
 fn square(
     height: f64,
 ) -> (
-    Arc<marvelous_cloth::garment::CompiledGarment>,
-    marvelous_cloth::model::State,
+    Arc<fashioncraft::garment::CompiledGarment>,
+    fashioncraft::model::State,
 ) {
     let t = authoring::apply(
         &presets::basic(GarmentKind::Tshirt, 0),
@@ -93,7 +93,7 @@ fn split_steps_let_free_cloth_fall_at_gravitys_pace() {
 fn split_steps_keep_falling_cloth_out_of_the_floor() {
     let (g, mut state) = square(0.5);
     // The floor is part of the obstacle, as the editor and recordings add it.
-    let floor = marvelous_cloth::avatar::SurfaceMesh {
+    let floor = fashioncraft::avatar::SurfaceMesh {
         vertices: vec![],
         triangles: vec![],
     }

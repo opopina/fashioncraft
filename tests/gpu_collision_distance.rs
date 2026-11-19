@@ -3,8 +3,7 @@
 //! initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::SurfaceMesh,
     garment::{
         GarmentTemplate,
@@ -13,6 +12,7 @@ use marvelous_cloth::{
     gpu_vbd::GpuVbd,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 #[test]
@@ -37,7 +37,7 @@ fn gpu_stacked_fabrics_keep_the_mean_of_their_distances() {
         p.id = format!("square{k}");
         p.name = p.id.clone();
         p.pins.clear();
-        p.pattern = marvelous_cloth::model::Pattern {
+        p.pattern = fashioncraft::model::Pattern {
             width: 0.12,
             height: 0.12,
             nx: 3,

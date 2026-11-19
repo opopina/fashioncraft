@@ -1,8 +1,8 @@
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar_import::Candidate, fitting::FittingProject, garment::presets::GarmentKind,
     vbd::VbdSettings,
 };
+use glam::DVec3;
 
 fn project(dir: &std::path::Path) -> FittingProject {
     let path = dir.join("old.obj");

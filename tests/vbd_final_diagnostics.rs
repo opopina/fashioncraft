@@ -3,18 +3,18 @@
 //! The sample is not a solver step. These tests check its accepted-state
 //! contacts, free-DOF residual against a finite-difference objective, pinned
 //! normalization, state preservation and the "one accepted step" contract.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::GarmentTemplate,
     model::State,
     ogc::ContactSet,
     vbd::{FinalDiagnosticsBackend, Grab, VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 mod common;
 
-fn free_vertices_of(garment: &marvelous_cloth::garment::CompiledGarment) -> Vec<usize> {
+fn free_vertices_of(garment: &fashioncraft::garment::CompiledGarment) -> Vec<usize> {
     garment
         .mesh
         .pins

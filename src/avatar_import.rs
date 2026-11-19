@@ -122,7 +122,7 @@ impl Candidate {
         let mut out = std::io::BufWriter::new(
             std::fs::File::create(asset.path()).map_err(|e| e.to_string())?,
         );
-        writeln!(out, "# ClothCraft static avatar; metres; Y-up").map_err(|e| e.to_string())?;
+        writeln!(out, "# FashionCraft static avatar; metres; Y-up").map_err(|e| e.to_string())?;
         for p in &mesh.vertices {
             writeln!(out, "v {} {} {}", p.x, p.y, p.z).map_err(|e| e.to_string())?;
         }

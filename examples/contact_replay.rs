@@ -1,7 +1,7 @@
 //! CPU-only contact microbenchmark. Replays deterministic small displacements;
 //! these are queries, not a simulated trajectory or a frame-rate benchmark.
 use clap::Parser;
-use marvelous_cloth::{fitting::FittingProject, ogc::OgcSettings, vbd::VbdSolver};
+use fashioncraft::{fitting::FittingProject, ogc::OgcSettings, vbd::VbdSolver};
 use serde::Serialize;
 use std::{path::PathBuf, time::Instant};
 
@@ -17,7 +17,7 @@ struct Args {
 #[derive(Serialize)]
 struct Sample {
     total_ms: f64,
-    profile: marvelous_cloth::ogc::DetectionProfile,
+    profile: fashioncraft::ogc::DetectionProfile,
     contacts: usize,
     active: usize,
     rebuilt: bool,

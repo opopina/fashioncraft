@@ -1,11 +1,18 @@
 [package]
-name = "marvelous-cloth"
+name = "fashioncraft"
 version = "0.1.0"
 edition = "2024"
-description = "Native garment editor with a double-precision CPU FEM reference"
+description = "3D garment design and cloth simulation: pattern editor, sewing and draping on an avatar"
 license = "MIT"
-repository = "https://github.com/erythrofr/ClothCraft"
-default-run = "marvelous-cloth"
+repository = "https://github.com/opopina/FashionCraft"
+homepage = "https://github.com/opopina/FashionCraft"
+authors = ["erythrofr and ClothCraft contributors", "Ricardo Rivadeneira"]
+default-run = "fashioncraft-reference"
+
+# The CPU FEM reference and the original native editor. The studio is `cloth-fit --view`.
+[[bin]]
+name = "fashioncraft-reference"
+path = "src/main.rs"
 
 [features]
 default = ["desktop"]

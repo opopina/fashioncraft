@@ -19,7 +19,7 @@ impl KeymapName {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Compatible => "Compatible",
-            Self::Classic => "ClothCraft classic",
+            Self::Classic => "FashionCraft classic",
         }
     }
 }

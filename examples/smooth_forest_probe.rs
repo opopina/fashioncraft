@@ -1,6 +1,6 @@
 //! Static law and conditioning probes; optional frozen-dress graph samples.
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     math::{Jet, Scalar},
     model::State,

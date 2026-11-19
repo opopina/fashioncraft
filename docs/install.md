@@ -63,7 +63,7 @@ are separate development artifacts.
    a terminal opened in that directory.
 
 The archive contains `cloth-fit.exe` (native fitting editor),
-`marvelous-cloth.exe` (additional native CLI entrypoint) and
+`fashioncraft-reference.exe` (additional native CLI entrypoint) and
 `cloth-template.exe` (headless CPU template commands), `cloth-session.exe`
 (local JSON-lines authoring process), bundled MakeHuman
 mannequin assets with their independent license notice, original sample
@@ -165,7 +165,7 @@ Microsoft C++ build toolchain. From the repository root:
 
 ```powershell
 cargo test --locked --no-default-features -j 2 -- --test-threads=2
-cargo build --locked --release -j 2 --features desktop --bin cloth-fit --bin marvelous-cloth --bin cloth-template --bin cloth-session
+cargo build --locked --release -j 2 --features desktop --bin cloth-fit --bin fashioncraft-reference --bin cloth-template --bin cloth-session
 .\scripts\package-windows.ps1 -Destination "$env:TEMP\ClothCraft Package With Spaces" -BinariesDirectory '.\target\release' -Verify -UiSmoke
 ```
 

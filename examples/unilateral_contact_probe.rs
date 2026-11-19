@@ -2,8 +2,7 @@
 //! Original OGC movement guards plus finite-triangle swept clearance checks.
 //! Compares analytical, all-linearized and constraint-generation contact.
 use clap::Parser;
-use glam::{DMat3, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     ogc::{
         OgcSettings, OgcWorld,
         geometry::{closest_segments, closest_triangle, segment_triangle},
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     },
     solver_lab::contact_qp::{self, Row, Settings},
 };
+use glam::{DMat3, DVec3};
 use serde::Serialize;
 use std::{fs, path::PathBuf, time::Instant};
 

@@ -2,14 +2,14 @@
 //! vertices. An elastic at 70 % draws a free edge of a weightless sheet in while the opposite
 //! edge keeps its length; tape on the sides of a heavy hanging sheet keeps them from
 //! stretching.
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate, seam::Side, template::LineSpring},
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn far_away() -> SurfaceMesh {
@@ -32,7 +32,7 @@ fn sheet(pinned: bool, density: f64) -> GarmentTemplate {
     if !pinned {
         p.pins.clear();
     }
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.2,
         height: 0.2,
         nx: 8,

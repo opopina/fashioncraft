@@ -1,6 +1,6 @@
 //! On-demand CPU inspection; no collision analysis during ordinary repaints.
 use eframe::egui;
-use marvelous_cloth::{avatar::diagnostics, fitting::FittingScene, vbd::VbdSettings};
+use fashioncraft::{avatar::diagnostics, fitting::FittingScene, vbd::VbdSettings};
 use std::sync::{Arc, Mutex, mpsc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,8 +34,8 @@ struct Sample {
     milliseconds: f64,
     // Keep the captured geometry allocation alive: pointer identity cannot be
     // accidentally reused while the sample is still displayed.
-    _surface: Arc<marvelous_cloth::avatar::SurfaceMesh>,
-    _garment: Option<Arc<marvelous_cloth::garment::CompiledGarment>>,
+    _surface: Arc<fashioncraft::avatar::SurfaceMesh>,
+    _garment: Option<Arc<fashioncraft::garment::CompiledGarment>>,
 }
 impl Sample {
     fn current(&self, now: Stamp) -> bool {
@@ -267,7 +267,7 @@ pub(super) fn show(
 mod tests {
     use super::super::super::authoring_smoke::widget_harness::Harness;
     use super::*;
-    use marvelous_cloth::{fitting::FittingProject, garment::presets::GarmentKind};
+    use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind};
 
     struct Case {
         scene: FittingScene,
@@ -367,12 +367,12 @@ mod tests {
         assert!(sample.initialization.as_ref().unwrap().is_ok());
         assert_eq!(serde_json::to_vec(&c.scene.state).unwrap(), before);
         let t = c.scene.garment.mesh.triangles[0].vertices;
-        let touching = marvelous_cloth::avatar::SurfaceMesh {
+        let touching = fashioncraft::avatar::SurfaceMesh {
             vertices: t.map(|v| c.scene.state.x[v]).to_vec(),
             triangles: vec![[0, 1, 2]],
         };
         c.scene.collider = Arc::new(
-            marvelous_cloth::avatar::MeshCollider::new(Arc::new(touching), 500_000.).unwrap(),
+            fashioncraft::avatar::MeshCollider::new(Arc::new(touching), 500_000.).unwrap(),
         );
         assert!(!sample.current(Stamp::new(&c.scene, c.generation)));
         h.frame(&mut c, &mut draw);

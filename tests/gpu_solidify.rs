@@ -2,8 +2,7 @@
 //! as in tests/strengthen_solidify.rs. Ordinary test runs must not initialize a GPU.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring,
     avatar::SurfaceMesh,
     garment::{GarmentTemplate, pins::MaterialPinTarget},
@@ -11,6 +10,7 @@ use marvelous_cloth::{
     model::State,
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::{DVec2, DVec3};
 use std::sync::Arc;
 
 #[test]
@@ -31,7 +31,7 @@ fn gpu_solidified_square_stays_flat() {
     t.seams.clear();
     let p = &mut t.panels[0];
     p.pins.clear();
-    p.pattern = marvelous_cloth::model::Pattern {
+    p.pattern = fashioncraft::model::Pattern {
         width: 0.24,
         height: 0.24,
         nx: 6,

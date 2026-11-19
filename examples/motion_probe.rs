@@ -1,6 +1,6 @@
 //! Opt-in accepted-state trace for diagnosing vibration, not a render benchmark.
 use clap::Parser;
-use marvelous_cloth::{
+use fashioncraft::{
     fitting::FittingProject,
     vbd::{VbdSettings, VbdSolver},
 };
@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     & (wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::SUBGROUP),
                 ..Default::default()
             }))?;
-        Some(marvelous_cloth::gpu_vbd::GpuVbd::new(device, queue))
+        Some(fashioncraft::gpu_vbd::GpuVbd::new(device, queue))
     } else {
         None
     };

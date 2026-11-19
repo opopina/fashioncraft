@@ -1,10 +1,10 @@
 //! Physical prerequisites for authored holds. These exercise compiled constraints,
 //! not a native pin tool or persistent target schema (both remain separate work).
-use glam::DVec3;
-use marvelous_cloth::{
+use fashioncraft::{
     garment::{CompiledGarment, GarmentTemplate},
     vbd::{VbdSettings, VbdSolver},
 };
+use glam::DVec3;
 use std::sync::Arc;
 
 fn editable() -> GarmentTemplate {
@@ -20,13 +20,13 @@ fn editable() -> GarmentTemplate {
 
 #[test]
 fn group_freeze_is_atomic_preserves_existing_targets_and_releases_cleanly() {
-    use marvelous_cloth::authoring::{
+    use fashioncraft::authoring::{
         History, prepare_freeze_edit, prepare_freeze_group_edit, prepare_pin_edit,
     };
     let mut t = editable();
     t.panels[0]
         .pins
-        .push(marvelous_cloth::garment::template::Corner::TopLeft);
+        .push(fashioncraft::garment::template::Corner::TopLeft);
     t.panels[1].placement.translation.x += 4.;
     let g = t.compile().unwrap();
     let mut state = g.initial_state.clone();
@@ -117,7 +117,7 @@ fn group_freeze_is_atomic_preserves_existing_targets_and_releases_cleanly() {
 
 #[test]
 fn authored_hold_coincident_with_legacy_pin_remains_distinguishable() {
-    use marvelous_cloth::authoring::prepare_pin_edit;
+    use fashioncraft::authoring::prepare_pin_edit;
     let t = GarmentTemplate::two_panel_demo();
     let g = t.compile().unwrap();
     let i = g.mesh.pins.iter().position(Option::is_some).unwrap();
@@ -128,7 +128,7 @@ fn authored_hold_coincident_with_legacy_pin_remains_distinguishable() {
     let (pin, state) = prepare_pin_edit(&t, &g, &state, &panel.id, &[g.mesh.uv[i]], true).unwrap();
     assert!(pin.garment.authored_holds[i]);
     assert!(
-        marvelous_cloth::authoring::capture_pin_targets(
+        fashioncraft::authoring::capture_pin_targets(
             &pin.template,
             &g,
             &state,
@@ -156,7 +156,7 @@ fn authored_hold_coincident_with_legacy_pin_remains_distinguishable() {
 
 #[test]
 fn fitting_cache_roundtrip_includes_holds_and_preserves_empty_legacy_fields() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::prepare_freeze_edit, fitting::FittingProject, garment::presets::GarmentKind,
     };
     let dir = tempfile::tempdir().unwrap();
@@ -209,7 +209,7 @@ fn fitting_cache_roundtrip_includes_holds_and_preserves_empty_legacy_fields() {
 
 #[test]
 fn frozen_panel_roundtrip_rejects_remesh_and_releases_without_reset() {
-    use marvelous_cloth::authoring::{prepare_freeze_edit, prepare_pin_edit};
+    use fashioncraft::authoring::{prepare_freeze_edit, prepare_pin_edit};
     let mut t = editable();
     for (i, panel) in t.panels.iter_mut().enumerate() {
         panel.placement.rotation_degrees = DVec3::new(90., 0., 0.);
@@ -277,7 +277,7 @@ fn frozen_panel_roundtrip_rejects_remesh_and_releases_without_reset() {
 
 #[test]
 fn authored_pin_save_release_and_history_preserve_drape() {
-    use marvelous_cloth::authoring::{History, prepare_pin_edit};
+    use fashioncraft::authoring::{History, prepare_pin_edit};
     let t = editable();
     let g = t.compile().unwrap();
     let mut state = g.initial_state.clone();
@@ -330,9 +330,7 @@ fn authored_pin_save_release_and_history_preserve_drape() {
 
 #[test]
 fn pin_remesh_and_unsupported_copy_fail_without_dropping_holds() {
-    use marvelous_cloth::authoring::{
-        Command, apply, clipboard::PatternClipboard, prepare_pin_edit,
-    };
+    use fashioncraft::authoring::{Command, apply, clipboard::PatternClipboard, prepare_pin_edit};
     let t = editable();
     let g = t.compile().unwrap();
     let p = &g.panels[0];
@@ -381,7 +379,7 @@ fn pin_remesh_and_unsupported_copy_fail_without_dropping_holds() {
 
 #[test]
 fn material_targets_resolve_exactly_without_mutating_constraints() {
-    use marvelous_cloth::garment::pins::{MaterialPinTarget, resolve_targets};
+    use fashioncraft::garment::pins::{MaterialPinTarget, resolve_targets};
     let mut g = panels(false);
     let i = g.panels[0].vertices.start;
     let target = MaterialPinTarget {
@@ -432,7 +430,7 @@ fn material_targets_resolve_exactly_without_mutating_constraints() {
 
 #[test]
 fn capture_uses_material_identity_and_rejects_stale_or_ambiguous_input() {
-    use marvelous_cloth::authoring::capture_pin_targets;
+    use fashioncraft::authoring::capture_pin_targets;
     let t = GarmentTemplate::two_panel_demo();
     let g = t.compile().unwrap();
     let mut s = g.initial_state.clone();
@@ -629,7 +627,7 @@ fn inconsistent_pin_target_is_rejected_before_initialization() {
 
 #[test]
 fn grouped_holds_preserve_drape_and_undo_as_one_edit() {
-    use marvelous_cloth::authoring::{History, prepare_pin_group_edit};
+    use fashioncraft::authoring::{History, prepare_pin_group_edit};
     use std::collections::BTreeMap;
     let t = editable();
     let g = t.compile().unwrap();
@@ -678,7 +676,7 @@ fn grouped_holds_preserve_drape_and_undo_as_one_edit() {
 
 #[test]
 fn grouped_holds_reject_invalid_or_frozen_member_atomically() {
-    use marvelous_cloth::authoring::{prepare_freeze_edit, prepare_pin_group_edit};
+    use fashioncraft::authoring::{prepare_freeze_edit, prepare_pin_group_edit};
     use std::collections::BTreeMap;
     let t = editable();
     let g = t.compile().unwrap();
@@ -707,7 +705,7 @@ fn grouped_holds_reject_invalid_or_frozen_member_atomically() {
 
 #[test]
 fn moving_pins_moves_their_targets_and_points_and_nothing_else() {
-    use marvelous_cloth::authoring::{prepare_pin_group_edit, prepare_pin_move_edit};
+    use fashioncraft::authoring::{prepare_pin_group_edit, prepare_pin_move_edit};
     use std::collections::BTreeMap;
     let t = editable();
     let g = t.compile().unwrap();

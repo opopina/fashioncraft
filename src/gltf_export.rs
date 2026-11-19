@@ -54,7 +54,7 @@ impl Builder {
     fn new() -> Self {
         Self {
             json: json!({
-                "asset": {"version": "2.0", "generator": "ClothCraft"},
+                "asset": {"version": "2.0", "generator": "FashionCraft"},
                 "scene": 0,
                 "scenes": [{"nodes": []}],
                 "nodes": [],

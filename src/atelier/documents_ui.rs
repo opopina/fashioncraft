@@ -16,7 +16,7 @@ pub(super) struct DocumentUi {
     avatar_import: avatar_import_ui::ImportUi,
     pattern_import: pattern_import_ui::ImportUi,
     svg_import: svg_import_ui::ImportUi,
-    staged_avatar: Option<marvelous_cloth::avatar_import::StagedAvatar>,
+    staged_avatar: Option<fashioncraft::avatar_import::StagedAvatar>,
     path: Option<PathBuf>,
     pub dirty: bool,
     last_recovery: Instant,
@@ -55,7 +55,7 @@ impl DocumentUi {
     }
 }
 fn install_avatar(
-    prepared: marvelous_cloth::avatar_import::Prepared,
+    prepared: fashioncraft::avatar_import::Prepared,
     project: &mut FittingProject,
     scene: &mut FittingScene,
     authoring: &mut AuthoringUi,
@@ -76,7 +76,7 @@ fn prepare_pattern_edit(
     import: &pattern_import_ui::ImportUi,
     project: &FittingProject,
     scene: &FittingScene,
-) -> Result<marvelous_cloth::authoring::Edit, String> {
+) -> Result<fashioncraft::authoring::Edit, String> {
     import.prepare(
         &project.template,
         pattern_arrangement_origin(project, scene),
@@ -86,7 +86,7 @@ fn prepare_svg_edit(
     import: &svg_import_ui::ImportUi,
     project: &FittingProject,
     scene: &FittingScene,
-) -> Result<marvelous_cloth::authoring::Edit, String> {
+) -> Result<fashioncraft::authoring::Edit, String> {
     import.prepare(
         &project.template,
         pattern_arrangement_origin(project, scene),
@@ -111,7 +111,7 @@ fn pattern_arrangement_origin(project: &FittingProject, scene: &FittingScene) ->
     glam::DVec3::new(right + 0.2 + scene.collider.clearance + thickness, 1.5, 0.5)
 }
 fn install_template(
-    prepared: marvelous_cloth::template_catalog::Prepared,
+    prepared: fashioncraft::template_catalog::Prepared,
     project: &mut FittingProject,
     scene: &mut FittingScene,
     authoring: &mut AuthoringUi,
@@ -313,7 +313,7 @@ impl Atelier {
             Some(Action::Import) => {
                 if let Some(path) = FileDialog::new()
                     .set_title("Import native garment template")
-                    .add_filter("ClothCraft template JSON", &["json"])
+                    .add_filter("FashionCraft template JSON", &["json"])
                     .pick_file()
                 {
                     use std::io::Read;
@@ -324,7 +324,7 @@ impl Atelier {
                             .take(8 * 1024 * 1024 + 1)
                             .read_to_end(&mut bytes)
                             .map_err(|e| e.to_string())?;
-                        marvelous_cloth::template_catalog::Selection::external(
+                        fashioncraft::template_catalog::Selection::external(
                             &bytes,
                             path.display().to_string(),
                         )
@@ -431,7 +431,7 @@ impl Atelier {
         self.pause_document(ctx);
         let path = if save_as || self.document.path.is_none() {
             FileDialog::new()
-                .add_filter("ClothCraft project", &["json"])
+                .add_filter("FashionCraft project", &["json"])
                 .set_file_name(
                     self.document
                         .path
@@ -560,7 +560,7 @@ impl Atelier {
         if !self.can_replace_document(ctx) {
             return;
         }
-        let picker = FileDialog::new().add_filter("ClothCraft project", &["json"]);
+        let picker = FileDialog::new().add_filter("FashionCraft project", &["json"]);
         let picker = if recovery {
             picker
                 .set_directory(&self.output)
@@ -579,8 +579,8 @@ impl Atelier {
         }
         // Start with a single unsewn, unpinned rectangle; empty solver meshes are unsupported.
         let mut p = self.project.clone();
-        let command = marvelous_cloth::authoring::Command::Primitive {
-            kind: marvelous_cloth::garment::shapes::Primitive::Rectangle,
+        let command = fashioncraft::authoring::Command::Primitive {
+            kind: fashioncraft::garment::shapes::Primitive::Rectangle,
             size: glam::DVec2::new(0.4, 0.6),
             sweep_degrees: 180.,
             origin: glam::DVec2::ZERO,
@@ -588,7 +588,7 @@ impl Atelier {
             fabric: p.template.fabrics[0].id.clone(),
             replace: true,
         };
-        match marvelous_cloth::authoring::apply(&p.template, command) {
+        match fashioncraft::authoring::apply(&p.template, command) {
             Ok(edit) => {
                 p.template = edit.template;
                 p.state = None;
@@ -748,7 +748,7 @@ impl Atelier {
             .and_then(|s| s.to_str())
             .unwrap_or("Untitled");
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-            "{}{} — ClothCraft",
+            "{}{} — FashionCraft",
             name,
             if self.document.dirty { " *" } else { "" }
         )));
@@ -760,7 +760,7 @@ impl Atelier {
 mod template_tests {
     use super::super::authoring_smoke::widget_harness::Harness;
     use super::*;
-    use marvelous_cloth::{garment::presets::GarmentKind, template_catalog::Selection};
+    use fashioncraft::{garment::presets::GarmentKind, template_catalog::Selection};
 
     struct Case {
         browser: template_browser::Browser,

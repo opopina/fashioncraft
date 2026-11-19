@@ -2,8 +2,7 @@
 //! like the CPU recording does. Never run as part of ordinary CPU checks.
 #![cfg(feature = "desktop")]
 use eframe::wgpu;
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     avatar::SurfaceMesh,
     avatar_animation::{AvatarAnimation, PoseKey, Recorder, run, run_stepping},
@@ -19,6 +18,7 @@ use marvelous_cloth::{
     model::State,
     vbd::VbdSettings,
 };
+use glam::{DVec2, DVec3};
 use std::{path::PathBuf, sync::Arc};
 
 fn mannequin() -> PathBuf {
@@ -164,7 +164,7 @@ fn span(x: &[DVec3]) -> f64 {
 #[test]
 #[ignore = "uses a hardware GPU; run explicitly with --ignored"]
 fn fabric_keys_shrink_the_cloth_on_the_gpu_as_on_the_cpu() {
-    use marvelous_cloth::avatar_animation::set_fabric_key;
+    use fashioncraft::avatar_animation::set_fabric_key;
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,

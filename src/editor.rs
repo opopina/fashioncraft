@@ -14,7 +14,7 @@
 //! interaction below are unchanged from the previous layout.
 use crate::render::{Camera, Viewport};
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
-use marvelous_cloth::{
+use fashioncraft::{
     model::{Mesh, Scene, State},
     project::{self, Project},
     solver::{Metrics, ReferenceSolver},
@@ -133,7 +133,7 @@ pub fn run(project: Project, output: PathBuf) -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "MARVELOUS CLOTH | FEM Workshop",
+        "FashionCraft | FEM Workshop",
         options,
         Box::new(move |cc| Ok(Box::new(Editor::new(cc, project, output)?))),
     )
@@ -396,7 +396,7 @@ impl Editor {
                 );
                 ui.separator();
                 ui.label(
-                    RichText::new("MARVELOUS CLOTH")
+                    RichText::new("FASHIONCRAFT")
                         .strong()
                         .size(13.5)
                         .color(ACCENT_DEEP),

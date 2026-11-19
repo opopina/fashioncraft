@@ -1,6 +1,6 @@
 //! Existing seam selection/deletion is available independently of sewing mode.
 use super::{authoring_ui::Tool, board::same_edge, *};
-use marvelous_cloth::{authoring::Command, garment::seam::BoundaryRef};
+use fashioncraft::{authoring::Command, garment::seam::BoundaryRef};
 
 impl Atelier {
     pub(super) fn edge_seams(&self) -> Vec<String> {
@@ -149,7 +149,7 @@ impl Atelier {
     /// Merge the pieces a seam joins into one, as one undo step.
     pub(super) fn merge_along_seam(&mut self, seam: String) -> bool {
         let ui_lang = self.prefs.language;
-        if self.edit(marvelous_cloth::authoring::Command::MergeAlongSeam { seam }) {
+        if self.edit(fashioncraft::authoring::Command::MergeAlongSeam { seam }) {
             self.authoring.edge = None;
             self.authoring.selection.seam = None;
             self.status = i18n::tr(ui_lang, "Pieces merged along the seam").into();
@@ -162,7 +162,7 @@ impl Atelier {
     /// the closed share is sewn) and set its tape width.
     fn seam_zipper_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
         let ui_lang = self.prefs.language;
-        use marvelous_cloth::garment::template::SeamZipper;
+        use fashioncraft::garment::template::SeamZipper;
         let current = self.project.template.seam_zippers.get(seam).cloned();
         let mut wanted: Option<Option<SeamZipper>> = None;
         ui.horizontal_wrapped(|ui| {
@@ -210,7 +210,7 @@ impl Atelier {
             }
         });
         if let Some(zipper) = wanted {
-            self.edit(marvelous_cloth::authoring::Command::SetSeamZipper {
+            self.edit(fashioncraft::authoring::Command::SetSeamZipper {
                 seam: seam.into(),
                 zipper,
             });
@@ -220,7 +220,7 @@ impl Atelier {
     /// The angle at which the selected seam's pieces meet (180° flat) and its strength.
     fn seam_fold_controls(&mut self, ui: &mut egui::Ui, seam: &str) {
         let ui_lang = self.prefs.language;
-        use marvelous_cloth::garment::template::SeamFold;
+        use fashioncraft::garment::template::SeamFold;
         let current = self.project.template.seam_folds.get(seam).cloned();
         let mut wanted: Option<Option<SeamFold>> = None;
         ui.horizontal(|ui| {
@@ -263,7 +263,7 @@ impl Atelier {
             }
         });
         if let Some(fold) = wanted {
-            self.edit(marvelous_cloth::authoring::Command::SetSeamFold {
+            self.edit(fashioncraft::authoring::Command::SetSeamFold {
                 seam: seam.into(),
                 fold,
             });

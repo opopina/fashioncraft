@@ -1,5 +1,4 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate,
@@ -8,6 +7,7 @@ use marvelous_cloth::{
         seam::{BoundaryRef, Side},
     },
 };
+use glam::{DVec2, DVec3};
 
 fn rectangle(width: f64) -> Command {
     // Deliberately clockwise, translated input: drawing direction is arbitrary.

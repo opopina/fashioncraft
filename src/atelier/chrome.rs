@@ -1,8 +1,8 @@
 //! Compact viewport headers and contextual inspector, independent of solver choice.
 use super::*;
 use crate::render::appearance::{AntiAliasing, Appearance};
+use fashioncraft::vbd::{FinalDiagnostics, FinalDiagnosticsBackend};
 use layout::ViewMode;
-use marvelous_cloth::vbd::{FinalDiagnostics, FinalDiagnosticsBackend};
 #[path = "avatar_diagnostics.rs"]
 mod avatar_diagnostics;
 
@@ -487,13 +487,13 @@ impl Atelier {
             .animation_frame_state()
             .map(|shown| std::mem::replace(&mut self.scene.state, shown));
         let mut optics =
-            marvelous_cloth::garment::appearance::bind(&self.project.template, &self.scene.garment);
+            fashioncraft::garment::appearance::bind(&self.project.template, &self.scene.garment);
         self.prefs.garment_display.style.apply(&mut optics);
         let (visible_faces, face_colors) = self.display_buffers();
         let flipped_faces = self.flipped_faces();
         // Trims of the pieces on show, lying on their front faces.
         let trims = if self.prefs.garment_display.garment && self.prefs.garment_display.trims {
-            let zippers = marvelous_cloth::garment::trims::zipper_trims(&self.project.template);
+            let zippers = fashioncraft::garment::trims::zipper_trims(&self.project.template);
             let shown: Vec<_> = self
                 .project
                 .template
@@ -504,7 +504,7 @@ impl Atelier {
                 .cloned()
                 .collect();
             let front = self.face_positions(true);
-            marvelous_cloth::garment::trims::trim_triangles(
+            fashioncraft::garment::trims::trim_triangles(
                 &shown,
                 &self.scene.garment,
                 front.as_ref().unwrap_or(&self.scene.state.x),
@@ -523,10 +523,10 @@ impl Atelier {
             .iter()
             .map(|maps| maps.each_ref().map(Option::as_deref))
             .collect();
-        let graphics: Vec<marvelous_cloth::render::GraphicDraw> = graphic_draws
+        let graphics: Vec<fashioncraft::render::GraphicDraw> = graphic_draws
             .iter()
             .map(
-                |(image, triangles, opacity)| marvelous_cloth::render::GraphicDraw {
+                |(image, triangles, opacity)| fashioncraft::render::GraphicDraw {
                     image,
                     triangles,
                     opacity: *opacity,
@@ -556,9 +556,10 @@ impl Atelier {
                         .unwrap_or(&self.scene.collider.surface),
                 ),
                 // The contact map asks the collider which cloth touches the avatar.
-                collider: (display.contacts && !self.clean_view).then_some(
-                    self.scene.collider.as_ref() as &dyn marvelous_cloth::contact::Collider,
-                ),
+                collider:
+                    (display.contacts && !self.clean_view).then_some(
+                        self.scene.collider.as_ref() as &dyn fashioncraft::contact::Collider
+                    ),
                 seams: if self.seams && !self.clean_view && seams_shown {
                     &self.scene.garment.seams
                 } else {
@@ -567,7 +568,7 @@ impl Atelier {
                 trims: &trims,
                 graphics: &graphics,
                 fabric_images: &fabric_images,
-                display: marvelous_cloth::render::DisplayOptions {
+                display: fashioncraft::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),
                     flipped_faces: flipped_faces.as_deref(),

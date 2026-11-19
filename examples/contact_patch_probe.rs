@@ -2,8 +2,7 @@
 //! Same backward-Euler objective and OGC movement guards; fixed planar patch,
 //! one moving point, no damping, friction, sleep, or velocity correction.
 use clap::Parser;
-use glam::{DMat3, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::{
         OgcSettings, OgcWorld,
@@ -12,6 +11,7 @@ use marvelous_cloth::{
         smooth_forest,
     },
 };
+use glam::{DMat3, DVec3};
 use serde_json::json;
 use std::{fs, path::PathBuf};
 #[path = "support/two_sided_fixture.rs"]
@@ -49,7 +49,7 @@ enum Law {
 fn energy<S: Scalar>(law: Law, x: [[S; 3]; 5], cfg: &OgcSettings) -> S {
     match law {
         Law::LocalSurface(support) => {
-            use marvelous_cloth::ogc::local_surface::{self, Sample};
+            use fashioncraft::ogc::local_surface::{self, Sample};
             let samples = [
                 Sample::triangle([x[1], x[2], x[3]], 1.).unwrap(),
                 Sample::triangle([x[2], x[1], x[4]], 1.).unwrap(),
@@ -59,7 +59,7 @@ fn energy<S: Scalar>(law: Law, x: [[S; 3]; 5], cfg: &OgcSettings) -> S {
         }
         Law::TwoSided { alpha, measures } => two_sided_fixture::energy(
             x,
-            marvelous_cloth::ogc::two_sided_contact::Settings {
+            fashioncraft::ogc::two_sided_contact::Settings {
                 radius: cfg.radius,
                 stiffness: cfg.stiffness,
                 width: 0.01,

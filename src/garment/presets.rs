@@ -157,7 +157,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         })
         .collect();
     GarmentTemplate {
-        format: "marvelous-cloth-template".into(),
+        format: super::template::TEMPLATE_FORMAT.into(),
         mirror_links: vec![],
         pin_targets: vec![],
         frozen_panels: vec![],

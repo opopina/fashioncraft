@@ -1,10 +1,10 @@
 //! A skirt drafted from measurements: its outline follows the waist, hip, depth, length and
 //! flare asked for, it is sewn down both sides and starts clear of the mannequin.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar::{SurfaceMesh, diagnostics},
     garment::presets::{SkirtMeasurements, skirt},
 };
+use glam::DVec2;
 use std::{path::Path, sync::Arc};
 
 fn width_at(points: &[DVec2], y: f64) -> f64 {

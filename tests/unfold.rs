@@ -1,7 +1,6 @@
 //! Unfold: a half piece mirrored across a straight boundary into the whole piece, with its
 //! curves, markings and internal lines mirrored and the fold boundary gone.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -13,6 +12,7 @@ use marvelous_cloth::{
         template::{Tack, TackPoint},
     },
 };
+use glam::DVec2;
 
 /// A lone half piece: a trapezoid with a curved hem, a seam allowance and an internal line.
 fn half() -> GarmentTemplate {

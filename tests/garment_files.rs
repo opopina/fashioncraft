@@ -1,8 +1,7 @@
 //! Garments and poses as files of their own: a saved garment opens in the template browser
 //! and adds beside another garment with all its seams; a pose file carries the rotations
 //! only and refuses anything else.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{
         self, Command,
         clipboard::{self, PatternClipboard},
@@ -14,6 +13,7 @@ use marvelous_cloth::{
     },
     template_catalog::Selection,
 };
+use glam::DVec2;
 
 fn ids(t: &GarmentTemplate) -> Vec<String> {
     t.panels.iter().map(|p| p.id.clone()).collect()
@@ -86,10 +86,10 @@ fn a_pose_file_round_trips_and_refuses_strangers() {
 fn a_saved_avatar_reads_back_as_the_same_mesh() {
     let mannequin =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj");
-    let body = marvelous_cloth::avatar::SurfaceMesh::load_obj(&mannequin).unwrap();
+    let body = fashioncraft::avatar::SurfaceMesh::load_obj(&mannequin).unwrap();
     let text = body.to_obj("posed avatar\nmetres");
     assert!(text.starts_with("# posed avatar\n# metres\n"));
-    let back = marvelous_cloth::avatar::SurfaceMesh::parse_obj(&text).unwrap();
+    let back = fashioncraft::avatar::SurfaceMesh::parse_obj(&text).unwrap();
     assert_eq!(back.triangles, body.triangles);
     assert_eq!(back.vertices.len(), body.vertices.len());
     // Positions print exactly: Rust writes the shortest text that reads back the same.

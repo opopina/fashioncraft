@@ -1,6 +1,6 @@
 //! CPU snapshot audit, not a contact potential or simulation benchmark.
 use clap::Parser;
-use marvelous_cloth::{fitting::FittingProject, model::State, vbd::VbdSolver};
+use fashioncraft::{fitting::FittingProject, model::State, vbd::VbdSolver};
 use serde_json::json;
 use std::{fs, path::PathBuf, time::Instant};
 

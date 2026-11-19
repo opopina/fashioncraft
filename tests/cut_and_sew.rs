@@ -1,8 +1,7 @@
 //! Cut and sew: a piece split in two along a straight internal line carried on to the
 //! outline, sewn back together along the cut, with the seams that crossed the cut split so
 //! the garment stays sewn exactly as before.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, edge_length},
     fitting::FittingProject,
     garment::{
@@ -14,6 +13,7 @@ use marvelous_cloth::{
         trims::{Trim, TrimKind},
     },
 };
+use glam::DVec2;
 
 fn tshirt() -> GarmentTemplate {
     FittingProject::basic(

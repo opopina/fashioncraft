@@ -1,5 +1,5 @@
+use fashioncraft::garment::trims::{Trim, TrimKind};
 use glam::DVec2;
-use marvelous_cloth::garment::trims::{Trim, TrimKind};
 
 fn trim(kind: TrimKind) -> Trim {
     Trim {
@@ -82,7 +82,7 @@ fn all_trim_types_roundtrip_and_reject_invalid_geometry() {
 
 #[test]
 fn document_roundtrip_validates_references_and_keeps_physics() {
-    use marvelous_cloth::{authoring, garment::GarmentTemplate};
+    use fashioncraft::{authoring, garment::GarmentTemplate};
     let source = GarmentTemplate::two_panel_demo();
     let legacy = serde_json::to_value(&source).unwrap();
     assert!(legacy.get("trims").is_none());
@@ -112,7 +112,7 @@ fn document_roundtrip_validates_references_and_keeps_physics() {
 
 #[test]
 fn trim_transactions_copy_and_delete_keep_identity_and_physics() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, clipboard::PatternClipboard},
         garment::GarmentTemplate,
     };
@@ -174,7 +174,7 @@ fn trim_transactions_copy_and_delete_keep_identity_and_physics() {
 
 #[test]
 fn trim_topology_edits_fail_closed_and_remesh_keeps_attachment() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::{
             GarmentTemplate,
@@ -245,7 +245,7 @@ fn trim_topology_edits_fail_closed_and_remesh_keeps_attachment() {
 
 #[test]
 fn standalone_mirror_reflects_all_trims_and_preserves_history() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, History},
         fitting::FittingProject,
         garment::{
@@ -454,7 +454,7 @@ fn standalone_mirror_reflects_all_trims_and_preserves_history() {
 
 #[test]
 fn trim_history_and_project_save_preserve_drape() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, History},
         fitting::FittingProject,
         garment::presets::GarmentKind,
@@ -517,7 +517,7 @@ fn trim_history_and_project_save_preserve_drape() {
 
 #[test]
 fn repeat_trims_is_atomic_and_undoable_for_all_kinds() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command, History},
         garment::GarmentTemplate,
     };
@@ -680,7 +680,7 @@ fn repeat_trims_is_atomic_and_undoable_for_all_kinds() {
 
 #[test]
 fn repeat_trims_refuses_document_capacity_without_partial_write() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::GarmentTemplate,
     };
@@ -713,7 +713,7 @@ fn repeat_trims_refuses_document_capacity_without_partial_write() {
 
 #[test]
 fn repeat_refuses_linked_panel_without_mutating_template() {
-    use marvelous_cloth::{
+    use fashioncraft::{
         authoring::{self, Command},
         garment::{GarmentTemplate, shapes::MirrorAxis, template::MirrorLink},
     };

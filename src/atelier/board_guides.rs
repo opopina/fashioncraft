@@ -4,8 +4,8 @@
 //! can be locked, offset into evenly spaced copies or deleted. Pattern points snap to guides and
 //! a guide snaps to pattern points. Stored with the project; nothing here touches the garment.
 use super::*;
+use fashioncraft::fitting::{GuideAxis, GuideLine};
 use glam::DVec2;
-use marvelous_cloth::fitting::{GuideAxis, GuideLine};
 use serde::{Deserialize, Serialize};
 
 /// Guide colour on the white board.
@@ -395,7 +395,7 @@ impl Atelier {
                     return;
                 }
                 if self.project.board_guides.lines.len()
-                    >= marvelous_cloth::fitting::BoardGuides::MAX_LINES
+                    >= fashioncraft::fitting::BoardGuides::MAX_LINES
                 {
                     self.status =
                         i18n::tr(ui_lang, "Guide limit reached; delete some guides first").into();
@@ -740,7 +740,7 @@ impl Atelier {
                     state.offset_mm / 1000.,
                     state.offset_both,
                 );
-                let room = marvelous_cloth::fitting::BoardGuides::MAX_LINES
+                let room = fashioncraft::fitting::BoardGuides::MAX_LINES
                     .saturating_sub(self.project.board_guides.lines.len());
                 let added = copies.len().min(room);
                 self.project

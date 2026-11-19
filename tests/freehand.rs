@@ -1,8 +1,8 @@
-use glam::DVec2;
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     curves,
     freehand::{FitError, FitOptions, MAX_INPUT_SAMPLES, MAX_OUTPUT_SEGMENTS, fit_freehand},
 };
+use glam::DVec2;
 
 fn opts(max_error_m: f64) -> FitOptions {
     FitOptions {

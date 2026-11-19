@@ -1,4 +1,4 @@
-use marvelous_cloth::solver_lab::contact_newton::{least_squares, solve};
+use fashioncraft::solver_lab::contact_newton::{least_squares, solve};
 
 #[test]
 fn nonsymmetric_force_geometry_blocks_recover_known_solution() {

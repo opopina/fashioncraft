@@ -14,7 +14,9 @@ Research and public manual references are recorded in `docs/research.md`, `docs/
 
 ## ClothCraft source
 
-ClothCraft source is distributed under the MIT license; see [LICENSE](LICENSE).
+FashionCraft is built on ClothCraft by erythrofr and the ClothCraft contributors. Both are
+distributed under the MIT license; see [LICENSE](LICENSE), which keeps the original copyright
+notice, and [CONTRIBUTORS.md](CONTRIBUTORS.md).
 The MakeHuman CC0 notice applies to the bundled assets, not the program source.
 
 ## Optional Box3D research harness

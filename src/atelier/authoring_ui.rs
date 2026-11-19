@@ -1,7 +1,6 @@
 //! Egui adapter for the CPU authoring commands; no physical model lives here.
 use super::*;
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, ConstructionRef, Edit, History, PointConstruction},
     garment::{
         markings::{MAX_ALLOWANCE_M, Notch, NotchKind, polyline_length, validate_notch},
@@ -11,6 +10,7 @@ use marvelous_cloth::{
         template::Placement,
     },
 };
+use glam::{DVec2, DVec3};
 
 /// Seam-allowance width shown for a boundary that has none stored yet.
 const DEFAULT_ALLOWANCE_MM: f64 = 10.;
@@ -86,7 +86,7 @@ pub(super) struct AuthoringUi {
     pub reverse: bool,
     pub ease: bool,
     pub preview: Option<Placement>,
-    pub preview_state: Option<marvelous_cloth::model::State>,
+    pub preview_state: Option<fashioncraft::model::State>,
     /// The edit being installed moves pieces in 3D: draped ones carry their drape along.
     pub carry_drape: bool,
     pub error: Option<String>,
@@ -143,7 +143,7 @@ pub(super) struct DartDraft {
 }
 
 fn dart_edge(
-    template: &marvelous_cloth::garment::GarmentTemplate,
+    template: &fashioncraft::garment::GarmentTemplate,
     panel: &str,
     edge: &str,
 ) -> Result<[DVec2; 2], String> {
@@ -186,7 +186,7 @@ fn dart_edge(
 
 impl DartDraft {
     fn new(
-        template: &marvelous_cloth::garment::GarmentTemplate,
+        template: &fashioncraft::garment::GarmentTemplate,
         panel: String,
         edge: String,
     ) -> Result<Self, String> {
@@ -203,7 +203,7 @@ impl DartDraft {
 
     pub(super) fn preview(
         &self,
-        template: &marvelous_cloth::garment::GarmentTemplate,
+        template: &fashioncraft::garment::GarmentTemplate,
     ) -> Result<[DVec2; 3], String> {
         let [a, b] = dart_edge(template, &self.panel, &self.edge)?;
         let parse = |s: &str| {
@@ -235,7 +235,7 @@ impl DartDraft {
 
     fn command(
         &self,
-        template: &marvelous_cloth::garment::GarmentTemplate,
+        template: &fashioncraft::garment::GarmentTemplate,
     ) -> Result<Command, String> {
         let [left, apex, right] = self.preview(template)?;
         let [a, b] = dart_edge(template, &self.panel, &self.edge)?;
@@ -258,7 +258,7 @@ impl DartDraft {
 
     pub(super) fn boundary_start(
         &self,
-        template: &marvelous_cloth::garment::GarmentTemplate,
+        template: &fashioncraft::garment::GarmentTemplate,
     ) -> Option<DVec2> {
         dart_edge(template, &self.panel, &self.edge)
             .ok()
@@ -270,7 +270,7 @@ impl DartDraft {
 fn dart_controls(
     ui: &mut egui::Ui,
     draft: &mut Option<DartDraft>,
-    template: &marvelous_cloth::garment::GarmentTemplate,
+    template: &fashioncraft::garment::GarmentTemplate,
     selected: Option<(&str, &str)>,
 ) -> Option<Command> {
     if draft
@@ -587,7 +587,7 @@ struct ConstructionControls {
 /// Board-space reference endpoints, current corner and proposed corner.
 /// Only semantic contour coordinates are read; this never compiles a mesh.
 fn construction_preview_points(
-    template: &marvelous_cloth::garment::GarmentTemplate,
+    template: &fashioncraft::garment::GarmentTemplate,
     target: &ConstructionRef,
     reference: &ConstructionRef,
     result: DVec2,
@@ -710,7 +710,7 @@ fn construction_reference_selector(
 fn construction_controls(
     ui: &mut egui::Ui,
     draft: &mut ConstructionDraft,
-    template: &marvelous_cloth::garment::GarmentTemplate,
+    template: &fashioncraft::garment::GarmentTemplate,
     target: &ConstructionRef,
 ) -> ConstructionControls {
     let choices: Vec<_> = template
@@ -1389,8 +1389,8 @@ impl Atelier {
     fn target_length_properties(
         &mut self,
         ui: &mut egui::Ui,
-        panel: &marvelous_cloth::garment::template::Panel,
-        polygon: &marvelous_cloth::garment::polygon::PolygonPattern,
+        panel: &fashioncraft::garment::template::Panel,
+        polygon: &fashioncraft::garment::polygon::PolygonPattern,
     ) {
         let ui_lang = self.prefs.language;
         let Some(name) = self
@@ -1812,7 +1812,7 @@ impl Atelier {
         if matches!(self.authoring.tool, Tool::Ellipse | Tool::Sector)
             && self.authoring.draft.len() == 4
         {
-            use marvelous_cloth::garment::shapes::Primitive;
+            use fashioncraft::garment::shapes::Primitive;
             let command = Command::Primitive {
                 kind: if self.authoring.tool == Tool::Ellipse {
                     Primitive::Ellipse
@@ -1941,7 +1941,7 @@ impl EditorTransition<'_> {
             self.scene.state = if kept.x == flat.x {
                 flat
             } else {
-                match marvelous_cloth::avatar::diagnostics::check_vbd_initialization(
+                match fashioncraft::avatar::diagnostics::check_vbd_initialization(
                     std::sync::Arc::new(edit.garment.clone()),
                     &self.scene.collider.surface,
                     &kept,
@@ -2106,7 +2106,7 @@ mod construction_tests {
     fn named_widgets_dart_preview_cancel_apply_history_and_reload() {
         use super::super::authoring_smoke::widget_harness::Harness;
         struct Case {
-            template: marvelous_cloth::garment::GarmentTemplate,
+            template: fashioncraft::garment::GarmentTemplate,
             panel: String,
             draft: Option<DartDraft>,
             history: History,
@@ -2183,7 +2183,7 @@ mod construction_tests {
         let after_mass: f64 = c.template.compile().unwrap().mesh.masses.iter().sum();
         assert!((after_mass / before_mass - (0.12 - 0.04 * 0.08 / 2.) / 0.12).abs() < 1e-10);
         let after = serde_json::to_string(&c.template).unwrap();
-        let reloaded: marvelous_cloth::garment::GarmentTemplate =
+        let reloaded: fashioncraft::garment::GarmentTemplate =
             serde_json::from_str(&after).unwrap();
         reloaded.compile().unwrap();
         assert_eq!(serde_json::to_string(&reloaded).unwrap(), after);
@@ -2275,7 +2275,7 @@ mod construction_tests {
     fn named_widgets_intersection_selects_edges_rejects_stale_and_applies_once() {
         use super::super::authoring_smoke::widget_harness::Harness;
         struct Case {
-            template: marvelous_cloth::garment::GarmentTemplate,
+            template: fashioncraft::garment::GarmentTemplate,
             target: ConstructionRef,
             draft: ConstructionDraft,
             history: History,
@@ -2421,7 +2421,7 @@ mod construction_tests {
     fn named_widgets_construction_types_validates_applies_and_undoes() {
         use super::super::authoring_smoke::widget_harness::Harness;
         struct Case {
-            template: marvelous_cloth::garment::GarmentTemplate,
+            template: fashioncraft::garment::GarmentTemplate,
             target: ConstructionRef,
             draft: ConstructionDraft,
             history: History,
@@ -2492,8 +2492,8 @@ mod construction_tests {
         let undo = c.history.restore(&c.template, false).unwrap();
         assert_eq!(serde_json::to_string(&undo.template).unwrap(), before);
     }
-    pub(super) fn template() -> marvelous_cloth::garment::GarmentTemplate {
-        use marvelous_cloth::garment::presets::{self, GarmentKind};
+    pub(super) fn template() -> fashioncraft::garment::GarmentTemplate {
+        use fashioncraft::garment::presets::{self, GarmentKind};
         authoring::apply(
             &presets::basic(GarmentKind::Tshirt, 0),
             Command::Polygon {
@@ -2518,7 +2518,7 @@ mod construction_tests {
     fn frame(
         ctx: &egui::Context,
         draft: &mut ConstructionDraft,
-        t: &marvelous_cloth::garment::GarmentTemplate,
+        t: &fashioncraft::garment::GarmentTemplate,
         events: Vec<egui::Event>,
     ) -> (ConstructionControls, Vec<String>) {
         let target = ConstructionRef {
@@ -2762,20 +2762,20 @@ mod transition_tests {
             assert_eq!(state.scene.state.v, saved.v);
             assert_eq!(state.scene.state.time, saved.time);
         }
-        let placement = marvelous_cloth::garment::graphics::GraphicPlacement {
+        let placement = fashioncraft::garment::graphics::GraphicPlacement {
             id: "graphic_1".into(),
             panel_id: state.project.template.panels[0].id.clone(),
             asset_id: "asset_1".into(),
             center_m: DVec2::new(0.1, 0.1),
             size_m: DVec2::new(0.05, 0.05),
             rotation_degrees: 0.,
-            side: marvelous_cloth::garment::graphics::GraphicSide::Front,
+            side: fashioncraft::garment::graphics::GraphicSide::Front,
             opacity: 1.,
         };
         let mut updated = placement.clone();
         updated.center_m += glam::DVec2::new(0.02, -0.01);
         updated.rotation_degrees = 37.;
-        updated.side = marvelous_cloth::garment::graphics::GraphicSide::Back;
+        updated.side = fashioncraft::garment::graphics::GraphicSide::Back;
         for (command, expected) in [
             (
                 Command::SetGraphic {
@@ -2845,10 +2845,10 @@ mod transition_tests {
             );
         }
         assert!(state.project.template.graphics.is_empty());
-        let mut trim = marvelous_cloth::garment::trims::Trim {
+        let mut trim = fashioncraft::garment::trims::Trim {
             id: "trim_1".into(),
             panel_id: state.project.template.panels[0].id.clone(),
-            kind: marvelous_cloth::garment::trims::TrimKind::Button {
+            kind: fashioncraft::garment::trims::TrimKind::Button {
                 center_m: glam::DVec2::new(0.1, 0.1),
                 diameter_m: 0.018,
             },
@@ -2864,7 +2864,7 @@ mod transition_tests {
             state.install(edit);
         };
         apply_trim(Command::SetTrim { trim: trim.clone() });
-        trim.kind = marvelous_cloth::garment::trims::TrimKind::Button {
+        trim.kind = fashioncraft::garment::trims::TrimKind::Button {
             center_m: glam::DVec2::new(0.15, 0.1),
             diameter_m: 0.018,
         };
@@ -3074,7 +3074,7 @@ mod transition_tests {
 
         // An invalid endpoint must not pop Undo or install a new generation.
         let t = state.scene.garment.mesh.triangles[0].vertices;
-        let touching = marvelous_cloth::avatar::SurfaceMesh {
+        let touching = fashioncraft::avatar::SurfaceMesh {
             vertices: t.map(|i| state.scene.state.x[i]).to_vec(),
             triangles: vec![[0, 1, 2]],
         };
@@ -3122,7 +3122,7 @@ mod transition_tests {
     fn named_widgets_markings_stage_cancel_apply_and_show_invalid_input() {
         use super::super::authoring_smoke::widget_harness::Harness;
         struct Case {
-            template: marvelous_cloth::garment::GarmentTemplate,
+            template: fashioncraft::garment::GarmentTemplate,
             panel: String,
             draft: MarkingsDraft,
             commands: Vec<Command>,
@@ -3365,7 +3365,7 @@ mod transition_tests {
         };
         let assert_retained =
             |state: &EditorTransition<'_>,
-             retained: &std::sync::Arc<marvelous_cloth::garment::CompiledGarment>| {
+             retained: &std::sync::Arc<fashioncraft::garment::CompiledGarment>| {
                 assert!(*state.playing && *state.pending);
                 assert_eq!(*state.generation, 12);
                 assert!(std::sync::Arc::ptr_eq(retained, &state.scene.garment));

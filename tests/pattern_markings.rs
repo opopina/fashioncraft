@@ -1,7 +1,6 @@
 //! Seam allowance and notches (`MARK-01`): draft markings that change the
 //! printed cutting line and never the physics.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
@@ -15,6 +14,7 @@ use marvelous_cloth::{
     },
     model::Material,
 };
+use glam::DVec2;
 
 fn settings() -> MeshingSettings {
     MeshingSettings {

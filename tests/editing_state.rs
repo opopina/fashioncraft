@@ -1,8 +1,8 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{Command, apply},
     garment::{GarmentTemplate, meshing::MeshingSettings},
 };
+use glam::{DVec2, DVec3};
 
 #[test]
 fn adding_and_sewing_a_panel_keep_the_existing_drape() {

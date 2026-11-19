@@ -1,12 +1,12 @@
 //! Outline edits on a piece laid out automatically keep it where it is on the board.
-use glam::DVec2;
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command},
     garment::{
         GarmentTemplate,
         presets::{self, GarmentKind},
     },
 };
+use glam::DVec2;
 
 /// Where a piece's outline points are on the board.
 fn on_board(t: &GarmentTemplate, index: usize) -> Vec<DVec2> {

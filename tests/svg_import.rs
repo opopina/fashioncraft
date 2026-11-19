@@ -1,9 +1,9 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::garment::{
+use fashioncraft::garment::{
     GarmentTemplate,
     meshing::MeshingSettings,
     svg_import::{self, Drawing, Outline},
 };
+use glam::{DVec2, DVec3};
 
 fn template() -> GarmentTemplate {
     serde_json::from_str(include_str!("../examples/templates/two-panel.json")).unwrap()
@@ -196,7 +196,7 @@ fn prepare(
     t: &GarmentTemplate,
     outlines: Vec<Outline>,
     selected: &[usize],
-) -> Result<marvelous_cloth::authoring::Edit, String> {
+) -> Result<fashioncraft::authoring::Edit, String> {
     svg_import::prepare(
         t,
         &Drawing {
@@ -232,7 +232,7 @@ fn svg_down_direction_and_physical_area_survive_editable_conversion() {
             .iter()
             .any(|v| v.distance(DVec2::new(0.1, 0.2)) < 1e-12)
     );
-    assert!((marvelous_cloth::garment::domain::area(&p.points) - 0.01).abs() < 1e-12);
+    assert!((fashioncraft::garment::domain::area(&p.points) - 0.01).abs() < 1e-12);
     let added_area =
         e.garment.mesh.rest_area.iter().sum::<f64>() - old.mesh.rest_area.iter().sum::<f64>();
     assert!((added_area - 0.01).abs() < 1e-12);
@@ -255,7 +255,7 @@ fn svg_down_direction_and_physical_area_survive_editable_conversion() {
 fn prepared_import_is_one_reversible_template_edit() {
     let t = template();
     let edit = prepare(&t, vec![triangle(0.), triangle(1.)], &[0, 1]).unwrap();
-    let mut history = marvelous_cloth::authoring::History::default();
+    let mut history = fashioncraft::authoring::History::default();
     history.record(t.clone());
     let undo = history.restore(&edit.template, false).unwrap();
     assert_eq!(

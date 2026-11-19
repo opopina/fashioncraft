@@ -1,8 +1,8 @@
-use glam::{DQuat, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     math::{Jet, Scalar},
     ogc::local_surface::{self, Sample},
 };
+use glam::{DQuat, DVec3};
 
 #[test]
 fn coplanar_field_reproduces_plane_with_unequal_samples_and_support_changes() {
@@ -178,7 +178,7 @@ fn opposite_layers_can_cancel_the_contact_gradient() {
 }
 #[test]
 fn known_separate_layers_match_the_sum_of_two_plane_barriers() {
-    use marvelous_cloth::ogc::potential::activation;
+    use fashioncraft::ogc::potential::activation;
     let lower = [Sample::oriented([0., 0., 0.].map(Jet::c), [0., 1., 0.].map(Jet::c), 1.).unwrap()];
     let upper =
         [Sample::oriented([0., 0.002, 0.].map(Jet::c), [0., 1., 0.].map(Jet::c), 1.).unwrap()];
@@ -253,7 +253,7 @@ fn concave_patch_field_does_not_preserve_the_triangle_zero_set() {
 
 #[test]
 fn snapshot_patch_eligibility_preserves_original_seam_exclusions() {
-    use marvelous_cloth::ogc::OgcWorld;
+    use fashioncraft::ogc::OgcWorld;
     let x = [
         DVec3::Y * 0.001,
         DVec3::ZERO,

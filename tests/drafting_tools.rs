@@ -1,5 +1,4 @@
-use glam::{DVec2, DVec3};
-use marvelous_cloth::{
+use fashioncraft::{
     authoring::{self, Command, History},
     garment::{
         GarmentTemplate, export,
@@ -9,6 +8,7 @@ use marvelous_cloth::{
         shapes::{self, BooleanOp, MirrorAxis, Primitive},
     },
 };
+use glam::{DVec2, DVec3};
 
 fn settings() -> MeshingSettings {
     MeshingSettings {
@@ -154,7 +154,7 @@ fn subtraction_has_a_real_hole_and_exports_split_grain_guides() {
     assert!((area(&t) - 0.32).abs() < 1e-9);
     assert!(g.embed_point(&t.panels[0].id, DVec2::splat(0.3)).is_err());
     for tri in &g.mesh.triangles {
-        assert!(!marvelous_cloth::garment::domain::inside(
+        assert!(!fashioncraft::garment::domain::inside(
             tri.rest.iter().sum::<DVec2>() / 3.,
             &hole.points
         ));

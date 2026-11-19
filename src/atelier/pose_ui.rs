@@ -2,7 +2,7 @@
 //! the skeleton drawn over the 3D view. Applying a pose rebuilds the avatar collider; the
 //! drape starts again from the flat arrangement.
 use super::*;
-use marvelous_cloth::{
+use fashioncraft::{
     avatar_rig::{self, Rig},
     fitting::AvatarPose,
 };
@@ -37,7 +37,7 @@ pub(super) struct PoseUi {
     brush_strength: f64,
     brush_remove: bool,
     /// The rest avatar and its rig with skin weights, keyed by the draft's skeleton.
-    skin: Option<(String, Arc<marvelous_cloth::avatar::SurfaceMesh>, Arc<Rig>)>,
+    skin: Option<(String, Arc<fashioncraft::avatar::SurfaceMesh>, Arc<Rig>)>,
 }
 
 /// Brush defaults: radius in centimetres and strength per dab.
@@ -65,9 +65,9 @@ const POSE_STEP_M: f64 = 0.0015;
 /// The avatar moving from one pose to another, one simulation step at a time.
 pub(super) struct Transition {
     rig: Arc<Rig>,
-    rest: Arc<marvelous_cloth::avatar::SurfaceMesh>,
+    rest: Arc<fashioncraft::avatar::SurfaceMesh>,
     /// Scene objects, added after the body as part of the same obstacle.
-    props: Option<Arc<marvelous_cloth::avatar::SurfaceMesh>>,
+    props: Option<Arc<fashioncraft::avatar::SurfaceMesh>>,
     from: avatar_rig::Pose,
     to: AvatarPose,
     step: usize,
@@ -120,7 +120,7 @@ impl Atelier {
     /// Move the avatar into `pose` over many simulation steps, the cloth following it.
     pub(super) fn begin_pose_transition(&mut self, pose: AvatarPose) -> bool {
         let start = || -> Result<Transition, String> {
-            let rest = marvelous_cloth::avatar::SurfaceMesh::load_obj(&self.project.avatar_path)?;
+            let rest = fashioncraft::avatar::SurfaceMesh::load_obj(&self.project.avatar_path)?;
             let rig = pose.rig(&rest)?;
             let from = self
                 .project
@@ -137,7 +137,7 @@ impl Atelier {
                 .map(|(p, q)| p.distance(*q))
                 .fold(0., f64::max);
             let steps = ((farthest / POSE_STEP_M).ceil() as usize).clamp(5, 900);
-            let props = marvelous_cloth::fitting::scene_objects_mesh(&self.project.scene_objects)?
+            let props = fashioncraft::fitting::scene_objects_mesh(&self.project.scene_objects)?
                 .map(Arc::new);
             Ok(Transition {
                 rig: Arc::new(rig),
@@ -180,7 +180,7 @@ impl Atelier {
             body = body.merged(props);
         }
         let surface = Arc::new(body);
-        match marvelous_cloth::avatar::MeshCollider::with_clearance(
+        match fashioncraft::avatar::MeshCollider::with_clearance(
             surface,
             self.project.contact_stiffness,
             self.project.contact_clearance,
@@ -518,7 +518,7 @@ impl Atelier {
             .is_none_or(|(k, _)| k != &key);
         if fresh {
             // Bones only: an empty surface needs no weights.
-            let empty = marvelous_cloth::avatar::SurfaceMesh {
+            let empty = fashioncraft::avatar::SurfaceMesh {
                 vertices: vec![],
                 triangles: vec![],
             };
@@ -729,7 +729,7 @@ fn remove_bone(pose: &mut AvatarPose, k: usize) {
 
 impl Atelier {
     /// The rest avatar and the draft's rig with skin weights, built once per skeleton.
-    fn skin(&mut self) -> Option<(Arc<marvelous_cloth::avatar::SurfaceMesh>, Arc<Rig>)> {
+    fn skin(&mut self) -> Option<(Arc<fashioncraft::avatar::SurfaceMesh>, Arc<Rig>)> {
         let draft = self.authoring.pose.draft.as_ref()?;
         let key = skeleton_key(draft);
         if self
@@ -740,7 +740,7 @@ impl Atelier {
             .is_none_or(|(k, _, _)| *k != key)
         {
             let rest =
-                marvelous_cloth::avatar::SurfaceMesh::load_obj(&self.project.avatar_path).ok()?;
+                fashioncraft::avatar::SurfaceMesh::load_obj(&self.project.avatar_path).ok()?;
             let plain = AvatarPose {
                 painted_weights: Default::default(),
                 ..draft.clone()
@@ -769,7 +769,7 @@ impl Atelier {
         };
         let picked = |at: egui::Pos2, this: &Self| {
             let (origin, dir) = this.camera.ray(at, rect);
-            marvelous_cloth::trace3d::pick(&this.scene.collider.surface, origin, dir)
+            fashioncraft::trace3d::pick(&this.scene.collider.surface, origin, dir)
                 .filter(|v| *v < rest.vertices.len())
         };
         if self.authoring.pose.adding_bone.is_some() {
@@ -850,7 +850,7 @@ impl Atelier {
             tail: tail.to_array(),
         });
         // The bone must make a valid skeleton.
-        let empty = marvelous_cloth::avatar::SurfaceMesh {
+        let empty = fashioncraft::avatar::SurfaceMesh {
             vertices: vec![],
             triangles: vec![],
         };

@@ -2,6 +2,9 @@
 use super::{authoring_ui::Tool, board::same_edge, *};
 use fashioncraft::{authoring::Command, garment::seam::BoundaryRef};
 
+/// Where a new tear opens a seam: its middle fifth.
+const NEW_TEAR: [f64; 2] = [0.4, 0.6];
+
 impl Atelier {
     pub(super) fn edge_seams(&self) -> Vec<String> {
         self.project
@@ -92,6 +95,7 @@ impl Atelier {
             }
             self.seam_fold_controls(ui, id);
             self.seam_zipper_controls(ui, id);
+            self.seam_tear_controls(ui, id);
         }
         let mut select = None;
         egui::CollapsingHeader::new(super::workspace::section(format!(
@@ -237,6 +241,114 @@ impl Atelier {
 }
 
 impl Atelier {
+    /// Tears of a seam (3D Garment › Tear): stretches left unsewn, as a rip, each from and to
+    /// a share of the seam's length; tear another stretch, change one, or mend them.
+    pub(super) fn seam_tear_controls(&mut self, ui: &mut egui::Ui, id: &str) {
+        let ui_lang = self.prefs.language;
+        let tears = self
+            .project
+            .template
+            .seam_tears
+            .get(id)
+            .cloned()
+            .unwrap_or_default();
+        let mut wanted: Option<Vec<[f64; 2]>> = None;
+        ui.horizontal(|ui| {
+            ui.label(i18n::tr(ui_lang, "Tears"));
+            if ui
+                .small_button(i18n::tr(ui_lang, "Tear"))
+                .on_hover_text(i18n::tr(ui_lang, "Open a stretch of this seam, as a rip"))
+                .clicked()
+            {
+                let mut next = tears.clone();
+                next.push(NEW_TEAR);
+                wanted = Some(next);
+            }
+            if !tears.is_empty() && ui.small_button(i18n::tr(ui_lang, "Mend all")).clicked() {
+                wanted = Some(vec![]);
+            }
+        });
+        for (k, tear) in tears.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add_space(12.);
+                let mut edited = tear.map(|s| s * 100.);
+                let mut commit = false;
+                for (n, value) in edited.iter_mut().enumerate() {
+                    if n == 1 {
+                        ui.label("–");
+                    }
+                    let r = ui.add(
+                        egui::DragValue::new(value)
+                            .range(0.0..=100.0)
+                            .speed(0.5)
+                            .fixed_decimals(0)
+                            .suffix(" %"),
+                    );
+                    commit |= r.drag_stopped() || (r.changed() && !r.dragged());
+                }
+                if commit && edited[1] > edited[0] {
+                    let mut next = tears.clone();
+                    next[k] = edited.map(|s| s / 100.);
+                    wanted = Some(next);
+                }
+                if ui
+                    .small_button(i18n::tr(ui_lang, "Mend"))
+                    .on_hover_text(i18n::tr(ui_lang, "Sew this stretch again"))
+                    .clicked()
+                {
+                    let mut next = tears.clone();
+                    next.remove(k);
+                    wanted = Some(next);
+                }
+            });
+        }
+        if let Some(tears) = wanted {
+            self.edit(Command::SetSeamTears {
+                seam: id.into(),
+                tears,
+            });
+        }
+    }
+
+    /// 3D Garment › Tear › Tear seam: open the middle fifth of the chosen seam.
+    pub(super) fn tear_chosen_seam(&mut self) -> Result<(), String> {
+        let seam = self
+            .chosen_seam()
+            .ok_or("Select a seam (or a sewn segment) first")?;
+        let mut tears = self
+            .project
+            .template
+            .seam_tears
+            .get(&seam.id)
+            .cloned()
+            .unwrap_or_default();
+        tears.push(NEW_TEAR);
+        if !self.edit(Command::SetSeamTears {
+            seam: seam.id.clone(),
+            tears,
+        }) {
+            return Err(self.status.clone());
+        }
+        self.authoring.selection.seam = Some(seam.id.clone());
+        self.prefs.workspace.inspector_open = true;
+        self.status = format!(
+            "Seam {} torn from 40 to 60 % · change it under Tears · simulate to see it open",
+            seam.id
+        );
+        Ok(())
+    }
+
+    /// 3D Garment › Tear › Edit tears: show the chosen seam's tears in the inspector.
+    pub(super) fn edit_tears(&mut self) -> Result<(), String> {
+        let seam = self
+            .chosen_seam()
+            .ok_or("Select a seam (or a sewn segment) first")?;
+        self.authoring.selection.seam = Some(seam.id.clone());
+        self.prefs.workspace.inspector_open = true;
+        self.status = format!("Tears of seam {} are under Tears in the inspector", seam.id);
+        Ok(())
+    }
+
     /// Merge the pieces a seam joins into one, as one undo step.
     pub(super) fn merge_along_seam(&mut self, seam: String) -> bool {
         let ui_lang = self.prefs.language;

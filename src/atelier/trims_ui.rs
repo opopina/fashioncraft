@@ -297,7 +297,7 @@ impl Atelier {
     }
 
     /// The seam picked in the seam list, or else the one on the selected segment.
-    fn chosen_seam(&self) -> Option<fashioncraft::garment::seam::SeamSpec> {
+    pub(super) fn chosen_seam(&self) -> Option<fashioncraft::garment::seam::SeamSpec> {
         let id = self
             .authoring
             .selection

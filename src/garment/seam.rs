@@ -323,17 +323,20 @@ impl CompiledSeam {
         Ok(())
     }
     pub fn compile(spec: &SeamSpec, a: BoundaryCurve, b: BoundaryCurve) -> Result<Self, String> {
-        Self::compile_until(spec, a, b, 1.)
+        Self::compile_until(spec, a, b, 1., &[])
     }
 
     /// The seam sewn only from its start to `until` (a share of its length, as for a zipper
-    /// closed that far); 1 sews all of it.
+    /// closed that far); 1 sews all of it. `torn` are shares of its length left open, as a
+    /// ripped seam is: no stitches there.
     pub fn compile_until(
         spec: &SeamSpec,
         a: BoundaryCurve,
         b: BoundaryCurve,
         until: f64,
+        torn: &[[f64; 2]],
     ) -> Result<Self, String> {
+        let open = |s: f64| torn.iter().any(|[lo, hi]| s > lo + 1e-12 && s < hi - 1e-12);
         if !until.is_finite() || until <= 0. || until > 1. {
             return Err("A seam is sewn over a share of 0 to 1 of its length".into());
         }
@@ -381,12 +384,16 @@ impl CompiledSeam {
         );
         partition.extend(knots.iter().map(|k| k[0]));
         partition.push(until);
+        partition.extend(torn.iter().flatten().map(|s| s.clamp(0., until)));
         partition.retain(|s| *s <= until + 1e-12);
         partition.sort_by(f64::total_cmp);
         partition.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         let mut samples = vec![];
         for interval in partition.windows(2) {
             let [lo, hi] = [interval[0], interval[1]];
+            if open((lo + hi) * 0.5) {
+                continue;
+            }
             let [blo, bhi] = [interpolate(&knots, lo, 0), interpolate(&knots, hi, 0)];
             let weight_m = (a.length * (hi - lo) + b.length * (bhi - blo)) / 4.0;
             for q in [-1.0 / 3.0_f64.sqrt(), 1.0 / 3.0_f64.sqrt()] {
@@ -401,13 +408,14 @@ impl CompiledSeam {
         // every joint, without inventing a physical bridge across the gap.
         let mut probes: Vec<_> = partition
             .iter()
+            .filter(|s| !open(**s))
             .map(|s| StitchPoint::new(&a, &b, *s, interpolate(&knots, *s, 0)))
             .collect();
         let joints: Vec<f64> = a
             .joints()
             .into_iter()
             .chain(b.joints().into_iter().map(|t| interpolate(&knots, t, 1)))
-            .filter(|s| *s <= until + 1e-12)
+            .filter(|s| *s <= until + 1e-12 && !open(*s))
             .collect();
         probes.extend(
             joints
@@ -416,6 +424,7 @@ impl CompiledSeam {
         );
         let pairs = partition
             .iter()
+            .filter(|s| !open(**s))
             .map(|s| [a.point(*s), b.point(interpolate(&knots, *s, 0))])
             .chain(joints.iter().map(|s| {
                 [

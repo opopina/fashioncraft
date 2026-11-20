@@ -202,7 +202,13 @@ const GARMENT_3D: &[Item] = &[
             Run("Circumference measure", C::MeasureGarmentGirth),
         ],
     ),
-    Sub("Tear", &[Todo("Edit tears"), Todo("Tear seam")]),
+    Sub(
+        "Tear",
+        &[
+            Run("Edit tears", C::EditTears),
+            Run("Tear seam", C::TearSeam),
+        ],
+    ),
     S,
     Run("Mark simulation issue", C::ToolInspect),
 ];
@@ -221,7 +227,7 @@ const PATTERN_2D: &[Item] = &[
             Run("Extend line to outline", C::ExtendLineEnds),
             Run("Add point / split line", C::SplitSegment),
             Run("Smooth curve", C::SmoothCurve),
-            Todo("Cut and extend"),
+            Run("Cut and extend", C::CutAndExtend),
         ],
     ),
     Sub(
@@ -239,7 +245,7 @@ const PATTERN_2D: &[Item] = &[
             Run("Diamond dart", C::AddDiamondDart),
         ],
     ),
-    Todo("Trace"),
+    Run("Trace", C::TraceShape),
     Run("Measure on the board", C::ToolMeasure),
     Sub(
         "Pleats",
@@ -718,7 +724,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 191, "{done} of {all}");
+        assert!(done >= 195, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -343,6 +343,10 @@ pub struct GarmentTemplate {
     /// Steam brushed onto the pieces: each stamp shrinks or stretches the cloth under it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steam: Vec<super::steam::SteamStamp>,
+    /// Torn stretches of seams, by seam id, as shares of the seam's length: left unsewn, as a
+    /// ripped seam is.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seam_tears: BTreeMap<String, Vec<[f64; 2]>>,
     /// Seams switched off, by id: kept in the document but not sewn, with their folds and
     /// zippers (Sewing › Activate all seams turns them back on).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -785,6 +789,20 @@ impl GarmentTemplate {
                 return Err(format!("Flipped panel {id} is not in the template"));
             }
         }
+        for (id, tears) in &self.seam_tears {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Tear on unknown seam {id}"));
+            }
+            if tears.len() > 64
+                || tears.iter().any(|[lo, hi]| {
+                    !(0.0..=1.0).contains(lo) || !(0.0..=1.0).contains(hi) || hi - lo < 1e-6
+                })
+            {
+                return Err(format!(
+                    "Seam {id} needs tears within its length, each of some length"
+                ));
+            }
+        }
         if self.steam.len() > super::steam::MAX_STAMPS {
             return Err("Too much steam: remove some before adding more".into());
         }
@@ -1222,6 +1240,7 @@ impl GarmentTemplate {
                     spec.reverse_b,
                 )?,
                 closed,
+                self.seam_tears.get(&spec.id).map_or(&[][..], |t| t),
             )?;
             if (seam.lengths[0] - seam.lengths[1]).abs()
                 > 1e-8 * seam.lengths[0].max(seam.lengths[1])
@@ -1485,6 +1504,7 @@ impl GarmentTemplate {
             seam_folds: Default::default(),
             seam_zippers: Default::default(),
             inactive_seams: Default::default(),
+            seam_tears: Default::default(),
             steam: vec![],
             tacks: vec![],
             line_folds: vec![],

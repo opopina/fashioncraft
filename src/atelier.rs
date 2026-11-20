@@ -694,6 +694,10 @@ impl Atelier {
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
+            Id::TearSeam => self.tear_chosen_seam()?,
+            Id::EditTears => self.edit_tears()?,
+            Id::TraceShape => self.trace_selected_shape()?,
+            Id::CutAndExtend => self.cut_and_extend_selected()?,
             Id::PleatSewing => {
                 let (panel, line) = self
                     .selected_internal_line()

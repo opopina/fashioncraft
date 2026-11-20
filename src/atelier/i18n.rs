@@ -2307,6 +2307,30 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Tear seam: open a stretch of the selected seam, as a rip" => {
+            "Rasgar costura: abrir un tramo de la costura seleccionada, como un rasgado"
+        }
+        "Edit the tears of the selected seam" => "Editar los rasgados de la costura seleccionada",
+        "Tears" => "Rasgados",
+        "Open a stretch of this seam, as a rip" => "Abre un tramo de esta costura, como un rasgado",
+        "Mend all" => "Coser todos",
+        "Trace the selected closed internal shape as a new piece" => {
+            "Trazar la forma interna cerrada seleccionada como pieza nueva"
+        }
+        "Cut and extend: prolong the selected line to the outline and add a point there" => {
+            "Cortar y extender: prolongar la línea seleccionada hasta el contorno y añadir un punto allí"
+        }
+        "Select a closed internal shape on the board first" => {
+            "Primero selecciona en el tablero una forma interna cerrada"
+        }
+        "Select an open internal line on the board first" => {
+            "Primero selecciona en el tablero una línea interna abierta"
+        }
+        "Shape traced as a new piece of the same fabric" => {
+            "Forma trazada como pieza nueva del mismo tejido"
+        }
+        "Mend" => "Coser",
+        "Sew this stretch again" => "Volver a coser este tramo",
         "Piping along the selected seam or segment" => {
             "Vivo a lo largo de la costura o el segmento seleccionado"
         }

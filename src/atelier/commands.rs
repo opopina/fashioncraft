@@ -191,6 +191,10 @@ pub enum CommandId {
     Puckering,
     Steam,
     Piping,
+    TearSeam,
+    EditTears,
+    TraceShape,
+    CutAndExtend,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1893,6 +1897,42 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Piping,
         "trims.piping",
         "Piping along the selected seam or segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        TearSeam,
+        "garment.tear_seam",
+        "Tear seam: open a stretch of the selected seam, as a rip",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        EditTears,
+        "garment.edit_tears",
+        "Edit the tears of the selected seam",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        TraceShape,
+        "pattern.trace",
+        "Trace the selected closed internal shape as a new piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        CutAndExtend,
+        "pattern.cut_and_extend",
+        "Cut and extend: prolong the selected line to the outline and add a point there",
         Pattern,
         None,
         TemplateHistory,

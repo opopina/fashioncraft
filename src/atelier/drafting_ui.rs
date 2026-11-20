@@ -679,3 +679,118 @@ impl Atelier {
         });
     }
 }
+
+impl Atelier {
+    /// 2D Pattern › Trace: the selected closed internal shape traced as a new piece of the
+    /// same fabric, next to its piece.
+    pub(super) fn trace_selected_shape(&mut self) -> Result<(), String> {
+        let (panel, line) = self
+            .selected_internal_line()
+            .ok_or("Select a closed internal shape on the board first")?;
+        let closed = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.as_ref())
+            .and_then(|poly| poly.lines.iter().find(|l| l.id == line))
+            .is_some_and(|l| l.closed);
+        if !closed {
+            return Err("Trace makes a piece from a closed internal shape; select one".into());
+        }
+        let origin = self
+            .clone_origin(&panel, &line)
+            .ok_or("There is no room for the traced piece")?;
+        if !self.edit(Command::CloneShapeAsPanel {
+            panel,
+            line,
+            origin,
+        }) {
+            return Err(self.status.clone());
+        }
+        self.authoring.edge = None;
+        self.status = "Shape traced as a new piece of the same fabric".into();
+        Ok(())
+    }
+
+    /// 2D Pattern › Edit › Cut and extend: the selected open internal line prolonged from the
+    /// end nearer the outline until it reaches it, and a point added to the outline there, so
+    /// the piece can later be cut or sewn at that point.
+    pub(super) fn cut_and_extend_selected(&mut self) -> Result<(), String> {
+        use fashioncraft::garment::lines2d;
+        let (panel, line) = self
+            .selected_internal_line()
+            .ok_or("Select an open internal line on the board first")?;
+        let polygon = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .and_then(|p| p.polygon.clone())
+            .ok_or("The piece has no outline")?;
+        // The end that reaches the outline soonest.
+        let current = |at_start: bool| {
+            let l = polygon.lines.iter().find(|l| l.id == line)?;
+            if at_start {
+                l.points.first().copied()
+            } else {
+                l.points.last().copied()
+            }
+        };
+        let reach = |at_start: bool| {
+            let to = lines2d::extended_end(&polygon, &line, at_start).ok()?;
+            Some((to.distance(current(at_start)?), to, at_start))
+        };
+        let (_, end, at_start) = [reach(true), reach(false)]
+            .into_iter()
+            .flatten()
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .ok_or("Neither end of this line can be prolonged")?;
+        // The outline segment the prolonged end meets, and how far along it.
+        let mut nearest: Option<(f64, String, f64)> = None;
+        for edge in &polygon.edges {
+            let Ok(path) = lines2d::path(&polygon, edge) else {
+                continue;
+            };
+            let mut along = 0.;
+            for w in path.points.windows(2) {
+                let d = w[1] - w[0];
+                let length = d.length();
+                if length < 1e-12 {
+                    continue;
+                }
+                let t = ((end - w[0]).dot(d) / (length * length)).clamp(0., 1.);
+                let distance = (w[0] + d * t).distance(end);
+                if nearest.as_ref().is_none_or(|n| distance < n.0) {
+                    nearest = Some((distance, edge.clone(), along + t * length));
+                }
+                along += length;
+            }
+        }
+        let (distance, edge, at_m) = nearest.ok_or("The piece has no outline")?;
+        if distance > 0.002 {
+            return Err("This line reaches another internal line, not the outline; use Extend line to outline".into());
+        }
+        if !self.edit(Command::ExtendLine {
+            panel: panel.clone(),
+            line: line.clone(),
+            at_start,
+        }) {
+            return Err(self.status.clone());
+        }
+        if !self.edit(Command::SplitBoundary {
+            panel,
+            edge: edge.clone(),
+            at_m,
+        }) {
+            return Err(format!(
+                "The line reaches the outline, but no point could be added on {edge}: {}",
+                self.status
+            ));
+        }
+        self.status = format!("Line prolonged to {edge}, with a new point there");
+        Ok(())
+    }
+}

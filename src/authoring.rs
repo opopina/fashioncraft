@@ -338,6 +338,13 @@ pub enum Command {
     RemoveSeam {
         seam: String,
     },
+    /// The torn stretches of `seam`, as shares of its length, replacing the ones it had: tear
+    /// it, change its tears, or mend them all (`tears` empty). Overlapping tears are merged.
+    /// One undo step.
+    SetSeamTears {
+        seam: String,
+        tears: Vec<[f64; 2]>,
+    },
     /// Brush steam onto the cloth: the stamps of one stroke. One undo step.
     AddSteam {
         stamps: Vec<crate::garment::steam::SteamStamp>,
@@ -678,6 +685,7 @@ impl Command {
             Self::RemoveSeam { .. } => "Remove seam",
             Self::RemoveSeams { .. } => "Remove seams",
             Self::AddSteam { .. } => "Steam",
+            Self::SetSeamTears { .. } => "Tear seam",
             Self::RemoveSteam { .. } => "Remove steam",
             Self::SetSeamsActive { active: true, .. } => "Activate seams",
             Self::SetSeamsActive { active: false, .. } => "Deactivate seams",
@@ -1572,6 +1580,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.seam_folds.retain(|id, _| seams.contains(id));
     template.seam_zippers.retain(|id, _| seams.contains(id));
     template.inactive_seams.retain(|id| seams.contains(id));
+    template.seam_tears.retain(|id, _| seams.contains(id));
     template.steam.retain(|s| panels.contains(&s.panel));
 }
 
@@ -4646,6 +4655,33 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 return Err("Seam not found".into());
             }
             template.seams.retain(|s| s.id != seam);
+        }
+        Command::SetSeamTears { seam, tears } => {
+            if !template.seams.iter().any(|s| s.id == seam) {
+                return Err(format!("There is no seam {seam}"));
+            }
+            let mut merged: Vec<[f64; 2]> = vec![];
+            let mut sorted = tears;
+            sorted.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            for [lo, hi] in sorted {
+                if !(lo.is_finite() && hi.is_finite()) || hi <= lo {
+                    return Err("A tear runs from a start to a later end".into());
+                }
+                let (lo, hi) = (lo.clamp(0., 1.), hi.clamp(0., 1.));
+                match merged.last_mut() {
+                    Some(last) if lo <= last[1] => last[1] = last[1].max(hi),
+                    _ => merged.push([lo, hi]),
+                }
+            }
+            let before = template.seam_tears.get(&seam).cloned().unwrap_or_default();
+            if before == merged {
+                return Err("The tears are unchanged".into());
+            }
+            if merged.is_empty() {
+                template.seam_tears.remove(&seam);
+            } else {
+                template.seam_tears.insert(seam, merged);
+            }
         }
         Command::AddSteam { stamps } => {
             if stamps.is_empty() {

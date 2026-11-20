@@ -2,13 +2,25 @@
 
 ## FashionCraft icon
 
-`fashioncraft-icon.png` is the native window icon. It is drawn by hand as vector shapes in
-`fashioncraft-icon.svg` (a dress on a hanger, white on a raspberry square, with dashed stitch lines) and
-rendered to a 1024 × 1024 PNG with macOS Quick Look (`qlmanage -t -s 1024`). It is original to this
-repository and distributed under its [MIT License](../../LICENSE).
+`fashioncraft-icon.png` (1024 × 1024, the native window icon) and `fashioncraft-icon-128.png`
+(128 × 128, the size app catalogs show) are a silk moth, *Bombyx mori*, the animal that gives
+silk, as a line engraving in ivory and black ink on FashionCraft's amber (`#f2a13a`) rounded
+square, with transparent corners. It follows the ArtCraft apps' shared style (an engraved animal
+on a saturated square, cut by the tile's edges) without reusing any of their artwork.
 
-It is a placeholder: the ArtCraft apps share a style of engraved animals on a saturated square (see
-below), and a FashionCraft icon in that style is still to be made.
+The icon is drawn entirely by `scripts/fashioncraft-icon.py` (numpy, SciPy, Pillow): the moth is
+modelled as a field of tones (wings with veins, cross lines and shading, a furry thorax, a banded
+abdomen, feathery antennae), then engraved as lines whose width follows the tone, out from each
+wing's root and across the body, with crossing lines in the darkest parts and short strokes for
+fur. No image is read. To redraw it:
+
+```sh
+python3 scripts/fashioncraft-icon.py assets/branding/fashioncraft-icon.png 1024
+python3 scripts/fashioncraft-icon.py assets/branding/fashioncraft-icon-128.png 128
+```
+
+It is original to this repository and distributed under its [MIT License](../../LICENSE).
+`fashioncraft-icon.svg` is the earlier placeholder (a dress on a hanger), kept for the record.
 
 ## ClothCraft icon (inherited)
 
@@ -17,6 +29,10 @@ below), and a FashionCraft icon in that style is still to be made.
 ## Visual references
 
 Viewed the official [ArtCraft app lineup](https://getartcraft.com/apps) on 2026-10-14, including PhotoCraft, VectorCraft and FilmCraft icons. The shared visual language is a monochrome natural-history-style animal engraving on a saturated rounded square. The [PhotoCraft](https://getartcraft.com/images/apps/photocraft/icon.webp) and [VectorCraft](https://getartcraft.com/images/apps/vectorcraft/icon.webp) image URLs identify the references; their files are not bundled or reused. ClothCraft is independent and not an ArtCraft product.
+
+For the FashionCraft icon the app icons in `storytold/craft-launcher` (`assets/app-icons/`) were
+viewed again on 2026-11-20 for the style only. They are ArtCraft trademarks, not open source; none
+is copied, traced or redrawn here.
 
 ## Generation record
 

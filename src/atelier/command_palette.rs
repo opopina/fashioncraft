@@ -213,6 +213,15 @@ fn aliases(id: CommandId) -> &'static str {
         DeleteAvatar => "delete remove avatar body mannequin",
         EditTexture2d => "edit texture shift offset position grain repeat 2d board",
         EditTexture3d => "edit texture shift offset position cloth 3d",
+        OpenTrim => "open trim object buckle badge button mesh obj fbx gltf",
+        AddAvatarObject => "add avatar second body multiple avatars armour collide",
+        StyleLineEdit => "style line styleline edit corner bend edge reshape pattern drape",
+        StyleLineMove => "style line styleline shift edge reshape pattern drape",
+        StyleLineScale => "style line styleline scale resize lengthen shorten edge drape",
+        StyleLineDraw => "style line styleline draw internal line on cloth drape",
+        ReDrape => "redrape re-drape retarget carry avatar new body keep size",
+        AutoFit => "auto fit fitting grade resize avatar new body size",
+        RunPythonScript => "python script py automate api run code",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -978,7 +987,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::HighQualityView
+            CommandId::AddAvatarObject
         );
         h.key(
             "palette.query",

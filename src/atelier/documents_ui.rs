@@ -268,6 +268,7 @@ impl Atelier {
                 if let Some(candidate) = &self.document.avatar_import.candidate {
                     match candidate.prepare(&self.project, self.settings.clone()) {
                         Ok(prepared) => {
+                            let source = self.redrape_source();
                             self.remove_recovery();
                             install_avatar(
                                 prepared,
@@ -278,6 +279,7 @@ impl Atelier {
                                 &mut self.generation,
                             );
                             self.authoring.board.snap_mm = self.prefs.snap_mm;
+                            self.authoring.redrape_from = source;
                             self.playing = false;
                             self.pending = false;
                             self.grab = None;
@@ -285,9 +287,11 @@ impl Atelier {
                             self.issue.invalidate();
                             self.metrics = None;
                             self.simulation_error = None;
-                            self.status =
-                                "Avatar replaced · drape reset · save to keep the imported asset"
-                                    .into();
+                            self.status = i18n::tr(
+                                self.prefs.language,
+                                "Avatar replaced · drape reset · Re-drape brings the drape from the previous avatar",
+                            )
+                            .into();
                         }
                         Err(error) => self.document.avatar_import.error = Some(error),
                     }

@@ -101,6 +101,15 @@ pub(super) fn mirror(
         use crate::garment::trims::TrimKind;
         match &mut trim.kind {
             TrimKind::Button { center_m, .. } => reflect(center_m),
+            // A reflected piece turns an object trim the other way; its mesh is not mirrored.
+            TrimKind::Object {
+                center_m,
+                turn_degrees,
+                ..
+            } => {
+                reflect(center_m);
+                *turn_degrees = -*turn_degrees;
+            }
             TrimKind::Buttonhole { start_m, end_m, .. } => {
                 reflect(start_m);
                 reflect(end_m);

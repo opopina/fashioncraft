@@ -420,6 +420,47 @@ impl MeshCollider {
     pub fn signed_distance(&self, p: DVec3) -> f64 {
         self.differential(p).0
     }
+    /// The point of the surface nearest `p`, the triangle it lies on and that triangle's unit
+    /// normal by its winding.
+    pub fn nearest_point(&self, p: DVec3) -> (DVec3, usize, DVec3) {
+        let c = self.nearest(p);
+        (c.point, c.triangle, self.face_normals[c.triangle])
+    }
+    /// `p` moved out along the surface's normal to `margin` above it, when it is nearer than
+    /// that (or inside).
+    pub fn lift_outside(&self, p: DVec3, margin: f64) -> DVec3 {
+        let (d, n, _) = self.differential(p);
+        if d < margin { p + n * (margin - d) } else { p }
+    }
+    /// Where a ray first meets the surface before `max_t`: its parameter (metres for a unit
+    /// direction) and the triangle.
+    pub fn first_hit(&self, origin: DVec3, direction: DVec3, max_t: f64) -> Option<(f64, usize)> {
+        if !origin.is_finite() || !direction.is_finite() || direction == DVec3::ZERO {
+            return None;
+        }
+        let mut best: Option<(f64, usize)> = None;
+        let mut stack = vec![0];
+        while let Some(i) = stack.pop() {
+            let limit = best.map_or(max_t, |b| b.0);
+            let node = &self.nodes[i];
+            if !node.intersects_ray(origin, direction, limit) {
+                continue;
+            }
+            if let Some([a, b]) = node.children {
+                stack.extend([a, b]);
+                continue;
+            }
+            for &t in &self.order[node.start..node.end] {
+                let corners = self.surface.triangles[t].map(|v| self.surface.vertices[v]);
+                if let Some((d, _)) = crate::picking::ray_triangle(origin, direction, corners)
+                    && d < best.map_or(max_t, |b| b.0)
+                {
+                    best = Some((d, t));
+                }
+            }
+        }
+        best
+    }
     /// Visibility query on the original surface, not its collision envelope.
     /// `max_t` is a ray parameter (metres for a unit direction), strictly exclusive.
     pub fn occludes_ray(&self, origin: DVec3, direction: DVec3, max_t: f64) -> bool {

@@ -22,15 +22,13 @@ pub(super) enum Custom {
 pub(super) enum Item {
     /// Runs a registry command.
     Run(&'static str, CommandId),
-    /// Planned: shown disabled and counted as missing.
-    Todo(&'static str),
     Sub(&'static str, &'static [Item]),
     Custom(Custom),
     Separator,
 }
 
 use CommandId as C;
-use Item::{Custom as X, Run, Separator as S, Sub, Todo};
+use Item::{Custom as X, Run, Separator as S, Sub};
 
 const FILE: &[Item] = &[
     Run("New project", C::NewProject),
@@ -39,7 +37,7 @@ const FILE: &[Item] = &[
         "Open",
         &[
             Run("Garment…", C::OpenTemplates),
-            Todo("Trim…"),
+            Run("Trim…", C::OpenTrim),
             Run("Avatar…", C::ImportAvatar),
             Run("Pose…", C::LoadPoseFile),
             Run("Scene and props…", C::OpenSceneObjects),
@@ -50,7 +48,7 @@ const FILE: &[Item] = &[
         &[
             Run("Project…", C::AddGarment),
             Run("Garment…", C::AddGarment),
-            Todo("Avatar…"),
+            Run("Avatar…", C::AddAvatarObject),
         ],
     ),
     Run("Save project", C::SaveProject),
@@ -76,7 +74,7 @@ const FILE: &[Item] = &[
             Run("USD…", C::ImportAvatar),
             Run("Point cache…", C::ImportPointCache),
             Run("Motion (BVH)…", C::ImportBvh),
-            Todo("Python script…"),
+            Run("Python script…", C::RunPythonScript),
         ],
     ),
     Sub(
@@ -186,14 +184,22 @@ const GARMENT_3D: &[Item] = &[
             Run("Detach all pins from avatar", C::DetachPins),
         ],
     ),
-    Todo("Style lines"),
+    Sub(
+        "Style lines",
+        &[
+            Run("Edit style line", C::StyleLineEdit),
+            Run("Move style line", C::StyleLineMove),
+            Run("Scale style line", C::StyleLineScale),
+            Run("Draw style line", C::StyleLineDraw),
+        ],
+    ),
     Run("3D pen", C::TracePen3d),
     S,
     Run("Fold arrangement", C::FoldArrangement),
     Run("Reset 2D arrangement (all)", C::Reset2dArrangement),
     Run("Reset 3D arrangement (all)", C::ResetSimulation),
     Run("Reset 3D arrangement (selected)", C::ResetSelectedPieces3d),
-    Todo("Re-drape 3D arrangement"),
+    Run("Re-drape 3D arrangement", C::ReDrape),
     S,
     Sub(
         "Garment measurements",
@@ -255,7 +261,7 @@ const PATTERN_2D: &[Item] = &[
             Run("Pleat sewing", C::PleatSewing),
         ],
     ),
-    Todo("Auto fit"),
+    Run("Auto fit", C::AutoFit),
 ];
 
 const SEWING: &[Item] = &[
@@ -467,7 +473,6 @@ fn count(items: &[Item], done: &mut usize, all: &mut usize) {
                 *done += 1;
                 *all += 1;
             }
-            Item::Todo(_) => *all += 1,
             Item::Sub(_, inner) => count(inner, done, all),
             Item::Custom(_) | Item::Separator => {}
         }
@@ -523,6 +528,19 @@ impl Atelier {
             C::Steam => self.authoring.steam.open,
             C::HighQualityView => display.high_quality,
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
+            C::RunPythonScript => self.authoring.script.open,
+            C::StyleLineEdit => {
+                self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Edit)
+            }
+            C::StyleLineMove => {
+                self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Move)
+            }
+            C::StyleLineScale => {
+                self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Scale)
+            }
+            C::StyleLineDraw => {
+                self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Draw)
+            }
             C::SelectMeshBrush => {
                 self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Brush)
             }
@@ -601,11 +619,6 @@ impl Atelier {
                         self.invoke_command(id, ctx);
                         ui.close();
                     }
-                }
-                Item::Todo(label) => {
-                    let language = self.prefs.language;
-                    ui.add_enabled(false, egui::Button::new(i18n::tr(language, label)))
-                        .on_disabled_hover_text(i18n::tr(language, "Not built yet"));
                 }
                 Item::Sub(label, inner) => {
                     ui.menu_button(i18n::tr(self.prefs.language, label), |ui| {
@@ -733,9 +746,9 @@ mod tests {
     #[test]
     fn coverage_only_grows() {
         let (done, all) = coverage();
-        assert!(done <= all);
-        // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 207, "{done} of {all}");
+        // Every item the bar lays out runs a command; a drop means one lost its command.
+        assert_eq!(done, all);
+        assert!(done >= 216, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 
@@ -751,7 +764,7 @@ mod tests {
             let mut labels = std::collections::BTreeSet::new();
             for item in *items {
                 let label = match item {
-                    Item::Run(l, _) | Item::Todo(l) | Item::Sub(l, _) => *l,
+                    Item::Run(l, _) | Item::Sub(l, _) => *l,
                     _ => continue,
                 };
                 assert!(labels.insert(label), "{title}: {label} twice");

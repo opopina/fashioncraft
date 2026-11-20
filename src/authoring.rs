@@ -157,6 +157,17 @@ pub enum Command {
         points: Vec<usize>,
         delta: DVec2,
     },
+    /// A style-line change made from the 3D view, on one piece or on both sides of a seam
+    /// line, by material amounts: contour points moved; outline edges bent, both Bézier
+    /// handles moving by the amount so the edge's middle moves three quarters of it (a straight
+    /// edge first gets handles a third of the way from each end); and edges scaled about the
+    /// middle of their chord. Seams along changed edges, or along edges whose ends moved, take
+    /// up the length difference (easing). One undo step.
+    StyleLine {
+        moves: Vec<(String, Vec<usize>, DVec2)>,
+        bends: Vec<(String, String, DVec2)>,
+        scales: Vec<(String, String, f64)>,
+    },
     /// Move contour selections on several panels by one board-space delta.
     /// Panel presentation rotations are inverted independently; compilation is atomic.
     MovePointGroups {
@@ -437,6 +448,18 @@ pub enum Command {
         panel: String,
         scale: DVec2,
     },
+    /// The garment a Python script saved, in place of the current one. Pieces whose outline
+    /// the script changed are laid back to their own corner of the material frame. One undo
+    /// step.
+    RunScript {
+        template: Box<GarmentTemplate>,
+    },
+    /// Auto fit: scale several pieces at once, each about its centre along its material axes,
+    /// as the garment is resized for another body. Seams along scaled pieces take up the
+    /// length differences (easing). One undo step.
+    FitPieces {
+        scales: Vec<(String, DVec2)>,
+    },
     /// Line panels up on the board with a reference panel's edges or centre.
     AlignPanels {
         panels: Vec<String>,
@@ -670,6 +693,9 @@ impl Command {
             Self::Dimensions { .. } => "Resize piece",
             Self::Anchor { .. } => "Anchor piece",
             Self::MovePoints { .. } => "Move points",
+            Self::StyleLine { .. } => "Style line",
+            Self::FitPieces { .. } => "Auto fit",
+            Self::RunScript { .. } => "Python script",
             Self::MovePointGroups { .. } => "Move point groups",
             Self::Nudge { .. } => "Nudge",
             Self::SplitBoundary { .. } => "Add point",
@@ -2204,6 +2230,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
         | Command::Place { panel, .. }
         | Command::Arrange { panel, .. }
         | Command::ScalePanel { panel, .. } => held(panel),
+        Command::FitPieces { scales } => scales.iter().any(|(p, _)| held(p)),
         Command::PlaceGroup { panels, .. } => panels.iter().any(|p| held(p)),
         Command::Primitive { replace: true, .. } | Command::Polygon { replace: true, .. } => {
             !source.pin_targets.is_empty() || !source.frozen_panels.is_empty()
@@ -2673,6 +2700,47 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             // centred where it was.
             normalize(p);
             selected = Some(panel);
+        }
+        Command::RunScript { template: new } => {
+            let mut new = *new;
+            for p in &mut new.panels {
+                let changed = source
+                    .panels
+                    .iter()
+                    .find(|old| old.id == p.id)
+                    .is_none_or(|old| {
+                        serde_json::to_value(&old.polygon).ok()
+                            != serde_json::to_value(&p.polygon).ok()
+                    });
+                if changed && p.polygon.is_some() {
+                    normalize(p);
+                }
+            }
+            template = new;
+            selected = template.panels.first().map(|p| p.id.clone());
+        }
+        Command::FitPieces { scales } => {
+            if scales.is_empty() {
+                return Err("No piece needs resizing".into());
+            }
+            freeze_layouts(&mut template);
+            for (panel, scale) in &scales {
+                arrange2d::validate_scale(*scale)?;
+                let index = panel_index(&template, panel)?;
+                let p = &mut template.panels[index];
+                let pivot = DVec2::new(p.pattern.width, p.pattern.height) * 0.5;
+                arrange2d::scale_panel_material(p, pivot, *scale)?;
+                normalize(p);
+            }
+            for seam in &mut template.seams {
+                if seam
+                    .references()
+                    .any(|r| scales.iter().any(|(p, _)| *p == r.panel))
+                {
+                    seam.allow_ease = true;
+                }
+            }
+            selected = scales.first().map(|(p, _)| p.clone());
         }
         Command::AlignPanels {
             panels,
@@ -3834,6 +3902,118 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             normalize(p);
             selected = Some(panel);
         }
+        Command::StyleLine {
+            moves,
+            bends,
+            scales,
+        } => {
+            if moves.is_empty() && bends.is_empty() && scales.is_empty() {
+                return Err("The style line did not change".into());
+            }
+            let amount = |d: DVec2| d.is_finite() && d.length() <= 10.;
+            if moves.iter().any(|m| !amount(m.2))
+                || bends.iter().any(|b| !amount(b.2))
+                || scales.iter().any(|s| !(0.05..=20.).contains(&s.2))
+            {
+                return Err("Change the style line by a finite amount".into());
+            }
+            // Edges whose length may change, by panel.
+            let mut changed: std::collections::BTreeSet<(String, String)> = Default::default();
+            let mut touched: Vec<String> = vec![];
+            let index_of = |template: &GarmentTemplate, panel: &str| {
+                template
+                    .panels
+                    .iter()
+                    .position(|p| p.id == panel)
+                    .ok_or_else(|| format!("Panel {panel} not found"))
+            };
+            let edge_of = |panel: &Panel, edge: &str| -> Result<(usize, usize), String> {
+                let poly = panel
+                    .polygon
+                    .as_ref()
+                    .ok_or("This panel has no editable contour")?;
+                let i = poly
+                    .edges
+                    .iter()
+                    .position(|e| e == edge)
+                    .ok_or("Only the outline's edges are style lines")?;
+                Ok((i, (i + 1) % poly.points.len()))
+            };
+            for (panel, points, delta) in moves {
+                let k = index_of(&template, &panel)?;
+                let p = &mut template.panels[k];
+                let poly = p
+                    .polygon
+                    .as_ref()
+                    .ok_or("This panel has no editable contour")?;
+                let n = poly.points.len();
+                for &point in &points {
+                    if point < n {
+                        changed.insert((panel.clone(), poly.edges[point].clone()));
+                        changed.insert((panel.clone(), poly.edges[(point + n - 1) % n].clone()));
+                    }
+                }
+                remap_anchors(p, &points, |q| q + delta)?;
+                touched.push(panel);
+            }
+            for (panel, edge, delta) in bends {
+                let k = index_of(&template, &panel)?;
+                let p = &mut template.panels[k];
+                let (i, j) = edge_of(p, &edge)?;
+                let poly = p.polygon.as_mut().expect("checked by edge_of");
+                let (a, b) = (poly.points[i], poly.points[j]);
+                let controls = poly
+                    .curves
+                    .entry(edge.clone())
+                    .or_insert([a + (b - a) / 3., a + (b - a) * (2. / 3.)]);
+                controls[0] += delta;
+                controls[1] += delta;
+                changed.insert((panel.clone(), edge));
+                touched.push(panel);
+            }
+            for (panel, edge, scale) in scales {
+                let k = index_of(&template, &panel)?;
+                let p = &mut template.panels[k];
+                let (i, j) = edge_of(p, &edge)?;
+                let poly = p.polygon.as_ref().expect("checked by edge_of");
+                let n = poly.points.len();
+                let (a, b) = (poly.points[i], poly.points[j]);
+                let middle = (a + b) * 0.5;
+                let handles = poly.curves.get(&edge).copied();
+                for e in [i, (i + n - 1) % n, j] {
+                    changed.insert((panel.clone(), poly.edges[e].clone()));
+                }
+                remap_anchors(p, &[i, j], |q| middle + (q - middle) * scale)?;
+                // The edge's own handles scale with it, so its curve keeps its shape.
+                if let Some([c, d]) = handles {
+                    p.polygon
+                        .as_mut()
+                        .expect("checked by edge_of")
+                        .curves
+                        .insert(
+                            edge,
+                            [middle + (c - middle) * scale, middle + (d - middle) * scale],
+                        );
+                }
+                touched.push(panel);
+            }
+            touched.sort();
+            touched.dedup();
+            for panel in &touched {
+                let k = index_of(&template, panel)?;
+                normalize(&mut template.panels[k]);
+            }
+            for seam in &mut template.seams {
+                if seam.references().any(|r| {
+                    r.edge
+                        .as_ref()
+                        .is_some_and(|e| changed.contains(&(r.panel.clone(), e.clone())))
+                }) {
+                    seam.allow_ease = true;
+                }
+            }
+            selected = touched.into_iter().next();
+        }
         Command::MovePointGroups {
             groups,
             board_delta,
@@ -4923,7 +5103,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 }
                 let delta = offset_m * i as f64;
                 match &mut copy.kind {
-                    TrimKind::Button { center_m, .. } => *center_m += delta,
+                    TrimKind::Button { center_m, .. } | TrimKind::Object { center_m, .. } => {
+                        *center_m += delta
+                    }
                     TrimKind::Buttonhole { start_m, end_m, .. } => {
                         *start_m += delta;
                         *end_m += delta;

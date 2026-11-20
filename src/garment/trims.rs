@@ -38,6 +38,112 @@ pub enum TrimKind {
         path_m: Vec<DVec2>,
         diameter_m: f64,
     },
+    /// A rigid 3D object fixed on the cloth (a buckle, a badge, a carved button) opened from a
+    /// mesh file. Its mesh is kept in metres in its own frame: X along the piece's material u
+    /// axis, Z out of the front face, centred across and with its back at Z = 0. The origin
+    /// sits on the front face at `center_m`; `turn_degrees` turns it about the face normal and
+    /// `scale` sizes it.
+    Object {
+        name: String,
+        center_m: DVec2,
+        #[serde(default)]
+        turn_degrees: f64,
+        #[serde(default = "unit_scale")]
+        scale: f64,
+        vertices: Vec<[f32; 3]>,
+        triangles: Vec<[u32; 3]>,
+    },
+}
+
+fn unit_scale() -> f64 {
+    1.
+}
+
+/// Most triangles an object trim may have.
+pub const MAX_OBJECT_TRIANGLES: usize = 100_000;
+/// Largest size of an object trim, metres.
+pub const MAX_OBJECT_SIZE_M: f64 = 2.;
+
+/// The largest extent of a mesh's vertices.
+fn extent(vertices: &[[f32; 3]]) -> f64 {
+    let (lo, hi) = vertices.iter().fold(
+        (
+            glam::DVec3::splat(f64::INFINITY),
+            glam::DVec3::splat(f64::NEG_INFINITY),
+        ),
+        |(lo, hi), v| {
+            let v = glam::Vec3::from_array(*v).as_dvec3();
+            (lo.min(v), hi.max(v))
+        },
+    );
+    (hi - lo).max_element().max(0.)
+}
+
+/// An object trim made from a mesh file's triangles, centred at `center_m` of a piece.
+///
+/// The thinnest of the mesh's three axes becomes the one out of the cloth (the axes turn
+/// cyclically, so the object is not mirrored). The unit is guessed from its size, since mesh
+/// files rarely say: larger than 30 units is millimetres, larger than 1 centimetres, otherwise
+/// metres. The mesh is centred across and its back laid at Z = 0.
+pub fn object_from_mesh(
+    name: &str,
+    mesh: &crate::avatar::SurfaceMesh,
+    center_m: DVec2,
+) -> Result<TrimKind, String> {
+    use glam::DVec3;
+    if mesh.triangles.is_empty() || mesh.triangles.len() > MAX_OBJECT_TRIANGLES {
+        return Err(format!(
+            "A trim object needs 1 to {MAX_OBJECT_TRIANGLES} triangles; this one has {}",
+            mesh.triangles.len()
+        ));
+    }
+    let (lo, hi) = mesh.vertices.iter().fold(
+        (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
+        |(lo, hi), v| (lo.min(*v), hi.max(*v)),
+    );
+    let size = hi - lo;
+    if !size.is_finite() || size.max_element() <= 0. {
+        return Err("The trim object has no size".into());
+    }
+    let unit = if size.max_element() > 30. {
+        0.001
+    } else if size.max_element() > 1. {
+        0.01
+    } else {
+        1.
+    };
+    // Turn the axes so the thinnest points out of the cloth.
+    let thin = (0..3)
+        .min_by(|a, b| size[*a].total_cmp(&size[*b]))
+        .unwrap_or(2);
+    let turn = |v: DVec3| match thin {
+        0 => DVec3::new(v.y, v.z, v.x),
+        1 => DVec3::new(v.z, v.x, v.y),
+        _ => v,
+    };
+    let (lo, hi) = (turn(lo), turn(hi));
+    let origin = DVec3::new(0.5 * (lo.x + hi.x), 0.5 * (lo.y + hi.y), lo.z);
+    let vertices: Vec<[f32; 3]> = mesh
+        .vertices
+        .iter()
+        .map(|v| ((turn(*v) - origin) * unit).as_vec3().to_array())
+        .collect();
+    let triangles = mesh.triangles.iter().map(|t| t.map(|i| i as u32)).collect();
+    let kind = TrimKind::Object {
+        name: name.chars().take(120).collect(),
+        center_m,
+        turn_degrees: 0.,
+        scale: 1.,
+        vertices,
+        triangles,
+    };
+    Trim {
+        id: "trim".into(),
+        panel_id: "panel".into(),
+        kind: kind.clone(),
+    }
+    .validate()?;
+    Ok(kind)
 }
 
 fn valid_id(id: &str) -> bool {
@@ -85,6 +191,27 @@ impl Trim {
                 spacing_m,
             } => path(path_m) && (1..=8).contains(rows) && size(*spacing_m),
             TrimKind::Piping { path_m, diameter_m } => path(path_m) && size(*diameter_m),
+            TrimKind::Object {
+                name,
+                center_m,
+                turn_degrees,
+                scale,
+                vertices,
+                triangles,
+            } => {
+                name.chars().count() <= 120
+                    && point(*center_m)
+                    && turn_degrees.is_finite()
+                    && (0.01..=100.).contains(scale)
+                    && (3..=3 * MAX_OBJECT_TRIANGLES).contains(&vertices.len())
+                    && (1..=MAX_OBJECT_TRIANGLES).contains(&triangles.len())
+                    && vertices.iter().flatten().all(|v| v.is_finite())
+                    && triangles
+                        .iter()
+                        .flatten()
+                        .all(|i| (*i as usize) < vertices.len())
+                    && extent(vertices) * scale <= MAX_OBJECT_SIZE_M
+            }
         };
         if !valid {
             return Err("Invalid trim geometry or dimensions".into());
@@ -108,6 +235,8 @@ const THREAD_COLOR: [f32; 3] = [0.92, 0.84, 0.62];
 const TAPE_COLOR: [f32; 3] = [0.05, 0.05, 0.06];
 const TEETH_COLOR: [f32; 3] = [0.62, 0.62, 0.64];
 const PIPING_COLOR: [f32; 3] = [0.08, 0.1, 0.2];
+/// A brushed-brass look for object trims.
+const OBJECT_COLOR: [f32; 3] = [0.7, 0.58, 0.34];
 /// Sides of a piping tube's cross-section.
 const PIPING_SIDES: usize = 8;
 
@@ -130,6 +259,42 @@ fn surface_point(
     let [a, b, c] = t.vertices.map(|i| x[i]);
     let n = (b - a).cross(c - a).normalize_or_zero();
     (n != glam::DVec3::ZERO).then_some((p, -n))
+}
+
+/// Like `surface_point`, with the direction of the piece's material u axis on the cloth there,
+/// at right angles to the normal.
+fn surface_frame(
+    garment: &super::CompiledGarment,
+    x: &[glam::DVec3],
+    panel: &str,
+    uv: DVec2,
+) -> Option<(glam::DVec3, glam::DVec3, glam::DVec3)> {
+    let (p, n) = surface_point(garment, x, panel, uv)?;
+    let terms = garment.material_point(panel, uv)?;
+    let vertices: Vec<usize> = terms.iter().map(|(v, _)| *v).collect();
+    let t = garment
+        .mesh
+        .triangles
+        .iter()
+        .find(|t| vertices.iter().all(|v| t.vertices.contains(v)))?;
+    let [a, b, c] = t.vertices;
+    let m = glam::DMat2::from_cols(
+        garment.mesh.uv[b] - garment.mesh.uv[a],
+        garment.mesh.uv[c] - garment.mesh.uv[a],
+    );
+    let along = if m.determinant().abs() > 1e-18 {
+        let k = m.inverse().col(0);
+        (x[b] - x[a]) * k.x + (x[c] - x[a]) * k.y
+    } else {
+        glam::DVec3::ZERO
+    };
+    let along = (along - n * along.dot(n)).normalize_or_zero();
+    let along = if along == glam::DVec3::ZERO {
+        n.any_orthonormal_vector()
+    } else {
+        along
+    };
+    Some((p, n, along))
 }
 
 /// What the zippers on seams draw, as trims of the pieces they lie on: a tape with teeth along
@@ -410,6 +575,29 @@ pub fn trim_triangles(
                         tri([w[0][i], w[1][i], w[1][j]], PIPING_COLOR);
                         tri([w[0][i], w[1][j], w[0][j]], PIPING_COLOR);
                     }
+                }
+            }
+            TrimKind::Object {
+                center_m,
+                turn_degrees,
+                scale,
+                vertices,
+                triangles,
+                ..
+            } => {
+                let Some((p, n, along)) = surface_frame(garment, x, panel, *center_m) else {
+                    continue;
+                };
+                let (sin, cos) = turn_degrees.to_radians().sin_cos();
+                let across = n.cross(along);
+                let (u, v) = (along * cos + across * sin, across * cos - along * sin);
+                let origin = p + n * TRIM_LIFT_M;
+                let place = |k: u32| {
+                    let [a, b, c] = vertices[k as usize].map(f64::from);
+                    origin + (u * a + v * b + n * c) * *scale
+                };
+                for t in triangles {
+                    tri(t.map(place), OBJECT_COLOR);
                 }
             }
             TrimKind::Topstitch {

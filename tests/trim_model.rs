@@ -594,7 +594,7 @@ fn repeat_trims_is_atomic_and_undoable_for_all_kinds() {
         let first = &edit.template.trims[1].kind;
         let second = &edit.template.trims[2].kind;
         let point = |kind: &TrimKind| match kind {
-            TrimKind::Button { center_m, .. } => *center_m,
+            TrimKind::Button { center_m, .. } | TrimKind::Object { center_m, .. } => *center_m,
             TrimKind::Buttonhole { start_m, .. } => *start_m,
             TrimKind::Zipper { path_m, .. }
             | TrimKind::Topstitch { path_m, .. }

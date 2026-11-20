@@ -1,4 +1,5 @@
-//! Static triangle meshes from STL, PLY and COLLADA files, for avatars and props.
+//! Static triangle meshes from STL, PLY and COLLADA files, for avatars and props. `load` also
+//! reads OBJ, glTF/VRM, FBX, Alembic and USD through their own readers.
 //!
 //! STL (ASCII or binary) stores loose triangles: corners at exactly the same position are
 //! joined. PLY (ASCII or binary, either byte order) keeps its vertices and fans polygons into
@@ -115,6 +116,12 @@ pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
     if extension == "obj" {
         return SurfaceMesh::load_obj(path);
     }
+    let limits = crate::gltf_avatar::Limits::default();
+    match extension.as_str() {
+        "gltf" | "glb" => return Ok(crate::gltf_avatar::load(path, None, limits)?.mesh),
+        "vrm" => return Ok(crate::gltf_avatar::load_vrm(path, limits)?.mesh),
+        _ => {}
+    }
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(match extension.as_str() {
         "stl" => stl_with(&bytes, false)?.mesh,
@@ -126,7 +133,11 @@ pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
         "fbx" => crate::fbx_import::fbx(&bytes)?.mesh,
         "abc" => crate::abc_import::abc(&bytes)?.mesh,
         "usda" | "usd" | "usdz" => crate::usd_import::usd(&bytes, &extension)?.mesh,
-        _ => return Err("Choose an OBJ, STL, PLY, COLLADA, FBX, Alembic or USD mesh".into()),
+        _ => {
+            return Err(
+                "Choose an OBJ, glTF, VRM, STL, PLY, COLLADA, FBX, Alembic or USD mesh".into(),
+            );
+        }
     })
 }
 

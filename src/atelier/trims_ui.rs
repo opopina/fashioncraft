@@ -11,7 +11,187 @@ use fashioncraft::{
 };
 use glam::DVec2;
 
+/// Position, size and turn of an object trim; the trim as changed once an edit ends.
+fn object_trim_controls(ui: &mut egui::Ui, ui_lang: i18n::Language, trim: &Trim) -> Option<Trim> {
+    let TrimKind::Object {
+        center_m,
+        turn_degrees,
+        scale,
+        ..
+    } = &trim.kind
+    else {
+        return None;
+    };
+    let commit = |r: &egui::Response| r.drag_stopped() || (r.changed() && !r.dragged());
+    let mut centre_mm = *center_m * 1000.;
+    let mut turn = *turn_degrees;
+    let mut percent = *scale * 100.;
+    let mut done = false;
+    ui.horizontal(|ui| {
+        ui.label(i18n::tr(ui_lang, "Position"));
+        for value in [&mut centre_mm.x, &mut centre_mm.y] {
+            done |= commit(&ui.add(egui::DragValue::new(value).speed(0.5).suffix(" mm")));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label(i18n::tr(ui_lang, "Size"));
+        done |= commit(
+            &ui.add(
+                egui::DragValue::new(&mut percent)
+                    .range(1.0..=10_000.0)
+                    .speed(0.5)
+                    .suffix(" %"),
+            ),
+        );
+        ui.label(i18n::tr(ui_lang, "Turn"));
+        done |= commit(
+            &ui.add(
+                egui::DragValue::new(&mut turn)
+                    .range(-180.0..=180.0)
+                    .speed(0.5)
+                    .suffix("°"),
+            ),
+        );
+    });
+    if !done {
+        return None;
+    }
+    let mut changed = trim.clone();
+    if let TrimKind::Object {
+        center_m,
+        turn_degrees,
+        scale,
+        ..
+    } = &mut changed.kind
+    {
+        *center_m = centre_mm / 1000.;
+        *turn_degrees = turn;
+        *scale = percent / 100.;
+    }
+    (changed != *trim && changed.validate().is_ok()).then_some(changed)
+}
+
+/// Mesh files a trim object can be opened from.
+const TRIM_FILES: &[&str] = &[
+    "obj", "gltf", "glb", "vrm", "stl", "ply", "dae", "fbx", "abc", "usda", "usd", "usdz",
+];
+
 impl Atelier {
+    /// File › Open › Trim: a 3D object from a mesh file (a buckle, a badge, a button), which
+    /// the next click on a piece, on the board or on the cloth, fixes there.
+    pub(super) fn open_trim(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Open trim")
+            .add_filter("Mesh", TRIM_FILES)
+            .pick_file()
+        else {
+            return;
+        };
+        let name = path
+            .file_stem()
+            .map_or_else(|| "Trim".into(), |s| s.to_string_lossy().into_owned());
+        self.load_trim_object(&path, &name);
+    }
+
+    /// Ready an object trim from the mesh at `path`, waiting for its place.
+    pub(super) fn load_trim_object(&mut self, path: &std::path::Path, name: &str) {
+        match fashioncraft::mesh_import::load(path).and_then(|mesh| {
+            fashioncraft::garment::trims::object_from_mesh(name, &mesh, DVec2::ZERO)
+        }) {
+            Ok(kind) => {
+                self.authoring.trim_place = Some(kind);
+                self.status = i18n::tr(
+                    self.prefs.language,
+                    "Click a piece, on the board or on the cloth, where the trim goes · Esc cancels",
+                )
+                .into();
+            }
+            Err(e) => self.status = e,
+        }
+    }
+
+    /// Fix the trim waiting for its place at material point `at` of `panel`.
+    pub(super) fn place_trim(&mut self, panel: String, at: DVec2) -> bool {
+        let Some(mut kind) = self.authoring.trim_place.take() else {
+            return false;
+        };
+        if let TrimKind::Object { center_m, .. } = &mut kind {
+            *center_m = at;
+        }
+        let trim = Trim {
+            id: self.new_trim_id(),
+            panel_id: panel,
+            kind,
+        };
+        let placed = self.edit(Command::SetTrim { trim });
+        if placed {
+            self.status = i18n::tr(self.prefs.language, "Trim placed").into();
+        }
+        placed
+    }
+
+    /// Esc while a trim waits for its place.
+    fn trim_place_cancelled(&mut self, ctx: &egui::Context) -> bool {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.authoring.trim_place = None;
+            self.status = i18n::tr(self.prefs.language, "Trim cancelled").into();
+            return true;
+        }
+        false
+    }
+
+    /// While a trim waits for its place, a click on the cloth puts it there.
+    pub(super) fn trim_place_3d(&mut self, response: &egui::Response, rect: egui::Rect) -> bool {
+        if self.authoring.trim_place.is_none() {
+            return false;
+        }
+        if self.trim_place_cancelled(&response.ctx)
+            || !response.clicked_by(egui::PointerButton::Primary)
+        {
+            return true;
+        }
+        let Some(pos) = response.interact_pointer_pos() else {
+            return true;
+        };
+        match self.picked_cloth_point(pos, rect) {
+            Some((panel, uv, _)) => {
+                self.place_trim(panel, uv);
+            }
+            None => self.status = i18n::tr(self.prefs.language, "Click on the cloth").into(),
+        }
+        true
+    }
+
+    /// While a trim waits for its place, a click on a piece on the board puts it there.
+    pub(super) fn trim_place_board(&mut self, rect: egui::Rect, response: &egui::Response) -> bool {
+        if self.authoring.trim_place.is_none() {
+            return false;
+        }
+        if self.trim_place_cancelled(&response.ctx)
+            || !response.clicked_by(egui::PointerButton::Primary)
+        {
+            return true;
+        }
+        let Some(pos) = response.interact_pointer_pos() else {
+            return true;
+        };
+        let at = self.authoring.board.world(rect, pos);
+        let template = &self.project.template;
+        let piece = (0..template.panels.len()).rev().find(|&i| {
+            self.board_outline(i)
+                .is_some_and(|outline| super::board_measure::contains(&outline, at))
+        });
+        match piece {
+            Some(i) => {
+                let uv = fashioncraft::authoring::arrange2d::material_point(template, i, at);
+                let panel = template.panels[i].id.clone();
+                self.place_trim(panel, uv);
+            }
+            None => self.status = i18n::tr(self.prefs.language, "Click on a piece").into(),
+        }
+        true
+    }
+
     /// A trim id not used yet in the document.
     fn new_trim_id(&self) -> String {
         let used = |id: &str| self.project.template.trims.iter().any(|t| t.id == id);
@@ -136,14 +316,22 @@ impl Atelier {
                         TrimKind::Zipper { .. } => "Zipper",
                         TrimKind::Topstitch { .. } => "Topstitch",
                         TrimKind::Piping { .. } => "Piping",
+                        TrimKind::Object { .. } => "Object",
                     };
-                    ui.label(format!("{kind} · {}", trim.id));
+                    let kind = i18n::tr(ui_lang, kind);
+                    match &trim.kind {
+                        TrimKind::Object { name, .. } => ui.label(format!("{kind} · {name}")),
+                        _ => ui.label(format!("{kind} · {}", trim.id)),
+                    };
                     if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
                         command = Some(Command::RemoveTrim {
                             id: trim.id.clone(),
                         });
                     }
                 });
+                if let Some(changed) = object_trim_controls(ui, ui_lang, trim) {
+                    command = Some(Command::SetTrim { trim: changed });
+                }
             }
         });
         if let Some(command) = command {

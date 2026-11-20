@@ -205,6 +205,15 @@ pub enum CommandId {
     DeleteAvatar,
     EditTexture2d,
     EditTexture3d,
+    OpenTrim,
+    AddAvatarObject,
+    StyleLineEdit,
+    StyleLineMove,
+    StyleLineScale,
+    StyleLineDraw,
+    ReDrape,
+    AutoFit,
+    RunPythonScript,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2036,6 +2045,87 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        OpenTrim,
+        "file.open_trim",
+        "Open trim: a 3D object from a mesh file, fixed where you click a piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AddAvatarObject,
+        "file.add_avatar",
+        "Add avatar: another body or hard object the cloth collides with",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleLineEdit,
+        "garment.style_line_edit",
+        "Edit style line: drag a garment edge to move its corner or bend it",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleLineMove,
+        "garment.style_line_move",
+        "Move style line: drag a garment edge to shift it whole",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleLineScale,
+        "garment.style_line_scale",
+        "Scale style line: drag a garment edge along itself to resize it",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        StyleLineDraw,
+        "garment.style_line_draw",
+        "Draw style line: click an internal line onto a draped piece",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ReDrape,
+        "garment.redrape",
+        "Re-drape: carry the drape from the previous avatar onto this one, same size",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        AutoFit,
+        "pattern.auto_fit",
+        "Auto fit: carry the drape to this avatar and resize the pieces to fit it",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        RunPythonScript,
+        "file.python_script",
+        "Python script: run a .py file on the open garment",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
     entry!(

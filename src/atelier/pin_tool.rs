@@ -400,6 +400,38 @@ impl Atelier {
         picked
     }
 
+    /// The point of the cloth under screen point `pos`, unless the body hides it: its piece,
+    /// its material coordinates and where it is.
+    pub(super) fn picked_cloth_point(
+        &self,
+        pos: egui::Pos2,
+        rect: egui::Rect,
+    ) -> Option<(String, DVec2, DVec3)> {
+        let (origin, dir) = self.camera.ray(pos, rect);
+        let g = &self.scene.garment;
+        let x = &self.scene.state.x;
+        let mut best: Option<(f64, usize, [f64; 3])> = None;
+        for (face, t) in g.mesh.triangles.iter().enumerate() {
+            if !self.cloth_face_shown(face) {
+                continue;
+            }
+            if let Some((d, w)) = picking::ray_triangle(origin, dir, t.vertices.map(|i| x[i]))
+                && best.is_none_or(|(b, _, _)| d < b)
+            {
+                best = Some((d, face, w));
+            }
+        }
+        let (d, face, w) = best?;
+        if self.avatar_shown() && self.scene.collider.occludes_ray(origin, dir, d - 1e-5) {
+            return None;
+        }
+        let t = &g.mesh.triangles[face];
+        let range = g.panels.iter().find(|r| r.triangles.contains(&face))?;
+        let uv = (0..3).map(|k| g.mesh.uv[t.vertices[k]] * w[k]).sum();
+        let at = (0..3).map(|k| x[t.vertices[k]] * w[k]).sum();
+        Some((range.id.clone(), uv, at))
+    }
+
     /// Whether each compiled panel is on screen (not hidden, not isolated away) and not frozen.
     pub(super) fn pinnable_panels(&self) -> Vec<bool> {
         let frozen: BTreeSet<&str> = self

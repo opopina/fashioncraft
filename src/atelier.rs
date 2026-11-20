@@ -108,8 +108,12 @@ mod pose_ui;
 mod quick_actions;
 #[path = "atelier/radial.rs"]
 mod radial;
+#[path = "atelier/redrape_ui.rs"]
+mod redrape_ui;
 #[path = "atelier/scene_ui.rs"]
 mod scene_ui;
+#[path = "atelier/script_ui.rs"]
+mod script_ui;
 #[path = "atelier/seam_links.rs"]
 mod seam_links;
 #[path = "atelier/seams_ui.rs"]
@@ -128,6 +132,8 @@ mod shapes_ui;
 mod stage_settings;
 #[path = "atelier/steam_ui.rs"]
 mod steam_ui;
+#[path = "atelier/style_lines.rs"]
+mod style_lines;
 #[path = "atelier/texture_ui.rs"]
 mod texture_ui;
 #[path = "atelier/trace_pen.rs"]
@@ -752,6 +758,15 @@ impl Atelier {
             Id::Piping => self.pipe_selected()?,
             Id::SuperimposeSide => self.superimpose_side()?,
             Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
+            Id::OpenTrim => self.open_trim(),
+            Id::AddAvatarObject => self.add_avatar_object(),
+            Id::StyleLineEdit => self.start_style_lines(style_lines::StyleMode::Edit),
+            Id::StyleLineMove => self.start_style_lines(style_lines::StyleMode::Move),
+            Id::StyleLineScale => self.start_style_lines(style_lines::StyleMode::Scale),
+            Id::StyleLineDraw => self.start_style_lines(style_lines::StyleMode::Draw),
+            Id::ReDrape => self.redrape()?,
+            Id::AutoFit => self.auto_fit()?,
+            Id::RunPythonScript => self.open_python_script(),
             Id::HighQualityView => {
                 let display = &mut self.prefs.garment_display;
                 display.high_quality = !display.high_quality;
@@ -1546,6 +1561,7 @@ impl eframe::App for Atelier {
             self.pleats_window(&ctx);
             self.mesh_select_window(&ctx);
             self.texture_edit_window(&ctx);
+            self.script_window(&ctx);
             self.steam_window(&ctx);
             self.object_browser_window(&ctx);
         }

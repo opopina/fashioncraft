@@ -540,7 +540,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Workspace profiles…" => "Perfiles del espacio de trabajo…",
         "Compatible" => "Compatible",
         "FashionCraft classic" => "FashionCraft clásico",
-        "Not built yet" => "Aún no está hecho",
         "Cut and sew along line" => "Cortar y coser por la línea",
         "Replace outline with shape" => "Reemplazar contorno por la forma",
         "Slash and spread along line" => "Abrir y separar por la línea",
@@ -2220,8 +2219,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Clear keys" => "Borrar claves",
         "Keys" => "Claves",
-        "OBJ, STL, PLY, COLLADA or FBX objects the cloth rests on or drapes over; with keys they move while the animation records." => {
-            "Objetos OBJ, STL, PLY, COLLADA o FBX sobre los que la tela se apoya o cae; con claves se mueven mientras se graba la animación."
+        "Objects and other avatars the cloth rests on or drapes over (OBJ, glTF, FBX, STL, PLY, COLLADA, Alembic or USD); with keys they move while the animation records." => {
+            "Objetos y otros avatares sobre los que la tela se apoya o cae (OBJ, glTF, FBX, STL, PLY, COLLADA, Alembic o USD); con claves se mueven mientras se graba la animación."
         }
         "Key wind" => "Clave de viento",
         "Key gravity" => "Clave de gravedad",
@@ -2307,6 +2306,96 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Edit style line" => "Editar línea de estilo",
+        "Move style line" => "Mover línea de estilo",
+        "Scale style line" => "Escalar línea de estilo",
+        "Draw style line" => "Dibujar línea de estilo",
+        "Open trim: a 3D object from a mesh file, fixed where you click a piece" => {
+            "Abrir ribete: un objeto 3D de un archivo de malla, fijado donde hagas clic en una pieza"
+        }
+        "Add avatar: another body or hard object the cloth collides with" => {
+            "Añadir avatar: otro cuerpo u objeto rígido con el que choca la tela"
+        }
+        "Edit style line: drag a garment edge to move its corner or bend it" => {
+            "Editar línea de estilo: arrastra un borde de la prenda para mover su esquina o curvarlo"
+        }
+        "Move style line: drag a garment edge to shift it whole" => {
+            "Mover línea de estilo: arrastra un borde de la prenda para desplazarlo entero"
+        }
+        "Scale style line: drag a garment edge along itself to resize it" => {
+            "Escalar línea de estilo: arrastra un borde de la prenda a lo largo de sí mismo para cambiar su largo"
+        }
+        "Draw style line: click an internal line onto a draped piece" => {
+            "Dibujar línea de estilo: marca con clics una línea interna sobre una pieza drapeada"
+        }
+        "Re-drape: carry the drape from the previous avatar onto this one, same size" => {
+            "Recolocar: lleva el drapeado del avatar anterior a este, con la misma talla"
+        }
+        "Auto fit: carry the drape to this avatar and resize the pieces to fit it" => {
+            "Ajuste automático: lleva el drapeado a este avatar y ajusta el tamaño de las piezas"
+        }
+        "Python script: run a .py file on the open garment" => {
+            "Guion de Python: ejecuta un archivo .py sobre la prenda abierta"
+        }
+        "Click a piece, on the board or on the cloth, where the trim goes · Esc cancels" => {
+            "Haz clic en una pieza, en el tablero o en la tela, donde va el ribete · Esc cancela"
+        }
+        "Trim placed" => "Ribete colocado",
+        "Trim cancelled" => "Ribete cancelado",
+        "Click on a piece" => "Haz clic en una pieza",
+        "Avatar added beside the current one · place it in Scene and props" => {
+            "Avatar añadido junto al actual · colócalo en Escena y accesorios"
+        }
+        "Drag an edge of the garment: near an end it moves the corner, in between it bends · Esc ends" => {
+            "Arrastra un borde de la prenda: cerca de un extremo mueve la esquina, en medio lo curva · Esc termina"
+        }
+        "Drag an edge of the garment to move it · Esc ends" => {
+            "Arrastra un borde de la prenda para moverlo · Esc termina"
+        }
+        "Drag an edge of the garment along itself to lengthen or shorten it · Esc ends" => {
+            "Arrastra un borde de la prenda a lo largo de sí mismo para alargarlo o acortarlo · Esc termina"
+        }
+        "Click points on a piece; Enter or a double click makes them an internal line · Esc ends" => {
+            "Marca puntos en una pieza; Intro o doble clic los convierte en línea interna · Esc termina"
+        }
+        "Pattern reshaped from the 3D view" => "Patrón modificado desde la vista 3D",
+        "Keep the line on one piece" => "Mantén la línea en una sola pieza",
+        "A line needs two points" => "Una línea necesita dos puntos",
+        "Internal line drawn on the piece" => "Línea interna dibujada en la pieza",
+        "Avatar replaced · drape reset · Re-drape brings the drape from the previous avatar" => {
+            "Avatar reemplazado · drapeado reiniciado · Recolocar trae el drapeado del avatar anterior"
+        }
+        "Open the new avatar first (File › Open › Avatar): the garment is carried over from the previous one" => {
+            "Abre primero el avatar nuevo (Archivo › Abrir › Avatar): la prenda se trae desde el anterior"
+        }
+        "The garment changed since the avatar was replaced, so its earlier drape no longer fits it" => {
+            "La prenda cambió desde que se reemplazó el avatar; su drapeado anterior ya no le corresponde"
+        }
+        "The avatar was deleted; open one to drape the garment on" => {
+            "El avatar se borró; abre uno para drapear la prenda"
+        }
+        "Re-draped from the previous avatar, same size · simulate to settle" => {
+            "Recolocada desde el avatar anterior, misma talla · simula para asentarla"
+        }
+        "Re-draped: the pieces already fit the new avatar · simulate to settle" => {
+            "Recolocada: las piezas ya le quedan al avatar nuevo · simula para asentarla"
+        }
+        "Pieces resized for the new avatar:" => "Piezas ajustadas al avatar nuevo:",
+        "simulate to settle" => "simula para asentarla",
+        "Running…" => "Ejecutando…",
+        "Script applied as one edit; Undo takes it back" => {
+            "Guion aplicado como un solo cambio; Deshacer lo revierte"
+        }
+        "The saved garment was not applied" => "No se aplicó la prenda guardada",
+        "The script ran and saved no change" => "El guion se ejecutó y no guardó cambios",
+        "The script failed; see its output" => "El guion falló; mira su salida",
+        "Python script" => "Guion de Python",
+        "The script works on the open garment through the fashioncraft module: fashioncraft.garment() reads it, fashioncraft.save(garment) hands it back as one undoable edit. It runs with Python 3 on this computer." => {
+            "El guion trabaja sobre la prenda abierta con el módulo fashioncraft: fashioncraft.garment() la lee y fashioncraft.save(garment) la devuelve como un solo cambio que se puede deshacer. Se ejecuta con Python 3 en este ordenador."
+        }
+        "Run" => "Ejecutar",
+        "Choose another…" => "Elegir otro…",
+        "Output" => "Salida",
         "Edit texture on the board: drag a piece's texture, set its size, turn and grain" => {
             "Editar textura en el tablero: arrastra la textura de una pieza; tamaño, giro e hilo"
         }
@@ -2698,7 +2787,7 @@ mod tests {
     fn labels(items: &[Item], out: &mut Vec<&'static str>) {
         for item in items {
             match *item {
-                Item::Run(label, _) | Item::Todo(label) => out.push(label),
+                Item::Run(label, _) => out.push(label),
                 Item::Sub(label, inner) => {
                     out.push(label);
                     labels(inner, out);

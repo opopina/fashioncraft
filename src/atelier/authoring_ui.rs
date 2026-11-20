@@ -66,7 +66,13 @@ pub(super) struct AuthoringUi {
     pub pleats: super::pleats_ui::PleatsUi,
     pub mesh_select: super::mesh_select::MeshSelect,
     pub texture_edit: super::texture_ui::TextureEdit,
+    pub style_lines: super::style_lines::StyleLines,
+    pub script: super::script_ui::ScriptUi,
     pub steam: super::steam_ui::SteamUi,
+    /// The drape on the avatar before the last one opened, for Re-drape and Auto fit.
+    pub redrape_from: Option<super::redrape_ui::RedrapeSource>,
+    /// File › Open › Trim: the object opened, waiting for a click on a piece.
+    pub trim_place: Option<fashioncraft::garment::trims::TrimKind>,
     /// Graphic on the 3D garment: the PNG chosen, waiting for a click on the cloth.
     pub graphic_3d: Option<std::path::PathBuf>,
     pub object_browser: super::object_browser_ui::ObjectBrowserUi,

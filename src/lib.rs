@@ -34,10 +34,12 @@ pub mod ogc;
 pub mod pattern_import;
 pub mod picking;
 pub mod project;
+pub mod redrape;
 /// Shared optional renderer; the numerical modules do not depend on this module.
 #[cfg(feature = "desktop")]
 pub mod render;
 pub mod retopology;
+pub mod scripting;
 pub mod session_protocol;
 pub mod solver;
 pub mod solver_lab;

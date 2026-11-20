@@ -369,3 +369,24 @@ fn bare_filename_resolves_buffers_in_current_directory() {
         vec![[0, 1, 2]]
     );
 }
+
+/// glTF files serve as scene objects and added avatars, through the general mesh loader.
+#[test]
+fn a_glb_loads_as_a_scene_object() {
+    let (doc, bin) = fixture();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("second avatar.glb");
+    std::fs::write(&path, glb(&doc, &bin)).unwrap();
+    let mesh = fashioncraft::mesh_import::load(&path).unwrap();
+    assert_eq!(mesh.triangles, vec![[0, 1, 2]]);
+    let object = fashioncraft::fitting::SceneObject {
+        id: "object_1".into(),
+        name: "second avatar".into(),
+        path,
+        translation: [0.5, 0., 0.],
+        rotation_degrees: [0.; 3],
+        scale: 1.,
+        keys: vec![],
+    };
+    assert_eq!(object.mesh().unwrap().vertices[1], DVec3::new(1.5, 0., 0.));
+}

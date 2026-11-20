@@ -10,28 +10,110 @@ pub(super) struct SceneUi {
     draft: Option<Vec<SceneObject>>,
 }
 
-/// A new object's scale from its size: files larger than 500 units are taken to be in
-/// millimetres, larger than 10 in centimetres, others in metres.
-fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
-    let mesh = fashioncraft::mesh_import::load(path)?;
-    let (lo, hi) = mesh.vertices.iter().fold(
+/// Mesh files a scene object or an added avatar can come from.
+const OBJECT_FILES: &[&str] = &[
+    "obj", "gltf", "glb", "vrm", "stl", "ply", "dae", "fbx", "abc", "usda", "usd", "usdz",
+];
+
+/// The corners of the box around `points`.
+fn bounds<'a>(points: impl Iterator<Item = &'a glam::DVec3>) -> (glam::DVec3, glam::DVec3) {
+    points.fold(
         (
             glam::DVec3::splat(f64::INFINITY),
             glam::DVec3::splat(f64::NEG_INFINITY),
         ),
         |(lo, hi), p| (lo.min(*p), hi.max(*p)),
-    );
+    )
+}
+
+/// A new object's scale from its size: files larger than 500 units are taken to be in
+/// millimetres, larger than 10 in centimetres, others in metres.
+fn scale_of(mesh: &fashioncraft::avatar::SurfaceMesh) -> f64 {
+    let (lo, hi) = bounds(mesh.vertices.iter());
     let size = (hi - lo).max_element();
-    Ok(if size > 500. {
+    if size > 500. {
         0.001
     } else if size > 10. {
         0.01
     } else {
         1.
-    })
+    }
+}
+
+fn guess_scale(path: &std::path::Path) -> Result<f64, String> {
+    Ok(scale_of(&fashioncraft::mesh_import::load(path)?))
+}
+
+/// An object id not used yet among `objects`.
+fn new_object_id(objects: &[SceneObject]) -> String {
+    (1..)
+        .map(|k| format!("object_{k}"))
+        .find(|id| !objects.iter().any(|o| &o.id == id))
+        .unwrap()
 }
 
 impl Atelier {
+    /// File › Add › Avatar: another avatar, or a hard object such as armour, that the cloth
+    /// collides with, kept with the project's scene objects.
+    pub(super) fn add_avatar_object(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Add avatar")
+            .add_filter("Avatar", OBJECT_FILES)
+            .pick_file()
+        {
+            self.add_scene_avatar(path);
+        }
+    }
+
+    /// Add the avatar at `path` to the scene, standing 15 cm to the right of the current one on
+    /// the same floor, and open Scene and props to place it.
+    pub(super) fn add_scene_avatar(&mut self, path: PathBuf) -> bool {
+        let mesh = match fashioncraft::mesh_import::load(&path) {
+            Ok(mesh) => mesh,
+            Err(e) => {
+                self.status = e;
+                return false;
+            }
+        };
+        let scale = scale_of(&mesh);
+        let (lo, hi) = bounds(mesh.vertices.iter());
+        let (lo, hi) = (lo * scale, hi * scale);
+        let (body_lo, body_hi) = if self.project.avatar_removed {
+            (glam::DVec3::ZERO, glam::DVec3::ZERO)
+        } else {
+            bounds(self.scene.collider.surface.vertices.iter())
+        };
+        let translation = [
+            body_hi.x + 0.15 - lo.x,
+            body_lo.y - lo.y,
+            0.5 * (body_lo.z + body_hi.z) - 0.5 * (lo.z + hi.z),
+        ];
+        let mut objects = self.project.scene_objects.clone();
+        let id = new_object_id(&objects);
+        let name = path
+            .file_stem()
+            .map_or_else(|| id.clone(), |s| s.to_string_lossy().into_owned());
+        objects.push(SceneObject {
+            id,
+            name,
+            path,
+            translation,
+            rotation_degrees: [0.; 3],
+            scale,
+            keys: vec![],
+        });
+        if !self.apply_scene_objects(objects) {
+            return false;
+        }
+        self.authoring.scene.open = true;
+        self.status = i18n::tr(
+            self.prefs.language,
+            "Avatar added beside the current one · place it in Scene and props",
+        )
+        .into();
+        true
+    }
+
     /// Rebuild the scene with `objects`; the drape starts again from the arrangement.
     pub(super) fn apply_scene_objects(&mut self, objects: Vec<SceneObject>) -> bool {
         let ui_lang = self.prefs.language;
@@ -88,7 +170,7 @@ impl Atelier {
             .show(ctx, |ui| {
                 ui.small(i18n::tr(
                     ui_lang,
-                    "OBJ, STL, PLY, COLLADA or FBX objects the cloth rests on or drapes over; with keys they move while the animation records.",
+                    "Objects and other avatars the cloth rests on or drapes over (OBJ, glTF, FBX, STL, PLY, COLLADA, Alembic or USD); with keys they move while the animation records.",
                 ));
                 if draft.is_empty() {
                     ui.label(i18n::tr(ui_lang, "No objects yet."));
@@ -181,10 +263,7 @@ impl Atelier {
                 ui.horizontal(|ui| {
                     if ui.button(i18n::tr(ui_lang, "Add object…")).clicked() {
                         add = rfd::FileDialog::new()
-                            .add_filter(
-                                "Mesh",
-                                &["obj", "stl", "ply", "dae", "fbx", "abc", "usda", "usd", "usdz"],
-                            )
+                            .add_filter("Mesh", OBJECT_FILES)
                             .pick_file();
                     }
                     if ui
@@ -203,10 +282,7 @@ impl Atelier {
             match guess_scale(&path) {
                 Ok(scale) => {
                     let draft = self.authoring.scene.draft.get_or_insert_with(Vec::new);
-                    let id = (1..)
-                        .map(|k| format!("object_{k}"))
-                        .find(|id| !draft.iter().any(|o| &o.id == id))
-                        .unwrap();
+                    let id = new_object_id(draft);
                     let name = path
                         .file_stem()
                         .map_or_else(|| id.clone(), |s| s.to_string_lossy().into_owned());

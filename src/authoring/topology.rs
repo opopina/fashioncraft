@@ -79,6 +79,7 @@ fn carried(template: &GarmentTemplate, panel: &str) -> Vec<(Carried, Vec<DVec2>)
                     .map(|d| *center_m + d * (diameter_m / 2.))
                     .to_vec(),
                 TrimKind::Buttonhole { start_m, end_m, .. } => vec![*start_m, *end_m],
+                TrimKind::Object { center_m, .. } => vec![*center_m],
                 TrimKind::Zipper { path_m, .. }
                 | TrimKind::Topstitch { path_m, .. }
                 | TrimKind::Piping { path_m, .. } => path_m.clone(),
@@ -128,7 +129,9 @@ fn carry(
             let t = &mut template.trims[k];
             t.panel_id = to.to_string();
             match &mut t.kind {
-                TrimKind::Button { center_m, .. } => *center_m = map(*center_m),
+                TrimKind::Button { center_m, .. } | TrimKind::Object { center_m, .. } => {
+                    *center_m = map(*center_m)
+                }
                 TrimKind::Buttonhole { start_m, end_m, .. } => {
                     *start_m = map(*start_m);
                     *end_m = map(*end_m);

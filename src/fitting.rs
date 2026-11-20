@@ -679,6 +679,31 @@ impl FittingProject {
         }
         Ok(project)
     }
+    /// The avatar's surface as the cloth meets it, posed, without the scene's props; `None`
+    /// when the avatar was deleted.
+    pub fn body_surface(&self) -> Result<Option<SurfaceMesh>, String> {
+        if self.avatar_removed {
+            return Ok(None);
+        }
+        let mut surface = SurfaceMesh::load_obj(&self.avatar_path)?;
+        if let Some(posed) = self.avatar_pose.as_ref().filter(|p| !p.pose.is_empty()) {
+            surface = posed.rig(&surface)?.posed(&surface, &posed.pose);
+        }
+        Ok(Some(surface))
+    }
+
+    /// The avatar's joints when it stands at rest as they were set; `None` when posed or never
+    /// set, for them to be estimated from its shape.
+    pub fn body_landmarks(&self) -> Option<crate::redrape::Landmarks> {
+        let pose = self.avatar_pose.as_ref().filter(|p| p.pose.is_empty())?;
+        Some(
+            pose.joints
+                .iter()
+                .map(|(k, v)| (k.clone(), glam::DVec3::from_array(*v)))
+                .collect(),
+        )
+    }
+
     pub fn compile(&self) -> Result<FittingScene, String> {
         if self.version != 1 {
             return Err("Unsupported fitting project version".into());

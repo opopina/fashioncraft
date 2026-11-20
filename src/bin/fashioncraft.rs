@@ -65,17 +65,45 @@ fn data_dir() -> PathBuf {
         .join("session")
 }
 
+/// Why a project given to open cannot be, in the interface's language.
+fn unreadable(path: &Path, output: &Path) -> String {
+    let spanish = std::fs::read_to_string(output.join("preferences.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .is_some_and(|prefs| prefs["language"] == "spanish");
+    if spanish {
+        format!(
+            "FashionCraft no puede leer {}.\n\nSi está en una carpeta de la nube (Nextcloud, iCloud, Dropbox…), \
+             dale acceso en Ajustes del Sistema › Privacidad y seguridad, o ábrelo desde Archivo › Abrir.",
+            path.display()
+        )
+    } else {
+        format!(
+            "FashionCraft cannot read {}.\n\nIf it is in a cloud folder (Nextcloud, iCloud, Dropbox…), \
+             give FashionCraft access in System Settings › Privacy & Security, or open it with File › Open.",
+            path.display()
+        )
+    }
+}
+
 fn start() -> Result<(), String> {
     let assets = assets_dir().ok_or(
         "FashionCraft could not find its mannequin beside the program. Reinstall FashionCraft.",
     )?;
     let output = data_dir();
     std::fs::create_dir_all(&output).map_err(|e| format!("{}: {e}", output.display()))?;
-    // A project given on the command line, as a double-clicked file is.
-    let source = std::env::args_os()
+    // A project given on the command line, as a double-clicked file is. One that cannot be read
+    // is an error, not a reason to open the T-shirt in its place. (Old macOS versions pass a
+    // `-psn_…` process serial number first; it is not a file.)
+    let source = match std::env::args_os()
         .nth(1)
+        .filter(|a| !a.to_string_lossy().starts_with("-psn_"))
         .map(PathBuf::from)
-        .filter(|path| path.is_file());
+    {
+        Some(path) if path.is_file() => Some(path),
+        Some(path) => return Err(unreadable(&path, &output)),
+        None => None,
+    };
     let mut project = match &source {
         Some(path) => FittingProject::load(path)?,
         None => FittingProject::basic(GarmentKind::Tshirt, 2, assets.join(MANNEQUIN)),

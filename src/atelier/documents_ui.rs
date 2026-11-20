@@ -21,6 +21,9 @@ pub(super) struct DocumentUi {
     pub dirty: bool,
     last_recovery: Instant,
     recovery: PathBuf,
+    /// Held locked while this window is open, so another window starting knows that this
+    /// window's recovery snapshot is in use and not left by a crash.
+    _recovery_lock: Option<std::fs::File>,
     checked_recovery: bool,
     closing: bool,
     smoke_fixture: Option<PathBuf>,
@@ -38,6 +41,8 @@ impl DocumentUi {
         }
     }
     pub fn new(output: &std::path::Path, path: Option<PathBuf>, modified: bool) -> Self {
+        // A window opened on a document opens that document, not a snapshot.
+        let opened_a_document = path.is_some();
         Self {
             browser: Default::default(),
             avatar_import: Default::default(),
@@ -48,12 +53,31 @@ impl DocumentUi {
             path,
             last_recovery: Instant::now(),
             recovery: output.join(format!("recovery-{}.json", std::process::id())),
-            checked_recovery: false,
+            _recovery_lock: recovery_lock(output),
+            checked_recovery: opened_a_document,
             closing: false,
             smoke_fixture: None,
         }
     }
 }
+/// This window's lock on its recovery snapshot (`recovery-<pid>.lock`), held while it is open.
+fn recovery_lock(output: &std::path::Path) -> Option<std::fs::File> {
+    std::fs::create_dir_all(output).ok()?;
+    let file =
+        std::fs::File::create(output.join(format!("recovery-{}.lock", std::process::id()))).ok()?;
+    file.try_lock().ok()?;
+    Some(file)
+}
+
+/// Whether the window that saved `snapshot` is still open: its lock is held. Snapshots of
+/// closed or crashed windows (or of versions without locks) are not in use.
+fn snapshot_in_use(snapshot: &std::path::Path) -> bool {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(snapshot.with_extension("lock"))
+        .is_ok_and(|f| matches!(f.try_lock(), Err(std::fs::TryLockError::WouldBlock)))
+}
+
 fn install_avatar(
     prepared: fashioncraft::avatar_import::Prepared,
     project: &mut FittingProject,
@@ -689,12 +713,16 @@ impl Atelier {
                         .and_then(|s| s.to_str())
                         .is_some_and(|s| s.starts_with("recovery-") && s.ends_with(".json"))
                 })
+                // Another open window's snapshot is its live work, not something to recover.
+                .filter(|p| *p != self.document.recovery && !snapshot_in_use(p))
                 .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
+            let ui_lang = self.prefs.language;
             if let Some(path) = previous
                 && MessageDialog::new()
-                    .set_title("Recovery available")
+                    .set_title(i18n::tr(ui_lang, "Recovery available"))
                     .set_description(format!(
-                        "Open the last recovery snapshot?\n{}",
+                        "{}\n{}",
+                        i18n::tr(ui_lang, "Open the last recovery snapshot?"),
                         path.display()
                     ))
                     .set_buttons(MessageButtons::YesNo)
@@ -978,5 +1006,28 @@ mod appearance_fixture_tests {
         let missing = dir.path().join("missing");
         assert!(reserve_appearance_fixture(&missing).is_err());
         assert!(!missing.exists());
+    }
+
+    #[test]
+    fn only_snapshots_of_closed_windows_are_offered_for_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let snapshot = dir.path().join("recovery-41.json");
+        std::fs::write(&snapshot, "{}").unwrap();
+        // No lock at all: left by a version without locks, or never locked.
+        assert!(!super::snapshot_in_use(&snapshot));
+        // Its window is open: the lock is held.
+        let held = std::fs::File::create(dir.path().join("recovery-41.lock")).unwrap();
+        held.try_lock().unwrap();
+        assert!(super::snapshot_in_use(&snapshot));
+        // The window closed or crashed: the lock was let go.
+        drop(held);
+        assert!(!super::snapshot_in_use(&snapshot));
+        // This window's own lock is taken and held.
+        let own = super::recovery_lock(dir.path()).expect("own lock");
+        let own_snapshot = dir
+            .path()
+            .join(format!("recovery-{}.json", std::process::id()));
+        assert!(super::snapshot_in_use(&own_snapshot));
+        drop(own);
     }
 }

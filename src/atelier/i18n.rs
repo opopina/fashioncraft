@@ -2307,6 +2307,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Graphic cancelled" => "Gráfico cancelado",
         "Untitled" => "Sin título",
+        "Recovery available" => "Recuperación disponible",
+        "Open the last recovery snapshot?" => "¿Abrir la última copia de recuperación?",
         "Edit style line" => "Editar línea de estilo",
         "Move style line" => "Mover línea de estilo",
         "Scale style line" => "Escalar línea de estilo",

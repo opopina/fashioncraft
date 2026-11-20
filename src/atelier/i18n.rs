@@ -2314,6 +2314,26 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Tears" => "Rasgados",
         "Open a stretch of this seam, as a rip" => "Abre un tramo de esta costura, como un rasgado",
         "Mend all" => "Coser todos",
+        "Select mesh with a brush" => "Seleccionar malla con pincel",
+        "Select mesh with a box" => "Seleccionar malla con recuadro",
+        "Select mesh with a lasso" => "Seleccionar malla con lazo",
+        "Select cloth in the 3D view · Shift adds, Cmd/Ctrl takes away · Esc ends" => {
+            "Selecciona tela en la vista 3D · Mayús añade, Cmd/Ctrl quita · Esc termina"
+        }
+        "Select mesh" => "Seleccionar malla",
+        "Brush size" => "Tamaño del pincel",
+        "[ and ] make it smaller and larger" => "[ y ] lo achican y agrandan",
+        "points selected" => "puntos seleccionados",
+        "Freeze in place" => "Congelar en su sitio",
+        "Hold the selected points where they are: they are pinned" => {
+            "Sujeta los puntos seleccionados donde están: quedan con alfileres"
+        }
+        "Brush" => "Pincel",
+        "Release" => "Soltar",
+        "Let the selected points move again" => {
+            "Deja que los puntos seleccionados vuelvan a moverse"
+        }
+        "Select frozen" => "Seleccionar lo congelado",
         "Trace the selected closed internal shape as a new piece" => {
             "Trazar la forma interna cerrada seleccionada como pieza nueva"
         }

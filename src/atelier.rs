@@ -88,6 +88,8 @@ mod measure;
 mod measure3d_ui;
 #[path = "atelier/menus.rs"]
 mod menus;
+#[path = "atelier/mesh_select.rs"]
+mod mesh_select;
 #[path = "atelier/object_browser_ui.rs"]
 mod object_browser_ui;
 #[path = "atelier/palette_ui.rs"]
@@ -694,6 +696,9 @@ impl Atelier {
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
+            Id::SelectMeshBrush => self.start_mesh_select(mesh_select::SelectShape::Brush),
+            Id::SelectMeshBox => self.start_mesh_select(mesh_select::SelectShape::Box),
+            Id::SelectMeshLasso => self.start_mesh_select(mesh_select::SelectShape::Lasso),
             Id::TearSeam => self.tear_chosen_seam()?,
             Id::EditTears => self.edit_tears()?,
             Id::TraceShape => self.trace_selected_shape()?,
@@ -1463,6 +1468,7 @@ impl eframe::App for Atelier {
             self.history_window(&ctx);
             self.camera_props_window(&ctx);
             self.pleats_window(&ctx);
+            self.mesh_select_window(&ctx);
             self.steam_window(&ctx);
             self.object_browser_window(&ctx);
         }

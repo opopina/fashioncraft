@@ -440,6 +440,8 @@ impl Atelier {
                 // So does measuring.
             } else if self.ik_interaction(&response, rect) {
                 // A hand or foot of the pose being edited is being dragged.
+            } else if self.mesh_select_interaction(&response, rect) {
+                // A select-mesh tool takes the clicks on the cloth.
             } else if self.graphic_3d_interaction(&response, rect) {
                 // A graphic waiting for its place takes the click on the cloth.
             } else if self.arrangement_point_interaction(&response, rect) {
@@ -617,6 +619,7 @@ impl Atelier {
             self.paint_arrangement_points(ui, rect);
             self.paint_selected_points_3d(ui, rect);
             self.paint_pins_3d(ui, rect);
+            self.paint_mesh_select(ui, rect);
             self.paint_trace_pen(ui, rect);
             self.paint_measure3d(ui, rect);
             self.paint_piece_names_3d(ui, rect);

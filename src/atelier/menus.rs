@@ -173,9 +173,9 @@ const GARMENT_3D: &[Item] = &[
     Run("Move in 3D", C::ToolMove),
     Run("Rotate in 3D", C::ToolRotate),
     Run("Grab cloth", C::ToolGrab),
-    Todo("Select mesh (brush)"),
-    Todo("Select mesh (box)"),
-    Todo("Select mesh (lasso)"),
+    Run("Select mesh (brush)", C::SelectMeshBrush),
+    Run("Select mesh (box)", C::SelectMeshBox),
+    Run("Select mesh (lasso)", C::SelectMeshLasso),
     S,
     Sub(
         "Pins",
@@ -521,6 +521,15 @@ impl Atelier {
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::SelectAllSeams => self.authoring.selection.all_seams,
             C::Steam => self.authoring.steam.open,
+            C::SelectMeshBrush => {
+                self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Brush)
+            }
+            C::SelectMeshBox => {
+                self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Box)
+            }
+            C::SelectMeshLasso => {
+                self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Lasso)
+            }
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
@@ -724,7 +733,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 197, "{done} of {all}");
+        assert!(done >= 200, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

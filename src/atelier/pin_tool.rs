@@ -401,7 +401,7 @@ impl Atelier {
     }
 
     /// Whether each compiled panel is on screen (not hidden, not isolated away) and not frozen.
-    fn pinnable_panels(&self) -> Vec<bool> {
+    pub(super) fn pinnable_panels(&self) -> Vec<bool> {
         let frozen: BTreeSet<&str> = self
             .project
             .template
@@ -423,7 +423,7 @@ impl Atelier {
 
     /// Vertices of `panels` (by index, `true` = included) that project into `region` and are
     /// not hidden behind the avatar or other cloth, with their screen positions.
-    fn visible_vertices(
+    pub(super) fn visible_vertices(
         &mut self,
         rect: egui::Rect,
         panels: &[bool],
@@ -464,7 +464,7 @@ impl Atelier {
             .collect()
     }
 
-    fn visible_vertices_in(
+    pub(super) fn visible_vertices_in(
         &mut self,
         rect: egui::Rect,
         region: &super::selection::Region,
@@ -579,7 +579,7 @@ impl Atelier {
     }
 
     /// Pin (`hold`) or release the given cloth vertices as one validated undo step.
-    fn apply_pins(&mut self, vertices: &[usize], hold: bool) {
+    pub(super) fn apply_pins(&mut self, vertices: &[usize], hold: bool) {
         let ui_lang = self.prefs.language;
         if self.pending {
             self.status = i18n::tr(

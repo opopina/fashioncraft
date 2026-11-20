@@ -195,6 +195,9 @@ pub enum CommandId {
     EditTears,
     TraceShape,
     CutAndExtend,
+    SelectMeshBrush,
+    SelectMeshBox,
+    SelectMeshLasso,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1936,6 +1939,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        SelectMeshBrush,
+        "garment.select_mesh_brush",
+        "Select mesh with a brush",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        SelectMeshBox,
+        "garment.select_mesh_box",
+        "Select mesh with a box",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        SelectMeshLasso,
+        "garment.select_mesh_lasso",
+        "Select mesh with a lasso",
+        Pattern,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
     entry!(

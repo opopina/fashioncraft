@@ -137,3 +137,70 @@ fn a_pleated_piece_draws_in_across_its_pleats() {
     let width = side(0.).distance(side(0.6));
     assert!(width < 0.57, "pleated width {width} m, flat 0.6 m");
 }
+
+#[test]
+fn pleat_sewing_tacks_untacked_pleats_like_the_pleats_tool_does() {
+    let (base, id, edge) = panel();
+    for (kind, count) in [(PleatKind::Knife, 3), (PleatKind::Box, 2)] {
+        let tacked = authoring::apply(&base, pleats(&id, &edge, count, 0.02, kind))
+            .unwrap()
+            .template;
+        let open = authoring::apply(
+            &base,
+            Command::AddPleats {
+                panel: id.clone(),
+                edge: edge.clone(),
+                count,
+                depth_m: 0.02,
+                kind,
+                tack: false,
+            },
+        )
+        .unwrap()
+        .template;
+        assert!(open.tacks.is_empty());
+        let group = open.panels[0].polygon.as_ref().unwrap().lines[0]
+            .group
+            .clone()
+            .unwrap();
+        let sewn = authoring::apply(
+            &open,
+            Command::TackPleats {
+                panel: id.clone(),
+                group: group.clone(),
+            },
+        )
+        .unwrap()
+        .template;
+        assert_eq!(sewn.tacks.len(), tacked.tacks.len(), "{kind:?}");
+        for (a, b) in sewn.tacks.iter().zip(&tacked.tacks) {
+            let close = |p: DVec2, q: DVec2| p.distance(q) < 1e-6;
+            assert!(
+                close(a.a.uv, b.a.uv) && close(a.b.uv, b.b.uv),
+                "{kind:?}: {a:?} vs {b:?}"
+            );
+        }
+        // Sewing them again adds nothing.
+        assert!(
+            authoring::apply(
+                &sewn,
+                Command::TackPleats {
+                    panel: id.clone(),
+                    group
+                }
+            )
+            .is_err()
+        );
+    }
+    // Lines that are not a set of pleats are refused.
+    assert!(
+        authoring::apply(
+            &base,
+            Command::TackPleats {
+                panel: id.clone(),
+                group: "nothing".into()
+            }
+        )
+        .is_err()
+    );
+}

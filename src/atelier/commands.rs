@@ -187,6 +187,7 @@ pub enum CommandId {
     PressureMap,
     Reset2dArrangement,
     GraphicOn3dGarment,
+    PleatSewing,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1853,6 +1854,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         GraphicOn3dGarment,
         "graphics.click_on_cloth",
         "Graphic by clicking the cloth: choose a PNG, then click where it goes",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        PleatSewing,
+        "pattern.pleat_sewing",
+        "Pleat sewing: tack the selected set of pleats shut at their segment",
         Pattern,
         None,
         TemplateHistory,

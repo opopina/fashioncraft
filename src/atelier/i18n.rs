@@ -2307,6 +2307,13 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Pleat sewing: tack the selected set of pleats shut at their segment" => {
+            "Coser pliegues: cerrar con puntadas los pliegues seleccionados en su segmento"
+        }
+        "Select a line of a set of pleats on the board first" => {
+            "Primero selecciona en el tablero una línea de un juego de pliegues"
+        }
+        "Pleats tacked shut at their segment" => "Pliegues cerrados con puntadas en su segmento",
         "Click on the cloth" => "Haz clic sobre la tela",
         "Pieces laid out as on the board, in front of the avatar · Reset 3D arrangement puts them back" => {
             "Piezas colocadas como en el tablero, delante del avatar · Restablecer colocación 3D las devuelve"

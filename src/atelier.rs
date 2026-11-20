@@ -689,6 +689,24 @@ impl Atelier {
             }
             Id::Reset2dArrangement => self.reset_2d_arrangement(),
             Id::GraphicOn3dGarment => self.start_graphic_3d(),
+            Id::PleatSewing => {
+                let (panel, line) = self
+                    .selected_internal_line()
+                    .ok_or("Select a line of a set of pleats on the board first")?;
+                let group = self
+                    .project
+                    .template
+                    .panels
+                    .iter()
+                    .find(|p| p.id == panel)
+                    .and_then(|p| p.polygon.as_ref())
+                    .and_then(|poly| poly.lines.iter().find(|l| l.id == line))
+                    .and_then(|l| l.group.clone())
+                    .ok_or("Select a line of a set of pleats on the board first")?;
+                if self.edit(fashioncraft::authoring::Command::TackPleats { panel, group }) {
+                    self.status = "Pleats tacked shut at their segment".into();
+                }
+            }
             Id::FoldArrangement => {
                 let (panel, line) = self
                     .selected_internal_line()

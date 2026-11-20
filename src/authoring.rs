@@ -479,6 +479,14 @@ pub enum Command {
         kind: crate::garment::pleats::PleatKind,
         tack: bool,
     },
+    /// Close the pleats of internal-line group `group` of `panel` with tacks where they leave
+    /// their segment, as Pleats does with its tack option: the lines are read in order across
+    /// the piece with their fold angles, an outer and an inner crease per knife pleat, outer,
+    /// inner, inner, outer per box pleat. Pleats tacked already are left alone. One undo step.
+    TackPleats {
+        panel: String,
+        group: String,
+    },
     /// Remove contour points that start a boundary shorter than `overlap_m`, and internal line
     /// anchors closer than that, on the given panels; with `straight_degrees`, also contour
     /// points between two straight boundaries turning less than that. Boundaries used by
@@ -677,6 +685,7 @@ impl Command {
             Self::OffsetAsLines { .. } => "Offset as lines",
             Self::PerpendicularLine { .. } => "Perpendicular line",
             Self::AddPleats { .. } => "Pleats",
+            Self::TackPleats { .. } => "Pleat sewing",
             Self::CleanUpPoints { .. } => "Clean up points",
             Self::GroupLines { .. } => "Group lines",
             Self::UngroupLines { .. } => "Ungroup lines",
@@ -2952,6 +2961,90 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                         b: point(t),
                     });
                 }
+            }
+            selected = Some(panel);
+        }
+        Command::TackPleats { panel, group } => {
+            use crate::garment::template::{Tack, TackPoint};
+            /// How far inside the segment a pleat's tack holds the fabric, metres.
+            const TACK_INSET_M: f64 = 0.003;
+            let index = panel_index(&template, &panel)?;
+            let polygon = template.panels[index]
+                .polygon
+                .as_ref()
+                .ok_or("Pleats require a drafted panel")?;
+            let not_pleats = || "Select a line of a set of pleats".to_string();
+            // Each crease: where it starts (by its segment), which way it runs, its fold angle.
+            let mut creases: Vec<(DVec2, DVec2, f64)> = vec![];
+            for line in polygon
+                .lines
+                .iter()
+                .filter(|l| l.group.as_ref() == Some(&group))
+            {
+                let [start, end] = match line.points.as_slice() {
+                    [a, b] => [*a, *b],
+                    _ => return Err(not_pleats()),
+                };
+                let angle = template
+                    .line_folds
+                    .iter()
+                    .find(|f| f.panel == panel && f.line == line.id)
+                    .ok_or_else(not_pleats)?
+                    .angle;
+                creases.push((start, (end - start).normalize_or_zero(), angle));
+            }
+            if creases.len() < 2 {
+                return Err(not_pleats());
+            }
+            // In the order Pleats laid them: along the segment from its start.
+            let gap = (crate::garment::lines2d::OUTLINE_GAP_M, TACK_INSET_M);
+            let inside = |(p, inward, _): (DVec2, DVec2, f64)| p + inward * (gap.1 - gap.0);
+            let mut pairs: Vec<[DVec2; 2]> = vec![];
+            let mut i = 0;
+            while i < creases.len() {
+                let a = |k: usize| creases.get(k).map(|c| c.2);
+                if a(i + 3).is_some()
+                    && a(i) == a(i + 3)
+                    && a(i + 1) == a(i + 2)
+                    && a(i) != a(i + 1)
+                {
+                    pairs.push([inside(creases[i]), inside(creases[i + 3])]);
+                    i += 4;
+                } else if a(i + 1).is_some_and(|b| Some(b) != a(i)) {
+                    let (start, next) = (creases[i].0, creases[i + 1].0);
+                    let landing = start + (next - start) * 2.;
+                    pairs.push([inside(creases[i]), inside((landing, creases[i].1, 0.))]);
+                    i += 2;
+                } else {
+                    return Err("Cannot read these lines as knife or box pleats".into());
+                }
+            }
+            let tacked = |p: DVec2, q: DVec2| {
+                template.tacks.iter().any(|t| {
+                    t.a.panel == panel
+                        && t.b.panel == panel
+                        && ((t.a.uv.distance(p) < 1e-3 && t.b.uv.distance(q) < 1e-3)
+                            || (t.a.uv.distance(q) < 1e-3 && t.b.uv.distance(p) < 1e-3))
+                })
+            };
+            let fresh: Vec<[DVec2; 2]> =
+                pairs.into_iter().filter(|[p, q]| !tacked(*p, *q)).collect();
+            if fresh.is_empty() {
+                return Err("Those pleats are tacked already".into());
+            }
+            for [p, q] in fresh {
+                let id = unused_id("pleat_tack", template.tacks.iter().map(|t| t.id.clone()));
+                template.tacks.push(Tack {
+                    id,
+                    a: TackPoint {
+                        panel: panel.clone(),
+                        uv: p,
+                    },
+                    b: TackPoint {
+                        panel: panel.clone(),
+                        uv: q,
+                    },
+                });
             }
             selected = Some(panel);
         }

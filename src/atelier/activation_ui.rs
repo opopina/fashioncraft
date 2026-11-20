@@ -448,6 +448,55 @@ impl Atelier {
         .into();
     }
 
+    /// Superimpose (side): the selected piece laid flat beside the piece it is sewn to (its first
+    /// seam with another piece), the two seam edges meeting, on the side away from that piece.
+    /// Only the draped positions change; refused while a step runs, over pins, or if the cloth
+    /// would start intersecting.
+    pub(super) fn superimpose_side(&mut self) -> Result<(), String> {
+        let ui_lang = self.prefs.language;
+        if self.pending {
+            return Err("Wait for the current step to finish, then try again".into());
+        }
+        let ids = self.selected_panels();
+        let [panel] = ids.as_slice() else {
+            return Err("Select one piece sewn to another".into());
+        };
+        let garment = self.scene.garment.clone();
+        let placed = transfer::superimpose_side(
+            &self.project.template,
+            &garment,
+            &self.scene.state.x,
+            panel,
+            self.settings.contact.radius * 2. + 0.002,
+        )?;
+        if placed.iter().any(|(v, _)| garment.mesh.pins[*v].is_some()) {
+            return Err(i18n::tr(
+                ui_lang,
+                "Release the pins of that piece before superimposing it",
+            )
+            .into());
+        }
+        self.playing = false;
+        let mut candidate = self.scene.state.clone();
+        for (v, p) in placed {
+            candidate.x[v] = p;
+            candidate.v[v] = DVec3::ZERO;
+        }
+        fashioncraft::vbd::VbdSolver::new(
+            garment.clone(),
+            Some(&self.scene.collider.surface),
+            &candidate,
+        )
+        .map_err(|e| format!("Not laid beside: the cloth would start intersecting ({e})"))?;
+        self.scene.state = candidate;
+        self.issue.invalidate();
+        self.generation += 1;
+        self.metrics = None;
+        self.grab = None;
+        self.status = "Piece laid beside the piece it is sewn to · simulate to settle".into();
+        Ok(())
+    }
+
     /// The internal line selected on the board, as (piece, line).
     pub(super) fn selected_internal_line(&self) -> Option<(String, String)> {
         let edge = self.authoring.edge.as_ref()?;

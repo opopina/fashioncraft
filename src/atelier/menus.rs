@@ -166,7 +166,7 @@ const GARMENT_3D: &[Item] = &[
             S,
             Run("Superimpose over", C::SuperimposeOver),
             Run("Superimpose under", C::SuperimposeUnder),
-            Todo("Superimpose side"),
+            Run("Superimpose side", C::SuperimposeSide),
         ],
     ),
     S,
@@ -336,7 +336,7 @@ const ANIMATION: &[Item] = &[
 ];
 
 const RENDER: &[Item] = &[
-    Todo("High-quality 3D view"),
+    Run("High-quality 3D view", C::HighQualityView),
     Run("Technical view", C::TechnicalView),
 ];
 
@@ -521,6 +521,7 @@ impl Atelier {
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::SelectAllSeams => self.authoring.selection.all_seams,
             C::Steam => self.authoring.steam.open,
+            C::HighQualityView => display.high_quality,
             C::SelectMeshBrush => {
                 self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Brush)
             }
@@ -733,7 +734,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 202, "{done} of {all}");
+        assert!(done >= 204, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -208,6 +208,8 @@ fn aliases(id: CommandId) -> &'static str {
         SelectMeshLasso => "select mesh lasso points cloth freeze",
         ConvertToQuads => "convert quads quad mesh grid squares",
         ConvertToTriangles => "convert triangles triangle mesh",
+        HighQualityView => "high quality view render supersample smooth antialias",
+        SuperimposeSide => "superimpose side beside lay flat seam",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",
@@ -973,7 +975,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             commands::REGISTRY[c.palette.selected].id,
-            CommandId::PressureMap
+            CommandId::HighQualityView
         );
         h.key(
             "palette.query",

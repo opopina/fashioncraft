@@ -696,6 +696,16 @@ impl Atelier {
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
+            Id::SuperimposeSide => self.superimpose_side()?,
+            Id::HighQualityView => {
+                let display = &mut self.prefs.garment_display;
+                display.high_quality = !display.high_quality;
+                self.status = if display.high_quality {
+                    "High-quality 3D view: drawn at twice the resolution".into()
+                } else {
+                    "Standard 3D view".into()
+                };
+            }
             Id::ConvertToQuads | Id::ConvertToTriangles => {
                 let panels = self.selected_panels();
                 let quads = id == Id::ConvertToQuads;

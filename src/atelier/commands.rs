@@ -200,6 +200,8 @@ pub enum CommandId {
     SelectMeshLasso,
     ConvertToQuads,
     ConvertToTriangles,
+    HighQualityView,
+    SuperimposeSide,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1986,6 +1988,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        HighQualityView,
+        "view.high_quality",
+        "High-quality 3D view: draw at twice the resolution",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        SuperimposeSide,
+        "garment.superimpose_side",
+        "Superimpose side: lay the selected piece flat beside the piece it is sewn to",
+        Pattern,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
     entry!(

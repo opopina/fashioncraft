@@ -271,3 +271,107 @@ pub fn lay_out_as_board(
         })
         .collect()
 }
+
+/// Superimpose (side): a piece laid flat beside the piece it is sewn to, the two seam edges
+/// meeting. Its flat pattern (`uv`, its vertices' material coordinates) is placed in the
+/// partner's plane (`normal`) with its seam running from material point `ua` to `ub` along the
+/// partner's seam from `a` to `b`, on the side away from the partner (`partner_centre`), `gap`
+/// clear of it. Returns the vertices' positions, in order.
+pub fn lay_beside(
+    uv: &[glam::DVec2],
+    [ua, ub]: [glam::DVec2; 2],
+    [a, b]: [DVec3; 2],
+    normal: DVec3,
+    partner_centre: DVec3,
+    gap: f64,
+) -> Result<Vec<DVec3>, String> {
+    let along = (b - a).normalize_or_zero();
+    let normal = (normal - along * normal.dot(along)).normalize_or_zero();
+    let seam = (ub - ua).normalize_or_zero();
+    if along == DVec3::ZERO || normal == DVec3::ZERO || seam == glam::DVec2::ZERO {
+        return Err("The seam is too short to lay a piece beside it".into());
+    }
+    // Across the seam in the partner's plane, toward the side away from the partner.
+    let mut across = normal.cross(along);
+    if across.dot(partner_centre - a) > 0. {
+        across = -across;
+    }
+    // Across the seam in the pattern, toward the moved piece's own material.
+    let centre = uv.iter().copied().sum::<glam::DVec2>() / uv.len().max(1) as f64;
+    let mut side = seam.perp();
+    if side.dot(centre - ua) < 0. {
+        side = -side;
+    }
+    Ok(uv
+        .iter()
+        .map(|p| {
+            let d = *p - ua;
+            a + along * d.dot(seam) + across * (d.dot(side) + gap)
+        })
+        .collect())
+}
+
+/// Superimpose (side) for piece `panel` of `template` as compiled in `garment`, its cloth at
+/// `x`: laid flat beside the piece its first seam with another piece joins it to, the seam
+/// edges meeting, `gap` apart. Returns the piece's vertices and their positions.
+pub fn superimpose_side(
+    template: &super::GarmentTemplate,
+    garment: &super::CompiledGarment,
+    x: &[DVec3],
+    panel: &str,
+    gap: f64,
+) -> Result<Vec<(usize, DVec3)>, String> {
+    let range = |id: &str| garment.panels.iter().find(|r| r.id == id);
+    let moved = range(panel).ok_or("The piece is not in the garment")?;
+    let spec = template
+        .seams
+        .iter()
+        .find(|s| {
+            s.references().any(|r| r.panel == panel) && s.references().any(|r| r.panel != panel)
+        })
+        .ok_or("Superimpose side works on a piece sewn to another piece")?;
+    let partner_id = spec
+        .references()
+        .find(|r| r.panel != panel)
+        .map(|r| r.panel.clone())
+        .ok_or("Superimpose side works on a piece sewn to another piece")?;
+    let partner = range(&partner_id).ok_or("The other piece is not in the garment")?;
+    let seam = garment
+        .seams
+        .iter()
+        .find(|s| s.id == spec.id)
+        .ok_or("That seam is not sewn")?;
+    let (first, last) = (
+        seam.guides.first().ok_or("That seam is not sewn")?,
+        seam.guides.last().ok_or("That seam is not sewn")?,
+    );
+    let at = |side: &[(usize, f64); 2]| side.iter().map(|(v, w)| x[*v] * *w).sum::<DVec3>();
+    let uv_at = |side: &[(usize, f64); 2]| {
+        side.iter()
+            .map(|(v, w)| garment.mesh.uv[*v] * *w)
+            .sum::<glam::DVec2>()
+    };
+    let (k_moved, k_partner) = if moved.vertices.contains(&first[0][0].0) {
+        (0, 1)
+    } else {
+        (1, 0)
+    };
+    let normal = garment.mesh.triangles[partner.triangles.clone()]
+        .iter()
+        .map(|t| {
+            let [p, q, r] = t.vertices.map(|i| x[i]);
+            (q - p).cross(r - p)
+        })
+        .sum::<DVec3>();
+    let centre =
+        x[partner.vertices.clone()].iter().sum::<DVec3>() / partner.vertices.len().max(1) as f64;
+    let placed = lay_beside(
+        &garment.mesh.uv[moved.vertices.clone()],
+        [uv_at(&first[k_moved]), uv_at(&last[k_moved])],
+        [at(&first[k_partner]), at(&last[k_partner])],
+        normal,
+        centre,
+        gap,
+    )?;
+    Ok(moved.vertices.clone().zip(placed).collect())
+}

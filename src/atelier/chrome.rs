@@ -540,8 +540,10 @@ impl Atelier {
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
+        // High quality: twice the pixels each way, averaged down when shown.
+        let supersample = if display.high_quality { 2. } else { 1. };
         let texture = self.viewport.draw_scene(
-            [size.x as u32, size.y as u32],
+            [(size.x * supersample) as u32, (size.y * supersample) as u32],
             &self.camera,
             DrawModel {
                 marked_faces: if self.clean_view {

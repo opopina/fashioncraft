@@ -2323,6 +2323,23 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Meshed as quads along the grain" => "Mallado en cuadrados a lo largo del hilo",
         "Meshed as triangles" => "Mallado en triángulos",
+        "High-quality 3D view: draw at twice the resolution" => {
+            "Vista 3D de alta calidad: dibujar al doble de resolución"
+        }
+        "High-quality 3D view: drawn at twice the resolution" => {
+            "Vista 3D de alta calidad: dibujada al doble de resolución"
+        }
+        "Standard 3D view" => "Vista 3D estándar",
+        "Superimpose side: lay the selected piece flat beside the piece it is sewn to" => {
+            "Superponer al lado: colocar la pieza seleccionada plana junto a la pieza a la que está cosida"
+        }
+        "Select one piece sewn to another" => "Selecciona una pieza cosida a otra",
+        "Superimpose side works on a piece sewn to another piece" => {
+            "Superponer al lado funciona con una pieza cosida a otra"
+        }
+        "Piece laid beside the piece it is sewn to · simulate to settle" => {
+            "Pieza colocada junto a la pieza a la que está cosida · simula para asentar"
+        }
         "Select mesh with a box" => "Seleccionar malla con recuadro",
         "Select mesh with a lasso" => "Seleccionar malla con lazo",
         "Select cloth in the 3D view · Shift adds, Cmd/Ctrl takes away · Esc ends" => {

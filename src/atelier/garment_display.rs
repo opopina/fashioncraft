@@ -88,6 +88,9 @@ pub(super) struct GarmentDisplay {
     pub(super) internal_lines: bool,
     /// Label each piece with its name in the 3D view.
     pub(super) piece_names: bool,
+    /// High-quality 3D view: the scene drawn at twice the resolution and averaged down, for
+    /// smoother edges and fine wrinkles (four times the pixels to draw).
+    pub(super) high_quality: bool,
     /// Technical-flat rendering (Alt+0).
     pub(super) schematic: bool,
     pub(super) schematic_line_px: f32,
@@ -123,6 +126,7 @@ impl Default for GarmentDisplay {
             style: GarmentStyle::TexturedThick,
             internal_lines: true,
             piece_names: false,
+            high_quality: false,
             schematic: false,
             schematic_line_px: 1.5,
             schematic_line_color: [0x1E, 0x1E, 0x22],

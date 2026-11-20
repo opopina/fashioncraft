@@ -300,3 +300,43 @@ fn internal_lines_group_and_ungroup() {
         .is_err()
     );
 }
+
+/// An outline with no curves at all, as a DXF brings its curves (short straight steps), is
+/// read as a sampled curve: its gentle points go and the spans are refitted as curves, while
+/// its sharp corners stay.
+#[test]
+fn a_sampled_outline_from_cad_becomes_a_few_curves() {
+    // A half disc: a 48-step arc closed by its straight diameter (two sharp corners).
+    let mut points: Vec<DVec2> = (0..=48)
+        .map(|k| {
+            let a = std::f64::consts::PI * k as f64 / 48.;
+            DVec2::new(0.3 + 0.2 * a.cos(), 0.3 - 0.2 * a.sin())
+        })
+        .collect();
+    points.dedup();
+    let t = piece(&points, |_| false);
+    assert!(polygon(&t).curves.is_empty());
+    let after = optimize(&t, 0.1).unwrap();
+    let b = polygon(&after);
+    assert!(b.points.len() <= 10, "{}", b.points.len());
+    assert!(!b.curves.is_empty());
+    // The two ends of the diameter are corners and stay.
+    let a = polygon(&t);
+    let top = a
+        .points
+        .iter()
+        .map(|p| p.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let shift =
+        after.panels[0].layout_2d.unwrap_or_default() - t.panels[0].layout_2d.unwrap_or_default();
+    for corner in a.points.iter().filter(|p| (p.y - top).abs() < 1e-9) {
+        assert!(
+            b.points
+                .iter()
+                .any(|p| (*p + shift).distance(*corner) < 1e-9),
+            "corner {corner} kept"
+        );
+    }
+    let worst = board_deviation(&t, &after).max(board_deviation(&after, &t));
+    assert!(worst < 5e-4, "within 0.5 mm: {worst}");
+}

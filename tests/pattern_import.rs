@@ -178,3 +178,27 @@ fn source_requires_explicit_units_and_rejects_invalid_text() {
     std::fs::write(&p, [0xff, 0xfe]).unwrap();
     assert!(Source::load(&p).is_err());
 }
+
+/// R12 files usually declare the Windows-1252 code page: their accented labels are not UTF-8.
+#[test]
+fn a_windows_1252_dxf_loads_with_its_accented_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("molde.dxf");
+    let mut bytes = document(&format!(
+        "0\nTEXT\n8\nTEXTO\n10\n0\n20\n0\n40\n3\n1\nPu\u{FFFF}o doblado\n{}",
+        rectangle(0., 0., 100., 50.)
+    ))
+    .into_bytes();
+    // "Puño" in Windows-1252: the ñ is the single byte 0xF1, invalid on its own in UTF-8.
+    let marker = "\u{FFFF}".as_bytes().to_vec();
+    let at = bytes
+        .windows(marker.len())
+        .position(|w| w == marker.as_slice())
+        .unwrap();
+    bytes.splice(at..at + marker.len(), [0xF1]);
+    std::fs::write(&path, &bytes).unwrap();
+    let source = Source::load(&path).unwrap();
+    let drawing = source.inspect(Options::default()).unwrap();
+    assert_eq!(drawing.paths.len(), 1);
+    assert_eq!(pattern_import::windows_1252(&[0x80, 0xF1, b'a']), "€ña");
+}

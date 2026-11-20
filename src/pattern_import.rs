@@ -25,16 +25,22 @@ pub struct Source {
     text: String,
 }
 impl Source {
+    /// Reads a DXF as UTF-8 or, when it is not, as Windows-1252: the code page R12 files
+    /// usually declare (`$DWGCODEPAGE ANSI_1252`), with accented labels such as "Puño".
     pub fn load(path: &Path) -> Result<Self, String> {
-        let mut text = String::new();
+        let mut bytes = Vec::new();
         std::fs::File::open(path)
             .map_err(|e| e.to_string())?
             .take(MAX_BYTES + 1)
-            .read_to_string(&mut text)
+            .read_to_end(&mut bytes)
             .map_err(|e| e.to_string())?;
-        if text.len() as u64 > MAX_BYTES {
+        if bytes.len() as u64 > MAX_BYTES {
             return Err("DXF exceeds the 16 MiB input limit".into());
         }
+        if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
+            return Err("This DXF is saved as UTF-16; save it as ASCII or UTF-8 text".into());
+        }
+        let text = String::from_utf8(bytes).unwrap_or_else(|e| windows_1252(e.as_bytes()));
         Ok(Self {
             path: path.to_owned(),
             text,
@@ -43,6 +49,23 @@ impl Source {
     pub fn inspect(&self, options: Options) -> Result<Drawing, String> {
         dxf_import::read_ascii(&self.text, options)
     }
+}
+
+/// Text in the Windows-1252 code page: Latin-1, but for the printable characters it puts at
+/// 0x80–0x9F; the five bytes it leaves undefined become U+FFFD.
+pub fn windows_1252(bytes: &[u8]) -> String {
+    const HIGH: [char; 32] = [
+        '€', '\u{FFFD}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{FFFD}', 'Ž',
+        '\u{FFFD}', '\u{FFFD}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ',
+        '\u{FFFD}', 'ž', 'Ÿ',
+    ];
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x80..=0x9F => HIGH[(b - 0x80) as usize],
+            _ => b as char,
+        })
+        .collect()
 }
 
 /// Cheap eligibility, not full contour validation. Apply validates the whole garment.

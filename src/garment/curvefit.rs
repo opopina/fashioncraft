@@ -180,15 +180,19 @@ fn tangents(polygon: &PolygonPattern) -> Vec<(DVec2, DVec2)> {
 }
 
 /// Indices of the smooth points that may be removed: on a curve, turning gently, and not
-/// ending a boundary that `keep` protects.
+/// ending a boundary that `keep` protects. An outline with no curves at all is read as a curve
+/// drawn as short straight steps (as CAD files bring them, a DXF's polylines): there every
+/// gently turning point is a sample of the curve.
 fn removable(polygon: &PolygonPattern, keep: &impl Fn(&str) -> bool) -> Vec<usize> {
     let n = polygon.points.len();
     let dirs = tangents(polygon);
+    let sampled = polygon.curves.is_empty();
     (0..n)
         .filter(|&k| {
             let previous = (k + n - 1) % n;
             let (incoming, outgoing) = dirs[k];
-            (polygon.curves.contains_key(&polygon.edges[k])
+            (sampled
+                || polygon.curves.contains_key(&polygon.edges[k])
                 || polygon.curves.contains_key(&polygon.edges[previous]))
                 && incoming.angle_to(outgoing).abs().to_degrees() < SMOOTH_DEGREES
                 && !keep(&polygon.edges[k])

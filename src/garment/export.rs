@@ -509,7 +509,11 @@ pub fn grain_guides_obj(
                     panel: panel.id.clone(),
                     points: vec![center + direction * span[0], center + direction * span[1]],
                 };
-                let points = garment.embed_path(&path)?;
+                // Shrinking and steam rescale the rest shapes the path is located in; a guide
+                // that cannot be followed through them is left out rather than failing the export.
+                let Ok(points) = garment.embed_path(&path) else {
+                    continue;
+                };
                 writeln!(out, "g {}_{name}", panel.id).unwrap();
                 for p in &points {
                     let p = p.evaluate(&state.x)?;

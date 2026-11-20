@@ -340,6 +340,9 @@ pub struct GarmentTemplate {
     /// sewn, from the seam's start.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_zippers: BTreeMap<String, SeamZipper>,
+    /// Steam brushed onto the pieces: each stamp shrinks or stretches the cloth under it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steam: Vec<super::steam::SteamStamp>,
     /// Seams switched off, by id: kept in the document but not sewn, with their folds and
     /// zippers (Sewing › Activate all seams turns them back on).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -422,6 +425,8 @@ pub enum LineKind {
     Elastic,
     /// Keeps the line from stretching (`ratio` 100).
     Tape,
+    /// Draws the line in a little, as a tight seam does, so the cloth beside it puckers.
+    Puckering,
 }
 
 impl LineSpring {
@@ -441,6 +446,17 @@ impl LineSpring {
             kind: LineKind::Tape,
             ratio: 100.,
             strength: 2000.,
+        }
+    }
+    /// Puckering: the line drawn in to 92 % with a moderate pull, so the cloth beside it
+    /// ripples in small puckers rather than gathering.
+    pub fn puckering(panel: &str, line: &str) -> Self {
+        Self {
+            panel: panel.into(),
+            line: line.into(),
+            kind: LineKind::Puckering,
+            ratio: 92.,
+            strength: 40.,
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -768,6 +784,15 @@ impl GarmentTemplate {
             if !self.panels.iter().any(|p| &p.id == id) {
                 return Err(format!("Flipped panel {id} is not in the template"));
             }
+        }
+        if self.steam.len() > super::steam::MAX_STAMPS {
+            return Err("Too much steam: remove some before adding more".into());
+        }
+        for stamp in &self.steam {
+            if !self.panels.iter().any(|p| p.id == stamp.panel) {
+                return Err(format!("Steam on unknown panel {}", stamp.panel));
+            }
+            stamp.validate()?;
         }
         for id in &self.inactive_seams {
             if !self.seams.iter().any(|s| &s.id == id) {
@@ -1395,6 +1420,9 @@ impl GarmentTemplate {
                 shrink(&mut out, &range, warp / 100., weft / 100.);
             }
         }
+        if !self.steam.is_empty() {
+            super::steam::apply(&mut out, &self.steam);
+        }
         if self.panel_pressure.values().any(|p| *p != 0.) {
             out.pressure = vec![0.; out.mesh.triangles.len()];
             for range in &out.panels {
@@ -1457,6 +1485,7 @@ impl GarmentTemplate {
             seam_folds: Default::default(),
             seam_zippers: Default::default(),
             inactive_seams: Default::default(),
+            steam: vec![],
             tacks: vec![],
             line_folds: vec![],
             line_springs: vec![],

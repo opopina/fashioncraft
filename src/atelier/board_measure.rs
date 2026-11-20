@@ -55,7 +55,7 @@ pub(super) fn contains(outline: &[DVec2], p: DVec2) -> bool {
 
 impl Atelier {
     /// The outer contour of piece `i` on the board, with curves flattened.
-    fn board_outline(&self, i: usize) -> Option<Vec<DVec2>> {
+    pub(super) fn board_outline(&self, i: usize) -> Option<Vec<DVec2>> {
         let poly = self.board_polygon(i)?;
         let origin = self.board_origin(i);
         let angle = self.board_angle(i);

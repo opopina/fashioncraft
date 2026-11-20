@@ -338,6 +338,17 @@ pub enum Command {
     RemoveSeam {
         seam: String,
     },
+    /// Brush steam onto the cloth: the stamps of one stroke. One undo step.
+    AddSteam {
+        stamps: Vec<crate::garment::steam::SteamStamp>,
+    },
+    /// Take steam off: the stamps of a piece whose centres lie within a radius of any point of
+    /// an eraser stroke (piece, points, radius), every stamp of `panels`, or every stamp when
+    /// `panels` is empty and no eraser is given. One undo step.
+    RemoveSteam {
+        panels: Vec<String>,
+        eraser: Option<(String, Vec<DVec2>, f64)>,
+    },
     /// Delete several seams at once. One undo step.
     RemoveSeams {
         seams: Vec<String>,
@@ -666,6 +677,8 @@ impl Command {
             Self::SewChain { .. } => "Sew segments",
             Self::RemoveSeam { .. } => "Remove seam",
             Self::RemoveSeams { .. } => "Remove seams",
+            Self::AddSteam { .. } => "Steam",
+            Self::RemoveSteam { .. } => "Remove steam",
             Self::SetSeamsActive { active: true, .. } => "Activate seams",
             Self::SetSeamsActive { active: false, .. } => "Deactivate seams",
             Self::FabricAppearance { .. } => "Fabric appearance",
@@ -1559,6 +1572,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.seam_folds.retain(|id, _| seams.contains(id));
     template.seam_zippers.retain(|id, _| seams.contains(id));
     template.inactive_seams.retain(|id| seams.contains(id));
+    template.steam.retain(|s| panels.contains(&s.panel));
 }
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
@@ -4633,6 +4647,30 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             }
             template.seams.retain(|s| s.id != seam);
         }
+        Command::AddSteam { stamps } => {
+            if stamps.is_empty() {
+                return Err("No steam to add".into());
+            }
+            for stamp in &stamps {
+                panel_index(&template, &stamp.panel)?;
+                stamp.validate()?;
+            }
+            selected = stamps.first().map(|s| s.panel.clone());
+            template.steam.extend(stamps);
+        }
+        Command::RemoveSteam { panels, eraser } => {
+            let before = template.steam.len();
+            match &eraser {
+                Some((panel, points, radius)) => template.steam.retain(|s| {
+                    &s.panel != panel || points.iter().all(|p| s.center.distance(*p) > *radius)
+                }),
+                None if panels.is_empty() => template.steam.clear(),
+                None => template.steam.retain(|s| !panels.contains(&s.panel)),
+            }
+            if template.steam.len() == before {
+                return Err("There is no steam there".into());
+            }
+        }
         Command::RemoveSeams { seams } => {
             if seams.is_empty() {
                 return Err("No seams to delete".into());
@@ -4755,7 +4793,9 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                         *start_m += delta;
                         *end_m += delta;
                     }
-                    TrimKind::Zipper { path_m, .. } | TrimKind::Topstitch { path_m, .. } => {
+                    TrimKind::Zipper { path_m, .. }
+                    | TrimKind::Topstitch { path_m, .. }
+                    | TrimKind::Piping { path_m, .. } => {
                         for point in path_m {
                             *point += delta;
                         }

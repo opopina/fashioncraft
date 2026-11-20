@@ -135,6 +135,7 @@ impl Atelier {
                         TrimKind::Buttonhole { .. } => "Buttonhole",
                         TrimKind::Zipper { .. } => "Zipper",
                         TrimKind::Topstitch { .. } => "Topstitch",
+                        TrimKind::Piping { .. } => "Piping",
                     };
                     ui.label(format!("{kind} · {}", trim.id));
                     if ui.small_button(i18n::tr(ui_lang, "Remove")).clicked() {
@@ -361,6 +362,137 @@ impl Atelier {
             if tape { "Tape" } else { "Topstitching" },
             super::garment_display::counted(done, "segment", "segments"),
             seam.id,
+            if partial > 0 {
+                " · parts of segments were left out"
+            } else {
+                ""
+            }
+        );
+        Ok(())
+    }
+
+    /// Materials › Piping: a round cord along the selected segment, or along the first side of
+    /// the seam selected in the seam list or the 3D view.
+    pub(super) fn pipe_selected(&mut self) -> Result<(), String> {
+        /// Diameter of new piping, metres.
+        const PIPING_DIAMETER_M: f64 = 0.004;
+        /// How far inside the edge the cord's centre runs, metres.
+        const PIPING_INSET_M: f64 = 0.004;
+        let seam = self.authoring.selection.seam.clone().and_then(|id| {
+            self.project
+                .template
+                .seams
+                .iter()
+                .find(|s| s.id == id)
+                .cloned()
+        });
+        let targets: Vec<(String, String)> = if let Some(seam) = seam {
+            seam.side(false)
+                .filter(|r| r.range == [0., 1.])
+                .filter_map(|r| Some((r.panel.clone(), r.edge.clone()?)))
+                .collect()
+        } else {
+            let edge = self
+                .authoring
+                .edge
+                .clone()
+                .ok_or("Select a seam or a segment first")?;
+            vec![(
+                edge.panel,
+                edge.edge.ok_or("Select a seam or a segment first")?,
+            )]
+        };
+        if targets.is_empty() {
+            return Err(
+                "Piping goes along whole segments; split them at the seam's ends first".into(),
+            );
+        }
+        let mut done = 0;
+        for (panel, edge) in targets {
+            let Some(polygon) = self
+                .project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == panel)
+                .and_then(|p| p.polygon.clone())
+            else {
+                continue;
+            };
+            // The cord's centre line 4 mm inside the edge, like topstitching: closer, it can fall
+            // outside the meshed cloth where the mesh cuts a curved edge short.
+            let Some(path_m) =
+                lines2d::offset_lines(&polygon, &edge, 1, PIPING_INSET_M, false, false)
+                    .ok()
+                    .and_then(|mut lines| lines.pop())
+            else {
+                continue;
+            };
+            let trim = Trim {
+                id: self.new_trim_id(),
+                panel_id: panel,
+                kind: TrimKind::Piping {
+                    path_m,
+                    diameter_m: PIPING_DIAMETER_M,
+                },
+            };
+            done += usize::from(self.edit(Command::SetTrim { trim }));
+        }
+        if done == 0 {
+            return Err(self.status.clone());
+        }
+        self.status = format!(
+            "Piping along {} · it changes the look, not the drape",
+            super::garment_display::counted(done, "segment", "segments")
+        );
+        Ok(())
+    }
+
+    /// Materials › Puckering: puckering on both sides of the seam selected in the seam list or
+    /// the 3D view (seamline puckering), otherwise along the selected segment or internal line
+    /// (segment puckering).
+    pub(super) fn pucker_selected(&mut self) -> Result<(), String> {
+        use fashioncraft::garment::template::LineSpring;
+        let seam = self.authoring.selection.seam.clone().and_then(|id| {
+            self.project
+                .template
+                .seams
+                .iter()
+                .find(|s| s.id == id)
+                .cloned()
+        });
+        let (targets, partial, what) = if let Some(seam) = seam {
+            let (segments, partial) = Self::seam_segments(&seam);
+            (segments, partial, format!("seam {}", seam.id))
+        } else {
+            let edge = self
+                .authoring
+                .edge
+                .clone()
+                .ok_or("Select a seam, a segment or an internal line first")?;
+            let line = edge
+                .edge
+                .clone()
+                .ok_or("Select a seam, a segment or an internal line first")?;
+            (vec![(edge.panel, line.clone())], 0, line)
+        };
+        if targets.is_empty() {
+            return Err(
+                "This seam joins parts of segments only; split them at the seam's ends first"
+                    .into(),
+            );
+        }
+        let mut done = 0;
+        for (panel, line) in &targets {
+            done += usize::from(self.edit(Command::SetLineSpring {
+                panel: panel.clone(),
+                line: line.clone(),
+                spring: Some(LineSpring::puckering(panel, line)),
+            }));
+        }
+        self.status = format!(
+            "Puckering along {} of {what} · simulate to see it{}",
+            super::garment_display::counted(done, "segment", "segments"),
             if partial > 0 {
                 " · parts of segments were left out"
             } else {

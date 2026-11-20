@@ -2307,6 +2307,41 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Piping along the selected seam or segment" => {
+            "Vivo a lo largo de la costura o el segmento seleccionado"
+        }
+        "Select a seam or a segment first" => "Primero selecciona una costura o un segmento",
+        "Steam brush: shrink or stretch the cloth where you paint it" => {
+            "Pincel de vapor: encoge o estira la tela donde pintas"
+        }
+        "Brush steam onto a piece on the board, then simulate · right-drag pans" => {
+            "Pinta vapor sobre una pieza en el tablero y simula · arrastre derecho para desplazar"
+        }
+        "Size" => "Tamaño",
+        "Hardness" => "Dureza",
+        "Brush radius" => "Radio del pincel",
+        "Share of the brush at full strength; the rest eases off" => {
+            "Parte del pincel a plena fuerza; el resto se suaviza"
+        }
+        "Shrinkage" => "Encogimiento",
+        "Size the cloth takes under the steam: below 100 % it shrinks, above it stretches" => {
+            "Tamaño que toma la tela bajo el vapor: por debajo de 100 % encoge, por encima estira"
+        }
+        "Remove steam on the selected piece" => "Quitar el vapor de la pieza seleccionada",
+        "Remove all steam" => "Quitar todo el vapor",
+        "Steam removed · simulate to settle" => "Vapor quitado · simula para asentar",
+        "Steamed · simulate to see the cloth take its new size" => {
+            "Vapor aplicado · simula para ver la tela con su nuevo tamaño"
+        }
+        "Puckering along the selected seam or segment" => {
+            "Fruncido a lo largo de la costura o el segmento seleccionado"
+        }
+        "Draw this line in a little, as a tight seam does, so the cloth beside it puckers" => {
+            "Encoge un poco esta línea, como una costura tirante, para que la tela de al lado se frunza"
+        }
+        "Select a seam, a segment or an internal line first" => {
+            "Primero selecciona una costura, un segmento o una línea interna"
+        }
         "Pleat sewing: tack the selected set of pleats shut at their segment" => {
             "Coser pliegues: cerrar con puntadas los pliegues seleccionados en su segmento"
         }

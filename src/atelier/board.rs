@@ -454,6 +454,10 @@ impl Board {
             rect.center().y + (sin * d.x + cos * d.y) as f32,
         )
     }
+    /// Screen pixels per metre of material.
+    pub(super) fn pixels_per_metre(&self) -> f64 {
+        self.scale as f64
+    }
     pub(super) fn world(&self, rect: egui::Rect, p: egui::Pos2) -> DVec2 {
         let (sin, cos) = self.view_rotation.sin_cos();
         let v = DVec2::new(
@@ -1707,6 +1711,11 @@ impl Atelier {
                     .board
                     .zoom_at(rect, pos, (f64::from(zoom) * 0.002).exp());
             }
+        }
+        if self.steam_interaction(rect, &response) {
+            self.authoring.board.hover_snap = None;
+            self.paint_board(ui, rect, &response);
+            return;
         }
         if self.guide_interaction(ui, rect, &response) {
             self.authoring.board.hover_snap = None;
@@ -3466,6 +3475,7 @@ impl Atelier {
         if display.measurements {
             self.paint_measurements_2d(&painter, rect, response.hover_pos());
         }
+        self.paint_steam(&painter, rect, response.hover_pos());
         for [a, b] in &self.authoring.board.smart_lines {
             painter.extend(egui::Shape::dashed_line(
                 &[

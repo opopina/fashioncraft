@@ -33,6 +33,11 @@ pub enum TrimKind {
         rows: u8,
         spacing_m: f64,
     },
+    /// A round cord along a seam or an edge, drawn as a tube on the cloth's front face.
+    Piping {
+        path_m: Vec<DVec2>,
+        diameter_m: f64,
+    },
 }
 
 fn valid_id(id: &str) -> bool {
@@ -79,6 +84,7 @@ impl Trim {
                 rows,
                 spacing_m,
             } => path(path_m) && (1..=8).contains(rows) && size(*spacing_m),
+            TrimKind::Piping { path_m, diameter_m } => path(path_m) && size(*diameter_m),
         };
         if !valid {
             return Err("Invalid trim geometry or dimensions".into());
@@ -101,6 +107,9 @@ const HOLE_COLOR: [f32; 3] = [0.12, 0.11, 0.1];
 const THREAD_COLOR: [f32; 3] = [0.92, 0.84, 0.62];
 const TAPE_COLOR: [f32; 3] = [0.05, 0.05, 0.06];
 const TEETH_COLOR: [f32; 3] = [0.62, 0.62, 0.64];
+const PIPING_COLOR: [f32; 3] = [0.08, 0.1, 0.2];
+/// Sides of a piping tube's cross-section.
+const PIPING_SIDES: usize = 8;
 
 /// A point of the cloth at material coordinates `uv` of `panel`, now: where it is and the
 /// unit normal of the front face there (away from the faces' winding normal).
@@ -370,6 +379,37 @@ pub fn trim_triangles(
                         0.55 * width_m,
                         TEETH_COLOR,
                     );
+                }
+            }
+            TrimKind::Piping { path_m, diameter_m } => {
+                let r = 0.5 * diameter_m;
+                let points = walk(panel, path_m, 0.003);
+                // One ring of the tube around each sample, its centre a radius off the cloth.
+                let rings: Vec<Vec<DVec3>> = (0..points.len())
+                    .map(|k| {
+                        let (p, n) = points[k];
+                        let (prev, next) = (
+                            points[k.saturating_sub(1)].0,
+                            points[(k + 1).min(points.len() - 1)].0,
+                        );
+                        let t = (next - prev).normalize_or_zero();
+                        let u = (n - t * n.dot(t)).normalize_or_zero();
+                        let v = t.cross(u);
+                        let centre = p + n * (r + TRIM_LIFT_M);
+                        (0..PIPING_SIDES)
+                            .map(|i| {
+                                let a = std::f64::consts::TAU * i as f64 / PIPING_SIDES as f64;
+                                centre + (u * a.cos() + v * a.sin()) * r
+                            })
+                            .collect()
+                    })
+                    .collect();
+                for w in rings.windows(2) {
+                    for i in 0..PIPING_SIDES {
+                        let j = (i + 1) % PIPING_SIDES;
+                        tri([w[0][i], w[1][i], w[1][j]], PIPING_COLOR);
+                        tri([w[0][i], w[1][j], w[0][j]], PIPING_COLOR);
+                    }
                 }
             }
             TrimKind::Topstitch {

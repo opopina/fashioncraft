@@ -288,7 +288,7 @@ const MATERIALS: &[Item] = &[
         ],
     ),
     Run("Zipper", C::AddZipper),
-    Todo("Piping"),
+    Run("Piping", C::Piping),
     Run("Tape", C::AddTape),
     Sub(
         "Topstitch",
@@ -298,8 +298,8 @@ const MATERIALS: &[Item] = &[
             Run("Seamline topstitch", C::SeamlineTopstitch),
         ],
     ),
-    Todo("Puckering"),
-    Todo("Steam"),
+    Run("Puckering", C::Puckering),
+    Run("Steam", C::Steam),
     Run("Seam taping", C::SeamTaping),
 ];
 
@@ -514,6 +514,7 @@ impl Atelier {
             C::ChainFreeSewing => self.in_sewing_mode(true, true),
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::SelectAllSeams => self.authoring.selection.all_seams,
+            C::Steam => self.authoring.steam.open,
             C::ShowTrims => display.trims,
             C::ShowGraphics => display.graphics,
             C::HighResolution => (self.mesh_mm - HIGH_RESOLUTION_MM).abs() < 1e-9,
@@ -717,7 +718,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 188, "{done} of {all}");
+        assert!(done >= 191, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

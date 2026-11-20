@@ -58,6 +58,7 @@ fn trim_kind(kind: &TrimKind) -> &'static str {
         TrimKind::Buttonhole { .. } => "Buttonhole",
         TrimKind::Zipper { .. } => "Zipper",
         TrimKind::Topstitch { .. } => "Topstitch",
+        TrimKind::Piping { .. } => "Piping",
     }
 }
 

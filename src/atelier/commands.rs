@@ -188,6 +188,9 @@ pub enum CommandId {
     Reset2dArrangement,
     GraphicOn3dGarment,
     PleatSewing,
+    Puckering,
+    Steam,
+    Piping,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1863,6 +1866,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         PleatSewing,
         "pattern.pleat_sewing",
         "Pleat sewing: tack the selected set of pleats shut at their segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        Puckering,
+        "trims.puckering",
+        "Puckering along the selected seam or segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        Steam,
+        "trims.steam",
+        "Steam brush: shrink or stretch the cloth where you paint it",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        Piping,
+        "trims.piping",
+        "Piping along the selected seam or segment",
         Pattern,
         None,
         TemplateHistory,

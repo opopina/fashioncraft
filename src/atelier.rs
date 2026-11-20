@@ -124,6 +124,8 @@ mod sewing_ui;
 mod shapes_ui;
 #[path = "atelier/stage_settings.rs"]
 mod stage_settings;
+#[path = "atelier/steam_ui.rs"]
+mod steam_ui;
 #[path = "atelier/trace_pen.rs"]
 mod trace_pen;
 #[path = "atelier/trims_ui.rs"]
@@ -689,6 +691,9 @@ impl Atelier {
             }
             Id::Reset2dArrangement => self.reset_2d_arrangement(),
             Id::GraphicOn3dGarment => self.start_graphic_3d(),
+            Id::Puckering => self.pucker_selected()?,
+            Id::Steam => self.open_steam(),
+            Id::Piping => self.pipe_selected()?,
             Id::PleatSewing => {
                 let (panel, line) = self
                     .selected_internal_line()
@@ -1454,6 +1459,7 @@ impl eframe::App for Atelier {
             self.history_window(&ctx);
             self.camera_props_window(&ctx);
             self.pleats_window(&ctx);
+            self.steam_window(&ctx);
             self.object_browser_window(&ctx);
         }
         if changed {

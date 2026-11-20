@@ -64,6 +64,7 @@ pub(super) struct AuthoringUi {
     pub history_ui: super::history_ui::HistoryUi,
     pub camera_props: super::camera_props_ui::CameraPropsUi,
     pub pleats: super::pleats_ui::PleatsUi,
+    pub steam: super::steam_ui::SteamUi,
     /// Graphic on the 3D garment: the PNG chosen, waiting for a click on the cloth.
     pub graphic_3d: Option<std::path::PathBuf>,
     pub object_browser: super::object_browser_ui::ObjectBrowserUi,

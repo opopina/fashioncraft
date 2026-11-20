@@ -20,6 +20,7 @@ impl Atelier {
         ui.horizontal_wrapped(|ui| {
             let elastic = current.as_ref().is_some_and(|s| s.kind == LineKind::Elastic);
             let tape = current.as_ref().is_some_and(|s| s.kind == LineKind::Tape);
+            let pucker = current.as_ref().is_some_and(|s| s.kind == LineKind::Puckering);
             if ui
                 .selectable_label(elastic, i18n::tr(ui_lang, "Elastic"))
                 .on_hover_text(i18n::tr(ui_lang, "Gather this line to a share of its cut length, like an elastic band sewn along it"))
@@ -34,8 +35,18 @@ impl Atelier {
             {
                 wanted = Some((!tape).then(|| LineSpring::tape(panel, line)));
             }
+            if ui
+                .selectable_label(pucker, i18n::tr(ui_lang, "Puckering"))
+                .on_hover_text(i18n::tr(ui_lang, "Draw this line in a little, as a tight seam does, so the cloth beside it puckers"))
+                .clicked()
+            {
+                wanted = Some((!pucker).then(|| LineSpring::puckering(panel, line)));
+            }
         });
-        if let Some(spring) = current.as_ref().filter(|s| s.kind == LineKind::Elastic) {
+        if let Some(spring) = current
+            .as_ref()
+            .filter(|s| matches!(s.kind, LineKind::Elastic | LineKind::Puckering))
+        {
             let mut edited = spring.clone();
             let mut commit = false;
             ui.horizontal(|ui| {

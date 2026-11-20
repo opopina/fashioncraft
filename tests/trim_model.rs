@@ -596,7 +596,9 @@ fn repeat_trims_is_atomic_and_undoable_for_all_kinds() {
         let point = |kind: &TrimKind| match kind {
             TrimKind::Button { center_m, .. } => *center_m,
             TrimKind::Buttonhole { start_m, .. } => *start_m,
-            TrimKind::Zipper { path_m, .. } | TrimKind::Topstitch { path_m, .. } => path_m[0],
+            TrimKind::Zipper { path_m, .. }
+            | TrimKind::Topstitch { path_m, .. }
+            | TrimKind::Piping { path_m, .. } => path_m[0],
         };
         assert!((point(first) - point(&original.kind) - DVec2::new(0.03, 0.04)).length() < 1e-12);
         assert!((point(second) - point(&original.kind) - DVec2::new(0.06, 0.08)).length() < 1e-12);

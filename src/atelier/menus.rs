@@ -310,7 +310,7 @@ const MATERIALS: &[Item] = &[
 ];
 
 const AVATAR: &[Item] = &[
-    Todo("Delete avatar"),
+    Run("Delete avatar", C::DeleteAvatar),
     Run("Delete scene and props", C::ClearSceneObjects),
     S,
     Sub(
@@ -734,7 +734,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 204, "{done} of {all}");
+        assert!(done >= 205, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

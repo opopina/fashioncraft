@@ -2334,6 +2334,16 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Superponer al lado: colocar la pieza seleccionada plana junto a la pieza a la que está cosida"
         }
         "Select one piece sewn to another" => "Selecciona una pieza cosida a otra",
+        "Delete the avatar: the garment hangs on its own" => {
+            "Borrar el avatar: la prenda queda sola"
+        }
+        "There is no avatar: import one first (File › Import)" => {
+            "No hay avatar: primero importa uno (Archivo › Importar)"
+        }
+        "There is no avatar to delete" => "No hay avatar que borrar",
+        "Avatar deleted · the cloth hangs on its own; import an avatar to bring one back" => {
+            "Avatar borrado · la tela queda sola; importa un avatar para recuperarlo"
+        }
         "Superimpose side works on a piece sewn to another piece" => {
             "Superponer al lado funciona con una pieza cosida a otra"
         }

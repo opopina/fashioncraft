@@ -1104,7 +1104,10 @@ impl Atelier {
     /// front and back faces overlap without darkening. Presentation only.
     fn paint_silhouette(&self, painter: &egui::Painter, rect: egui::Rect) {
         let surface = &self.scene.collider.surface;
-        if surface.vertices.is_empty() || u32::try_from(surface.vertices.len()).is_err() {
+        if self.project.avatar_removed
+            || surface.vertices.is_empty()
+            || u32::try_from(surface.vertices.len()).is_err()
+        {
             return;
         }
         let panels = &self.project.template.panels;

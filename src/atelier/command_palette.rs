@@ -210,6 +210,7 @@ fn aliases(id: CommandId) -> &'static str {
         ConvertToTriangles => "convert triangles triangle mesh",
         HighQualityView => "high quality view render supersample smooth antialias",
         SuperimposeSide => "superimpose side beside lay flat seam",
+        DeleteAvatar => "delete remove avatar body mannequin",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

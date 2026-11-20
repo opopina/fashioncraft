@@ -202,6 +202,7 @@ pub enum CommandId {
     ConvertToTriangles,
     HighQualityView,
     SuperimposeSide,
+    DeleteAvatar,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2003,6 +2004,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         SuperimposeSide,
         "garment.superimpose_side",
         "Superimpose side: lay the selected piece flat beside the piece it is sewn to",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        DeleteAvatar,
+        "avatar.delete",
+        "Delete the avatar: the garment hangs on its own",
         Pattern,
         None,
         NotUndoable,

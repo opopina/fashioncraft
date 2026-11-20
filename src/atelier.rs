@@ -459,7 +459,59 @@ impl Atelier {
         use commands::CommandId as Id;
         commands::availability(id, self.command_context())
             .map_err(|reason| reason.message().to_owned())?;
+        if self.project.avatar_removed
+            && matches!(
+                id,
+                Id::MeasureBodyTape
+                    | Id::MeasureBodyHeight
+                    | Id::MeasureBodyGirth
+                    | Id::OpenPose
+                    | Id::RestPose
+                    | Id::LoadPoseFile
+                    | Id::SavePoseFile
+                    | Id::PlayAnimation
+                    | Id::RecordAnimation
+                    | Id::OpenAnimation
+                    | Id::ImportBvh
+                    | Id::OpenAvatarEditor
+                    | Id::ToggleArrangementPoints
+                    | Id::ToggleSkeleton
+                    | Id::TracePen3d
+                    | Id::SaveAvatar
+                    | Id::AttachPins
+            )
+        {
+            return Err("There is no avatar: import one first (File › Import)".into());
+        }
         match id {
+            Id::DeleteAvatar => {
+                if self.project.avatar_removed {
+                    return Err("There is no avatar to delete".into());
+                }
+                if self.pending {
+                    return Err("Wait for the current step to finish, then try again".into());
+                }
+                self.playing = false;
+                let mut project = self.project.clone();
+                project.avatar_removed = true;
+                project.avatar_pose = None;
+                project.avatar_animation = None;
+                // Only the body changes: build the bodiless collider from a fresh compile.
+                let mut probe = project.clone();
+                probe.state = None;
+                probe.mesh_signature = None;
+                let scene = probe.compile()?;
+                self.scene.collider = scene.collider;
+                self.project = project;
+                self.generation += 1;
+                self.document.dirty = true;
+                self.issue.invalidate();
+                self.metrics = None;
+                self.grab = None;
+                self.status =
+                    "Avatar deleted · the cloth hangs on its own; import an avatar to bring one back"
+                        .into();
+            }
             Id::ToggleSimulation => {
                 if self.authoring.animation.recording() {
                     return Err("Recording · stop it from the timeline first".into());

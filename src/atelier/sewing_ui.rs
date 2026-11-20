@@ -804,11 +804,19 @@ impl Atelier {
     /// Sewing › Auto sewing: sew the unsewn segments that pair up on the pieces as they are
     /// laid around the body; openings the body passes through stay open.
     pub(super) fn auto_sew(&mut self) -> Result<(), String> {
+        let no_body = fashioncraft::avatar::SurfaceMesh {
+            vertices: vec![],
+            triangles: vec![],
+        };
         let found = fashioncraft::garment::auto_sew::auto_sew(
             &self.project.template,
             &self.scene.garment,
             &self.scene.state.x,
-            &self.scene.collider.surface,
+            if self.project.avatar_removed {
+                &no_body
+            } else {
+                &self.scene.collider.surface
+            },
         );
         if found.is_empty() {
             return Err(

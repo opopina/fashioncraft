@@ -310,7 +310,7 @@ impl Atelier {
 
     /// Whether the avatar is drawn and blocks 3D picking.
     pub(super) fn avatar_shown(&self) -> bool {
-        self.prefs.garment_display.avatar
+        self.prefs.garment_display.avatar && !self.project.avatar_removed
     }
 
     /// The per-triangle arrays the renderer borrows for one frame.

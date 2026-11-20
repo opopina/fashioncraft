@@ -78,7 +78,11 @@ impl Atelier {
     /// Framing bounds for the 3D view bar.
     pub(super) fn view_bounds(&self) -> ViewBounds {
         let garment = bounds_of(self.scene.state.x.iter());
-        let mannequin = bounds_of(self.scene.collider.surface.vertices.iter());
+        let mannequin = if self.project.avatar_removed {
+            None
+        } else {
+            bounds_of(self.scene.collider.surface.vertices.iter())
+        };
         let all = match (garment, mannequin) {
             (Some((a, b)), Some((c, d))) => Some((a.min(c), b.max(d))),
             (garment, mannequin) => garment.or(mannequin),

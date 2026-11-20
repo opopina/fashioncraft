@@ -556,7 +556,7 @@ impl Atelier {
                 materials: &self.scene.garment.materials,
                 optics: Some(&optics),
                 sphere: None,
-                avatar: display.avatar.then_some(
+                avatar: (display.avatar && !self.project.avatar_removed).then_some(
                     animated_avatar
                         .as_deref()
                         .unwrap_or(&self.scene.collider.surface),

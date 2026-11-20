@@ -194,6 +194,7 @@ impl Selection {
             version: current.version,
             template: self.template.clone(),
             avatar_path: current.avatar_path.clone(),
+            avatar_removed: current.avatar_removed,
             contact_stiffness: current.contact_stiffness,
             contact_clearance: current.contact_clearance,
             prearrange: false,

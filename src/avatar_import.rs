@@ -160,6 +160,7 @@ impl Candidate {
     ) -> Result<Prepared, String> {
         let mut project = current.clone();
         project.avatar_path = self.asset.path();
+        project.avatar_removed = false;
         project.state = None;
         project.mesh_signature = None;
         project.prearrange = false;

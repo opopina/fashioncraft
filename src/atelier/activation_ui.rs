@@ -240,7 +240,7 @@ impl Atelier {
         self.playing = false;
         let garment = self.scene.garment.clone();
         let surface = &self.scene.collider.surface;
-        let axis = if surface.vertices.is_empty() {
+        let axis = if surface.vertices.is_empty() || self.project.avatar_removed {
             self.scene.state.x.iter().sum::<DVec3>() / self.scene.state.x.len().max(1) as f64
         } else {
             surface.vertices.iter().sum::<DVec3>() / surface.vertices.len() as f64
@@ -414,11 +414,12 @@ impl Atelier {
         }
         self.playing = false;
         let garment = self.scene.garment.clone();
-        let laid = transfer::lay_out_as_board(
-            &self.project.template,
-            &garment,
-            &self.scene.collider.surface.vertices,
-        );
+        let body: &[DVec3] = if self.project.avatar_removed {
+            &[]
+        } else {
+            &self.scene.collider.surface.vertices
+        };
+        let laid = transfer::lay_out_as_board(&self.project.template, &garment, body);
         if laid.is_empty() {
             self.status = i18n::tr(ui_lang, "There are no pieces to lay out").into();
             return;

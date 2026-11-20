@@ -22,6 +22,10 @@ pub struct FittingProject {
     pub template: GarmentTemplate,
     /// Relative paths are resolved against the fitting-project JSON directory.
     pub avatar_path: PathBuf,
+    /// The avatar was deleted (3D Garment › Avatar › Delete avatar): the scene has no body; the
+    /// cloth hangs and falls on its own. Importing an avatar brings one back.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub avatar_removed: bool,
     pub contact_stiffness: f64,
     #[serde(default)]
     pub contact_clearance: f64,
@@ -608,6 +612,7 @@ impl FittingProject {
             version: 1,
             template: presets::basic(kind, subdivisions),
             avatar_path,
+            avatar_removed: false,
             contact_stiffness: 500_000.0,
             contact_clearance: 0.0,
             // Planar panels start outside the full avatar bounding box. The old
@@ -688,8 +693,14 @@ impl FittingProject {
         {
             return Err("Stale fitting cache: clear state and mesh_signature, then rebuild".into());
         }
-        let mut surface = SurfaceMesh::load_obj(&self.avatar_path)?;
-        if let Some(posed) = self.avatar_pose.as_ref().filter(|p| !p.pose.is_empty()) {
+        let mut surface = if self.avatar_removed {
+            SurfaceMesh::far_away()
+        } else {
+            SurfaceMesh::load_obj(&self.avatar_path)?
+        };
+        if !self.avatar_removed
+            && let Some(posed) = self.avatar_pose.as_ref().filter(|p| !p.pose.is_empty())
+        {
             surface = posed.rig(&surface)?.posed(&surface, &posed.pose);
         }
         if let Some(props) = scene_objects_mesh(&self.scene_objects)? {

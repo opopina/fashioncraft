@@ -12,6 +12,18 @@ pub struct SurfaceMesh {
     pub triangles: Vec<[usize; 3]>,
 }
 impl SurfaceMesh {
+    /// The stand-in body of a scene without an avatar: one small triangle a kilometre below
+    /// the scene, out of reach of any cloth.
+    pub fn far_away() -> Self {
+        Self {
+            vertices: vec![
+                glam::DVec3::new(0., -1000., 0.),
+                glam::DVec3::new(0.01, -1000., 0.),
+                glam::DVec3::new(0., -1000., 0.01),
+            ],
+            triangles: vec![[0, 1, 2]],
+        }
+    }
     pub fn load_obj(path: &Path) -> Result<Self, String> {
         Self::parse_obj(&fs::read_to_string(path).map_err(|e| e.to_string())?)
     }

@@ -38,6 +38,33 @@ fn measure(path: &std::path::Path) -> Result<Measured, String> {
     Ok(Measured { body, joints, now })
 }
 
+/// Write a made body into `dir` as `avatar.obj`, with its joints (`measurements.json`) and the
+/// mannequin's anchors (`arrangement.json`), as an avatar import reads them. Returns the OBJ.
+pub(super) fn write_avatar(
+    dir: &std::path::Path,
+    body: &SurfaceMesh,
+    joints: &BTreeMap<String, glam::DVec3>,
+) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let obj = dir.join("avatar.obj");
+    std::fs::write(&obj, fashioncraft::avatar_animation::surface_obj(body))
+        .map_err(|e| e.to_string())?;
+    let landmarks: BTreeMap<&String, [f64; 3]> =
+        joints.iter().map(|(id, p)| (id, p.to_array())).collect();
+    std::fs::write(
+        dir.join("measurements.json"),
+        serde_json::to_string_pretty(&serde_json::json!({ "landmarks": landmarks }))
+            .map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::write(
+        dir.join("arrangement.json"),
+        include_str!("../../assets/makehuman/arrangement.json"),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(obj)
+}
+
 fn centimetres(m: &BodyMeasurements) -> [f64; 6] {
     [
         m.height_m, m.bust_m, m.waist_m, m.hip_m, m.arm_m, m.inseam_m,
@@ -148,23 +175,7 @@ impl Atelier {
             "avatar-{:.0}-{:.0}-{:.0}-{:.0}-{:.0}-{:.0}",
             t[0], t[1], t[2], t[3], t[4], t[5]
         ));
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let obj = dir.join("avatar.obj");
-        std::fs::write(&obj, fashioncraft::avatar_animation::surface_obj(&body))
-            .map_err(|e| e.to_string())?;
-        let landmarks: BTreeMap<&String, [f64; 3]> =
-            joints.iter().map(|(id, p)| (id, p.to_array())).collect();
-        std::fs::write(
-            dir.join("measurements.json"),
-            serde_json::to_string_pretty(&serde_json::json!({ "landmarks": landmarks }))
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
-        std::fs::write(
-            dir.join("arrangement.json"),
-            include_str!("../../assets/makehuman/arrangement.json"),
-        )
-        .map_err(|e| e.to_string())?;
+        let obj = write_avatar(&dir, &body, &joints)?;
         self.offer_avatar(&obj);
         self.status = format!(
             "Avatar made to {:.1} / {:.1} / {:.1} / {:.1} / {:.1} / {:.1} cm · confirm to replace the current one",

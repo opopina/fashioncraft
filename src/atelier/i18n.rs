@@ -2322,6 +2322,29 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Graphic cancelled" => "Gráfico cancelado",
         "Untitled" => "Sin título",
         "(mirror)" => "(espejo)",
+        "Create avatar (MakeHuman)…" => "Crear avatar (MakeHuman)…",
+        "Create avatar (MakeHuman)" => "Crear avatar (MakeHuman)",
+        "A body from MakeHuman's CC0 shapes. 50 % is average; the measurements follow the sliders." => {
+            "Un cuerpo con las formas CC0 de MakeHuman. 50 % es el promedio; las medidas siguen a los deslizadores."
+        }
+        "Gender" => "Género",
+        "Female" => "Mujer",
+        "Male" => "Hombre",
+        "Age" => "Edad",
+        " years" => " años",
+        "Muscle" => "Musculatura",
+        "Weight" => "Peso",
+        "Proportions" => "Proporciones",
+        "Ancestry" => "Ascendencia",
+        "African" => "Africana",
+        "Asian" => "Asiática",
+        "European" => "Europea",
+        "Make this body, then confirm it like an imported avatar" => {
+            "Crear este cuerpo y confirmarlo como un avatar importado"
+        }
+        "Avatar made from MakeHuman's shapes · confirm to replace the current one" => {
+            "Avatar creado con las formas de MakeHuman · confirma para reemplazar el actual"
+        }
         "(copy)" => "(copia)",
         "Recovery available" => "Recuperación disponible",
         "Open the last recovery snapshot?" => "¿Abrir la última copia de recuperación?",

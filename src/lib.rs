@@ -6,6 +6,7 @@ pub mod avatar;
 pub mod avatar_animation;
 pub mod avatar_import;
 pub mod avatar_landmarks;
+pub mod avatar_maker;
 pub mod avatar_measurements;
 pub mod avatar_rig;
 pub mod avatar_shape;

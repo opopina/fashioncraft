@@ -6,6 +6,8 @@
 
 The asset notice is retained at [LICENSE.ASSETS.md](assets/makehuman/LICENSE.ASSETS.md), with [provenance](assets/makehuman/provenance.json). `scripts/prepare-avatar.py` extracts the body, removes helpers, triangulates and normalizes to 1.75 m; `mannequin.obj` and `measurements.json` are derived outputs. No MakeHuman program code is incorporated.
 
+`assets/makehuman/macro-targets.bin` packs MakeHuman's CC0 macro targets (`data/targets/macrodetails`, 348 files, at the same revision; see [its provenance](assets/makehuman/macro-targets.provenance.json)) with the joint helpers of `base.obj`. `scripts/pack-macro-targets.py` makes it from those files; `src/avatar_maker.rs` blends them into new bodies. Only the data is used: the blend is this project's own, and no MakeHuman or MPFB program code is incorporated.
+
 ## Dependencies and references
 
 Rust dependencies are resolved by `Cargo.lock` and retain their respective upstream licenses. They are not vendored here. Consult each dependency's manifest/notices when preparing a binary distribution.

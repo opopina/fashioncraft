@@ -1,6 +1,7 @@
 //! Body measurements of a standing avatar, and the avatar reshaped to new ones.
 //!
-//! Girths are the lengths of the torso's horizontal cross-sections: bust at the chest joint,
+//! Girths are the lengths of the torso's horizontal cross-sections: bust the fullest below the
+//! chest joint (where the arms join),
 //! waist the narrowest between the lowest spine joint and the chest, hip the widest between
 //! the pelvis and the upper legs' joints. Reshaping scales the whole body to the new height
 //! about its feet, then scales the torso across (x and z, about the spine) by a factor that
@@ -81,10 +82,13 @@ fn levels(
             .map(|(y, _)| y)
             .ok_or_else(|| "The torso has no cross-section there".to_string())
     };
+    let waist = scan(low_spine, chest, false)?;
     Ok((
         Levels {
-            bust: chest,
-            waist: scan(low_spine, chest, false)?,
+            // The fullest part of the chest, below the armpits: at the chest joint itself the
+            // section of a narrow body takes in the roots of the arms.
+            bust: scan(waist, chest - 0.15 * (chest - waist), true)?,
+            waist,
             hip: scan(hips, pelvis.y, true)?,
         },
         axis,

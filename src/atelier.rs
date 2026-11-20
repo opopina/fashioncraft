@@ -22,6 +22,8 @@ mod arrangement_ui;
 mod authoring_smoke;
 #[path = "atelier/authoring_ui.rs"]
 mod authoring_ui;
+#[path = "atelier/avatar_maker_ui.rs"]
+mod avatar_maker_ui;
 #[path = "atelier/avatar_shape_ui.rs"]
 mod avatar_shape_ui;
 #[path = "atelier/board.rs"]
@@ -955,6 +957,9 @@ impl Atelier {
             Id::OpenAvatarEditor => {
                 self.authoring.avatar_shape.open = !self.authoring.avatar_shape.open;
             }
+            Id::CreateMakeHumanAvatar => {
+                self.authoring.avatar_maker.open = !self.authoring.avatar_maker.open;
+            }
             Id::ToggleArrangementPoints => {
                 self.authoring.arrangement.points = !self.authoring.arrangement.points;
             }
@@ -1568,6 +1573,7 @@ impl eframe::App for Atelier {
             self.obj_export_window(&ctx);
             self.print_window(&ctx);
             self.avatar_shape_window(&ctx);
+            self.avatar_maker_window(&ctx);
             self.draft_window(&ctx);
             self.skirt_draft_window(&ctx);
             self.trousers_draft_window(&ctx);

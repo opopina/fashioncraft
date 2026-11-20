@@ -1,0 +1,9 @@
+{
+  "license": "CC0-1.0",
+  "source": "https://github.com/makehumancommunity/makehuman/tree/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/makehuman/data/targets/macrodetails",
+  "revision": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482",
+  "repository": "https://github.com/makehumancommunity/makehuman",
+  "files": 348,
+  "downloaded": "2026-11-20",
+  "packed_by": "scripts/pack-macro-targets.py"
+}

@@ -125,6 +125,9 @@ fn aliases(id: CommandId) -> &'static str {
         }
         ToggleArrangementPoints => "arrangement points anchors place avatar show",
         OpenAvatarEditor => "avatar editor measurements height bust waist hip size body",
+        CreateMakeHumanAvatar => {
+            "makehuman create new avatar body mannequin gender age muscle weight"
+        }
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",
         ToggleHistory => "history undo redo edits list go back",
         ToggleObjectBrowser => "object browser scene tree outliner pieces fabrics avatar list",

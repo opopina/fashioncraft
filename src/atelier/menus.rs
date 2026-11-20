@@ -331,6 +331,7 @@ const AVATAR: &[Item] = &[
     Run("Rest pose", C::RestPose),
     Run("Play animation", C::PlayAnimation),
     Run("Avatar editor…", C::OpenAvatarEditor),
+    Run("Create avatar (MakeHuman)…", C::CreateMakeHumanAvatar),
 ];
 
 const ANIMATION: &[Item] = &[
@@ -579,6 +580,7 @@ impl Atelier {
             C::ToggleSkeleton => self.authoring.pose.skeleton,
             C::ToggleArrangementPoints => self.authoring.arrangement.points,
             C::OpenAvatarEditor => self.authoring.avatar_shape.open,
+            C::CreateMakeHumanAvatar => self.authoring.avatar_maker.open,
             C::DraftTshirt => self.authoring.shirt_draft.open,
             C::ToggleHistory => self.authoring.history_ui.open,
             C::ToggleObjectBrowser => self.authoring.object_browser.open,

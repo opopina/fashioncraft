@@ -57,6 +57,7 @@ pub(super) struct AuthoringUi {
     pub media3d: super::animation_export::Media3d,
     /// The avatar editor: measurements and a reshaped avatar.
     pub avatar_shape: super::avatar_shape_ui::AvatarShapeUi,
+    pub avatar_maker: super::avatar_maker_ui::AvatarMakerUi,
     /// Drafting a T-shirt from measurements.
     pub shirt_draft: super::avatar_shape_ui::DraftUi,
     pub skirt_draft: super::avatar_shape_ui::SkirtDraftUi,

@@ -119,6 +119,7 @@ pub enum CommandId {
     TracePen3d,
     ToggleArrangementPoints,
     OpenAvatarEditor,
+    CreateMakeHumanAvatar,
     DraftTshirt,
     ToggleHistory,
     ToggleObjectBrowser,
@@ -1277,6 +1278,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         OpenAvatarEditor,
         "avatar.editor",
         "Avatar editor…",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        CreateMakeHumanAvatar,
+        "avatar.makehuman",
+        "Create avatar (MakeHuman)…",
         Workspace,
         None,
         NotUndoable,

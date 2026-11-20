@@ -685,7 +685,7 @@ fn button_fill(visuals: &egui::Visuals, active: bool, hovered: bool) -> Color32 
 
 fn button_ink(visuals: &egui::Visuals, active: bool) -> Color32 {
     if active {
-        Color32::WHITE
+        visuals.selection.stroke.color
     } else {
         visuals.text_color()
     }

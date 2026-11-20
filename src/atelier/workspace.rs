@@ -4,8 +4,9 @@ use std::sync::OnceLock;
 
 // The ArtCraft look, as ArtCraft's own apps draw it (storytold/artcraft `artcraft-native` and
 // storytold/craft-launcher, Apache-2.0): near-black surfaces, hairline rules, square panels,
-// 3 px corners on anything pressable, the brand blue for what is selected. The colour tokens
-// below are theirs, by their names; FashionCraft's own colour marks only its wordmark.
+// 3 px corners on anything pressable. The colour tokens below are theirs, by their names.
+// What is selected, and the wordmark, carry FashionCraft's own colour: amber, which in the
+// ArtCraft family only AniCraft's yellow comes near.
 
 const fn hex(rgb: u32) -> Color32 {
     let [_, r, g, b] = rgb.to_be_bytes();
@@ -17,12 +18,13 @@ const fn alpha(rgb: u32, a: u8) -> Color32 {
     Color32::from_rgba_unmultiplied_const(r, g, b, a)
 }
 
-/// The brand blue: selected things, active tools, focus.
-pub(super) const ACCENT: Color32 = hex(0x2d81ff);
-/// FashionCraft's colour in the ArtCraft family (a violet between FilmCraft's and
-/// EffectCraft's), as text on dark and on light surfaces.
-const APP_INK_DARK: Color32 = Color32::from_rgb(214, 150, 245);
-const APP_INK_LIGHT: Color32 = Color32::from_rgb(128, 40, 168);
+/// FashionCraft's amber: selected things, active tools, the wordmark.
+pub(super) const ACCENT: Color32 = hex(0xf2a13a);
+/// Text and icons drawn on the amber.
+const ON_ACCENT: Color32 = hex(0x1b1b1f);
+/// The amber as text on dark and on light surfaces.
+const APP_INK_DARK: Color32 = ACCENT;
+const APP_INK_LIGHT: Color32 = hex(0x9c600c);
 /// Corners of buttons, fields, menus and windows; panels stay square.
 const RADIUS: egui::CornerRadius = egui::CornerRadius::same(3);
 
@@ -62,7 +64,7 @@ const DARK: Tokens = Tokens {
     line: alpha(0xffffff, 38),
     line_strong: alpha(0xf2f1ee, 102),
     wash: alpha(0xffffff, 26),
-    accent_ink: hex(0x74aaff),
+    accent_ink: APP_INK_DARK,
     warn: hex(0xffc14d),
     bad: hex(0xf87171),
     shadow: Color32::from_black_alpha(140),
@@ -79,7 +81,7 @@ const LIGHT: Tokens = Tokens {
     line: alpha(0x101014, 41),
     line_strong: alpha(0x101014, 102),
     wash: alpha(0x101014, 20),
-    accent_ink: hex(0x1659c4),
+    accent_ink: APP_INK_LIGHT,
     warn: hex(0x8a5800),
     bad: hex(0xb3261e),
     shadow: Color32::from_black_alpha(36),
@@ -154,17 +156,19 @@ fn visuals(visuals: &mut egui::Visuals, t: &Tokens) {
     visuals.menu_corner_radius = RADIUS;
     visuals.window_shadow = shadow;
     visuals.popup_shadow = shadow;
-    visuals.override_text_color = Some(t.ink);
+    // No overriding text colour: selected controls draw their text dark on the amber.
+    visuals.override_text_color = None;
+    visuals.weak_text_color = Some(t.muted);
     visuals.hyperlink_color = t.accent_ink;
     visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., Color32::WHITE);
+    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
     visuals.warn_fg_color = t.warn;
     visuals.error_fg_color = t.bad;
     visuals.striped = false;
     // Section headers sit on a full-width band, as property groups do.
     visuals.collapsing_header_frame = true;
     for (w, fill, stroke, fg) in [
-        (&mut visuals.widgets.noninteractive, t.bg, t.line, t.muted),
+        (&mut visuals.widgets.noninteractive, t.bg, t.line, t.ink),
         (&mut visuals.widgets.inactive, t.controls, t.line, t.ink),
         (
             &mut visuals.widgets.hovered,

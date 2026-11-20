@@ -206,6 +206,8 @@ fn aliases(id: CommandId) -> &'static str {
         SelectMeshBrush => "select mesh brush paint points cloth freeze",
         SelectMeshBox => "select mesh box rectangle points cloth freeze",
         SelectMeshLasso => "select mesh lasso points cloth freeze",
+        ConvertToQuads => "convert quads quad mesh grid squares",
+        ConvertToTriangles => "convert triangles triangle mesh",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

@@ -696,6 +696,17 @@ impl Atelier {
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
+            Id::ConvertToQuads | Id::ConvertToTriangles => {
+                let panels = self.selected_panels();
+                let quads = id == Id::ConvertToQuads;
+                if self.edit(fashioncraft::authoring::Command::SetMeshQuads { panels, quads }) {
+                    self.status = if quads {
+                        "Meshed as quads along the grain".into()
+                    } else {
+                        "Meshed as triangles".into()
+                    };
+                }
+            }
             Id::SelectMeshBrush => self.start_mesh_select(mesh_select::SelectShape::Brush),
             Id::SelectMeshBox => self.start_mesh_select(mesh_select::SelectShape::Box),
             Id::SelectMeshLasso => self.start_mesh_select(mesh_select::SelectShape::Lasso),

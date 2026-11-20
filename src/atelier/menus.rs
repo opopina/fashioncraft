@@ -161,8 +161,8 @@ const GARMENT_3D: &[Item] = &[
             Run("Strengthen", C::StrengthenPieces),
             Run("Solidify", C::SolidifyPieces),
             Run("Flip normals", C::FlipPieceNormals),
-            Todo("Convert to quads"),
-            Todo("Convert to triangles"),
+            Run("Convert to quads", C::ConvertToQuads),
+            Run("Convert to triangles", C::ConvertToTriangles),
             S,
             Run("Superimpose over", C::SuperimposeOver),
             Run("Superimpose under", C::SuperimposeUnder),
@@ -733,7 +733,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 200, "{done} of {all}");
+        assert!(done >= 202, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

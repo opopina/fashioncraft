@@ -345,6 +345,12 @@ pub enum Command {
         seam: String,
         tears: Vec<[f64; 2]>,
     },
+    /// Mesh `panels` as quads (an even grid of squares along each piece's grain inside) or as
+    /// free triangles. One undo step.
+    SetMeshQuads {
+        panels: Vec<String>,
+        quads: bool,
+    },
     /// Brush steam onto the cloth: the stamps of one stroke. One undo step.
     AddSteam {
         stamps: Vec<crate::garment::steam::SteamStamp>,
@@ -686,6 +692,8 @@ impl Command {
             Self::RemoveSeams { .. } => "Remove seams",
             Self::AddSteam { .. } => "Steam",
             Self::SetSeamTears { .. } => "Tear seam",
+            Self::SetMeshQuads { quads: true, .. } => "Convert to quads",
+            Self::SetMeshQuads { quads: false, .. } => "Convert to triangles",
             Self::RemoveSteam { .. } => "Remove steam",
             Self::SetSeamsActive { active: true, .. } => "Activate seams",
             Self::SetSeamsActive { active: false, .. } => "Deactivate seams",
@@ -4655,6 +4663,38 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 return Err("Seam not found".into());
             }
             template.seams.retain(|s| s.id != seam);
+        }
+        Command::SetMeshQuads { panels, quads } => {
+            if panels.is_empty() {
+                return Err("Select the pieces first".into());
+            }
+            let mut changed = 0;
+            for id in &panels {
+                let index = panel_index(&template, id)?;
+                let grain = template.panels[index].grain_degrees;
+                let Some(polygon) = template.panels[index].polygon.as_mut() else {
+                    return Err(format!("Piece {id} has no drafted outline to remesh"));
+                };
+                let mut settings = polygon.meshing_settings();
+                if settings.quads == quads && (!quads || settings.axis_degrees == grain) {
+                    continue;
+                }
+                settings.quads = quads;
+                if quads {
+                    // The grid runs along the grain.
+                    settings.axis_degrees = grain;
+                }
+                polygon.meshing = Some(settings);
+                changed += 1;
+            }
+            if changed == 0 {
+                return Err(if quads {
+                    "Those pieces are meshed as quads already".into()
+                } else {
+                    "Those pieces are meshed as triangles already".into()
+                });
+            }
+            selected = panels.first().cloned();
         }
         Command::SetSeamTears { seam, tears } => {
             if !template.seams.iter().any(|s| s.id == seam) {

@@ -2315,6 +2315,14 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Open a stretch of this seam, as a rip" => "Abre un tramo de esta costura, como un rasgado",
         "Mend all" => "Coser todos",
         "Select mesh with a brush" => "Seleccionar malla con pincel",
+        "Mesh the selected pieces as quads along their grain" => {
+            "Mallar las piezas seleccionadas en cuadrados a lo largo del hilo"
+        }
+        "Mesh the selected pieces as free triangles" => {
+            "Mallar las piezas seleccionadas en triángulos libres"
+        }
+        "Meshed as quads along the grain" => "Mallado en cuadrados a lo largo del hilo",
+        "Meshed as triangles" => "Mallado en triángulos",
         "Select mesh with a box" => "Seleccionar malla con recuadro",
         "Select mesh with a lasso" => "Seleccionar malla con lazo",
         "Select cloth in the 3D view · Shift adds, Cmd/Ctrl takes away · Esc ends" => {

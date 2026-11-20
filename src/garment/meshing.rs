@@ -21,6 +21,11 @@ pub struct MeshingSettings {
     pub min_angle_degrees: f64,
     #[serde(default = "budget")]
     pub max_vertices: usize,
+    /// Quad mesh: inside, an even grid of squares one target edge apart along `axis_degrees`
+    /// (each square two triangles); free triangles only where the grid meets the outline,
+    /// holes and internal lines.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quads: bool,
 }
 fn one() -> f64 {
     1.0
@@ -38,6 +43,7 @@ impl Default for MeshingSettings {
             anisotropy: one(),
             axis_degrees: 0.0,
             min_angle_degrees: angle(),
+            quads: false,
             max_vertices: budget(),
         }
     }
@@ -70,6 +76,69 @@ impl MeshingSettings {
         DVec2::new(c * p.x - s * p.y, s * p.x + c * p.y)
     }
 }
+/// Least distance, in target edges, between a grid point and the outline or a constraint: a
+/// closer grid point would leave a sliver against it.
+const GRID_CLEARANCE: f64 = 0.45;
+
+fn segment_distance(p: DVec2, a: DVec2, b: DVec2) -> f64 {
+    let d = b - a;
+    let t = if d.length_squared() > 0. {
+        ((p - a).dot(d) / d.length_squared()).clamp(0., 1.)
+    } else {
+        0.
+    };
+    p.distance(a + d * t)
+}
+
+/// Insert an even grid of points, one unit apart in the metric (one target edge along the
+/// mesh axis), inside the material: inside the outline, outside the holes, and clear of every
+/// outline and constraint segment.
+fn seed_grid(
+    cdt: &mut ConstrainedDelaunayTriangulation<Point2<f64>>,
+    outline: &[DVec2],
+    metric: &[DVec2],
+    holes: &[super::domain::Hole],
+    paths: &[(String, Vec<DVec2>)],
+    settings: &MeshingSettings,
+) -> Result<(), String> {
+    let mut segments: Vec<[DVec2; 2]> = (0..metric.len())
+        .map(|i| [metric[i], metric[(i + 1) % metric.len()]])
+        .collect();
+    for (_, path) in paths {
+        for pair in path.windows(2) {
+            segments.push([settings.to_metric(pair[0]), settings.to_metric(pair[1])]);
+        }
+    }
+    let lo = metric
+        .iter()
+        .copied()
+        .fold(DVec2::splat(f64::INFINITY), DVec2::min);
+    let hi = metric
+        .iter()
+        .copied()
+        .fold(DVec2::splat(f64::NEG_INFINITY), DVec2::max);
+    for y in (lo.y.floor() as i64)..=(hi.y.ceil() as i64) {
+        for x in (lo.x.floor() as i64)..=(hi.x.ceil() as i64) {
+            let q = DVec2::new(x as f64, y as f64);
+            let p = settings.material_point(q);
+            if !super::domain::inside(p, outline)
+                || holes.iter().any(|h| super::domain::inside(p, &h.points))
+                || segments
+                    .iter()
+                    .any(|[a, b]| segment_distance(q, *a, *b) < GRID_CLEARANCE)
+            {
+                continue;
+            }
+            if cdt.num_vertices() + 1 > settings.max_vertices {
+                return Err("The quad grid exceeds the meshing vertex budget".into());
+            }
+            cdt.insert(Point2::new(q.x, q.y))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 pub struct TriangulatedContour {
     pub uv: Vec<DVec2>,
     pub faces: Vec<[usize; 3]>,
@@ -235,6 +304,16 @@ pub fn triangulate_domain(
                 .map_err(|e| e.to_string())?;
         }
     }
+    if settings.quads {
+        seed_grid(&mut cdt, points, &metric, holes, &paths, settings)?;
+    }
+    // Squares of the grid split into two triangles of half a unit each; free triangles stay
+    // within the equilateral bound.
+    let max_area = if settings.quads {
+        0.5 * (1.0 + 1e-9)
+    } else {
+        3.0_f64.sqrt() / 4.0
+    };
     let material_face = |p: [Point2<f64>; 3]| {
         if legacy {
             return true;
@@ -251,7 +330,7 @@ pub fn triangulate_domain(
     for _ in 0..8 {
         let parameters = RefinementParameters::new()
             .exclude_outer_faces(legacy)
-            .with_max_allowed_area(3.0_f64.sqrt() / 4.0)
+            .with_max_allowed_area(max_area)
             .with_angle_limit(AngleLimit::from_deg(settings.min_angle_degrees))
             .with_max_additional_vertices(settings.max_vertices.saturating_sub(cdt.num_vertices()));
         let result = cdt.refine(parameters);
@@ -270,7 +349,7 @@ pub fn triangulate_domain(
             .filter(|f| {
                 !excluded.contains(&f.index())
                     && material_face(f.vertices().map(|v| v.position()))
-                    && f.area() > 3.0_f64.sqrt() / 4.0 * (1.0 + 1e-10)
+                    && f.area() > max_area * (1.0 + 1e-10)
             })
             .map(|f| {
                 let p = f.vertices().map(|v| v.position());

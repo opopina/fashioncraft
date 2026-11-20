@@ -198,6 +198,8 @@ pub enum CommandId {
     SelectMeshBrush,
     SelectMeshBox,
     SelectMeshLasso,
+    ConvertToQuads,
+    ConvertToTriangles,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1966,6 +1968,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ConvertToQuads,
+        "garment.convert_quads",
+        "Mesh the selected pieces as quads along their grain",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ConvertToTriangles,
+        "garment.convert_triangles",
+        "Mesh the selected pieces as free triangles",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
     entry!(

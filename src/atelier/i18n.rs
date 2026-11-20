@@ -2324,9 +2324,46 @@ fn spanish(text: &str) -> Option<&'static str> {
         "(mirror)" => "(espejo)",
         "Create avatar (MakeHuman)…" => "Crear avatar (MakeHuman)…",
         "Create avatar (MakeHuman)" => "Crear avatar (MakeHuman)",
-        "A body from MakeHuman's CC0 shapes. 50 % is average; the measurements follow the sliders." => {
-            "Un cuerpo con las formas CC0 de MakeHuman. 50 % es el promedio; las medidas siguen a los deslizadores."
+        "A body from MakeHuman's CC0 shapes, with Anny's settings. The measurements follow the sliders." => {
+            "Un cuerpo con las formas CC0 de MakeHuman y los ajustes de Anny. Las medidas siguen a los deslizadores."
         }
+        "Ideal" => "Ideales",
+        "Uncommon" => "Poco comunes",
+        "Bust size" => "Talla de busto",
+        "Bust firmness" => "Firmeza del busto",
+        "Measurements" => "Medidas",
+        "Each from −100 % smaller to +100 % larger than the settings make it." => {
+            "Cada una de −100 % más chica a +100 % más grande de lo que dan los ajustes."
+        }
+        "Typical" => "Típico",
+        "The typical build for this age and gender" => {
+            "La complexión típica para esta edad y género"
+        }
+        "Random realistic" => "Al azar realista",
+        "A build drawn as a real person of this age and gender might have" => {
+            "Una complexión al azar, como la que podría tener una persona real de esta edad y género"
+        }
+        "Shapes: MakeHuman (CC0). Settings and calibration by age: Anny, NAVER LABS Europe (Apache 2.0)." => {
+            "Formas: MakeHuman (CC0). Ajustes y calibración por edad: Anny, NAVER LABS Europe (Apache 2.0)."
+        }
+        "Underbust" => "Bajo busto",
+        "Hips" => "Caderas",
+        "Neck" => "Cuello",
+        "Neck height" => "Alto del cuello",
+        "Shoulder width" => "Ancho de hombros",
+        "Front chest width" => "Ancho del pecho",
+        "Nape to waist" => "Nuca a cintura",
+        "Waist to hip" => "Cintura a cadera",
+        "Upper arm" => "Brazo",
+        "Upper arm length" => "Largo del brazo",
+        "Forearm length" => "Largo del antebrazo",
+        "Wrist" => "Muñeca",
+        "Thigh" => "Muslo",
+        "Upper leg length" => "Largo del muslo",
+        "Knee" => "Rodilla",
+        "Calf" => "Pantorrilla",
+        "Lower leg length" => "Largo de la pierna",
+        "Ankle" => "Tobillo",
         "Gender" => "Género",
         "Female" => "Mujer",
         "Male" => "Hombre",

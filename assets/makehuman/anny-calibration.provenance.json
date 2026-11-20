@@ -1,0 +1,12 @@
+{
+  "license": "Apache-2.0",
+  "license_file": "anny-LICENSE.txt",
+  "copyright": "Anny, Copyright (C) 2025 NAVER Corporation",
+  "source": "https://github.com/naver/anny/tree/8f35dc2df1c4062fd2fae86734f9705de50c0c2b/src/anny/data/shape_calibration",
+  "files": ["boys.pth", "girls.pth"],
+  "revision": "8f35dc2df1c4062fd2fae86734f9705de50c0c2b",
+  "repository": "https://github.com/naver/anny",
+  "downloaded": "2026-11-20",
+  "converted_by": "scripts/convert-anny-calibration.py",
+  "contents": "Anny's morphological age mapping (years to Anny's age parameter) and the age-conditioned Beta distributions of height, weight, muscle and proportions for boys and girls, calibrated by NAVER LABS Europe on WHO growth data."
+}

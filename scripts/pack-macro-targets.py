@@ -1,6 +1,9 @@
-"""Pack MakeHuman's CC0 macro targets into assets/makehuman/macro-targets.bin.
+"""Pack MakeHuman's CC0 body targets into assets/makehuman/macro-targets.bin.
 
-Usage: python3 scripts/pack-macro-targets.py <makehuman>/data/targets/macrodetails
+Usage: python3 scripts/pack-macro-targets.py <makehuman>/data/targets
+
+Packed: the macro targets (`macrodetails`, named by their path below it), the bust size and
+firmness targets (`breast/female-…`) and the measurement targets (`measure/…`).
 
 The targets come from the MakeHuman community repository at the revision in
 assets/makehuman/macro-targets.provenance.json. Only their data is used; no MakeHuman program
@@ -29,6 +32,24 @@ OUTPUT = ROOT / "assets/makehuman/macro-targets.bin"
 BODY = 13380
 
 
+def target_files(targets: Path):
+    """(name, path) of every packed target, sorted by name."""
+    out = []
+    for folder, prefix in [("macrodetails", ""), ("breast", "breast/"), ("measure", "measure/")]:
+        root = targets / folder
+        for d, _, fs in os.walk(root):
+            for f in fs:
+                if not f.endswith(".target"):
+                    continue
+                path = Path(d) / f
+                name = path.relative_to(root).with_suffix("").as_posix()
+                # The bust's local targets (breast-dist-…) are not part of the body settings.
+                if prefix == "breast/" and not name.startswith("female-"):
+                    continue
+                out.append((prefix + name, path))
+    return sorted(out)
+
+
 def main(targets: Path) -> None:
     vertices, groups, group = [], {}, None
     for line in BASE.read_text(encoding="utf-8").splitlines():
@@ -54,13 +75,10 @@ def main(targets: Path) -> None:
         encoded = name.encode()
         blob += struct.pack("<H", len(encoded)) + encoded
         blob += struct.pack(f"<B{len(index)}H", len(index), *index)
-    files = sorted(
-        Path(d) / f for d, _, fs in os.walk(targets) for f in fs if f.endswith(".target")
-    )
+    files = target_files(targets)
     blob += struct.pack("<I", len(files))
     offsets = 0
-    for path in files:
-        name = path.relative_to(targets).with_suffix("").as_posix()
+    for name, path in files:
         rows = []
         for line in path.read_text(encoding="utf-8").splitlines():
             parts = line.split()

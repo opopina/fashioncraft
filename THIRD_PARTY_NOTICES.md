@@ -6,7 +6,13 @@
 
 The asset notice is retained at [LICENSE.ASSETS.md](assets/makehuman/LICENSE.ASSETS.md), with [provenance](assets/makehuman/provenance.json). `scripts/prepare-avatar.py` extracts the body, removes helpers, triangulates and normalizes to 1.75 m; `mannequin.obj` and `measurements.json` are derived outputs. No MakeHuman program code is incorporated.
 
-`assets/makehuman/macro-targets.bin` packs MakeHuman's CC0 macro targets (`data/targets/macrodetails`, 348 files, at the same revision; see [its provenance](assets/makehuman/macro-targets.provenance.json)) with the joint helpers of `base.obj`. `scripts/pack-macro-targets.py` makes it from those files; `src/avatar_maker.rs` blends them into new bodies. Only the data is used: the blend is this project's own, and no MakeHuman or MPFB program code is incorporated.
+`assets/makehuman/macro-targets.bin` packs MakeHuman's CC0 body targets (`data/targets/macrodetails`, the bust's `female-…` targets of `breast` and `measure`, 604 files at the same revision; see [its provenance](assets/makehuman/macro-targets.provenance.json)) with the joint helpers of `base.obj`. `scripts/pack-macro-targets.py` makes it from those files; `src/avatar_maker.rs` blends them into new bodies. No MakeHuman or MPFB program code is incorporated.
+
+## Anny
+
+The body settings of `src/avatar_maker.rs` follow Anny, NAVER LABS Europe's human body model ([naver/anny](https://github.com/naver/anny), revision `8f35dc2df1c4062fd2fae86734f9705de50c0c2b`): how its phenotype settings weigh the targets, and its calibration. `assets/makehuman/anny-calibration.json` is Anny's `shape_calibration` (the mapping from age in years to Anny's age, and the age-conditioned distributions of height, weight, muscle and proportions for boys and girls, calibrated on WHO growth data), converted from PyTorch by `scripts/convert-anny-calibration.py`; see [its provenance](assets/makehuman/anny-calibration.provenance.json).
+
+Anny, Copyright (C) 2025 NAVER Corporation, is licensed under the Apache License, Version 2.0, kept at [anny-LICENSE.txt](assets/makehuman/anny-LICENSE.txt). The calibration file is converted, not otherwise modified; the weighting is reimplemented in Rust here. Anny's own body data are MakeHuman's CC0 assets, as above.
 
 ## Dependencies and references
 

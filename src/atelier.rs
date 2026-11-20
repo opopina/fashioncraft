@@ -1504,12 +1504,20 @@ impl eframe::App for Atelier {
         }
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.colored_label(
-                    workspace::ACCENT,
-                    egui::RichText::new("FASHIONCRAFT").strong().size(15.),
+                ui.label(
+                    egui::RichText::new("FASHIONCRAFT")
+                        .size(15.)
+                        .family(workspace::display_or_body(ui))
+                        .extra_letter_spacing(0.5)
+                        .color(workspace::app_ink(ui.visuals())),
                 );
-                ui.label(egui::RichText::new("ALPHA").small().color(Color32::GRAY))
-                    .on_hover_text("Early alpha · built on ClothCraft by erythrofr and contributors");
+                ui.label(
+                    egui::RichText::new("ALPHA")
+                        .small()
+                        .extra_letter_spacing(1.)
+                        .color(ui.visuals().warn_fg_color),
+                )
+                .on_hover_text("Early alpha · built on ClothCraft by erythrofr and contributors");
                 ui.separator();
                 let language = self.prefs.language;
                 if command_palette::launch_button(
@@ -1540,7 +1548,10 @@ impl eframe::App for Atelier {
                     self.invoke_command(commands::CommandId::ExportSession, &ctx);
                 }
                 ui.separator();
-                self.menu_bar(ui, &ctx, can_open_palette);
+                ui.scope(|ui| {
+                    workspace::menu_bar_style(ui);
+                    self.menu_bar(ui, &ctx, can_open_palette);
+                });
             });
         });
         self.animation_tick(&ctx);

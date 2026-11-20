@@ -405,7 +405,7 @@ mod tests {
             theme: ThemeChoice::Dark,
             ..Preferences::default()
         };
-        let reviewed = egui::Color32::from_rgb(0xEC, 0xEC, 0xEC);
+        let reviewed = egui::Color32::from_rgb(0xF2, 0xF1, 0xEE);
 
         apply(&ctx, &light);
         assert_eq!(

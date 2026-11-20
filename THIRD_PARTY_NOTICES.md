@@ -19,6 +19,23 @@ distributed under the MIT license; see [LICENSE](LICENSE), which keeps the origi
 notice, and [CONTRIBUTORS.md](CONTRIBUTORS.md).
 The MakeHuman CC0 notice applies to the bundled assets, not the program source.
 
+## ArtCraft look
+
+The workspace theme in `src/atelier/workspace.rs` follows the look of ArtCraft's own apps: its
+colour tokens, hairline rules, square panels and 3 px corners on controls are adapted from
+[storytold/artcraft](https://github.com/storytold/artcraft) (`artcraft-native/src/theme.rs`) and
+[storytold/craft-launcher](https://github.com/storytold/craft-launcher)
+(`crates/ui-egui/src/theme.rs`), both licensed under Apache-2.0. Only values and rules are
+adapted; no code or images from those repositories are included.
+
+## Fonts
+
+`assets/fonts/` holds the three typefaces ArtCraft's apps use, taken as distributed in
+storytold/craft-launcher (`assets/fonts/`), each under the SIL Open Font License 1.1 with its
+licence beside it: Inter (`OFL-Inter.txt`, The Inter Project Authors), Archivo
+(`OFL-Archivo.txt`, The Archivo Project Authors) and Geist Mono (`OFL-GeistMono.txt`, The Geist
+Project Authors). They are embedded in the studio binary unchanged.
+
 ## Optional Box3D research harness
 
 `experiments/box3d` contains ClothCraft's comparison harness. It requires a

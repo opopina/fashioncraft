@@ -251,7 +251,7 @@ impl Atelier {
                 painter.layout_no_wrap(text, egui::FontId::proportional(13.), Color32::WHITE);
             let place =
                 egui::Rect::from_min_size(at + egui::vec2(8., -22.), galley.size()).expand(4.);
-            painter.rect_filled(place, 4., Color32::from_black_alpha(190));
+            painter.rect_filled(place, 3., Color32::from_black_alpha(190));
             painter.galley(place.min + egui::vec2(4., 4.), galley, Color32::WHITE);
         }
     }

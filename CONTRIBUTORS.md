@@ -32,5 +32,7 @@ here with its source.
 
 ## Third-party material
 
-The bundled MakeHuman assets are CC0; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The bundled MakeHuman assets are CC0, and the workspace look adapts the colour tokens and shape rules
+of ArtCraft's apps (Apache-2.0) with their fonts Inter, Archivo and Geist Mono (SIL OFL 1.1); see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 Dependencies keep their own licenses.

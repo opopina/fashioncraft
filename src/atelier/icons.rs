@@ -711,7 +711,7 @@ pub(super) fn tool_button(
         let visuals = ui.visuals();
         let fill = button_fill(visuals, active, response.hovered());
         if fill != Color32::TRANSPARENT {
-            ui.painter().rect_filled(rect, CornerRadius::same(4), fill);
+            ui.painter().rect_filled(rect, CornerRadius::same(3), fill);
         }
         let icon_rect = Rect::from_min_size(
             egui::pos2(rect.left() + padding, rect.center().y - icon_size * 0.5),
@@ -742,7 +742,7 @@ pub(super) fn dropdown_button(ui: &mut egui::Ui, icon: Icon, tip: &str) -> Respo
     if ui.is_rect_visible(rect) {
         let ink = ui.visuals().text_color();
         let fill = button_fill(ui.visuals(), false, response.hovered());
-        ui.painter().rect_filled(rect, 4., fill);
+        ui.painter().rect_filled(rect, 3., fill);
         glyph(
             ui.painter(),
             Rect::from_center_size(rect.center() - Vec2::new(6., 0.), Vec2::splat(18.)),
@@ -782,7 +782,7 @@ pub(super) fn icon_only(
         let visuals = ui.visuals();
         let fill = button_fill(visuals, active, response.hovered());
         if fill != Color32::TRANSPARENT {
-            ui.painter().rect_filled(rect, CornerRadius::same(4), fill);
+            ui.painter().rect_filled(rect, CornerRadius::same(3), fill);
         }
         glyph(
             ui.painter(),

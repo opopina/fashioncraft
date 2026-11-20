@@ -108,7 +108,7 @@ fn export_chrome_preview() {
     for frame_index in 0..3 {
         let mut out=ctx.run_ui(egui::RawInput { time: Some(frame_index as f64), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO,Vec2::new(1600.,900.))),..Default::default() },|ui| {
             egui::Panel::top("top").show(ui,|ui| { ui.horizontal(|ui| {
-                ui.colored_label(workspace::ACCENT,egui::RichText::new("CLOTHCRAFT").strong());
+                ui.label(egui::RichText::new("FASHIONCRAFT").strong().color(workspace::app_ink(ui.visuals())));
                 ui.small("ALPHA");ui.separator();
                 for label in ["▶ Simulate","Simulation","File","Export","Workspace","Examples","Online patterns"] { let _=ui.button(label); }
             }); });

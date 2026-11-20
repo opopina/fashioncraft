@@ -2,15 +2,103 @@
 use super::*;
 use std::sync::OnceLock;
 
-/// Workspace accent: a warm amber that reads on the dark chrome, on the neutral pattern
-/// board and on the light variant; selected things, active tools and section titles carry it.
-pub(super) const ACCENT: Color32 = Color32::from_rgb(0xF2, 0xA1, 0x3A);
-/// Text drawn on the accent.
-const ON_ACCENT: Color32 = Color32::from_rgb(0x1B, 0x1B, 0x1F);
+// The ArtCraft look, as ArtCraft's own apps draw it (storytold/artcraft `artcraft-native` and
+// storytold/craft-launcher, Apache-2.0): near-black surfaces, hairline rules, square panels,
+// 3 px corners on anything pressable, the brand blue for what is selected. The colour tokens
+// below are theirs, by their names; FashionCraft's own colour marks only its wordmark.
 
-/// A section title in an inspector or window: the accent, bold.
+const fn hex(rgb: u32) -> Color32 {
+    let [_, r, g, b] = rgb.to_be_bytes();
+    Color32::from_rgb(r, g, b)
+}
+
+const fn alpha(rgb: u32, a: u8) -> Color32 {
+    let [_, r, g, b] = rgb.to_be_bytes();
+    Color32::from_rgba_unmultiplied_const(r, g, b, a)
+}
+
+/// The brand blue: selected things, active tools, focus.
+pub(super) const ACCENT: Color32 = hex(0x2d81ff);
+/// FashionCraft's colour in the ArtCraft family (a violet between FilmCraft's and
+/// EffectCraft's), as text on dark and on light surfaces.
+const APP_INK_DARK: Color32 = Color32::from_rgb(214, 150, 245);
+const APP_INK_LIGHT: Color32 = Color32::from_rgb(128, 40, 168);
+/// Corners of buttons, fields, menus and windows; panels stay square.
+const RADIUS: egui::CornerRadius = egui::CornerRadius::same(3);
+
+/// One appearance's colours.
+struct Tokens {
+    /// The page behind everything.
+    bg: Color32,
+    /// Windows, menus and the top bar.
+    panel: Color32,
+    /// Buttons and other controls at rest.
+    controls: Color32,
+    /// Wells and inputs.
+    sunken: Color32,
+    ink: Color32,
+    ink_strong: Color32,
+    muted: Color32,
+    /// Every hairline.
+    line: Color32,
+    /// Outlined buttons and hovered borders.
+    line_strong: Color32,
+    /// Hovered and pressed controls.
+    wash: Color32,
+    accent_ink: Color32,
+    warn: Color32,
+    bad: Color32,
+    shadow: Color32,
+}
+
+const DARK: Tokens = Tokens {
+    bg: hex(0x121316),
+    panel: hex(0x101014),
+    controls: hex(0x1e1f22),
+    sunken: hex(0x060607),
+    ink: hex(0xf2f1ee),
+    ink_strong: Color32::WHITE,
+    muted: alpha(0xf2f1ee, 153),
+    line: alpha(0xffffff, 38),
+    line_strong: alpha(0xf2f1ee, 102),
+    wash: alpha(0xffffff, 26),
+    accent_ink: hex(0x74aaff),
+    warn: hex(0xffc14d),
+    bad: hex(0xf87171),
+    shadow: Color32::from_black_alpha(140),
+};
+
+const LIGHT: Tokens = Tokens {
+    bg: hex(0xf2f1ee),
+    panel: hex(0xf7f6f3),
+    controls: hex(0xe9e8e4),
+    sunken: hex(0xffffff),
+    ink: hex(0x101014),
+    ink_strong: Color32::BLACK,
+    muted: alpha(0x101014, 158),
+    line: alpha(0x101014, 41),
+    line_strong: alpha(0x101014, 102),
+    wash: alpha(0x101014, 20),
+    accent_ink: hex(0x1659c4),
+    warn: hex(0x8a5800),
+    bad: hex(0xb3261e),
+    shadow: Color32::from_black_alpha(36),
+};
+
+/// FashionCraft's colour, readable on the current appearance.
+pub(super) fn app_ink(visuals: &egui::Visuals) -> Color32 {
+    if visuals.dark_mode {
+        APP_INK_DARK
+    } else {
+        APP_INK_LIGHT
+    }
+}
+
+/// A section title in an inspector or window: small capitals, as ArtCraft labels its groups.
 pub(super) fn section(text: impl Into<String>) -> egui::RichText {
-    egui::RichText::new(text).strong().color(ACCENT)
+    egui::RichText::new(text.into().to_uppercase())
+        .small()
+        .strong()
 }
 
 /// Pristine egui base styles, captured before the first install. Deriving each
@@ -26,11 +114,17 @@ fn bases(ctx: &egui::Context) -> &'static (egui::Style, egui::Style) {
     })
 }
 
-/// Theme-independent geometry and text sizes.
+/// Theme-independent geometry and text sizes: dense enough for an editor.
 fn geometry(style: &mut egui::Style) {
     style.spacing.item_spacing = Vec2::new(8., 6.);
     style.spacing.button_padding = Vec2::new(10., 6.);
     style.spacing.interact_size.y = 28.;
+    style.spacing.menu_margin = egui::Margin::same(4);
+    style.spacing.scroll = egui::style::ScrollStyle {
+        bar_width: 8.,
+        floating: true,
+        ..egui::style::ScrollStyle::thin()
+    };
     style
         .text_styles
         .insert(egui::TextStyle::Body, egui::FontId::proportional(13.));
@@ -42,52 +136,162 @@ fn geometry(style: &mut egui::Style) {
         .insert(egui::TextStyle::Small, egui::FontId::proportional(11.));
 }
 
-/// The reviewed light palette. These values are unchanged from the approved pass.
-fn light_visuals(visuals: &mut egui::Visuals) {
-    visuals.panel_fill = Color32::from_rgb(0xEC, 0xEC, 0xEC);
-    visuals.window_fill = Color32::from_rgb(0xF7, 0xF7, 0xF7);
-    visuals.faint_bg_color = Color32::from_rgb(0xDD, 0xDD, 0xDD);
-    visuals.extreme_bg_color = Color32::WHITE;
+fn visuals(visuals: &mut egui::Visuals, t: &Tokens) {
+    let shadow = egui::epaint::Shadow {
+        offset: [0, 8],
+        blur: 24,
+        spread: 0,
+        color: t.shadow,
+    };
+    visuals.panel_fill = t.bg;
+    visuals.window_fill = t.panel;
+    visuals.faint_bg_color = t.controls;
+    visuals.extreme_bg_color = t.sunken;
+    visuals.code_bg_color = t.sunken;
+    visuals.text_edit_bg_color = Some(t.sunken);
+    visuals.window_stroke = Stroke::new(1., t.line);
+    visuals.window_corner_radius = RADIUS;
+    visuals.menu_corner_radius = RADIUS;
+    visuals.window_shadow = shadow;
+    visuals.popup_shadow = shadow;
+    visuals.override_text_color = Some(t.ink);
+    visuals.hyperlink_color = t.accent_ink;
     visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
-    visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xDD, 0xDD, 0xDD);
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xF1, 0xDF, 0xC6);
-    visuals.widgets.active.bg_fill = Color32::from_rgb(0xEC, 0xC9, 0x95);
+    visuals.selection.stroke = Stroke::new(1., Color32::WHITE);
+    visuals.warn_fg_color = t.warn;
+    visuals.error_fg_color = t.bad;
+    visuals.striped = false;
     // Section headers sit on a full-width band, as property groups do.
     visuals.collapsing_header_frame = true;
+    for (w, fill, stroke, fg) in [
+        (&mut visuals.widgets.noninteractive, t.bg, t.line, t.muted),
+        (&mut visuals.widgets.inactive, t.controls, t.line, t.ink),
+        (
+            &mut visuals.widgets.hovered,
+            t.wash,
+            t.line_strong,
+            t.ink_strong,
+        ),
+        (
+            &mut visuals.widgets.active,
+            t.wash,
+            t.line_strong,
+            t.ink_strong,
+        ),
+        (
+            &mut visuals.widgets.open,
+            t.wash,
+            t.line_strong,
+            t.ink_strong,
+        ),
+    ] {
+        w.bg_fill = fill;
+        w.weak_bg_fill = fill;
+        w.bg_stroke = Stroke::new(1., stroke);
+        w.corner_radius = RADIUS;
+        w.fg_stroke = Stroke::new(1., fg);
+        w.expansion = 0.;
+    }
 }
 
-/// Dark counterpart of the light palette, carrying the same accent. Text and
-/// stroke colours stay egui's dark defaults so contrast remains readable.
-fn dark_visuals(visuals: &mut egui::Visuals) {
-    visuals.panel_fill = Color32::from_rgb(0x1B, 0x1B, 0x1F);
-    visuals.window_fill = Color32::from_rgb(0x23, 0x23, 0x28);
-    visuals.faint_bg_color = Color32::from_rgb(0x2C, 0x2C, 0x32);
-    visuals.extreme_bg_color = Color32::from_rgb(0x12, 0x12, 0x15);
-    visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
-    visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x32, 0x32, 0x38);
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x4A, 0x40, 0x33);
-    visuals.widgets.active.bg_fill = Color32::from_rgb(0x6B, 0x52, 0x2E);
-    visuals.collapsing_header_frame = true;
+/// Archivo at its display weight and width: the FashionCraft wordmark and large titles.
+pub(super) fn display() -> egui::FontFamily {
+    egui::FontFamily::Name("display".into())
+}
+
+/// The display family once [`install_fonts`] has put it in, else the body family.
+pub(super) fn display_or_body(ui: &egui::Ui) -> egui::FontFamily {
+    let installed = ui.fonts(|f| f.definitions().families.contains_key(&display()));
+    if installed {
+        display()
+    } else {
+        egui::FontFamily::Proportional
+    }
+}
+
+/// A face to register: its name, its file, its variation coordinates and its family.
+type Face<'a> = (
+    &'a str,
+    &'static [u8],
+    &'a [([u8; 4], f32)],
+    egui::FontFamily,
+);
+
+/// ArtCraft's typefaces: Inter for text, Archivo for display type and Geist Mono for
+/// monospaced text, each at the weight (and width) ArtCraft's apps use. egui's own faces stay
+/// behind them, for the symbols and emoji these lack.
+fn install_fonts(ctx: &egui::Context) {
+    use egui::{FontData, FontFamily, FontTweak, epaint::text::VariationCoords};
+    use std::sync::Arc;
+    const INTER: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/fonts/Inter-Variable.ttf"
+    ));
+    const ARCHIVO: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/fonts/Archivo-Variable.ttf"
+    ));
+    const GEIST_MONO: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/fonts/GeistMono-Variable.ttf"
+    ));
+    let mut fonts = egui::FontDefinitions::default();
+    let fallback = fonts
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    let faces: [Face<'_>; 3] = [
+        (
+            "Inter",
+            INTER,
+            &[(*b"wght", 400.), (*b"opsz", 14.)],
+            FontFamily::Proportional,
+        ),
+        (
+            "Archivo-Display",
+            ARCHIVO,
+            &[(*b"wght", 620.), (*b"wdth", 118.)],
+            display(),
+        ),
+        (
+            "GeistMono",
+            GEIST_MONO,
+            &[(*b"wght", 400.)],
+            FontFamily::Monospace,
+        ),
+    ];
+    for (name, bytes, coords, family) in faces {
+        // These faces carry no hinting: drawn at fractional positions, small text would blur.
+        let tweak = FontTweak {
+            coords: VariationCoords::new(coords.iter().copied()),
+            subpixel_binning: Some(false),
+            ..Default::default()
+        };
+        fonts.font_data.insert(
+            name.to_owned(),
+            Arc::new(FontData::from_static(bytes).tweak(tweak)),
+        );
+        let mut stack = vec![name.to_owned()];
+        stack.extend(fallback.iter().cloned());
+        fonts.families.insert(family, stack);
+    }
+    ctx.set_fonts(fonts);
 }
 
 fn install(ctx: &egui::Context, dark: bool) {
+    install_fonts(ctx);
     let base = bases(ctx);
     let mut style = if dark { base.1.clone() } else { base.0.clone() };
     geometry(&mut style);
-    if dark {
-        dark_visuals(&mut style.visuals);
-    } else {
-        light_visuals(&mut style.visuals);
-    }
+    visuals(&mut style.visuals, if dark { &DARK } else { &LIGHT });
     // Both egui theme slots receive the same workspace look, so the active theme
     // preference cannot pick a half-styled variant.
     ctx.set_style_of(egui::Theme::Light, style.clone());
     ctx.set_style_of(egui::Theme::Dark, style);
 }
 
-/// Install the reviewed light workspace chrome.
+/// Install the light workspace chrome.
 pub(super) fn style(ctx: &egui::Context) {
     install(ctx, false);
 }
@@ -98,6 +302,18 @@ pub(super) fn style(ctx: &egui::Context) {
 pub(super) fn dark_style(ctx: &egui::Context) {
     install(ctx, true);
 }
+
+/// Menu titles in the top bar: plain text that washes on hover, like a menu bar, not boxes.
+pub(super) fn menu_bar_style(ui: &mut egui::Ui) {
+    let widgets = &mut ui.visuals_mut().widgets;
+    widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+    widgets.inactive.bg_fill = Color32::TRANSPARENT;
+    widgets.inactive.bg_stroke = Stroke::NONE;
+    for w in [&mut widgets.hovered, &mut widgets.active, &mut widgets.open] {
+        w.bg_stroke = Stroke::NONE;
+    }
+}
+
 impl Atelier {
     pub(super) fn panel_browser(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;

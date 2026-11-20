@@ -789,9 +789,11 @@ impl Atelier {
             .fixed_pos(rect.min + egui::vec2(10., 10.))
             .order(egui::Order::Middle)
             .show(ctx, |ui| {
+                let visuals = ui.visuals();
                 egui::Frame::new()
-                    .fill(Color32::from_black_alpha(150))
-                    .corner_radius(8.)
+                    .fill(visuals.window_fill.gamma_multiply(0.92))
+                    .stroke(visuals.window_stroke)
+                    .corner_radius(3.)
                     .inner_margin(4.)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {

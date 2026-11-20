@@ -248,7 +248,7 @@ impl Radial {
                     center + Vec2::new(0., OUTER + 25.),
                     Vec2::new(330., 26.),
                 );
-                p.rect_filled(r, 8., bg);
+                p.rect_filled(r, 3., bg);
                 p.text(
                     r.center(),
                     egui::Align2::CENTER_CENTER,

@@ -639,7 +639,7 @@ fn paint_construction_preview(ui: &mut egui::Ui, points: [DVec2; 4], second: Opt
         egui::Sense::hover(),
     );
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 4., ui.visuals().extreme_bg_color);
+    painter.rect_filled(rect, 3., ui.visuals().extreme_bg_color);
     let inner = rect.shrink(14.);
     let scale =
         (inner.width() as f64 / span.x.max(1e-9)).min(inner.height() as f64 / span.y.max(1e-9));

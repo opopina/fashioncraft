@@ -3,24 +3,30 @@
 ## FashionCraft icon
 
 `fashioncraft-icon.png` (1024 × 1024, the native window icon) and `fashioncraft-icon-128.png`
-(128 × 128, the size app catalogs show) are a silk moth, *Bombyx mori*, the animal that gives
-silk, as a line engraving in ivory and black ink on FashionCraft's amber (`#f2a13a`) rounded
-square, with transparent corners. It follows the ArtCraft apps' shared style (an engraved animal
-on a saturated square, cut by the tile's edges) without reusing any of their artwork.
+(128 × 128, the size app catalogs show) are a **vicuña**, engraved in ink on paper, on
+FashionCraft's fuchsia (`#dd2cce`). The vicuña gives the finest fibre there is and lives in
+Ecuador's Chimborazo reserve. The icon follows the ArtCraft apps' icon template: a portrait on a
+full-bleed field, the body running off the tile, exactly three colours (ink `#0b0b0c`, paper
+`#efe9dc` and the app colour), a 512-unit tile with 112-unit corners, the drawing stopping
+5 units short of the edge. None of their artwork is reused.
 
-The icon is drawn entirely by `scripts/fashioncraft-icon.py` (numpy, SciPy, Pillow): the moth is
-modelled as a field of tones (wings with veins, cross lines and shading, a furry thorax, a banded
-abdomen, feathery antennae), then engraved as lines whose width follows the tone, out from each
-wing's root and across the body, with crossing lines in the darkest parts and short strokes for
-fur. No image is read. To redraw it:
+The drawing, `source/vicuna-chatgpt.webp`, was made by Ricardo Rivadeneira with ChatGPT (OpenAI)
+on 2026-11-20 from prompts written for this repository (an original nineteenth-century-style
+engraving portrait of a vicuña with its fleecy shoulders, three flat colours, no text).
+`scripts/fashioncraft-icon.py` turns it into the icon: it finds the drawing on the source's tile,
+recolours it by unmixing each pixel into ink, paper and field and repainting those shares in the
+template's colours (so fine strokes and antialiasing survive), continues the fleece a little past
+the source's rounder corners, frames it with the ears whole and the body running off the bottom,
+and adds the template's corners and thin rim. To remake the icons:
 
 ```sh
-python3 scripts/fashioncraft-icon.py assets/branding/fashioncraft-icon.png 1024
-python3 scripts/fashioncraft-icon.py assets/branding/fashioncraft-icon-128.png 128
+python3 scripts/fashioncraft-icon.py
 ```
 
-It is original to this repository and distributed under its [MIT License](../../LICENSE).
-`fashioncraft-icon.svg` is the earlier placeholder (a dress on a hanger), kept for the record.
+The icon is distributed under this repository's [MIT License](../../LICENSE).
+
+Earlier icons, kept for the record: `silk-moth-icon.png`, a silk moth on amber drawn entirely by
+`scripts/silk-moth-icon.py`, and `fashioncraft-icon.svg`, a dress on a hanger.
 
 ## ClothCraft icon (inherited)
 

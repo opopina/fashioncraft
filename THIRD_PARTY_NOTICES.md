@@ -36,6 +36,12 @@ licence beside it: Inter (`OFL-Inter.txt`, The Inter Project Authors), Archivo
 (`OFL-Archivo.txt`, The Archivo Project Authors) and Geist Mono (`OFL-GeistMono.txt`, The Geist
 Project Authors). They are embedded in the studio binary unchanged.
 
+## App icon
+
+The FashionCraft icon's drawing (`assets/branding/source/vicuna-chatgpt.webp`) was generated with
+ChatGPT (OpenAI) by the project's author; the icon made from it is distributed with the
+repository under its MIT License. See [assets/branding/README.md](assets/branding/README.md).
+
 ## Optional Box3D research harness
 
 `experiments/box3d` contains ClothCraft's comparison harness. It requires a

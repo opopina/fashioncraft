@@ -2307,6 +2307,29 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Edit texture on the board: drag a piece's texture, set its size, turn and grain" => {
+            "Editar textura en el tablero: arrastra la textura de una pieza; tamaño, giro e hilo"
+        }
+        "Edit texture on the cloth: drag a piece's texture in the 3D view" => {
+            "Editar textura sobre la tela: arrastra la textura de una pieza en la vista 3D"
+        }
+        "Drag on a piece to move its texture · the window sets size, turn and grain" => {
+            "Arrastra sobre una pieza para mover su textura · la ventana ajusta tamaño, giro e hilo"
+        }
+        "Texture moved" => "Textura movida",
+        "Edit texture" => "Editar textura",
+        "Select a piece, or drag on one, to move its texture" => {
+            "Selecciona una pieza, o arrastra sobre una, para mover su textura"
+        }
+        "Texture position" => "Posición de la textura",
+        "Grain of this piece" => "Hilo de esta pieza",
+        "Turns the warp and weft of this piece, and its texture with them" => {
+            "Gira la urdimbre y la trama de esta pieza, y su textura con ellas"
+        }
+        "Fabric texture" => "Textura del tejido",
+        "This fabric has no texture image; add one in the Fabric tab" => {
+            "Este tejido no tiene imagen de textura; añade una en la pestaña Tejido"
+        }
         "Tear seam: open a stretch of the selected seam, as a rip" => {
             "Rasgar costura: abrir un tramo de la costura seleccionada, como un rasgado"
         }

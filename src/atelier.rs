@@ -128,6 +128,8 @@ mod shapes_ui;
 mod stage_settings;
 #[path = "atelier/steam_ui.rs"]
 mod steam_ui;
+#[path = "atelier/texture_ui.rs"]
+mod texture_ui;
 #[path = "atelier/trace_pen.rs"]
 mod trace_pen;
 #[path = "atelier/trims_ui.rs"]
@@ -749,6 +751,7 @@ impl Atelier {
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
             Id::SuperimposeSide => self.superimpose_side()?,
+            Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
             Id::HighQualityView => {
                 let display = &mut self.prefs.garment_display;
                 display.high_quality = !display.high_quality;
@@ -1542,6 +1545,7 @@ impl eframe::App for Atelier {
             self.camera_props_window(&ctx);
             self.pleats_window(&ctx);
             self.mesh_select_window(&ctx);
+            self.texture_edit_window(&ctx);
             self.steam_window(&ctx);
             self.object_browser_window(&ctx);
         }

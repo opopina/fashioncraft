@@ -170,10 +170,16 @@ pub fn bake(
             .filter(|g| g.panel_id == panel.id && g.side == GraphicSide::Front)
             .filter_map(|g| Some((g, *images.get(&g.asset_id)?)))
             .collect();
+        let shift = template
+            .texture_offsets
+            .get(&panel.id)
+            .copied()
+            .unwrap_or_default();
         let paint = |p: DVec2| {
             let mut c = base;
             if let Some((t, image)) = texture {
-                let warp_weft = DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
+                let q = p - shift;
+                let warp_weft = DVec2::new(q.x * cos + q.y * sin, -q.x * sin + q.y * cos);
                 c *= sample(image, t.image_uv(warp_weft), true).0;
             }
             for (g, image) in &prints {

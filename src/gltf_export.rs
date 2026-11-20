@@ -163,10 +163,19 @@ pub fn texture_coordinates(template: &GarmentTemplate, garment: &CompiledGarment
         let texture = appearances[panel.material]
             .as_ref()
             .and_then(|a| a.texture.as_ref());
+        // The image sits where the piece's texture position puts it.
+        let offset = template
+            .texture_offsets
+            .get(&panel.id)
+            .copied()
+            .unwrap_or_default();
         for i in panel.vertices.clone() {
             let p = garment.mesh.uv[i];
             let warp_weft = DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
-            uv[i] = texture.map_or(warp_weft, |t| t.image_uv(warp_weft));
+            uv[i] = texture.map_or(warp_weft, |t| {
+                let q = p - offset;
+                t.image_uv(DVec2::new(q.x * cos + q.y * sin, -q.x * sin + q.y * cos))
+            });
         }
     }
     uv

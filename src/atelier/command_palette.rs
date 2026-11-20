@@ -211,6 +211,8 @@ fn aliases(id: CommandId) -> &'static str {
         HighQualityView => "high quality view render supersample smooth antialias",
         SuperimposeSide => "superimpose side beside lay flat seam",
         DeleteAvatar => "delete remove avatar body mannequin",
+        EditTexture2d => "edit texture shift offset position grain repeat 2d board",
+        EditTexture3d => "edit texture shift offset position cloth 3d",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

@@ -345,6 +345,18 @@ pub enum Command {
         seam: String,
         tears: Vec<[f64; 2]>,
     },
+    /// Turn `panel`'s grain to `degrees` (warp direction in its material, counter-clockwise from
+    /// its x axis): the fabric's warp and weft, and its texture, follow. One undo step.
+    SetPanelGrain {
+        panel: String,
+        degrees: f64,
+    },
+    /// Move `panel`'s fabric texture to sit `offset` (material metres) across it; zero puts it
+    /// back. Looks only. One undo step.
+    SetTextureOffset {
+        panel: String,
+        offset: DVec2,
+    },
     /// Mesh `panels` as quads (an even grid of squares along each piece's grain inside) or as
     /// free triangles. One undo step.
     SetMeshQuads {
@@ -692,6 +704,8 @@ impl Command {
             Self::RemoveSeams { .. } => "Remove seams",
             Self::AddSteam { .. } => "Steam",
             Self::SetSeamTears { .. } => "Tear seam",
+            Self::SetTextureOffset { .. } => "Edit texture",
+            Self::SetPanelGrain { .. } => "Grain",
             Self::SetMeshQuads { quads: true, .. } => "Convert to quads",
             Self::SetMeshQuads { quads: false, .. } => "Convert to triangles",
             Self::RemoveSteam { .. } => "Remove steam",
@@ -1590,6 +1604,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.inactive_seams.retain(|id| seams.contains(id));
     template.seam_tears.retain(|id, _| seams.contains(id));
     template.steam.retain(|s| panels.contains(&s.panel));
+    template.texture_offsets.retain(|id, _| panels.contains(id));
 }
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
@@ -1604,6 +1619,7 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         // Board locks only filter 2D picking; flipping a piece's front only changes its look.
         t.locked_panels.clear();
         t.flipped_panels.clear();
+        t.texture_offsets.clear();
         t.internal_lines_locked = false;
         // Pins held on to the avatar only move while an animation records.
         t.pins_attached = false;
@@ -1650,6 +1666,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         && a.locked_panels == b.locked_panels
         && a.internal_lines_locked == b.internal_lines_locked
         && a.flipped_panels == b.flipped_panels
+        && a.texture_offsets == b.texture_offsets
     {
         return false;
     }
@@ -1661,6 +1678,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         t.locked_panels.clear();
         t.internal_lines_locked = false;
         t.flipped_panels.clear();
+        t.texture_offsets.clear();
         for p in &mut t.panels {
             if let Some(polygon) = p.polygon.as_mut() {
                 polygon.seam_allowances.clear();
@@ -4663,6 +4681,47 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 return Err("Seam not found".into());
             }
             template.seams.retain(|s| s.id != seam);
+        }
+        Command::SetPanelGrain { panel, degrees } => {
+            let index = panel_index(&template, &panel)?;
+            if !degrees.is_finite() {
+                return Err("A grain angle must be finite".into());
+            }
+            // Within a half turn either way.
+            let degrees = (degrees + 180.).rem_euclid(360.) - 180.;
+            let p = &mut template.panels[index];
+            if (p.grain_degrees - degrees).abs() < 1e-9 {
+                return Err("The grain is there already".into());
+            }
+            p.grain_degrees = degrees;
+            // A quad mesh keeps its grid along the grain.
+            if let Some(polygon) = p.polygon.as_mut()
+                && let Some(meshing) = polygon.meshing.as_mut()
+                && meshing.quads
+            {
+                meshing.axis_degrees = degrees;
+            }
+            selected = Some(panel);
+        }
+        Command::SetTextureOffset { panel, offset } => {
+            panel_index(&template, &panel)?;
+            if !offset.is_finite() || offset.length() > 100. {
+                return Err("A texture position must be finite and within 100 m".into());
+            }
+            let before = template
+                .texture_offsets
+                .get(&panel)
+                .copied()
+                .unwrap_or_default();
+            if before.distance(offset) < 1e-12 {
+                return Err("The texture is there already".into());
+            }
+            if offset.length() < 1e-12 {
+                template.texture_offsets.remove(&panel);
+            } else {
+                template.texture_offsets.insert(panel.clone(), offset);
+            }
+            selected = Some(panel);
         }
         Command::SetMeshQuads { panels, quads } => {
             if panels.is_empty() {

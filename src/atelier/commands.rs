@@ -203,6 +203,8 @@ pub enum CommandId {
     HighQualityView,
     SuperimposeSide,
     DeleteAvatar,
+    EditTexture2d,
+    EditTexture3d,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2013,6 +2015,24 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         DeleteAvatar,
         "avatar.delete",
         "Delete the avatar: the garment hangs on its own",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        EditTexture2d,
+        "materials.edit_texture_2d",
+        "Edit texture on the board: drag a piece's texture, set its size, turn and grain",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        EditTexture3d,
+        "materials.edit_texture_3d",
+        "Edit texture on the cloth: drag a piece's texture in the 3D view",
         Pattern,
         None,
         NotUndoable,

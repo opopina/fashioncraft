@@ -440,6 +440,8 @@ impl Atelier {
                 // So does measuring.
             } else if self.ik_interaction(&response, rect) {
                 // A hand or foot of the pose being edited is being dragged.
+            } else if self.texture_edit_3d(&response, rect) {
+                // Moving a texture takes drags on the cloth.
             } else if self.mesh_select_interaction(&response, rect) {
                 // A select-mesh tool takes the clicks on the cloth.
             } else if self.graphic_3d_interaction(&response, rect) {
@@ -540,6 +542,7 @@ impl Atelier {
         let display = self.prefs.garment_display;
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
+        let texture_offsets = self.texture_offsets_per_face();
         // High quality: twice the pixels each way, averaged down when shown.
         let supersample = if display.high_quality { 2. } else { 1. };
         let texture = self.viewport.draw_scene(
@@ -588,6 +591,7 @@ impl Atelier {
                     // cloth resting just above that shell.
                     contact_tolerance_m: self.settings.contact.radius + 0.002,
                     translucent: display.style == super::garment_display::GarmentStyle::Translucent,
+                    texture_offsets: texture_offsets.as_deref(),
                 },
             },
             self.wire && !self.clean_view,

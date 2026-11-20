@@ -272,8 +272,8 @@ const MATERIALS: &[Item] = &[
     Sub(
         "Texture",
         &[
-            Todo("Edit texture (2D)"),
-            Todo("Edit texture (3D)"),
+            Run("Edit texture (2D)", C::EditTexture2d),
+            Run("Edit texture (3D)", C::EditTexture3d),
             Run("Refresh textures", C::RefreshTextures),
         ],
     ),
@@ -522,6 +522,7 @@ impl Atelier {
             C::SelectAllSeams => self.authoring.selection.all_seams,
             C::Steam => self.authoring.steam.open,
             C::HighQualityView => display.high_quality,
+            C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::SelectMeshBrush => {
                 self.authoring.mesh_select.shape == Some(super::mesh_select::SelectShape::Brush)
             }
@@ -734,7 +735,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 205, "{done} of {all}");
+        assert!(done >= 207, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

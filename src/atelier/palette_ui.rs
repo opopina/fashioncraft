@@ -144,9 +144,16 @@ impl Atelier {
             .zip(weights)
             .map(|(&v, w)| garment.mesh.uv[v] * w)
             .sum();
+        let shift = template
+            .texture_offsets
+            .get(&panel.id)
+            .copied()
+            .unwrap_or_default();
         let texel = appearance.texture.clone().and_then(|texture| {
             let image = self.image_of(ctx, &texture.asset_id)?;
             let (sin, cos) = grain.to_radians().sin_cos();
+            // The image sits where the piece's texture position puts it.
+            let uv = uv - shift;
             let warp_weft = glam::DVec2::new(uv.x * cos + uv.y * sin, -uv.x * sin + uv.y * cos);
             let p = texture.image_uv(warp_weft);
             let [w, h] = image.size;

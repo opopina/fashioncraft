@@ -1715,7 +1715,7 @@ impl Atelier {
                     .zoom_at(rect, pos, (f64::from(zoom) * 0.002).exp());
             }
         }
-        if self.steam_interaction(rect, &response) {
+        if self.texture_edit_board(rect, &response) || self.steam_interaction(rect, &response) {
             self.authoring.board.hover_snap = None;
             self.paint_board(ui, rect, &response);
             return;

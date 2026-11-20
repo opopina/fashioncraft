@@ -340,6 +340,10 @@ pub struct GarmentTemplate {
     /// sewn, from the seam's start.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_zippers: BTreeMap<String, SeamZipper>,
+    /// Where each piece's fabric texture sits, by piece id: the image moved this far across the
+    /// piece, in its material coordinates (metres). Looks only.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub texture_offsets: BTreeMap<String, glam::DVec2>,
     /// Steam brushed onto the pieces: each stamp shrinks or stretches the cloth under it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steam: Vec<super::steam::SteamStamp>,
@@ -787,6 +791,11 @@ impl GarmentTemplate {
         for id in &self.flipped_panels {
             if !self.panels.iter().any(|p| &p.id == id) {
                 return Err(format!("Flipped panel {id} is not in the template"));
+            }
+        }
+        for (id, offset) in &self.texture_offsets {
+            if !self.panels.iter().any(|p| &p.id == id) || !offset.is_finite() {
+                return Err(format!("Texture position on unknown piece {id}"));
             }
         }
         for (id, tears) in &self.seam_tears {
@@ -1505,6 +1514,7 @@ impl GarmentTemplate {
             seam_zippers: Default::default(),
             inactive_seams: Default::default(),
             seam_tears: Default::default(),
+            texture_offsets: Default::default(),
             steam: vec![],
             tacks: vec![],
             line_folds: vec![],

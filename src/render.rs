@@ -64,6 +64,9 @@ pub struct DisplayOptions<'a> {
     pub contact_tolerance_m: f64,
     /// Draw the garment see-through, blended over the avatar (Garment style › Translucent).
     pub translucent: bool,
+    /// Per-triangle texture position (piece's texture offset, material metres); `None` is
+    /// zero everywhere.
+    pub texture_offsets: Option<&'a [glam::DVec2]>,
 }
 
 /// What the strain map measures.
@@ -189,6 +192,7 @@ impl Default for DisplayOptions<'_> {
             schematic: None,
             contact_tolerance_m: 0.,
             translucent: false,
+            texture_offsets: None,
         }
     }
 }
@@ -350,6 +354,7 @@ fn face_surface(
     uv: [glam::DVec2; 3],
     flipped: bool,
     layers: [Option<u32>; 3],
+    texture_offset: glam::DVec2,
 ) -> ([f32; 3], Surface) {
     let layer = layers[0];
     let (front, back) = (appearance.linear_color(), appearance.linear_back_color());
@@ -362,8 +367,13 @@ fn face_surface(
             back: if flipped { front } else { back },
             uv: warp_weft.map(|p| p.as_vec2().to_array()),
             weave: appearance.weave_parameters(),
+            // The image moved across the piece by its texture position; the weave stays.
             map_uv: texture.map_or([[0.; 2]; 3], |(t, _)| {
-                warp_weft.map(|p| t.image_uv(p).as_vec2().to_array())
+                uv.map(|p| {
+                    let p = p - texture_offset;
+                    let along = glam::DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
+                    t.image_uv(along).as_vec2().to_array()
+                })
             }),
             map: texture.map_or([-1., 0., -1., -1.], |(t, layer)| {
                 let detail = |k: usize| layers[k].map_or(-1., |l| l as f32);
@@ -1237,6 +1247,10 @@ impl Viewport {
                     t.vertices.map(|i| mesh.uv[i]),
                     flipped,
                     layers.get(t.material).copied().unwrap_or([None; 3]),
+                    display
+                        .texture_offsets
+                        .and_then(|o| o.get(face).copied())
+                        .unwrap_or_default(),
                 )
             });
             let points = t.vertices.map(|i| state.x[i].as_vec3());
@@ -1521,7 +1535,17 @@ impl Viewport {
                         let appearance = optics.and_then(|v| v.get(t.fabric)?.as_ref())?;
                         let grain = materials.get(t.fabric)?.grain_degrees;
                         let layers = layers.get(t.fabric).copied().unwrap_or([None; 3]);
-                        Some(face_surface(appearance, grain, t.material, false, layers).1)
+                        Some(
+                            face_surface(
+                                appearance,
+                                grain,
+                                t.material,
+                                false,
+                                layers,
+                                glam::DVec2::ZERO,
+                            )
+                            .1,
+                        )
                     })
                     .collect()
             })
@@ -2286,19 +2310,19 @@ mod face_tests {
             ..Default::default()
         };
         let uv = [glam::DVec2::ZERO, glam::DVec2::X, glam::DVec2::Y];
-        let (front, s) = face_surface(&a, 0., uv, false, [None; 3]);
+        let (front, s) = face_surface(&a, 0., uv, false, [None; 3], glam::DVec2::ZERO);
         assert!(
             front[0] > front[2] && s.back[2] > s.back[0],
             "red front, blue back"
         );
-        let (front, s) = face_surface(&a, 0., uv, true, [None; 3]);
+        let (front, s) = face_surface(&a, 0., uv, true, [None; 3], glam::DVec2::ZERO);
         assert!(
             front[2] > front[0] && s.back[0] > s.back[2],
             "flipped: blue front, red back"
         );
         // Without a back colour both faces are the front colour.
         let plain = FabricAppearance::default();
-        let (front, s) = face_surface(&plain, 0., uv, true, [None; 3]);
+        let (front, s) = face_surface(&plain, 0., uv, true, [None; 3], glam::DVec2::ZERO);
         assert_eq!(front, s.back);
     }
 
@@ -2317,7 +2341,7 @@ mod face_tests {
             glam::DVec2::new(0.01, 0.),
             glam::DVec2::Y,
         ];
-        let (_, s) = face_surface(&a, 90., uv, false, [None; 3]);
+        let (_, s) = face_surface(&a, 90., uv, false, [None; 3], glam::DVec2::ZERO);
         assert_eq!(s.weave, [2., 0.002, 0.5]);
         // A quarter-turned grain: the material x direction runs across the warp.
         assert!(
@@ -2347,16 +2371,23 @@ mod face_tests {
             glam::DVec2::new(0.1, 0.),
             glam::DVec2::new(0., 0.05),
         ];
-        let (_, s) = face_surface(&a, 0., uv, false, [Some(2), None, Some(3)]);
+        let (_, s) = face_surface(
+            &a,
+            0.,
+            uv,
+            false,
+            [Some(2), None, Some(3)],
+            glam::DVec2::ZERO,
+        );
         assert_eq!(s.map, [2., 0.0005, -1., 3.]);
         // 10 cm along the warp is two 5 cm repeats; 5 cm along the weft is two 2.5 cm ones.
         assert_eq!(s.map_uv[1], [2., 0.]);
         assert_eq!(s.map_uv[2], [0., 2.]);
         // Without a loaded image (no layer) the face shows no texture.
-        let (_, s) = face_surface(&a, 0., uv, false, [None; 3]);
+        let (_, s) = face_surface(&a, 0., uv, false, [None; 3], glam::DVec2::ZERO);
         assert_eq!(s.map, [-1., 0., -1., -1.]);
         // A quarter-turned grain turns the repeat with it.
-        let (_, s) = face_surface(&a, 90., uv, false, [Some(0), None, None]);
+        let (_, s) = face_surface(&a, 90., uv, false, [Some(0), None, None], glam::DVec2::ZERO);
         assert!((s.map_uv[1][0]).abs() < 1e-6 && (s.map_uv[1][1] + 4.).abs() < 1e-5);
     }
 }

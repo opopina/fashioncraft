@@ -19,8 +19,8 @@ drawing and remakes the rest:
 
     python3 scripts/fashioncraft-icon.py [SOURCE] [FIELD RRGGBB]
 
-Writes assets/branding/fashioncraft-icon.png (1024 px) and fashioncraft-icon-128.png. Needs
-numpy, SciPy and Pillow.
+Writes assets/branding/fashioncraft-icon.png (1024 px), fashioncraft-icon-128.png and
+fashioncraft-icon-macos.png (the tile on Apple's 824/1024 grid). Needs numpy, SciPy and Pillow.
 """
 import sys
 
@@ -169,6 +169,13 @@ def main():
         path = f"assets/branding/{name}"
         icon.resize((size, size), Image.LANCZOS).save(path)
         print(path)
+    # macOS draws app icons on Apple's grid: the tile 824 of 1024 wide, centred, clear round it.
+    # The Dock shows this one for the running app and the app bundle's icon is made from it.
+    grid = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    grid.paste(icon.resize((824, 824), Image.LANCZOS), (100, 100))
+    path = "assets/branding/fashioncraft-icon-macos.png"
+    grid.save(path)
+    print(path)
 
 
 if __name__ == "__main__":

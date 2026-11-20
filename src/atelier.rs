@@ -216,10 +216,14 @@ pub fn run(
             ((1100..=3840).contains(&w) && (700..=2160).contains(&h))
                 .then_some([w as f32, h as f32])
         });
-    let icon = eframe::icon_data::from_png_bytes(include_bytes!(
-        "../assets/branding/fashioncraft-icon.png"
-    ))
-    .map_err(|error| format!("Cannot decode the bundled app icon: {error}"))?;
+    // macOS shows this as the running app's Dock icon, so it carries Apple's grid margin there;
+    // elsewhere the tile fills the icon, as other apps' do.
+    #[cfg(target_os = "macos")]
+    let icon_png: &[u8] = include_bytes!("../assets/branding/fashioncraft-icon-macos.png");
+    #[cfg(not(target_os = "macos"))]
+    let icon_png: &[u8] = include_bytes!("../assets/branding/fashioncraft-icon.png");
+    let icon = eframe::icon_data::from_png_bytes(icon_png)
+        .map_err(|error| format!("Cannot decode the bundled app icon: {error}"))?;
     let mut wgpu_options = eframe::egui_wgpu::WgpuConfiguration::default();
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup) = &mut wgpu_options.wgpu_setup {
         let base = setup.device_descriptor.clone();

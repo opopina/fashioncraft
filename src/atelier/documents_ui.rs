@@ -753,7 +753,7 @@ impl Atelier {
             .as_ref()
             .and_then(|p| p.file_name())
             .and_then(|s| s.to_str())
-            .unwrap_or("Untitled");
+            .unwrap_or(i18n::tr(self.prefs.language, "Untitled"));
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
             "{}{} — FashionCraft",
             name,

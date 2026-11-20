@@ -2306,6 +2306,7 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Haz clic en la prenda donde va el gráfico · Esc cancela"
         }
         "Graphic cancelled" => "Gráfico cancelado",
+        "Untitled" => "Sin título",
         "Edit style line" => "Editar línea de estilo",
         "Move style line" => "Mover línea de estilo",
         "Scale style line" => "Escalar línea de estilo",

@@ -1,0 +1,106 @@
+name: FashionCraft release
+
+# Builds the FashionCraft app for macOS, Windows and Linux and puts the files, with their
+# SHA256SUMS.txt, on a draft GitHub Release for the tag. File names follow the ArtCraft launcher's
+# `<app>-<version>-<os>-<arch>[-portable].<ext>`; the tag is `v<version>` from Cargo.toml.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: python3 -m pip install --user pillow
+      # Signed with the Developer ID identity when the repository provides one; ad hoc otherwise.
+      - name: Package the app and disk image
+        env:
+          FASHIONCRAFT_SIGN_IDENTITY: ${{ secrets.FASHIONCRAFT_SIGN_IDENTITY }}
+        run: sh scripts/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python -m pip install pillow
+      - name: Package the portable app
+        shell: pwsh
+        run: ./scripts/package-windows-app.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+
+  linux:
+    # The oldest supported runner, so the program runs on older systems' C library too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the desktop link dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev libasound2-dev \
+            libssl-dev pkg-config libfuse2 python3-pil
+      - name: Fetch appimagetool
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+      - name: Package the tarball and AppImage
+        env:
+          APPIMAGETOOL: ${{ github.workspace }}/appimagetool
+        run: sh scripts/package-linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+
+  release:
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum fashioncraft-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Draft the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "FashionCraft $GITHUB_REF_NAME" \
+            --notes "FashionCraft $GITHUB_REF_NAME" dist/*
+      - name: Keep the files of a manual run
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: fashioncraft-release
+          path: dist/*

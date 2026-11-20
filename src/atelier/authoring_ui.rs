@@ -928,7 +928,27 @@ impl Atelier {
     pub(super) fn edit(&mut self, command: Command) -> bool {
         let name = command.name();
         match authoring::apply(&self.project.template, command) {
-            Ok(edit) => {
+            Ok(mut edit) => {
+                // Copies and mirrored copies are named in the interface's language.
+                {
+                    let before: std::collections::BTreeSet<&str> = self
+                        .project
+                        .template
+                        .panels
+                        .iter()
+                        .map(|p| p.id.as_str())
+                        .collect();
+                    for p in edit
+                        .template
+                        .panels
+                        .iter_mut()
+                        .filter(|p| !before.contains(p.id.as_str()))
+                    {
+                        if let Some(local) = i18n::copy_name(self.prefs.language, &p.name) {
+                            p.name = local;
+                        }
+                    }
+                }
                 if edit.reset_simulation
                     && (!self.project.template.pin_targets.is_empty()
                         || !self.project.template.frozen_panels.is_empty()

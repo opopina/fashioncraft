@@ -200,5 +200,41 @@ fn a_windows_1252_dxf_loads_with_its_accented_labels() {
     let source = Source::load(&path).unwrap();
     let drawing = source.inspect(Options::default()).unwrap();
     assert_eq!(drawing.paths.len(), 1);
+    assert_eq!(drawing.texts[0].text, "Puño doblado");
     assert_eq!(pattern_import::windows_1252(&[0x80, 0xF1, b'a']), "€ña");
+}
+
+#[test]
+fn pieces_are_named_after_the_labels_written_on_them() {
+    let text = |at: (f64, f64), height: f64, value: &str| {
+        format!(
+            "0\nTEXT\n8\nTEXTO\n10\n{}\n20\n{}\n40\n{height}\n1\n{value}\n",
+            at.0, at.1
+        )
+    };
+    let entities = [
+        // A front: cutting line, sewing line inside it, a note on the piece and the title
+        // block written just above the cutting line.
+        rectangle(0., 0., 100., 200.),
+        rectangle(10., 10., 80., 180.),
+        text((50., 100.), 2., "Bolsillo 160 mm"),
+        text((0., 220.), 5., "01 DELANTERO"),
+        text((0., 212.), 3., "Cuero negro · 2 espejados"),
+        // A back labelled with formatted MTEXT inside it.
+        rectangle(300., 0., 100., 100.),
+        "0\nMTEXT\n8\nTEXTO\n10\n350\n20\n50\n40\n4\n1\n{\\fArial|b1;02 \\PEspalda}\n".to_string(),
+        // A piece with no label keeps the layer and id.
+        rectangle(600., 0., 50., 50.),
+    ]
+    .concat();
+    let drawing = read_ascii(&document(&entities), Options::default()).unwrap();
+    assert_eq!(drawing.texts.len(), 4);
+    assert!(drawing.issues.is_empty(), "labels are not issues");
+    let t = template();
+    let edit = prepare(&t, &entities, &[1, 2, 3]).unwrap();
+    let names: Vec<&str> = edit.template.panels[t.panels.len()..]
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    assert_eq!(names, ["01 DELANTERO", "02 Espalda", "CUT front · dxf_3"]);
 }

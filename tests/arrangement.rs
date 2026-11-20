@@ -493,3 +493,90 @@ fn an_elliptical_wrap_hugs_the_back_closer_than_the_cylinder() {
         gaps[0]
     );
 }
+
+/// A rectangle `w × h` metres in material coordinates.
+fn rectangle(w: f64, h: f64) -> Vec<DVec2> {
+    vec![
+        DVec2::ZERO,
+        DVec2::new(w, 0.),
+        DVec2::new(w, h),
+        DVec2::new(0., h),
+    ]
+}
+
+fn mannequin() -> SurfaceMesh {
+    SurfaceMesh::load_obj(Path::new("assets/makehuman/mannequin.obj")).unwrap()
+}
+
+#[test]
+fn a_side_panel_sits_between_the_torso_and_the_arm() {
+    // A jacket's side panel: a strip under the arm. Counting the arm beside the torso put it
+    // outside the arm; it fits in between, below the armpit.
+    let avatar = mannequin();
+    let f = set()
+        .evaluate(&frame(), &landmarks(), "torso-middle-left")
+        .unwrap();
+    let a =
+        arrange_elliptical(&rectangle(0.048, 0.4), &f, 0.05, Some(80.0), Some(&avatar)).unwrap();
+    let elbow = landmark("joint-l-elbow");
+    assert!(
+        a.radius_m < elbow.x - f.origin.x,
+        "the panel at {:.3} m is not inside the arm at {:.3} m",
+        a.radius_m,
+        elbow.x
+    );
+    assert!(a.wrap.is_some());
+}
+
+#[test]
+fn a_long_front_keeps_its_wrap_close_to_the_body() {
+    // A jacket front reaches from the neck to below the hips. It used to be flattened and
+    // pushed some 60 cm away; it stays wrapped round the torso.
+    let avatar = mannequin();
+    let f = set()
+        .evaluate(&frame(), &landmarks(), "torso-middle-front-left")
+        .unwrap();
+    let a =
+        arrange_elliptical(&rectangle(0.25, 0.64), &f, 0.05, Some(80.0), Some(&avatar)).unwrap();
+    let w = a.wrap.expect("still wrapped");
+    assert_eq!(w.max_angle_degrees, 80.0);
+    assert!(a.radius_m < 0.3, "radius {}", a.radius_m);
+}
+
+#[test]
+fn a_sleeve_and_a_stand_collar_wrap_round_the_arm_and_the_neck() {
+    let avatar = mannequin();
+    let sleeve: Vec<DVec2> = [
+        (0.0, 0.10),
+        (0.06, 0.03),
+        (0.21, 0.0),
+        (0.36, 0.03),
+        (0.42, 0.10),
+        (0.33, 0.61),
+        (0.09, 0.61),
+    ]
+    .map(|(x, y)| DVec2::new(x, y))
+    .to_vec();
+    for (outline, anchor, most) in [
+        (sleeve, "upper-arm-left-outer", 0.12),
+        (rectangle(0.42, 0.04), "neck-back", 0.1),
+    ] {
+        let set = set();
+        let wrap = set
+            .anchors
+            .iter()
+            .find(|a| a.id == anchor)
+            .unwrap()
+            .max_wrap_degrees;
+        assert_eq!(wrap, 180.0, "{anchor} lets a piece wrap all round");
+        let f = set.evaluate(&frame(), &landmarks(), anchor).unwrap();
+        let a = arrange_elliptical(&outline, &f, 0.03, Some(wrap), Some(&avatar)).unwrap();
+        let w = a.wrap.expect("wrapped");
+        assert!(
+            w.max_angle_degrees > 120.0 && a.radius_m < most,
+            "{anchor}: radius {:.3}, wrap {}",
+            a.radius_m,
+            w.max_angle_degrees
+        );
+    }
+}

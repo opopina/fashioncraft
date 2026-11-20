@@ -58,9 +58,22 @@ pub struct Issue {
     pub reason: String,
 }
 
+/// A label written in the drawing (TEXT or MTEXT), such as a piece's name.
+#[derive(Debug)]
+pub struct Text {
+    pub layer: String,
+    pub text: String,
+    /// Insertion point, metres.
+    pub at: DVec2,
+    /// Letter height, metres.
+    pub height_m: f64,
+}
+
 #[derive(Debug)]
 pub struct Drawing {
     pub paths: Vec<Path>,
+    /// Labels, for naming the pieces they lie in.
+    pub texts: Vec<Text>,
     pub issues: Vec<Issue>,
     pub insunits: Option<i32>,
     pub metres_per_unit: f64,
@@ -280,6 +293,60 @@ fn geometry(
     }
 }
 
+/// A TEXT or MTEXT label: its text without MTEXT formatting, insertion point and height; none
+/// when it has no text or no insertion point.
+fn label(kind: &str, fields: &[Pair<'_>], scale: f64) -> Option<Text> {
+    let at = point(fields, 10, scale).ok()?;
+    let height_m = number(fields, 40, Some(0.)).ok()? * scale;
+    let mut raw = String::new();
+    if kind == "MTEXT" {
+        // Long MTEXT is split into 250-character chunks (group 3) before the last (group 1).
+        for p in fields.iter().filter(|p| p.code == 3) {
+            raw.push_str(p.value);
+        }
+    }
+    raw.push_str(field(fields, 1).ok()??);
+    let text = if kind == "MTEXT" {
+        mtext_plain(&raw)
+    } else {
+        raw
+    };
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!text.is_empty() && at.is_finite() && height_m.is_finite()).then(|| Text {
+        layer: String::new(),
+        text,
+        at,
+        height_m,
+    })
+}
+
+/// MTEXT's text without its formatting: `\P` paragraph breaks become spaces, `\X…;` codes and
+/// grouping braces go, `\\`, `\{` and `\}` stay as characters.
+fn mtext_plain(raw: &str) -> String {
+    let mut out = String::new();
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '{' | '}' => {}
+            '\\' => match chars.next() {
+                Some('P') | Some('~') => out.push(' '),
+                Some(c @ ('\\' | '{' | '}')) => out.push(c),
+                // Codes with an argument run to the semicolon; the others are one letter.
+                Some('A' | 'C' | 'F' | 'f' | 'H' | 'Q' | 'T' | 'W' | 'p') => {
+                    for c in chars.by_ref() {
+                        if c == ';' {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Parse into a reviewable geometry report. Structural or scale failures are
 /// errors; rejected entities are retained as issues alongside accepted paths.
 pub fn read_ascii(text: &str, options: Options) -> Result<Drawing, String> {
@@ -376,6 +443,7 @@ pub fn read_ascii(text: &str, options: Options) -> Result<Drawing, String> {
     let entities = entities.ok_or("Missing ENTITIES section")?;
     let mut result = Drawing {
         paths: vec![],
+        texts: vec![],
         issues: vec![],
         insunits: units,
         metres_per_unit: scale,
@@ -414,6 +482,18 @@ pub fn read_ascii(text: &str, options: Options) -> Result<Drawing, String> {
         }
         let layer = field(fields, 8)?.unwrap_or("0").to_owned();
         let handle = field(fields, 5)?.map(str::to_owned);
+        if kind == "TEXT" || kind == "MTEXT" {
+            match label(kind, fields, scale) {
+                Some(text) => result.texts.push(Text { layer, ..text }),
+                None => result.issues.push(Issue {
+                    entity: kind.into(),
+                    handle,
+                    layer,
+                    reason: "Label without readable text or insertion point".into(),
+                }),
+            }
+            continue;
+        }
         match geometry(kind, fields, &vertices, scale, options.chord_error_m) {
             Ok((points, closed)) => {
                 total += points.len();

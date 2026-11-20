@@ -101,6 +101,64 @@ fn intersects(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> bool {
 /// Append explicitly selected closed paths. No inferred seams, holes or line stitching.
 /// `origin` is the top-left 3D placement of a separated row chosen by the caller;
 /// the caller must keep that row outside the avatar and current drape bounds.
+/// How far above a piece its title block may be written, metres.
+const TITLE_BLOCK_M: f64 = 0.06;
+
+/// The title written on a piece: the tallest label inside its outline, inside the smallest
+/// other outline round it (the cutting line round a sewing line), or in a title block just
+/// above it that lies in no outline. Ties go to the label written first.
+fn piece_name(drawing: &Drawing, path: &crate::garment::dxf_import::Path) -> Option<String> {
+    let (lo, hi) = path
+        .points
+        .iter()
+        .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), p| {
+            (lo.min(*p), hi.max(*p))
+        });
+    let around = drawing
+        .paths
+        .iter()
+        .filter(|o| {
+            o.closed && !std::ptr::eq(*o, path) && domain::inside(path.points[0], &o.points)
+        })
+        .min_by(|a, b| {
+            domain::area(&a.points)
+                .abs()
+                .total_cmp(&domain::area(&b.points).abs())
+        });
+    let top = around.map_or(hi.y, |o| {
+        o.points
+            .iter()
+            .map(|p| p.y)
+            .fold(f64::NEG_INFINITY, f64::max)
+    });
+    let in_any_outline = |at: DVec2| {
+        drawing
+            .paths
+            .iter()
+            .any(|o| o.closed && domain::inside(at, &o.points))
+    };
+    drawing
+        .texts
+        .iter()
+        .filter(|t| {
+            domain::inside(t.at, &path.points)
+                || around.is_some_and(|o| domain::inside(t.at, &o.points))
+                || (t.at.y > top
+                    && t.at.y <= top + TITLE_BLOCK_M
+                    && t.at.x >= lo.x - TITLE_BLOCK_M
+                    && t.at.x <= hi.x
+                    && !in_any_outline(t.at))
+        })
+        .fold(
+            None,
+            |best: Option<&crate::garment::dxf_import::Text>, t| match best {
+                Some(b) if b.height_m >= t.height_m => Some(b),
+                _ => Some(t),
+            },
+        )
+        .map(|t| t.text.chars().take(80).collect())
+}
+
 pub fn prepare(
     source: &GarmentTemplate,
     drawing: &Drawing,
@@ -213,7 +271,7 @@ pub fn prepare(
         };
         template.panels.push(Panel {
             id: id.clone(),
-            name: format!("{} · {}", path.layer, id),
+            name: piece_name(drawing, path).unwrap_or_else(|| format!("{} · {}", path.layer, id)),
             pattern: Pattern {
                 width: size.x,
                 height: size.y,

@@ -965,7 +965,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "upper-arm-left-back",
@@ -1007,7 +1007,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "upper-arm-left-outer",
@@ -1047,7 +1047,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-left-front",
@@ -1089,7 +1089,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-left-back",
@@ -1131,7 +1131,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-left-outer",
@@ -1171,7 +1171,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-left-front",
@@ -1213,7 +1213,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-left-back",
@@ -1255,7 +1255,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-left-outer",
@@ -1295,7 +1295,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-left-front",
@@ -1337,7 +1337,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-left-back",
@@ -1379,7 +1379,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-left-outer",
@@ -1419,7 +1419,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "upper-arm-right-front",
@@ -1461,7 +1461,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "upper-arm-right-back",
@@ -1503,7 +1503,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "upper-arm-right-outer",
@@ -1543,7 +1543,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-right-front",
@@ -1585,7 +1585,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-right-back",
@@ -1627,7 +1627,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "forearm-right-outer",
@@ -1667,7 +1667,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-right-front",
@@ -1709,7 +1709,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-right-back",
@@ -1751,7 +1751,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "thigh-right-outer",
@@ -1791,7 +1791,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-right-front",
@@ -1833,7 +1833,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-right-back",
@@ -1875,7 +1875,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "shin-right-outer",
@@ -1915,7 +1915,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "neck-front",
@@ -1952,7 +1952,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   },
   {
    "id": "neck-back",
@@ -1989,7 +1989,7 @@
    },
    "clearance_m": 0.03,
    "wrap": true,
-   "max_wrap_degrees": 80.0
+   "max_wrap_degrees": 180.0
   }
  ]
 }

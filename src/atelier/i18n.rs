@@ -29,6 +29,20 @@ pub(super) fn tr(language: Language, text: &'static str) -> &'static str {
     }
 }
 
+/// A new copy's name in `language`, for the names the garment core gives copies ("X copy")
+/// and mirrored copies ("X mirror"); none in English or for other names.
+pub(super) fn copy_name(language: Language, name: &str) -> Option<String> {
+    if language == Language::English {
+        return None;
+    }
+    [(" mirror", "(mirror)"), (" copy", "(copy)")]
+        .into_iter()
+        .find_map(|(suffix, mark)| {
+            name.strip_suffix(suffix)
+                .map(|base| format!("{base} {}", tr(language, mark)))
+        })
+}
+
 /// `text` in `language` for text known only at run time, such as an edit's name; English
 /// text when there is no translation.
 pub(super) fn tr_any(language: Language, text: &str) -> &str {
@@ -2307,6 +2321,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Graphic cancelled" => "Gráfico cancelado",
         "Untitled" => "Sin título",
+        "(mirror)" => "(espejo)",
+        "(copy)" => "(copia)",
         "Recovery available" => "Recuperación disponible",
         "Open the last recovery snapshot?" => "¿Abrir la última copia de recuperación?",
         "Edit style line" => "Editar línea de estilo",
@@ -2738,6 +2754,21 @@ pub(super) fn coverage_line(language: Language, done: usize, all: usize) -> Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn copies_are_named_in_the_interface_language() {
+        use super::{Language, copy_name};
+        assert_eq!(
+            copy_name(Language::Spanish, "Manga mirror").as_deref(),
+            Some("Manga (espejo)")
+        );
+        assert_eq!(
+            copy_name(Language::Spanish, "Delantero copy").as_deref(),
+            Some("Delantero (copia)")
+        );
+        assert_eq!(copy_name(Language::English, "Manga mirror"), None);
+        assert_eq!(copy_name(Language::Spanish, "Espejo"), None);
+    }
+
     #[test]
     fn status_messages_with_values_are_translated_around_them() {
         use super::{Language, status};

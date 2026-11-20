@@ -522,6 +522,15 @@ pub fn arrange_elliptical(
     )
 }
 
+/// How far along its anchor's axis a wrapped panel that hits the body is moved, nearest first
+/// and downward first (a long piece centred on a mid-torso anchor reaches the neck; a sleeve
+/// centred on the upper arm reaches past the shoulder), metres.
+const AXIS_SHIFTS_M: [f64; 8] = [-0.05, 0.05, -0.1, 0.1, -0.18, 0.18, -0.28, 0.28];
+/// How much a wrapped panel's section is enlarged to clear the body before it is unwrapped.
+const SECTION_GROWTH: [f64; 3] = [1.0, 1.15, 1.35];
+/// The share of the clearance every point of an arranged panel keeps from the skin.
+const CLEAR_SHARE: f64 = 0.4;
+
 fn arrange_with(
     rest_points: &[DVec2],
     anchor: &AnchorFrame,
@@ -538,6 +547,135 @@ fn arrange_with(
             "clearance must be finite and non-negative, got {clearance_m}"
         ));
     }
+    let first = fit(
+        rest_points,
+        anchor,
+        clearance_m,
+        max_wrap_degrees,
+        surface,
+        elliptical,
+    )?;
+    let Some(surface) = surface else {
+        return Ok(first);
+    };
+    // Check samples across the whole panel against the body.
+    let samples = panel_samples(rest_points, 9);
+    let clear = |placement: &Placement, wrap: Option<crate::garment::template::PanelWrap>| {
+        samples.iter().all(|uv| {
+            let local = DVec3::new(uv.x, -uv.y, 0.0);
+            let local = wrap.map_or(local, |w| w.bend(local));
+            let p = placement.transform(local);
+            !inside(surface, p) && distance_to_surface(surface, p) >= CLEAR_SHARE * clearance_m
+        })
+    };
+    if clear(&first.placement, first.wrap) {
+        return Ok(first);
+    }
+    // A wrapped panel that hits the body keeps its wrap if it can: moved along the anchor's
+    // axis (as far as half its height), with a slightly larger section if need be; of the
+    // places that clear, the one snuggest to the body and nearest the anchor.
+    if first.wrap.is_some() {
+        let mut best: Option<(f64, Arrangement)> = None;
+        let height = rest_points
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| {
+                (lo.min(p.y), hi.max(p.y))
+            });
+        let reach = (0.75 * (height.1 - height.0)).max(0.05);
+        let shifts = std::iter::once(0.0).chain(
+            AXIS_SHIFTS_M
+                .iter()
+                .copied()
+                .filter(|s| s.abs() <= reach + 1e-9),
+        );
+        for shift in shifts {
+            // Farther along the axis cannot beat what is found already.
+            if best
+                .as_ref()
+                .is_some_and(|(score, _)| shift.abs() + 2.0 * clearance_m >= *score)
+            {
+                break;
+            }
+            let moved = AnchorFrame {
+                origin: anchor.origin + anchor.up * shift,
+                ..*anchor
+            };
+            let a = if shift == 0.0 {
+                first.clone()
+            } else {
+                fit(
+                    rest_points,
+                    &moved,
+                    clearance_m,
+                    max_wrap_degrees,
+                    Some(surface),
+                    elliptical,
+                )?
+            };
+            let Some(w) = a.wrap else { continue };
+            for grow in SECTION_GROWTH {
+                let wrap = crate::garment::template::PanelWrap {
+                    radius_m: w.radius_m * grow,
+                    half_width_m: w.half_width_m.map(|h| h * grow),
+                    ..w
+                };
+                let placement = placement_for(rest_points, &moved, a.radius_m * grow)?;
+                if clear(&placement, Some(wrap)) {
+                    // Snug to the body counts twice what nearness to the anchor does.
+                    let score = 2.0 * a.radius_m * grow + shift.abs();
+                    if best.as_ref().is_none_or(|(b, _)| score < *b) {
+                        best = Some((
+                            score,
+                            Arrangement {
+                                placement,
+                                wrap: Some(wrap),
+                                radius_m: a.radius_m * grow,
+                                skin_m: a.skin_m,
+                            },
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+        if let Some((_, a)) = best {
+            return Ok(a);
+        }
+    }
+    // Otherwise wrap less, then move out, until clear.
+    let (mut placement, mut wrap, mut radius) = (first.placement, first.wrap, first.radius_m);
+    let mut tries = 0;
+    while !clear(&placement, wrap) && tries < 12 {
+        tries += 1;
+        match &mut wrap {
+            Some(w) if w.max_angle_degrees > 20.0 + 1e-9 => w.max_angle_degrees -= 20.0,
+            Some(_) => wrap = None,
+            None => {
+                radius += 0.02;
+                placement = placement_for(rest_points, anchor, radius)?;
+            }
+        }
+    }
+    if !clear(&placement, wrap) {
+        return Err("no clear arrangement found for this panel on this anchor; try another anchor or a larger clearance".into());
+    }
+    Ok(Arrangement {
+        placement,
+        wrap,
+        radius_m: radius,
+        skin_m: first.skin_m,
+    })
+}
+
+/// The arrangement measured on the anchor, before any check against the body.
+fn fit(
+    rest_points: &[DVec2],
+    anchor: &AnchorFrame,
+    clearance_m: f64,
+    max_wrap_degrees: Option<f64>,
+    surface: Option<&crate::avatar::SurfaceMesh>,
+    elliptical: bool,
+) -> Result<Arrangement, String> {
     let (lo, hi) = rest_points
         .iter()
         .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), p| {
@@ -546,35 +684,53 @@ fn arrange_with(
     let centre = (lo + hi) / 2.0;
     let (half_width, height) = ((hi.x - lo.x) / 2.0, hi.y - lo.y);
     let heights: Vec<f64> = (0..5).map(|k| (k as f64 / 4.0 - 0.5) * height).collect();
+    // Whether the anchor's axis is inside the body at height `h`: a ray from a point outside
+    // (past a bent elbow, between the legs) says nothing about the skin round the axis.
+    let axis_inside = |h: f64| surface.is_some_and(|s| inside(s, anchor.origin + anchor.up * h));
+    let inside_heights: Vec<bool> = heights.iter().map(|h| axis_inside(*h)).collect();
     let ray = |angle: f64, h: f64| {
         let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
         surface.and_then(|s| surface_distance(s, anchor.origin + anchor.up * h, dir))
     };
-    // The last place a ray leaves the body within a panel's reach: an arm beside the torso
-    // counts, not only the torso.
+    let ray_at = |angle: f64, k: usize| {
+        if inside_heights[k] {
+            ray(angle, heights[k])
+        } else {
+            None
+        }
+    };
+    // Where a ray leaves the body for good within a panel's reach: past the torso, and past
+    // an arm beside it too when the panel would not fit in between.
     let reach = half_width.max(height) + clearance_m + 0.3;
-    let last_exit = |angle: f64, h: f64| {
+    let last_exit = |angle: f64, h: f64, from_inside: bool| {
         let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
         let s = surface?;
         let mut origin = anchor.origin + anchor.up * h;
         let (mut travelled, mut last) = (0.0, None);
+        let mut leaving = from_inside;
         for _ in 0..16 {
             let Some(d) = surface_distance(s, origin, dir) else {
                 break;
             };
+            if !leaving && last.is_some() && d >= 2.0 * clearance_m {
+                // Room for the panel between the body and the next part.
+                break;
+            }
             travelled += d;
             if travelled > reach {
                 break;
             }
-            last = Some(travelled);
+            if leaving {
+                last = Some(travelled);
+            }
+            leaving = !leaving;
             origin += dir * (d + 1e-6);
             travelled += 1e-6;
         }
         last
     };
-    let skin_ahead = heights
-        .iter()
-        .filter_map(|h| ray(0.0, *h))
+    let skin_ahead = (0..heights.len())
+        .filter_map(|k| ray_at(0.0, k))
         .fold(None, |m: Option<f64>, d| Some(m.map_or(d, |m| m.max(d))));
     let mut radius = skin_ahead.unwrap_or(0.0) + clearance_m;
     let wrap = match max_wrap_degrees {
@@ -584,8 +740,8 @@ fn arrange_with(
                 let span = (half_width / radius).min(max);
                 for k in 0..=12 {
                     let angle = -span + 2.0 * span * k as f64 / 12.0;
-                    for h in &heights {
-                        if let Some(d) = ray(angle, *h) {
+                    for k in 0..heights.len() {
+                        if let Some(d) = ray_at(angle, k) {
                             radius = radius.max(d + clearance_m);
                         }
                     }
@@ -617,6 +773,7 @@ fn arrange_with(
                 -1.0
             };
             let levels: Vec<f64> = (0..9).map(|k| (k as f64 / 8.0 - 0.5) * height).collect();
+            let levels_inside: Vec<bool> = levels.iter().map(|h| axis_inside(*h)).collect();
             for _ in 0..8 {
                 let span = ellipse_parameter(across, depth, half_width).min(max);
                 let mut needs = Vec::new();
@@ -624,12 +781,12 @@ fn arrange_with(
                     let t = -span + 2.0 * span * k as f64 / 24.0;
                     let angle = (across * t.sin()).atan2(depth * t.cos());
                     let u = centre.x + turn * t.signum() * ellipse_arc(across, depth, t.abs());
-                    for h in &levels {
+                    for (h, from_inside) in levels.iter().zip(&levels_inside) {
                         // Only where the panel itself lies.
                         if !point_in_outline(rest_points, DVec2::new(u, centre.y - h)) {
                             continue;
                         }
-                        if let Some(d) = last_exit(angle, *h) {
+                        if let Some(d) = last_exit(angle, *h, *from_inside) {
                             needs.push((angle, d + clearance_m));
                         }
                     }
@@ -666,37 +823,8 @@ fn arrange_with(
         }
         _ => None,
     };
-    let mut wrap = wrap;
-    let mut placement = placement_for(rest_points, anchor, radius)?;
-    // Check samples across the whole panel against the body: wrap less (then move out) until clear.
-    if let Some(surface) = surface {
-        let samples = panel_samples(rest_points, 9);
-        let clear = |placement: &Placement, wrap: Option<crate::garment::template::PanelWrap>| {
-            samples.iter().all(|uv| {
-                let local = DVec3::new(uv.x, -uv.y, 0.0);
-                let local = wrap.map_or(local, |w| w.bend(local));
-                let p = placement.transform(local);
-                !inside(surface, p) && distance_to_surface(surface, p) >= 0.5 * clearance_m
-            })
-        };
-        let mut tries = 0;
-        while !clear(&placement, wrap) && tries < 12 {
-            tries += 1;
-            match &mut wrap {
-                Some(w) if w.max_angle_degrees > 20.0 + 1e-9 => w.max_angle_degrees -= 20.0,
-                Some(_) => wrap = None,
-                None => {
-                    radius += 0.02;
-                    placement = placement_for(rest_points, anchor, radius)?;
-                }
-            }
-        }
-        if !clear(&placement, wrap) {
-            return Err("no clear arrangement found for this panel on this anchor; try another anchor or a larger clearance".into());
-        }
-    }
     Ok(Arrangement {
-        placement,
+        placement: placement_for(rest_points, anchor, radius)?,
         wrap,
         radius_m: radius,
         skin_m: skin_ahead,
@@ -733,14 +861,20 @@ fn ellipse_parameter(a: f64, b: f64, length: f64) -> f64 {
     std::f64::consts::PI
 }
 
-/// Sample points of a panel in material coordinates: outline vertices plus a grid inside it.
+/// Sample points of a panel in material coordinates: its outline every 1.5 cm (an edge is
+/// what meets an arm or a neck first) plus a grid inside it.
 fn panel_samples(outline: &[DVec2], n: usize) -> Vec<DVec2> {
     let (lo, hi) = outline
         .iter()
         .fold((DVec2::INFINITY, DVec2::NEG_INFINITY), |(lo, hi), p| {
             (lo.min(*p), hi.max(*p))
         });
-    let mut out = outline.to_vec();
+    let mut out = Vec::new();
+    for (k, a) in outline.iter().enumerate() {
+        let b = outline[(k + 1) % outline.len()];
+        let steps = ((a.distance(b) / 0.015).ceil() as usize).clamp(1, 200);
+        out.extend((0..steps).map(|i| a.lerp(b, i as f64 / steps as f64)));
+    }
     for i in 0..n {
         for j in 0..n {
             let p = lo

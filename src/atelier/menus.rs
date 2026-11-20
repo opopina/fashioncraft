@@ -72,8 +72,8 @@ const FILE: &[Item] = &[
             Run("OBJ…", C::ImportAvatar),
             Run("FBX…", C::ImportAvatar),
             Run("glTF…", C::ImportAvatar),
-            Todo("Alembic…"),
-            Todo("USD…"),
+            Run("Alembic…", C::ImportAvatar),
+            Run("USD…", C::ImportAvatar),
             Run("Point cache…", C::ImportPointCache),
             Run("Motion (BVH)…", C::ImportBvh),
             Todo("Python script…"),
@@ -724,7 +724,7 @@ mod tests {
         let (done, all) = coverage();
         assert!(done <= all);
         // Raise these as items get built; a drop means a menu item lost its command.
-        assert!(done >= 195, "{done} of {all}");
+        assert!(done >= 197, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

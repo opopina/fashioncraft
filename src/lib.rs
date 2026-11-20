@@ -1,5 +1,6 @@
 //! SI units throughout: metres, kilograms, seconds, Newtons.
 pub mod abc_export;
+pub mod abc_import;
 pub mod authoring;
 pub mod avatar;
 pub mod avatar_animation;
@@ -43,5 +44,6 @@ pub mod solver_lab;
 pub mod template_catalog;
 pub mod trace3d;
 pub mod usd_export;
+pub mod usd_import;
 pub mod vbd;
 pub mod weld;

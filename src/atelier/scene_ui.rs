@@ -181,7 +181,10 @@ impl Atelier {
                 ui.horizontal(|ui| {
                     if ui.button(i18n::tr(ui_lang, "Add object…")).clicked() {
                         add = rfd::FileDialog::new()
-                            .add_filter("Mesh", &["obj", "stl", "ply", "dae", "fbx"])
+                            .add_filter(
+                                "Mesh",
+                                &["obj", "stl", "ply", "dae", "fbx", "abc", "usda", "usd", "usdz"],
+                            )
                             .pick_file();
                     }
                     if ui

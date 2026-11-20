@@ -64,7 +64,7 @@ fn drop_degenerate(mesh: &mut SurfaceMesh) -> usize {
 }
 
 /// Scale a mesh without a declared unit to metres by its height, and say how.
-fn guess_units(mesh: &mut SurfaceMesh, warnings: &mut Vec<String>, format: &str) {
+pub(crate) fn guess_units(mesh: &mut SurfaceMesh, warnings: &mut Vec<String>, format: &str) {
     let (lo, hi) = mesh.vertices.iter().fold(
         (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY)),
         |(lo, hi), p| (lo.min(*p), hi.max(*p)),
@@ -104,8 +104,9 @@ pub fn stl(bytes: &[u8]) -> Result<Imported, String> {
     stl_with(bytes, true)
 }
 
-/// A mesh file as it is, in its own units (COLLADA's and FBX's declared units turned into
-/// metres): OBJ, STL, PLY, COLLADA or FBX, by extension. For props, whose scale the caller sets.
+/// A mesh file as it is, in its own units (COLLADA's, FBX's and USD's declared units turned
+/// into metres; Alembic's guessed from its size): OBJ, STL, PLY, COLLADA, FBX, Alembic or USD,
+/// by extension. For props, whose scale the caller sets.
 pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
     let extension = path
         .extension()
@@ -123,7 +124,9 @@ pub fn load(path: &std::path::Path) -> Result<SurfaceMesh, String> {
                 .mesh
         }
         "fbx" => crate::fbx_import::fbx(&bytes)?.mesh,
-        _ => return Err("Choose an OBJ, STL, PLY, COLLADA or FBX mesh".into()),
+        "abc" => crate::abc_import::abc(&bytes)?.mesh,
+        "usda" | "usd" | "usdz" => crate::usd_import::usd(&bytes, &extension)?.mesh,
+        _ => return Err("Choose an OBJ, STL, PLY, COLLADA, FBX, Alembic or USD mesh".into()),
     })
 }
 

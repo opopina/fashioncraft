@@ -253,7 +253,10 @@ impl Atelier {
                     .set_title("Import static avatar")
                     .add_filter(
                         "Static mesh",
-                        &["obj", "gltf", "glb", "vrm", "stl", "ply", "dae", "fbx"],
+                        &[
+                            "obj", "gltf", "glb", "vrm", "stl", "ply", "dae", "fbx", "abc", "usda",
+                            "usd", "usdz",
+                        ],
                     )
                     .pick_file()
                 {

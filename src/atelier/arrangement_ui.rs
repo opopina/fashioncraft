@@ -320,32 +320,39 @@ impl Atelier {
                 ui.checkbox(&mut state.wrap, i18n::tr(ui_lang, "Wrap around body"))
                     .on_hover_text(i18n::tr(ui_lang, "Curve the panel around the anchor axis, clearing the body across its width and height"));
                 let (clearance, wrap) = (state.clearance_mm / 1000.0, state.wrap);
-                let candidates = arrangements(
-                    &sidecar,
-                    &current,
-                    panel,
-                    clearance,
-                    wrap.then_some(max_wrap),
-                    &self.scene.collider.surface,
-                );
+                // Arranging casts many rays at the body: only when a button asks for it, never
+                // on every frame the panel is drawn.
+                let (mut preview, mut place) = (false, false);
                 ui.horizontal(|ui| {
-                    if ui.button(i18n::tr(ui_lang, "Preview")).on_hover_text(i18n::tr(ui_lang, "Show the panel on the anchor without changing the document")).clicked() {
+                    preview = ui.button(i18n::tr(ui_lang, "Preview")).on_hover_text(i18n::tr(ui_lang, "Show the panel on the anchor without changing the document")).clicked();
+                    place = ui.button(i18n::tr(ui_lang, "Place")).on_hover_text(i18n::tr(ui_lang, "Check initialization, then place (one undo step)")).clicked();
+                    if self.authoring.preview.is_some() && ui.button(i18n::tr(ui_lang, "Cancel")).clicked() {
+                        self.cancel_preview();
+                    }
+                });
+                if preview || place {
+                    let candidates = arrangements(
+                        &sidecar,
+                        &current,
+                        panel,
+                        clearance,
+                        wrap.then_some(max_wrap),
+                        &self.scene.collider.surface,
+                    );
+                    if place {
+                        self.authoring.arrangement.report = Some(self.place_on_anchor(&panel.id, &label, candidates));
+                    } else {
                         let first = candidates.iter().find(|c| c.is_ok()).unwrap_or(&candidates[0]);
                         match first {
                             Ok(a) => {
-                                self.preview_arrangement(&panel.id, a.placement.clone(), a.wrap);
+                                let (placement, wrap) = (a.placement.clone(), a.wrap);
+                                self.preview_arrangement(&panel.id, placement, wrap);
                                 self.authoring.arrangement.report = None;
                             }
                             Err(e) => self.authoring.arrangement.report = Some(Err(e.clone())),
                         }
                     }
-                    if ui.button(i18n::tr(ui_lang, "Place")).on_hover_text(i18n::tr(ui_lang, "Check initialization, then place (one undo step)")).clicked() {
-                        self.authoring.arrangement.report = Some(self.place_on_anchor(&panel.id, &label, candidates.clone()));
-                    }
-                    if self.authoring.preview.is_some() && ui.button(i18n::tr(ui_lang, "Cancel")).clicked() {
-                        self.cancel_preview();
-                    }
-                });
+                }
                 match &self.authoring.arrangement.report {
                     Some(Ok(msg)) => {
                         ui.small(msg);

@@ -439,34 +439,190 @@ pub fn surface_distance(
 ) -> Option<f64> {
     let mut best = f64::INFINITY;
     for t in &surface.triangles {
-        let (a, b, c) = (
-            surface.vertices[t[0]],
-            surface.vertices[t[1]],
-            surface.vertices[t[2]],
-        );
-        let (e1, e2) = (b - a, c - a);
-        let h = dir.cross(e2);
-        let det = e1.dot(h);
-        if det.abs() < 1e-14 {
-            continue;
-        }
-        let f = 1.0 / det;
-        let s = origin - a;
-        let u = f * s.dot(h);
-        if !(0.0..=1.0).contains(&u) {
-            continue;
-        }
-        let q = s.cross(e1);
-        let v = f * dir.dot(q);
-        if v < 0.0 || u + v > 1.0 {
-            continue;
-        }
-        let d = f * e2.dot(q);
-        if d > 1e-6 && d < best {
-            best = d;
+        let corners = t.map(|i| surface.vertices[i]);
+        if let Some(d) = ray_triangle(origin, dir, corners) {
+            best = best.min(d);
         }
     }
     best.is_finite().then_some(best)
+}
+
+/// Where the ray `origin + dir·t` meets a triangle, for t > 1 µm (Möller–Trumbore).
+fn ray_triangle(origin: DVec3, dir: DVec3, [a, b, c]: [DVec3; 3]) -> Option<f64> {
+    let (e1, e2) = (b - a, c - a);
+    let h = dir.cross(e2);
+    let det = e1.dot(h);
+    if det.abs() < 1e-14 {
+        return None;
+    }
+    let f = 1.0 / det;
+    let s = origin - a;
+    let u = f * s.dot(h);
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+    let q = s.cross(e1);
+    let v = f * dir.dot(q);
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+    let d = f * e2.dot(q);
+    (d > 1e-6).then_some(d)
+}
+
+/// An avatar's triangles in a tree of boxes, for the thousands of ray and distance queries of
+/// one arrangement: each query visits the few triangles near it, with the same results as
+/// testing them all.
+struct BodyTree<'a> {
+    surface: &'a crate::avatar::SurfaceMesh,
+    /// Depth first: an inner node's first child follows it, `second` is its other child.
+    nodes: Vec<TreeNode>,
+    /// Triangle indices, each leaf a run of them.
+    order: Vec<usize>,
+}
+
+struct TreeNode {
+    lo: DVec3,
+    hi: DVec3,
+    /// Leaf: its triangles `order[first..first + count]`; inner: count is 0.
+    first: usize,
+    count: usize,
+    second: usize,
+}
+
+impl<'a> BodyTree<'a> {
+    fn new(surface: &'a crate::avatar::SurfaceMesh) -> Self {
+        let mut tree = Self {
+            surface,
+            nodes: Vec::with_capacity(2 * surface.triangles.len() / 3 + 1),
+            order: (0..surface.triangles.len()).collect(),
+        };
+        let centres: Vec<DVec3> = surface
+            .triangles
+            .iter()
+            .map(|t| t.iter().map(|i| surface.vertices[*i]).sum::<DVec3>() / 3.0)
+            .collect();
+        tree.build(0, surface.triangles.len(), &centres);
+        tree
+    }
+
+    fn corners(&self, triangle: usize) -> [DVec3; 3] {
+        self.surface.triangles[triangle].map(|i| self.surface.vertices[i])
+    }
+
+    fn build(&mut self, first: usize, end: usize, centres: &[DVec3]) -> usize {
+        let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
+        let (mut clo, mut chi) = (lo, hi);
+        for &t in &self.order[first..end] {
+            for p in self.corners(t) {
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+            clo = clo.min(centres[t]);
+            chi = chi.max(centres[t]);
+        }
+        // A little room, so a ray starting on a face still enters its box.
+        let pad = DVec3::splat(1e-7);
+        let index = self.nodes.len();
+        self.nodes.push(TreeNode {
+            lo: lo - pad,
+            hi: hi + pad,
+            first,
+            count: end - first,
+            second: 0,
+        });
+        if end - first <= 4 {
+            return index;
+        }
+        let extent = chi - clo;
+        let axis = if extent.x >= extent.y && extent.x >= extent.z {
+            0
+        } else if extent.y >= extent.z {
+            1
+        } else {
+            2
+        };
+        let middle = (first + end) / 2;
+        self.order[first..end].select_nth_unstable_by(middle - first, |a, b| {
+            centres[*a][axis].total_cmp(&centres[*b][axis])
+        });
+        self.nodes[index].count = 0;
+        self.build(first, middle, centres);
+        let second = self.build(middle, end, centres);
+        self.nodes[index].second = second;
+        index
+    }
+
+    /// The nearest hit of the ray `origin + dir·t`, t > 1 µm, as [`surface_distance`] finds it.
+    fn ray(&self, origin: DVec3, dir: DVec3) -> Option<f64> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+        let inv = dir.recip();
+        let mut best = f64::INFINITY;
+        let mut stack = vec![0usize];
+        while let Some(n) = stack.pop() {
+            let node = &self.nodes[n];
+            let (t1, t2) = ((node.lo - origin) * inv, (node.hi - origin) * inv);
+            let near = t1.min(t2).max_element().max(0.0);
+            let far = t1.max(t2).min_element();
+            // A NaN (a ray along a box face) keeps the box rather than drop a hit.
+            if near > far || near > best {
+                continue;
+            }
+            if node.count > 0 {
+                for &t in &self.order[node.first..node.first + node.count] {
+                    if let Some(d) = ray_triangle(origin, dir, self.corners(t)) {
+                        best = best.min(d);
+                    }
+                }
+            } else {
+                stack.push(node.second);
+                stack.push(n + 1);
+            }
+        }
+        best.is_finite().then_some(best)
+    }
+
+    /// Parity test along a fixed oblique ray; valid for closed avatar surfaces.
+    fn inside(&self, p: DVec3) -> bool {
+        let dir = DVec3::new(0.2311, 0.4423, 0.8668).normalize();
+        let mut hits = 0;
+        let mut origin = p;
+        while let Some(t) = self.ray(origin, dir) {
+            hits += 1;
+            origin += dir * (t + 1e-7);
+            if hits > 64 {
+                break;
+            }
+        }
+        hits % 2 == 1
+    }
+
+    /// The distance from `p` to the nearest triangle.
+    fn distance(&self, p: DVec3) -> f64 {
+        let mut best = f64::INFINITY;
+        let mut stack = vec![0usize];
+        while let Some(n) = stack.pop() {
+            let Some(node) = self.nodes.get(n) else {
+                break;
+            };
+            let gap = (node.lo - p).max(p - node.hi).max(DVec3::ZERO).length();
+            if gap >= best {
+                continue;
+            }
+            if node.count > 0 {
+                for &t in &self.order[node.first..node.first + node.count] {
+                    let [a, b, c] = self.corners(t);
+                    best = best.min(point_triangle_distance(p, a, b, c));
+                }
+            } else {
+                stack.push(node.second);
+                stack.push(n + 1);
+            }
+        }
+        best
+    }
 }
 
 /// Result of arranging one panel on an anchor.
@@ -547,15 +703,16 @@ fn arrange_with(
             "clearance must be finite and non-negative, got {clearance_m}"
         ));
     }
+    let tree = surface.map(BodyTree::new);
     let first = fit(
         rest_points,
         anchor,
         clearance_m,
         max_wrap_degrees,
-        surface,
+        tree.as_ref(),
         elliptical,
     )?;
-    let Some(surface) = surface else {
+    let Some(surface) = tree.as_ref() else {
         return Ok(first);
     };
     // Check samples across the whole panel against the body.
@@ -565,7 +722,7 @@ fn arrange_with(
             let local = DVec3::new(uv.x, -uv.y, 0.0);
             let local = wrap.map_or(local, |w| w.bend(local));
             let p = placement.transform(local);
-            !inside(surface, p) && distance_to_surface(surface, p) >= CLEAR_SHARE * clearance_m
+            !surface.inside(p) && surface.distance(p) >= CLEAR_SHARE * clearance_m
         })
     };
     if clear(&first.placement, first.wrap) {
@@ -673,7 +830,7 @@ fn fit(
     anchor: &AnchorFrame,
     clearance_m: f64,
     max_wrap_degrees: Option<f64>,
-    surface: Option<&crate::avatar::SurfaceMesh>,
+    surface: Option<&BodyTree<'_>>,
     elliptical: bool,
 ) -> Result<Arrangement, String> {
     let (lo, hi) = rest_points
@@ -686,11 +843,11 @@ fn fit(
     let heights: Vec<f64> = (0..5).map(|k| (k as f64 / 4.0 - 0.5) * height).collect();
     // Whether the anchor's axis is inside the body at height `h`: a ray from a point outside
     // (past a bent elbow, between the legs) says nothing about the skin round the axis.
-    let axis_inside = |h: f64| surface.is_some_and(|s| inside(s, anchor.origin + anchor.up * h));
+    let axis_inside = |h: f64| surface.is_some_and(|s| s.inside(anchor.origin + anchor.up * h));
     let inside_heights: Vec<bool> = heights.iter().map(|h| axis_inside(*h)).collect();
     let ray = |angle: f64, h: f64| {
         let dir = DQuat::from_axis_angle(anchor.up, angle) * anchor.outward;
-        surface.and_then(|s| surface_distance(s, anchor.origin + anchor.up * h, dir))
+        surface.and_then(|s| s.ray(anchor.origin + anchor.up * h, dir))
     };
     let ray_at = |angle: f64, k: usize| {
         if inside_heights[k] {
@@ -709,7 +866,7 @@ fn fit(
         let (mut travelled, mut last) = (0.0, None);
         let mut leaving = from_inside;
         for _ in 0..16 {
-            let Some(d) = surface_distance(s, origin, dir) else {
+            let Some(d) = s.ray(origin, dir) else {
                 break;
             };
             if !leaving && last.is_some() && d >= 2.0 * clearance_m {
@@ -900,34 +1057,6 @@ pub(crate) fn point_in_outline(pts: &[DVec2], p: DVec2) -> bool {
     inside
 }
 
-/// Parity test along a fixed oblique ray; valid for closed avatar surfaces.
-fn inside(surface: &crate::avatar::SurfaceMesh, p: DVec3) -> bool {
-    let dir = DVec3::new(0.2311, 0.4423, 0.8668).normalize();
-    let mut hits = 0;
-    let mut origin = p;
-    while let Some(t) = surface_distance(surface, origin, dir) {
-        hits += 1;
-        origin += dir * (t + 1e-7);
-        if hits > 64 {
-            break;
-        }
-    }
-    hits % 2 == 1
-}
-
-fn distance_to_surface(surface: &crate::avatar::SurfaceMesh, p: DVec3) -> f64 {
-    let mut best = f64::INFINITY;
-    for t in &surface.triangles {
-        let (a, b, c) = (
-            surface.vertices[t[0]],
-            surface.vertices[t[1]],
-            surface.vertices[t[2]],
-        );
-        best = best.min(point_triangle_distance(p, a, b, c));
-    }
-    best
-}
-
 /// Ericson, Real-Time Collision Detection §5.1.5.
 fn point_triangle_distance(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> f64 {
     let (ab, ac, ap) = (b - a, c - a, p - a);
@@ -959,4 +1088,42 @@ fn point_triangle_distance(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> f64 {
     }
     let denom = 1.0 / (va + vb + vc);
     (p - (a + ab * (vb * denom) + ac * (vc * denom))).length()
+}
+
+#[cfg(test)]
+mod body_tree_tests {
+    use super::*;
+
+    #[test]
+    fn the_tree_answers_as_testing_every_triangle() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/makehuman/mannequin.obj");
+        let body = crate::avatar::SurfaceMesh::load_obj(&path).unwrap();
+        let tree = BodyTree::new(&body);
+        // Rays and points round the body, from a fixed pseudo-random sequence.
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed >> 11) as f64 / (1u64 << 53) as f64
+        };
+        for _ in 0..300 {
+            let p = DVec3::new(next() - 0.5, 1.8 * next(), 0.6 * next() - 0.3);
+            let dir = DVec3::new(next() - 0.5, next() - 0.5, next() - 0.5).normalize();
+            assert_eq!(tree.ray(p, dir), surface_distance(&body, p, dir));
+            let brute = body
+                .triangles
+                .iter()
+                .map(|t| {
+                    let [a, b, c] = t.map(|i| body.vertices[i]);
+                    point_triangle_distance(p, a, b, c)
+                })
+                .fold(f64::INFINITY, f64::min);
+            assert_eq!(tree.distance(p), brute);
+        }
+        // The spine is inside the body; a point in front of the chest is not.
+        assert!(tree.inside(DVec3::new(0., 1.2, 0.)));
+        assert!(!tree.inside(DVec3::new(0., 1.2, 0.5)));
+    }
 }

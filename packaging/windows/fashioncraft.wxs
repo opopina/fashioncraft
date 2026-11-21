@@ -13,11 +13,13 @@
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/opopina/fashioncraft" />
 
     <!-- Files in the user's profile: each component keeps its key path in HKCU and removes its
-         folders on uninstall, as Windows Installer requires there (ICE38, ICE64). -->
+         folders on uninstall, as Windows Installer requires there (ICE38, ICE64). Components with
+         files and a registry key path need a fixed GUID (WiX cannot generate one, WIX0230); never
+         change these, or upgrades leave the old files behind. -->
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="FashionCraft">
-          <Component Id="Program">
+          <Component Id="Program" Guid="72900324-C3EF-427B-A49F-D56B59528956">
             <File Id="fashioncraft.exe" Source="$(var.Stage)\fashioncraft.exe" />
             <File Id="LICENSE" Source="$(var.Stage)\LICENSE" />
             <File Id="THIRD_PARTY_NOTICES.md" Source="$(var.Stage)\THIRD_PARTY_NOTICES.md" />
@@ -28,7 +30,7 @@
           </Component>
           <Directory Id="AssetsFolder" Name="assets">
             <Directory Id="MakeHumanFolder" Name="makehuman">
-              <Component Id="Assets">
+              <Component Id="Assets" Guid="FDB7CEF3-3BB4-4A0D-93AF-CEC822C05FE1">
                 <File Id="mannequin.obj" Source="$(var.Stage)\assets\makehuman\mannequin.obj" />
                 <File Id="arrangement.json" Source="$(var.Stage)\assets\makehuman\arrangement.json" />
                 <File Id="measurements.json" Source="$(var.Stage)\assets\makehuman\measurements.json" />

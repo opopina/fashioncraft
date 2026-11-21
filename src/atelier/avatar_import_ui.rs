@@ -16,6 +16,18 @@ pub(super) enum Action {
     Cancel,
 }
 
+/// `path` with the home folder written `~`, as macOS and Linux show paths: shorter, and a
+/// screenshot or recording of the dialog does not show the account's folders.
+fn shown_path(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home
+        .filter(|h| h.parent().is_some())
+        .and_then(|h| path.strip_prefix(h).ok())
+    {
+        Some(rest) => std::path::Path::new("~").join(rest).display().to_string(),
+        None => path.display().to_string(),
+    }
+}
+
 fn button(ui: &mut egui::Ui, label: &str, name: &str, enabled: bool) -> bool {
     let response = ui
         .push_id(name, |ui| ui.add_enabled(enabled, egui::Button::new(label)))
@@ -66,7 +78,8 @@ impl ImportUi {
                 ui.label(tr("OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX · metres · Y-up"));
                 if let Some(error) = &self.error { ui.colored_label(egui::Color32::LIGHT_RED, status(error)); }
                 if let Some(candidate) = &self.candidate {
-                    ui.label(status(&format!("Source: {}", candidate.source.display())));
+                    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+                    ui.label(status(&format!("Source: {}", shown_path(&candidate.source, home.as_deref()))));
                     ui.label(status(&format!("{} vertices · {} triangles", candidate.vertices, candidate.triangles)));
                     let [lo, hi] = candidate.bounds;
                     let size = hi - lo;
@@ -361,5 +374,26 @@ mod tests {
         assert!(case.document.dirty);
         assert_eq!(case.generation, 17);
         assert_eq!(serde_json::to_vec(&case.project).unwrap(), before);
+    }
+
+    #[test]
+    fn the_source_path_writes_the_home_folder_as_a_tilde() {
+        use std::path::Path;
+        let home = Path::new("/Users/someone");
+        let inside = Path::new("/Users/someone")
+            .join("Library")
+            .join("avatar.obj");
+        let shown = Path::new("~").join("Library").join("avatar.obj");
+        assert_eq!(shown_path(&inside, Some(home)), shown.display().to_string());
+        let outside = Path::new("/Volumes/disk/avatar.obj");
+        assert_eq!(
+            shown_path(outside, Some(home)),
+            outside.display().to_string()
+        );
+        assert_eq!(
+            shown_path(outside, Some(Path::new("/"))),
+            outside.display().to_string()
+        );
+        assert_eq!(shown_path(outside, None), outside.display().to_string());
     }
 }

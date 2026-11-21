@@ -3,7 +3,10 @@
 //! say what each step does. It runs at a pace a person can follow live, and can record the
 //! window to an MP4 at the same time.
 //!
-//!     FASHIONCRAFT_DEMO=vest [FASHIONCRAFT_DEMO_RECORD=1] fashioncraft
+//!     FASHIONCRAFT_DEMO=vest [FASHIONCRAFT_DEMO_RECORD=1] [FASHIONCRAFT_DEMO_CLEAN=1] fashioncraft
+//!
+//! `FASHIONCRAFT_DEMO_CLEAN=1` leaves out the cursor, the click ripples and the captions, for
+//! stills and for footage that gets its own titles in an editor.
 //!
 //! The pointer and keys of the computer are ignored while it runs (only F9, pause or resume,
 //! and Shift+Escape, stop, are read), so a stray mouse cannot change what it does. Every step is
@@ -184,6 +187,8 @@ pub(super) struct Demo {
     paused: bool,
     stopped: bool,
     record_wanted: bool,
+    /// Draw no cursor, ripples or captions.
+    clean: bool,
     recorder: Option<Recorder>,
     shot_pending: bool,
     out: PathBuf,
@@ -218,6 +223,7 @@ impl Demo {
             paused: false,
             stopped: false,
             record_wanted: std::env::var("FASHIONCRAFT_DEMO_RECORD").is_ok_and(|v| v == "1"),
+            clean: std::env::var("FASHIONCRAFT_DEMO_CLEAN").is_ok_and(|v| v == "1"),
             recorder: None,
             shot_pending: false,
             out,
@@ -699,6 +705,9 @@ impl Atelier {
 
     /// The cursor, its clicks and the caption, over everything else.
     fn paint_demo(&self, ctx: &egui::Context, demo: &Demo) {
+        if demo.clean {
+            return;
+        }
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Tooltip,
             egui::Id::new("fashioncraft.demo.overlay"),

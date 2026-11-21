@@ -1,131 +1,118 @@
 # FashionCraft
 
-Open-source 3D garment design and cloth simulation, written in Rust.
+Open-source 3D garment design, written in Rust. Draw patterns in 2D, sew them, dress an avatar and
+watch the garment drape in 3D, then take it to other 3D tools. The workflow follows desktop tools
+like Marvelous Designer and CLO.
 
-Draw patterns, sew them together, place them around an avatar, simulate the drape and export the result to other 3D tools.
+![FashionCraft: a vest drawn from scratch, sewn and draped on an avatar from the library](docs/screenshots/fashioncraft-workspace.png)
 
-FashionCraft is built on [ClothCraft](https://github.com/erythrofr/ClothCraft), created by erythrofr with the ClothCraft contributors under the MIT license. Its physics engine, document model and first editor come from there; see [CONTRIBUTORS.md](CONTRIBUTORS.md) for who did what.
+**FashionCraft is an early alpha.** It already covers the whole path from pattern to draped garment,
+but expect rough edges, slow or restless simulation on dense garments and cases that still fail.
+Reports with a small example are very welcome.
 
-**FashionCraft is early alpha, not a production garment tool.** Expect unfinished interactions, residual oscillation, slow simulation on dense meshes and cases that still fail. Help is welcome with the interface, physics, testing, documentation and file formats. You do not need to be a programmer to contribute a useful reproduction, workflow sketch or testable hypothesis.
+## See it
 
-![FashionCraft workspace](docs/screenshots/workspace.png)
+A vest made from scratch in 2 minutes 37 seconds: an avatar from the library, the back and front
+drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey, and buttons
+fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).
 
-## Try it
+[![Watch the vest demo](docs/media/vest-demo-poster.jpg)](docs/media/vest-demo.mp4)
 
-Install Rust stable and run from the repository root:
+## Download
+
+- **macOS (Apple silicon):** the `.dmg` in [Releases](https://github.com/opopina/fashioncraft/releases).
+  The app is not notarised yet. The first time you open it, macOS will block it: allow it in
+  System Settings › Privacy & Security › Open Anyway.
+- **Linux and Windows:** builds are coming. Meanwhile, build from source.
+
+## Build from source
+
+With Rust stable installed, from the repository root:
 
 ```sh
-cargo run --release --locked -j 2 --bin cloth-fit -- --steps 0 --view
+cargo run --release --locked --bin fashioncraft
 ```
 
-The editor opens a T-shirt and the bundled MakeHuman mannequin. Windows is the main development platform; macOS and Linux need equivalent acceptance testing. The desktop requires a graphics adapter supported by wgpu. CPU command-line tools build without graphics dependencies.
+The 3D view needs a graphics adapter supported by [wgpu](https://wgpu.rs) (Metal, Vulkan or
+DirectX 12). On Linux you also need the Wayland or X11 and Vulkan libraries and
+`xdg-desktop-portal` for the file dialogs.
 
-To reopen a saved garment:
+## What it does
 
-```sh
-cargo run --release --locked -j 2 --bin cloth-fit -- --project path/to/garment.json --steps 0 --view
-```
+The menus follow the usual garment-design layout: File, Edit, 3D Garment, 2D Pattern, Sewing,
+Materials, Avatar, Animation, Render, Display, Settings and Window.
 
-Use **Space** to start or pause, **Grab** to pull the cloth and **Ctrl+S** to save. Grab exposes radius and strength above the 3D view; **3D gear → Clean view** hides editing annotations. Right-click a canvas for the radial tool menu. **Q** opens nearby shape, mirror and boolean actions. The 2D board and 3D viewport share panel and boundary selections.
+- **2D patterns:** polygons, rectangles, ellipses, arc sectors, spirals and freehand shapes;
+  internal lines, shapes and darts; mirrored pieces, booleans, trace, cut and sew, slash and
+  spread, merge and unfold; rulers, smart guides and grid snapping. T-shirt, skirt and trousers
+  drafted from measurements. DXF and SVG import, and a 1:1 PDF print of the patterns.
+- **Sewing:** segment, free and M:N sewing, automatic sewing, easing, length checks, pleats and
+  torn seams.
+- **3D garment:** arrangement points on the body, fold arrangement, superimpose, re-drape and auto
+  fit. Cloth simulation on the GPU, with friction, pins, freezing, strengthening and layers.
+  Strain, stress and pressure maps; steam and puckering.
+- **Fabrics and trims:** fabric presets with colour, normal and roughness textures; prints and logos
+  on the pattern or on the 3D garment; buttons and buttonholes, zippers, piping, tape and
+  topstitching.
+- **Avatars:** a library of twelve ready-made bodies with skin, eyes and hair. A body generator from
+  gender, age, build and twenty measurements, using MakeHuman's CC0 shapes with the settings of
+  NAVER LABS Europe's Anny. Avatar import from OBJ, glTF, FBX, USD and Alembic; an avatar editor,
+  tape and girth measures, an automatic skeleton, poses and BVH motion.
+- **Animation and export:** record takes; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD
+  point caches and OBJ sequences; capture video of the 3D view.
+- **Workspace:** English and Spanish, a command palette, Python scripting and project recovery.
 
-## What works today
-
-- **Patterns:** rectangles, ellipses, arc sectors, Bézier contours, point editing, holes and internal sewing paths; independent and paired linked mirrors; two-piece booleans.
-- **Sewing:** whole boundaries, partial ranges and ordered multi-edge chains, with direction, explicit easing and editable relationships.
-- **Arrangement:** translation and rotation in 3D; a separate 2D board layout; undo/redo and semantic copy/paste.
-- **Simulation:** CPU and hybrid GPU VBD with OGC contact, smoothed Coulomb friction, a physical floor, gravity and quality presets, mouse grabbing and passive motion diagnostics.
-- **Documents:** Open, Save, Save As, portable avatar assets and local recovery. Keep a saved JSON and its adjacent `.assets` folder together.
-- **Starting assets:** six bundled pattern templates, native template JSON import, and static OBJ/glTF/GLB avatars through File → Import avatar. Avatar replacement preserves authored patterns but resets the drape and undo history; [supported geometry and limits](docs/avatar-import.md).
-- **Avatars:** Avatar → Avatar library… offers twelve ready-made bodies (women, men and children of several builds, ages and ancestries) with skin, eyes, eyebrows, eyelashes, hair and neutral underwear; Avatar → Create avatar (MakeHuman)… makes a new one from gender, age, build and twenty measurements, with its look. Bodies and looks are MakeHuman's CC0 assets; the settings follow NAVER LABS Europe's Anny.
-- **Avatar inspection:** Properties → Simulation reports the actual collision mesh and can check the current arrangement through the CPU solver's initialization gate. [Coverage and limits](docs/avatar-diagnostics.md): topology warnings are not an intersection or global containment certificate.
-- **DXF outlines:** File → Import DXF patterns previews units, layers and excluded data before adding selected closed outlines as editable pieces. Existing unchanged panels retain their drape. This is a [generic planar subset](docs/pattern-import.md), not industrial DXF-AAMA/ASTM.
-- **SVG outlines:** File → Import SVG patterns adds selected closed outlines from a [physically scaled SVG subset](docs/svg-import.md). Curves are sampled into polygon edges; unsupported artwork and nested or overlapping selected outlines are rejected rather than interpreted as sewing or holes.
-- **Net material report:** the CPU `cloth-template metrics` command reports
-  rest-mesh area and cloth mass per panel and fabric. It is not cutting or
-  purchasing consumption; see [units and limits](docs/production-metrics.md).
-
-Select two boundaries in Sew, then confirm the nearby proposal; unequal lengths offer an explicit easing action. In Edit, box/lasso can select contour points across patterns for one group move; Delete removes selected pieces when no point, seam or text field owns the action. See [editing and inspection controls](docs/editor-basics.md).
-
-Added in FashionCraft on top of ClothCraft:
-
-- **Export:** OBJ with a material library, glTF 2.0 / GLB (optionally with the avatar and a recorded take), FBX 7.4, Alembic and USD / USDZ; quad retopology along the grain and welded seams for export.
-- **Avatar:** FBX import of static meshes, an automatic skeleton with skin weights, keyed poses and ready-made motions, and BVH motion retargeted onto the avatar.
-- **Body tools:** measurements along the body or the draped garment, and patterns traced directly on the avatar.
-- **Sewing:** automatic sewing of unsewn segments that pair up around the body.
-- **Production:** a 1:1 print sheet as PDF.
-- **Interface:** English and Spanish.
-
-These are implemented foundations, not completed production workflows. See the [workspace guide](docs/workspace-ui.md), [document and sewing guide](docs/documents-and-sewing.md) and [authoring reference](docs/authoring.md) for controls and limitations.
-
-## Physics: strengths and open problems
-
-The interactive engine uses **Vertex Block Descent (VBD) with Offset Geometric Contact (OGC)**. GPU execution is hybrid: candidate search and local solves run on the GPU, while precise contact geometry and movement bounds remain on the CPU. A double-precision Newton reference is also available.
-
-Contact protections are designed to preserve separation from an initially separated arrangement, within the documented geometric assumptions and local seam exclusions. They do not repair arbitrary initial intersections or guarantee every possible garment. See the [contact contract](docs/ogc.md).
-
-The main open problems are residual motion under tension, convergence, cost at fine mesh resolutions, friction, seam treatment and measured material calibration. Some test scenes run in real time; that does not establish a universal performance guarantee. **Rendering FPS and simulation speed are different:** a smooth viewport can show cloth progressing slower than wall time. Comparisons must report simulated seconds per wall second and full-step timings, alongside collision and deformation checks.
-
-The [headless solver lab](docs/solver-lab.md) contains experimental XPBD/OGC, finite-stiffness AVBD adaptations and a separate native Box3D particle lattice. Their failures are recorded; they are not alternative editor modes. Small contact research kernels are also not garment-ready solvers. No alternative has been selected to replace the current engine.
-
-The long-term goal is interchangeable physics behind a stable document and authoring model. There is no public solver plugin ABI yet. A useful solver contribution must preserve collision coverage and fluid pull/release behavior, not just reduce a jitter number.
+![The avatar library](docs/screenshots/avatar-library.png)
 
 ## Files
 
-| Data | Input | Output |
+| Data | Opens | Saves or exports |
 |---|---|---|
-| Editable garment | Project / template JSON (also files saved by ClothCraft) | Project / template JSON |
-| Avatar | OBJ, static glTF / GLB, static FBX meshes; BVH motion | glTF / GLB, FBX |
-| Simulated garment mesh | — | OBJ + MTL, glTF / GLB, FBX, Alembic, USD / USDZ |
-| Print | — | 1:1 PDF sheet |
-| 2D patterns | Selected closed outlines from generic planar ASCII DXF and physically scaled SVG subsets | Annotated SVG preview and millimetre-scale sewing outlines with a 100 mm ruler; no allowances or tiling |
-| Research data | — | Metrics, fiber frames and geometric grain guides |
+| Project | FashionCraft project JSON (also ClothCraft's) | Project JSON with its `.assets` folder |
+| 2D patterns | Closed outlines from DXF (generic planar) and SVG | 1:1 PDF, SVG |
+| Avatar | OBJ, glTF/GLB, FBX, USD, Alembic; BVH motion | glTF/GLB, FBX |
+| Garment | — | OBJ + MTL, glTF/GLB, FBX, Alembic, USD/USDZ, PC2, MDD, OBJ sequence |
 
-DXF-AAMA/ASTM, Alembic and USD import and grading rules remain planned. CLO and Marvelous Designer project files are not supported. Save preserves the editable document; Export writes separate interchange artifacts. See the [input/output contracts](docs/interoperability.md).
+Marvelous Designer and CLO project files are not supported; exchange formats are. See the
+[input/output contracts](docs/interoperability.md).
 
-## Help build it
+## Status
 
-**Contributing with an AI agent? Give it [COORDINATION.md](COORDINATION.md).**
-This repository hosts the Rust rewrite task catalog and a shared assignment
-board for contributors. The [EXO feature audit](docs/exo-feature-audit.md)
-and [atomic backlog](coordination/TASKS.md) identify gaps, existing PRs and
-acceptance checks. Agents claim scoped work and leave public handoffs; the
-coordinator detects overlapping assignments. It does not launch AI sessions
-or merge changes automatically.
+- **macOS:** the main platform, tested on Apple silicon.
+- **Linux:** being tested on Arch (Hyprland, NVIDIA).
+- **Windows:** not tested yet.
+- **Physics:** the GPU simulation is the fast path. Dense garments can still keep moving or snag on the
+  body (a sleeve on a spread thumb, for example), and the CPU path is slow on fine meshes. See
+  [the contact model](docs/ogc.md).
 
-Choose a track from the [roadmap](ROADMAP.md):
+## Contributing
 
-- **Make editing understandable:** sewing feedback, selection, arrangement, measurement and accessibility. An unfamiliar person should be able to make a simple garment without reading implementation details.
-- **Improve the solver:** profile full steps, investigate contact continuity and convergence, or build an alternative behind the same benchmark contract. Retain failed experiments and disclose tradeoffs.
-- **Connect other tools:** implement a small, tested import or export slice with explicit units and supported entities.
-- **Test real workflows:** share an original garment you may redistribute, exact steps, settings and expected behavior. A small failing example is valuable.
-
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). The [contributor kit](docs/contributor-kit.md) includes task briefs, an issue checklist and prompts you can give a coding assistant. Agents should read [AI_START_HERE.md](AI_START_HERE.md) and [AGENTS.md](AGENTS.md) before editing. Contributions need human review and the same evidence whether written by a person, an AI assistant or both.
-
-## Development
+Issues with a small example, the steps you took and what you expected are the most useful
+contribution. For code, run the checks before sending a change:
 
 ```sh
-cargo test --locked --no-default-features -j 2 -- --test-threads=2
-cargo clippy --locked --no-default-features --all-targets -j 2 -- -D warnings
-cargo build --locked -j 2
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
 ```
 
-On Windows, `scripts/check-cpu.ps1` runs the CPU checks. GPU tests and native window checks are opt-in; coordinate GPU use with the machine's owner. The [headless physics lab](docs/directional-contact.md#headless-laboratory) and [settling zoo](docs/settling-zoo.md) provide reproducible fixtures without opening the editor.
-
-| Area | Start here |
-|---|---|
-| Documents and editing | `src/document.rs`, `src/fitting.rs`, `src/authoring.rs` |
-| Patterns, meshing and seams | `src/garment/` |
-| Desktop workspace | `src/atelier/` |
-| Material energy and reference solver | `src/energy.rs`, `src/solver.rs` |
-| Interactive physics and contact | `src/vbd.rs`, `src/ogc/`, `src/gpu_vbd.rs` |
-| Research adapters | `src/solver_lab/`, `examples/solver_compare.rs` |
-
-The [architecture](docs/architecture.md), [handoff](docs/handoff.md) and [solver challenge](docs/solver-challenge.md) explain the contracts and evidence.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [architecture notes](docs/architecture.md).
 
 ## License and credits
 
-Original source and documentation are [MIT-licensed](LICENSE). The bundled MakeHuman assets retain their [CC0 notice and provenance](assets/makehuman/LICENSE.ASSETS.md) (the avatar looks: [their provenance](assets/avatars/provenance.json)); dependencies retain their own licenses. The project icon is documented in the [artwork record](assets/branding/README.md).
+FashionCraft is [MIT-licensed](LICENSE).
 
-FashionCraft is built on ClothCraft by erythrofr and the ClothCraft contributors; their copyright notice is kept in [LICENSE](LICENSE) and [CONTRIBUTORS.md](CONTRIBUTORS.md) lists the people involved. Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork; the [integration notes](docs/firefly-integration.md) record provenance and fixes.
+It started from [ClothCraft](https://github.com/erythrofr/ClothCraft) by erythrofr and the ClothCraft
+contributors (MIT). Its physics engine, document model and first editor come from there, and their
+copyright notice is kept in [LICENSE](LICENSE); [CONTRIBUTORS.md](CONTRIBUTORS.md) lists the people
+involved. Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork
+([notes](docs/firefly-integration.md)).
 
-FashionCraft is not affiliated with CLO or Marvelous Designer; those names are trademarks of their owners. Public manuals inform workflow research; proprietary code, icons and garment examples are not included. The [manual study](docs/manual-study.md) records the references consulted.
+The bundled bodies, skins, eyes and hair are MakeHuman's CC0 assets; the body settings follow
+NAVER LABS Europe's Anny (Apache 2.0). These, the fonts and other third-party material are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The icon is documented in the
+[artwork record](assets/branding/README.md).
+
+FashionCraft is not affiliated with CLO Virtual Fashion or Marvelous Designer; those names are
+trademarks of their owners. Only public manuals informed the workflow
+([references](docs/manual-study.md)); no proprietary code, files, icons or garments are included.

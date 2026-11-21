@@ -283,6 +283,16 @@ fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+/// What the top bar shows instead of words in a narrow window. Each is a single symbol, so it
+/// must be one egui can draw with the installed fonts (checked by a test), or the button shows
+/// an empty box: several emoji outside the basic plane, such as a magnifier, cannot be.
+pub(super) mod symbols {
+    pub const COMMANDS: &str = "⌘";
+    pub const PLAY: &str = "▶";
+    pub const PAUSE: &str = "⏸";
+    pub const EXPORT: &str = "⬆";
+}
+
 fn install(ctx: &egui::Context, dark: bool) {
     install_fonts(ctx);
     let base = bases(ctx);
@@ -414,5 +424,24 @@ impl Atelier {
             ui.small(i18n::tr(ui_lang, "Export folder (files replaced on every export):"));
             ui.label(egui::RichText::new(self.output.display().to_string()).small());
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui;
+
+    #[test]
+    fn the_compact_top_bar_symbols_have_glyphs() {
+        let ctx = egui::Context::default();
+        super::style(&ctx);
+        // Fonts set on a context take effect on its next pass.
+        let mut output = ctx.run_ui(Default::default(), |_| {});
+        output.textures_delta.clear();
+        use super::symbols::*;
+        for symbol in [COMMANDS, PLAY, PAUSE, EXPORT] {
+            let shown = ctx.fonts_mut(|f| f.has_glyphs(&egui::FontId::proportional(13.), symbol));
+            assert!(shown, "{symbol} has no glyph in the workspace fonts");
+        }
     }
 }

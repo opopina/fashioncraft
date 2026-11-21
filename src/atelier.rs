@@ -1600,7 +1600,7 @@ impl eframe::App for Atelier {
                 if command_palette::launch_button(
                     ui,
                     can_open_palette,
-                    if compact { "⌕" } else { i18n::tr(language, "Commands…") },
+                    if compact { workspace::symbols::COMMANDS } else { i18n::tr(language, "Commands…") },
                     language,
                 ) {
                     self.palette.begin();
@@ -1617,7 +1617,7 @@ impl eframe::App for Atelier {
                 );
                 let play = ui
                     .button(if compact {
-                        if self.playing { "⏸" } else { "▶" }
+                        if self.playing { workspace::symbols::PAUSE } else { workspace::symbols::PLAY }
                     } else {
                         play_label
                     })
@@ -1629,7 +1629,7 @@ impl eframe::App for Atelier {
                 }
                 let export_label = i18n::tr(language, "Export");
                 let export_button = ui
-                    .button(if compact { "📤" } else { export_label })
+                    .button(if compact { workspace::symbols::EXPORT } else { export_label })
                     .on_hover_text(format!(
                         "{export_label}: {}",
                         i18n::tr(language, "Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.")

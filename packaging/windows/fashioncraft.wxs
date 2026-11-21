@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FashionCraft's Windows installer, for the WiX Toolset v5. It installs per user, needing no
+     administrator, into %LOCALAPPDATA%\Programs\FashionCraft, with a Start menu shortcut and an
+     entry in Settings > Apps to uninstall it; the ArtCraft launcher installs MSIs per user too.
+     Built by scripts\package-windows-msi.ps1 from the portable app's staging folder. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="FashionCraft" Manufacturer="Ricardo Rivadeneira" Version="$(var.Version)"
+           UpgradeCode="889C913F-2219-426A-852B-4BB018192272" Scope="perUser" Language="1033">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of FashionCraft is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="FashionCraft.ico" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="FashionCraft.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/opopina/fashioncraft" />
+
+    <!-- Files in the user's profile: each component keeps its key path in HKCU and removes its
+         folders on uninstall, as Windows Installer requires there (ICE38, ICE64). -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="FashionCraft">
+          <Component Id="Program">
+            <File Id="fashioncraft.exe" Source="$(var.Stage)\fashioncraft.exe" />
+            <File Id="LICENSE" Source="$(var.Stage)\LICENSE" />
+            <File Id="THIRD_PARTY_NOTICES.md" Source="$(var.Stage)\THIRD_PARTY_NOTICES.md" />
+            <RegistryValue Root="HKCU" Key="Software\FashionCraft" Name="InstallFolder"
+                           Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+            <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+            <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+          </Component>
+          <Directory Id="AssetsFolder" Name="assets">
+            <Directory Id="MakeHumanFolder" Name="makehuman">
+              <Component Id="Assets">
+                <File Id="mannequin.obj" Source="$(var.Stage)\assets\makehuman\mannequin.obj" />
+                <File Id="arrangement.json" Source="$(var.Stage)\assets\makehuman\arrangement.json" />
+                <File Id="measurements.json" Source="$(var.Stage)\assets\makehuman\measurements.json" />
+                <File Id="LICENSE.ASSETS.md" Source="$(var.Stage)\assets\makehuman\LICENSE.ASSETS.md" />
+                <File Id="provenance.json" Source="$(var.Stage)\assets\makehuman\provenance.json" />
+                <RegistryValue Root="HKCU" Key="Software\FashionCraft" Name="Assets"
+                               Type="integer" Value="1" KeyPath="yes" />
+                <RemoveFolder Id="RemoveMakeHumanFolder" On="uninstall" />
+                <RemoveFolder Id="RemoveAssetsFolder" Directory="AssetsFolder" On="uninstall" />
+              </Component>
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="FashionCraftShortcut" Name="FashionCraft" Description="3D clothing design"
+                  Target="[INSTALLFOLDER]fashioncraft.exe" WorkingDirectory="INSTALLFOLDER"
+                  Icon="FashionCraft.ico" />
+        <RegistryValue Root="HKCU" Key="Software\FashionCraft" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+  </Package>
+</Wix>

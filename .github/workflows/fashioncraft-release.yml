@@ -1,6 +1,7 @@
 name: FashionCraft release
 
-# Builds the FashionCraft app for macOS, Windows and Linux and puts the files, with their
+# Builds the FashionCraft app for macOS (.dmg), Windows (.msi installer and portable .zip) and Linux
+# (AppImage and .tar.gz) and puts the files, with their
 # SHA256SUMS.txt, on a draft GitHub Release for the tag. File names follow the ArtCraft launcher's
 # `<app>-<version>-<os>-<arch>[-portable].<ext>`; the tag is `v<version>` from Cargo.toml.
 on:
@@ -57,10 +58,17 @@ jobs:
           $imports = & $dumpbin /dependents target\release\fashioncraft.exe | Out-String
           Write-Output $imports
           if ($imports -match '(?i)vcruntime|msvcp') { throw 'fashioncraft.exe still imports the Visual C++ runtime' }
+      - name: WiX Toolset
+        run: dotnet tool install --global wix --version 5.0.2
+      - name: Package the installer
+        shell: pwsh
+        run: ./scripts/package-windows-msi.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.msi
 
   linux:
     # The oldest supported runner, so the program runs on older systems' C library too.

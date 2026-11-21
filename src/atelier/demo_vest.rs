@@ -1,12 +1,27 @@
 //! The demo scripts: a vest made from scratch, the way a person would make it.
 use super::demo::{Step, Target, act, caption, click, guard, until};
 use super::*;
+use crate::render::PresetView;
 use glam::DVec2;
 use std::{cell::Cell, rc::Rc};
 
 /// The script called `name`, if there is one.
 /// The demos [`script`] knows.
 pub(super) const NAMES: &[&str] = &["vest"];
+
+/// Whether the 3D camera looks along preset `view`.
+fn facing(a: &Atelier, view: PresetView) -> bool {
+    let off = (a.camera.yaw - view.angles().0).rem_euclid(std::f32::consts::TAU);
+    off < 0.05 || off > std::f32::consts::TAU - 0.05
+}
+
+/// Where piece `i` was put on the body, once it is no longer at the spot new pieces start at
+/// (above and in front of the avatar): the placement's translation, metres.
+fn placed(a: &Atelier, i: usize) -> Option<glam::DVec3> {
+    let panel = a.project.template.panels.get(i)?;
+    (panel.placement.rotation_degrees.y.abs() > 1. || panel.placement.translation.y < 1.7)
+        .then_some(panel.placement.translation)
+}
 
 /// Whether the cloth hangs on the torso of the 1.80 m avatar: its centre above 1 m and nothing
 /// below 0.75 m. A vest that slid off (as one did on a Windows VM) lies near the floor, and
@@ -272,15 +287,30 @@ fn vest() -> Vec<Step> {
         Step::Wait(0.8),
         caption("Place each piece: select it, then click its point on the body"),
     ]);
-    menu(&mut s, "Display", Some("Viewpoint"), "view.back");
+    // The number keys turn the camera at once; a menu on a slow software renderer was not yet
+    // open when clicked, and the camera stayed facing front.
     s.extend([
+        Step::Key(egui::Key::Num8, egui::Modifiers::NONE),
+        until(
+            "the camera faces the back",
+            |a| facing(a, PresetView::Back),
+            3.,
+        ),
         Step::Wait(1.2),
         Step::Click(piece(0, &BACK, [0.0, 0.3])),
         Step::Click(anchor("torso-middle-back")),
         Step::Wait(1.0),
+        guard("the back sits behind the body", |a| {
+            placed(a, 0).is_some_and(|t| t.z < 0.)
+        }),
     ]);
-    menu(&mut s, "Display", Some("Viewpoint"), "view.front");
     s.extend([
+        Step::Key(egui::Key::Num2, egui::Modifiers::NONE),
+        until(
+            "the camera faces the front",
+            |a| facing(a, PresetView::Front),
+            3.,
+        ),
         Step::Wait(1.2),
         Step::Click(piece(1, &FRONT, [0.15, 0.35])),
         Step::Click(anchor("torso-middle-front-left")),
@@ -288,6 +318,11 @@ fn vest() -> Vec<Step> {
         Step::Click(mirrored(2, &FRONT, [0.15, 0.35])),
         Step::Click(anchor("torso-middle-front-right")),
         Step::Wait(1.2),
+        guard("both fronts sit on the front of the body", |a| {
+            [1, 2]
+                .iter()
+                .all(|&i| placed(a, i).is_some_and(|t| t.z > -0.05 && t.y < 1.7))
+        }),
         caption("Sew the shoulders and the sides: click one edge, then its partner, Enter"),
     ]);
     menu(&mut s, "Sewing", None, "tool.sew");

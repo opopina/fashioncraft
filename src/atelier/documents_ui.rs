@@ -693,6 +693,13 @@ impl Atelier {
         if self.document.recovery.is_file() {
             let _ = std::fs::remove_file(&self.document.recovery);
         }
+        // Its assets folder goes with it, or it is left behind on every discarded snapshot.
+        let mut assets = self.document.recovery.clone().into_os_string();
+        assets.push(".assets");
+        let assets = std::path::PathBuf::from(assets);
+        if assets.is_dir() {
+            let _ = std::fs::remove_dir_all(&assets);
+        }
         self.document.last_recovery = Instant::now();
     }
     // Only the explicitly selected acceptance scenario reaches this adapter.

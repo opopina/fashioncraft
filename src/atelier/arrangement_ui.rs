@@ -146,10 +146,17 @@ impl Atelier {
     }
 
     /// Where arrangement point `id` is on screen, once the points have been shown.
+    /// Where arrangement point `id` is on screen, only while it faces the camera, as clicking
+    /// picks among the facing points: a point on the far side projects onto one on the near side
+    /// (a demo on Windows placed the back on the front point when the camera still faced front).
     pub(super) fn arrangement_point_screen(&self, id: &str) -> Option<egui::Pos2> {
         let rect = self.authoring.selection.garment_rect?;
         let (_, points) = self.authoring.arrangement.skin_points.as_ref()?;
         let p = points.iter().find(|p| p.id == id)?;
+        let eye = self.camera.eye().as_dvec3();
+        if p.outward.dot(eye - p.at) <= 0. {
+            return None;
+        }
         self.camera.project(p.at.as_vec3(), rect)
     }
 

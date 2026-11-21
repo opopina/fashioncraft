@@ -73,8 +73,22 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
 - **Animation and export:** record takes; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD
   point caches and OBJ sequences; capture video of the 3D view.
 - **Workspace:** English and Spanish, a command palette, Python scripting and project recovery.
+- **AI:** an Assistant chat (Window › Assistant) that drafts, dresses, simulates and checks
+  garments for you with Claude, ChatGPT, Gemini or a local model, and an MCP server
+  (`fashioncraft-cli mcp`) for Claude Desktop, Claude Code, Cursor and ArtCraft.
 
 ![The avatar library](docs/screenshots/avatar-library.png)
+
+## AI agents
+
+Ask the Assistant (**Window › Assistant**) for something like "Draft a denim skirt for this avatar,
+simulate it and show me how it falls". It works in the open project as you watch, and Undo takes
+any step back. Choose Claude, ChatGPT, Gemini or a local model under **Connection** and paste your
+API key. The key is saved in the system keychain.
+
+MCP clients can drive FashionCraft too. Turn on **Settings › AI agents › Let AI agents use
+FashionCraft** and copy the entry shown there into Claude Desktop, Claude Code, Cursor or another
+MCP client. See [AI agents and the Assistant](docs/agents.md).
 
 ## Files
 
@@ -92,7 +106,7 @@ Marvelous Designer and CLO project files are not supported; exchange formats are
 
 - **macOS:** the main platform, tested on Apple silicon.
 - **Linux:** being tested on Arch (Hyprland, NVIDIA).
-- **Windows:** not tested yet.
+- **Windows:** tested on Windows 11 (x64): the installer and the full vest demo.
 - **Physics:** the GPU simulation is the fast path. Dense garments can still keep moving or snag on the
   body (a sleeve on a spread thumb, for example), and the CPU path is slow on fine meshes. See
   [the contact model](docs/ogc.md).

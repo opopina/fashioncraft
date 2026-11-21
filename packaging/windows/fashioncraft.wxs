@@ -28,6 +28,13 @@
             <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
             <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
           </Component>
+          <!-- fashioncraft-cli.exe: AI agents start `fashioncraft-cli mcp` (Settings > AI agents
+               shows the entry). Its own component, added in 0.1.1. -->
+          <Component Id="Cli" Guid="8C972AF1-2270-4698-96B4-83CD520C4FEF">
+            <File Id="fashioncraft_cli.exe" Source="$(var.Stage)\fashioncraft-cli.exe" />
+            <RegistryValue Root="HKCU" Key="Software\FashionCraft" Name="Cli"
+                           Type="integer" Value="1" KeyPath="yes" />
+          </Component>
           <Directory Id="AssetsFolder" Name="assets">
             <Directory Id="MakeHumanFolder" Name="makehuman">
               <Component Id="Assets" Guid="FDB7CEF3-3BB4-4A0D-93AF-CEC822C05FE1">

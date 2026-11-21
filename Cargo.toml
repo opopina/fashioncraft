@@ -28,6 +28,8 @@ desktop = [
     "dep:pollster",
     "dep:image",
     "dep:rfd",
+    "dep:ureq",
+    "dep:keyring",
     "dep:objc2",
     "dep:objc2-app-kit",
     "dep:objc2-foundation",
@@ -38,6 +40,8 @@ glam = { version = "0.34.1", features = ["serde"] }
 rayon = "1.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+# Agent tokens (src/agent.rs); already in the dependency tree.
+getrandom = "0.3"
 spade = "=2.15.1"
 i_overlay = "=9.0.1"
 quick-xml = "=0.41.0"
@@ -52,10 +56,19 @@ bytemuck = { version = "1", optional = true }
 pollster = { version = "1.0.1", optional = true }
 image = { version = "0.25.10", optional = true, default-features = false, features = ["png", "jpeg"] }
 miniz_oxide = "0.8.9"
+# The Assistant panel's calls to Claude and OpenAI-compatible APIs (rustls, Mozilla's roots).
+ureq = { version = "3", optional = true, features = ["json"] }
 
-# The studio's menus in macOS's own menu bar (src/atelier/native_menu.rs). The versions eframe
-# already uses, so nothing new is downloaded or built twice.
+# The Assistant's API keys: the macOS keychain and the Windows credential manager. Linux keeps
+# them in a private file (src/atelier/assistant_keys.rs).
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", optional = true, features = ["windows-native"] }
+
+# On macOS: the Assistant's keys in the keychain, and the studio's menus in macOS's own menu
+# bar (src/atelier/native_menu.rs; the objc2 versions eframe already uses, so nothing new is
+# downloaded or built twice).
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", optional = true, features = ["apple-native"] }
 objc2 = { version = "0.6.5", optional = true }
 objc2-foundation = { version = "0.3.2", optional = true, default-features = false, features = ["std", "NSString"] }
 objc2-app-kit = { version = "0.3.2", optional = true, default-features = false, features = [

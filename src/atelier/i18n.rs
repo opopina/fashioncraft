@@ -1287,6 +1287,64 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Swap A / B" => "Intercambiar A / B",
         "Swap seam ends · F" => "Intercambiar extremos de costura · F",
         "T-shirt from measurements" => "Camiseta por medidas",
+        "AI agents" => "Agentes de IA",
+        "Let AI agents use FashionCraft" => "Dejar que los agentes de IA usen FashionCraft",
+        "MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's gateway work in this window through fashioncraft-cli mcp. Off, nothing listens." => {
+            "Los clientes MCP como Claude Desktop, Claude Code, Cursor o la pasarela de ArtCraft trabajan en esta ventana a través de fashioncraft-cli mcp. Apagado, nada escucha."
+        }
+        "They work in the open window, with undo, and save and export only into Documents/FashionCraft." => {
+            "Trabajan en la ventana abierta, con deshacer, y solo guardan y exportan en Documentos/FashionCraft."
+        }
+        "MCP client entry" => "Entrada para el cliente MCP",
+        "Assistant" => "Asistente",
+        "You" => "Tú",
+        "Connection" => "Conexión",
+        "New chat" => "Nuevo chat",
+        "Provider" => "Proveedor",
+        "Model" => "Modelo",
+        "Address" => "Dirección",
+        "API key" => "Clave de API",
+        "paste a key to save it" => "pega una clave para guardarla",
+        "Save" => "Guardar",
+        "Forget it" => "Olvidarla",
+        "Using the key in" => "Usando la clave de",
+        "No key yet: create one in the provider's console." => {
+            "Aún no hay clave: crea una en la consola del proveedor."
+        }
+        "A key is saved in the macOS keychain." => "Hay una clave guardada en el llavero de macOS.",
+        "A key is saved in the Windows credential manager." => {
+            "Hay una clave guardada en el administrador de credenciales de Windows."
+        }
+        "A key is saved in a private file in FashionCraft's session folder." => {
+            "Hay una clave guardada en un archivo privado de la carpeta de sesión de FashionCraft."
+        }
+        "Your messages, the scene's summary and screenshots go to this provider. A local model keeps them on this computer." => {
+            "Tus mensajes, el resumen de la escena y las capturas van a este proveedor. Un modelo local los deja en este ordenador."
+        }
+        "no model chosen" => "ningún modelo elegido",
+        "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
+            "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
+        }
+        "Stopping after this step…" => "Deteniendo tras este paso…",
+        "Working in the project…" => "Trabajando en el proyecto…",
+        "Thinking…" => "Pensando…",
+        "Message the assistant (Enter sends)" => "Escribe al asistente (Intro envía)",
+        "Send" => "Enviar",
+        "Changes can be undone with Undo." => "Los cambios se pueden deshacer con Deshacer.",
+        "The assistant stopped unexpectedly." => "El asistente se detuvo de forma inesperada.",
+        "Reading the scene" => "Leyendo la escena",
+        "Looking up commands" => "Buscando comandos",
+        "Running a command" => "Ejecutando un comando",
+        "Drafting a pattern" => "Trazando un patrón",
+        "Changing the fabric" => "Cambiando la tela",
+        "Changing the colour" => "Cambiando el color",
+        "Looking at the 3D view" => "Mirando la vista 3D",
+        "Saving the project" => "Guardando el proyecto",
+        "Exporting the garment" => "Exportando la prenda",
+        "Using a tool" => "Usando una herramienta",
+        "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, Gemini or a local model; set its connection in its own window." => {
+            "El Asistente (Ventana › Asistente) trabaja en esta ventana con Claude, ChatGPT, Gemini o un modelo local; su conexión se configura en su propia ventana."
+        }
         "Tack" => "Hilván",
         "Target" => "Objetivo",
         "Technical view · Alt+0" => "Vista técnica · Alt+0",

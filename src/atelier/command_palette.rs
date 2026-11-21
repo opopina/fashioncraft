@@ -133,6 +133,7 @@ fn aliases(id: CommandId) -> &'static str {
         }
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",
         ToggleHistory => "history undo redo edits list go back",
+        ToggleAssistant => "assistant ai agent chat claude chatgpt gemini model help ask",
         ToggleObjectBrowser => "object browser scene tree outliner pieces fabrics avatar list",
         DraftSkirt => "skirt draft pattern measurements waist hip flare length size",
         DraftTrousers => {

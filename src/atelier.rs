@@ -276,8 +276,12 @@ pub fn run(
             // A software adapter (WARP on a Windows without a graphics driver, llvmpipe on Linux)
             // runs "GPU" compute on the CPU anyway, slowly, and WARP crashed during a demo on a
             // Windows VM: simulate on the CPU there. GPU compute stays a choice in the settings.
-            let gpu_compute =
-                render.adapter.get_info().device_type != eframe::wgpu::DeviceType::Cpu;
+            // FASHIONCRAFT_GPU_COMPUTE=0 or 1 chooses it outright, to test or to work round a driver.
+            let gpu_compute = match std::env::var("FASHIONCRAFT_GPU_COMPUTE").as_deref() {
+                Ok("0") => false,
+                Ok("1") => true,
+                _ => render.adapter.get_info().device_type != eframe::wgpu::DeviceType::Cpu,
+            };
             // Preferences choose the theme and the startup display defaults, so
             // they are loaded and applied before the first frame is drawn.
             // Applying them afterwards would show a flash of the wrong theme.

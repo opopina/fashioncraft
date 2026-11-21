@@ -1196,6 +1196,27 @@ impl Viewport {
             });
             self.size = size;
             self.samples = samples;
+            // A new target starts uninitialised (Direct3D 12 places it in a heap that is not
+            // zeroed), and with multisampling it is only ever a resolve target: the D3D12 debug
+            // layer reported it as used before initialisation (#1422) on a Windows VM. Clear it
+            // once here.
+            let mut clear = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("cloth-color-clear"),
+            });
+            clear.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("cloth-color-clear"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.color,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            self.render_state.queue.submit([clear.finish()]);
             self.render_state
                 .renderer
                 .write()

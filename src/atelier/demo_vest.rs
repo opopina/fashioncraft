@@ -8,6 +8,19 @@ use std::{cell::Cell, rc::Rc};
 /// The demos [`script`] knows.
 pub(super) const NAMES: &[&str] = &["vest"];
 
+/// Whether the cloth hangs on the torso of the 1.80 m avatar: its centre above 1 m and nothing
+/// below 0.75 m. A vest that slid off (as one did on a Windows VM) lies near the floor, and
+/// without this the demo still counted every step as done.
+fn on_the_body(a: &Atelier) -> bool {
+    let x = &a.scene.state.x;
+    if x.is_empty() {
+        return false;
+    }
+    let centre = x.iter().map(|p| p.y).sum::<f64>() / x.len() as f64;
+    let lowest = x.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    centre > 1.0 && lowest > 0.75
+}
+
 pub(super) fn script(name: &str) -> Option<Vec<Step>> {
     match name {
         "vest" => Some(vest()),
@@ -311,6 +324,7 @@ fn vest() -> Vec<Step> {
         click("toolbar.simulate"),
         Step::Wait(9.0),
         click("toolbar.simulate"),
+        guard("the vest stays on the body", on_the_body),
         caption("Give it a fabric: thick wool for every piece"),
         click("fabric_tab"),
         click("fabric_presets"),
@@ -362,6 +376,7 @@ fn vest() -> Vec<Step> {
         click("toolbar.simulate"),
         Step::Wait(5.0),
         click("toolbar.simulate"),
+        guard("the vest still hangs on the body", on_the_body),
         caption("Made in FashionCraft · open source"),
     ]);
     // A clean finish: no arrangement points, the high-quality view, the 3D view alone without

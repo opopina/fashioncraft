@@ -1,0 +1,8 @@
+# Windows builds carry the C runtime inside the program (static CRT): a clean Windows 11 has no
+# Visual C++ runtime (VCRUNTIME140.dll), and the portable .exe must start there without an
+# installer. Found by the first run on a fresh Windows 11 VM: exit 0xC0000135 (DLL not found).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

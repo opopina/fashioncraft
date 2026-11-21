@@ -47,6 +47,16 @@ jobs:
       - name: Package the portable app
         shell: pwsh
         run: ./scripts/package-windows-app.ps1
+      # A clean Windows has no Visual C++ runtime: the program must not import it (.cargo/config.toml
+      # links the C runtime statically).
+      - name: The program needs no Visual C++ runtime
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          $imports = & $dumpbin /dependents target\release\fashioncraft.exe | Out-String
+          Write-Output $imports
+          if ($imports -match '(?i)vcruntime|msvcp') { throw 'fashioncraft.exe still imports the Visual C++ runtime' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows

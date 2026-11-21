@@ -20,10 +20,22 @@ fastened through their buttonholes. Recorded with the app's own demo mode (`FASH
 
 ## Download
 
-- **macOS (Apple silicon):** the `.dmg` in [Releases](https://github.com/opopina/fashioncraft/releases).
-  The app is not notarised yet. The first time you open it, macOS will block it: allow it in
-  System Settings › Privacy & Security › Open Anyway.
-- **Linux and Windows:** builds are coming. Meanwhile, build from source.
+Get the file for your system from the [latest release](https://github.com/opopina/fashioncraft/releases/latest):
+
+| System | File | How to install |
+|---|---|---|
+| **Windows** 10 and 11 (64-bit) | `fashioncraft-<version>-windows-x64.msi` | Run it. It installs for your user, needs no administrator, and adds FashionCraft to the Start menu; uninstall it from Settings › Apps. |
+| | `fashioncraft-<version>-windows-x64-portable.zip` | No installation: unzip it anywhere and open `fashioncraft.exe`. |
+| **macOS** 11 or newer (Apple silicon and Intel) | `fashioncraft-<version>-macos-universal.dmg` | Open it and drag FashionCraft to Applications. |
+| **Linux** (x86-64) | `fashioncraft-<version>-linux-x86_64.AppImage` | Make it executable (`chmod +x`) and run it; works on most distributions. |
+| | `fashioncraft-<version>-linux-x86_64.tar.gz` | Unpack it and run `bin/fashioncraft`. |
+
+`SHA256SUMS.txt` in each release lets you check the files.
+
+The builds are not signed yet, so the first launch shows a warning:
+
+- **Windows:** "Windows protected your PC". Choose **More info › Run anyway**.
+- **macOS:** the app is blocked. Open **System Settings › Privacy & Security** and choose **Open Anyway**.
 
 ## Build from source
 

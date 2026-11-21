@@ -85,6 +85,51 @@ fn snapshot_in_use(snapshot: &std::path::Path) -> bool {
         .is_ok_and(|f| matches!(f.try_lock(), Err(std::fs::TryLockError::WouldBlock)))
 }
 
+/// Moves a recovery snapshot that was not taken up, with its assets folder, into
+/// `recovery-archive/` beside it, so it is no longer offered but can still be opened by hand.
+/// Its lock goes. The assets move with the snapshot, so its relative paths still resolve.
+fn archive_snapshot(output: &std::path::Path, snapshot: &std::path::Path) {
+    let archive = output.join("recovery-archive");
+    let Some(name) = snapshot.file_name() else {
+        return;
+    };
+    if std::fs::create_dir_all(&archive).is_err() {
+        return;
+    }
+    let _ = std::fs::rename(snapshot, archive.join(name));
+    let mut assets = name.to_os_string();
+    assets.push(".assets");
+    let assets_dir = snapshot.with_file_name(&assets);
+    if assets_dir.is_dir() {
+        let _ = std::fs::rename(&assets_dir, archive.join(&assets));
+    }
+    let _ = std::fs::remove_file(snapshot.with_extension("lock"));
+}
+
+/// Removes `recovery-*.lock` files that no open window holds and that have no snapshot beside
+/// them: a window that crashed or was killed never removes its own.
+fn remove_stale_locks(output: &std::path::Path, own: &std::path::Path) {
+    let own_lock = own.with_extension("lock");
+    for path in std::fs::read_dir(output)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+    {
+        let is_lock = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.starts_with("recovery-") && s.ends_with(".lock"));
+        if is_lock
+            && path != own_lock
+            && !path.with_extension("json").exists()
+            && !snapshot_in_use(&path.with_extension("json"))
+        {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
 fn install_avatar(
     prepared: fashioncraft::avatar_import::Prepared,
     project: &mut FittingProject,
@@ -709,7 +754,9 @@ impl Atelier {
         }
         if !self.document.checked_recovery {
             self.document.checked_recovery = true;
-            let previous = std::fs::read_dir(&self.output)
+            // Locks left by windows that are gone (a crash, a killed process) mean nothing.
+            remove_stale_locks(&self.output, &self.document.recovery);
+            let stale: Vec<PathBuf> = std::fs::read_dir(&self.output)
                 .ok()
                 .into_iter()
                 .flatten()
@@ -722,10 +769,15 @@ impl Atelier {
                 })
                 // Another open window's snapshot is its live work, not something to recover.
                 .filter(|p| *p != self.document.recovery && !snapshot_in_use(p))
-                .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
+                .collect();
+            let newest = stale
+                .iter()
+                .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
+                .cloned();
             let ui_lang = self.prefs.language;
-            if let Some(path) = previous
-                && MessageDialog::new()
+            // A demo runs unattended and must not stop at a question.
+            if let Some(path) = newest.filter(|_| self.demo.is_none()) {
+                let open = MessageDialog::new()
                     .set_title(i18n::tr(ui_lang, "Recovery available"))
                     .set_description(format!(
                         "{}\n{}",
@@ -734,9 +786,15 @@ impl Atelier {
                     ))
                     .set_buttons(MessageButtons::YesNo)
                     .show()
-                    == MessageDialogResult::Yes
-            {
-                self.open_document_path(path, true);
+                    == MessageDialogResult::Yes;
+                // Whatever the answer, these snapshots are not offered again: "No" used to bring
+                // the question back on every start. They are kept in recovery-archive/.
+                for snapshot in stale.iter().filter(|p| !open || **p != path) {
+                    archive_snapshot(&self.output, snapshot);
+                }
+                if open {
+                    self.open_document_path(path, true);
+                }
             }
         }
         let shortcut = ctx.input_mut(|i| {
@@ -1040,5 +1098,33 @@ mod appearance_fixture_tests {
             .join(format!("recovery-{}.json", std::process::id()));
         assert!(super::snapshot_in_use(&own_snapshot));
         drop(own);
+    }
+
+    #[test]
+    fn a_snapshot_not_taken_up_is_archived_and_stale_locks_go() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path();
+        // A declined snapshot of a crashed window, with its assets and its released lock.
+        let snapshot = out.join("recovery-41.json");
+        std::fs::write(&snapshot, "{}").unwrap();
+        std::fs::create_dir_all(out.join("recovery-41.json.assets")).unwrap();
+        std::fs::write(out.join("recovery-41.json.assets/avatar.obj"), "v 0 0 0").unwrap();
+        std::fs::write(out.join("recovery-41.lock"), "").unwrap();
+        super::archive_snapshot(out, &snapshot);
+        assert!(!snapshot.exists() && !out.join("recovery-41.lock").exists());
+        let archived = out.join("recovery-archive");
+        assert!(archived.join("recovery-41.json").exists());
+        assert!(archived.join("recovery-41.json.assets/avatar.obj").exists());
+        // Locks of windows that are gone, with no snapshot, go; a held one and our own stay.
+        std::fs::write(out.join("recovery-5180.lock"), "").unwrap();
+        let held = std::fs::File::create(out.join("recovery-77.lock")).unwrap();
+        held.try_lock().unwrap();
+        let own = super::recovery_lock(out).expect("own lock");
+        let own_snapshot = out.join(format!("recovery-{}.json", std::process::id()));
+        super::remove_stale_locks(out, &own_snapshot);
+        assert!(!out.join("recovery-5180.lock").exists());
+        assert!(out.join("recovery-77.lock").exists());
+        assert!(own_snapshot.with_extension("lock").exists());
+        drop((held, own));
     }
 }

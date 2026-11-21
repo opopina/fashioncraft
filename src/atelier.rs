@@ -273,6 +273,11 @@ pub fn run(
         Box::new(move |cc| {
             let render = cc.wgpu_render_state.clone().ok_or("wgpu unavailable")?;
             let gpu_device = (render.device.clone(), render.queue.clone());
+            // A software adapter (WARP on a Windows without a graphics driver, llvmpipe on Linux)
+            // runs "GPU" compute on the CPU anyway, slowly, and WARP crashed during a demo on a
+            // Windows VM: simulate on the CPU there. GPU compute stays a choice in the settings.
+            let gpu_compute =
+                render.adapter.get_info().device_type != eframe::wgpu::DeviceType::Cpu;
             // Preferences choose the theme and the startup display defaults, so
             // they are loaded and applied before the first frame is drawn.
             // Applying them afterwards would show a flash of the wrong theme.
@@ -349,7 +354,7 @@ pub fn run(
                 seams: false,
                 seam_links,
                 clean_view: false,
-                gpu: true,
+                gpu: gpu_compute,
                 gpu_device,
                 settings: simulation,
                 metrics: None,

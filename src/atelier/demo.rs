@@ -10,8 +10,8 @@
 //!
 //! The pointer and keys of the computer are ignored while it runs (only F9, pause or resume,
 //! and Shift+Escape, stop, are read), so a stray mouse cannot change what it does. Every step is
-//! written to `demo-<name>/review.md` in the session folder, with what failed and why; the
-//! recording goes beside it.
+//! written to `demo-<name>/review.md` in the session folder, with what failed and why, and as
+//! it happens to `progress.log` beside it (which survives a crash); the recording goes there too.
 use super::*;
 use std::{collections::HashMap, io::Write, path::PathBuf, sync::mpsc, thread::JoinHandle};
 
@@ -208,6 +208,8 @@ impl Demo {
         let name = std::env::var("FASHIONCRAFT_DEMO").ok()?;
         let script = super::demo_vest::script(&name)?;
         let out = output.join(format!("demo-{name}"));
+        let _ = std::fs::create_dir_all(&out);
+        let _ = std::fs::remove_file(out.join("progress.log"));
         Some(Self {
             name,
             script,
@@ -295,13 +297,25 @@ impl Demo {
     }
 
     fn note(&mut self, line: &str) {
-        self.log.push(format!("{:7.1} s  {line}", self.clock));
+        self.record(format!("{:7.1} s  {line}", self.clock));
     }
 
     fn fail(&mut self, what: &str, why: &str) {
         self.failures += 1;
-        self.log
-            .push(format!("{:7.1} s  ✗ {what}: {why}", self.clock));
+        self.record(format!("{:7.1} s  ✗ {what}: {why}", self.clock));
+    }
+
+    /// Keeps a log line for review.md and appends it at once to `progress.log`, so a run that
+    /// crashes (as one did inside a software renderer on Windows) still shows how far it got.
+    fn record(&mut self, line: String) {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.out.join("progress.log"))
+        {
+            let _ = writeln!(file, "{line}");
+        }
+        self.log.push(line);
     }
 
     fn move_to(&mut self, p: egui::Pos2) {

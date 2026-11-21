@@ -176,6 +176,11 @@ impl Atelier {
         else {
             return Ok(());
         };
+        self.export_gltf_to(&path)
+    }
+
+    /// The glTF export to `path`, without a dialog (agents use it too).
+    pub(super) fn export_gltf_to(&mut self, path: &std::path::Path) -> Result<(), String> {
         let take = self.current_take();
         let bodies = match (take, &self.project.avatar_animation) {
             (Some(take), Some(animation)) => Some(
@@ -202,7 +207,7 @@ impl Atelier {
             avatar: self.prefs.garment_display.avatar.then_some(&avatar),
             take: take.map(|t| (t, bodies)),
         };
-        fashioncraft::gltf_export::write(&scene, &path)?;
+        fashioncraft::gltf_export::write(&scene, path)?;
         self.status = format!(
             "Exported {}{}",
             path.display(),
@@ -456,6 +461,16 @@ impl Atelier {
         else {
             return Ok(());
         };
+        self.export_obj_to(ctx, &path)
+    }
+
+    /// The OBJ export to `path` with the export window's options, without a dialog (agents use
+    /// it too).
+    pub(super) fn export_obj_to(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
         let dialog = &self.authoring.media3d.obj;
         let mut options = dialog.options.clone();
         options.pieces = dialog
@@ -513,7 +528,7 @@ impl Atelier {
             avatar: avatar.then_some(self.scene.collider.surface.as_ref()),
             atlas: atlas.as_ref(),
         };
-        let summary = fashioncraft::obj_export::write(&scene, &options, &path)?;
+        let summary = fashioncraft::obj_export::write(&scene, &options, path)?;
         self.status = format!(
             "Exported {}: {} vertices, {} faces, {} textures",
             path.display(),

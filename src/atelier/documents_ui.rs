@@ -510,6 +510,25 @@ impl Atelier {
         project.animation_take = self.take_to_save();
         project
     }
+    /// Saves to `path` without a dialog, as Save does (agents use it). Returns the path.
+    pub(super) fn save_document_to(
+        &mut self,
+        ctx: &egui::Context,
+        path: PathBuf,
+    ) -> Result<String, String> {
+        self.pause_document(ctx);
+        if !self.commit_placement() {
+            return Err(self.status.clone());
+        }
+        self.snapshot_document()
+            .save(&path)
+            .map_err(|e| e.to_string())?;
+        self.document.path = Some(path.clone());
+        self.document.dirty = false;
+        self.remove_recovery();
+        self.status = format!("Saved {}", path.display());
+        Ok(path.display().to_string())
+    }
     pub(super) fn save_document(&mut self, ctx: &egui::Context, save_as: bool) -> bool {
         self.pause_document(ctx);
         let path = if save_as || self.document.path.is_none() {

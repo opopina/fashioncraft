@@ -10,6 +10,10 @@ use fashioncraft::{
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 #[path = "atelier/activation_ui.rs"]
 mod activation_ui;
+#[path = "atelier/agent_hub.rs"]
+mod agent_hub;
+#[path = "atelier/agent_tools.rs"]
+mod agent_tools;
 #[path = "atelier/animation_export.rs"]
 mod animation_export;
 #[path = "atelier/animation_ui.rs"]
@@ -18,6 +22,10 @@ mod animation_ui;
 mod arrange_ui;
 #[path = "atelier/arrangement_ui.rs"]
 mod arrangement_ui;
+#[path = "atelier/assistant_keys.rs"]
+mod assistant_keys;
+#[path = "atelier/assistant_ui.rs"]
+mod assistant_ui;
 #[path = "atelier/authoring_smoke.rs"]
 mod authoring_smoke;
 #[path = "atelier/authoring_ui.rs"]
@@ -329,6 +337,8 @@ pub fn run(
                 demo_points: Default::default(),
                 demo_points_before: Default::default(),
                 window_checked: false,
+                agent: agent_hub::AgentHub::new(output.clone()),
+                assistant: Default::default(),
                 mesh_mm: m.target_edge_m * 1000.,
                 anisotropy: m.anisotropy,
                 mesh_axis: m.axis_degrees,
@@ -437,6 +447,10 @@ struct Atelier {
     demo_points_before: std::collections::HashMap<String, egui::Pos2>,
     /// Whether the window was checked against its screen at start (see `ui`).
     window_checked: bool,
+    /// AI agents' tool calls and the loopback server for `fashioncraft-cli mcp`.
+    agent: agent_hub::AgentHub,
+    /// Window › Assistant.
+    assistant: assistant_ui::AssistantUi,
     perf: Option<perf::PerfRun>,
     mesh_mm: f64,
     anisotropy: f64,
@@ -978,6 +992,7 @@ impl Atelier {
             Id::ExportAlembic => self.export_alembic()?,
             Id::DraftTshirt => self.authoring.shirt_draft.open = !self.authoring.shirt_draft.open,
             Id::ToggleHistory => self.authoring.history_ui.open = !self.authoring.history_ui.open,
+            Id::ToggleAssistant => self.assistant.open = !self.assistant.open,
             Id::DraftSkirt => self.authoring.skirt_draft.open = !self.authoring.skirt_draft.open,
             Id::ImportBvh => self.import_bvh()?,
             Id::AttachPins | Id::DetachPins => {
@@ -1234,6 +1249,29 @@ impl Atelier {
     fn step(&mut self, ctx: &egui::Context) -> bool {
         self.submit(ctx, true)
     }
+    /// Takes the worker's latest step, if it finished since the last frame.
+    fn take_simulation_result(&mut self) {
+        let done = self.receive.lock().unwrap().take();
+        if let Some(done) = current_worker_result(done, self.generation) {
+            self.pending = false;
+            match done.result {
+                Ok((state, m)) => {
+                    self.simulation_error = None;
+                    self.document.dirty = true;
+                    self.smoke_applied |= done.had_grab;
+                    self.scene.state = state;
+                    self.status = "Dynamic simulation · OGC contacts".into();
+                    self.metrics = Some(m);
+                    self.advance_pose_transition();
+                }
+                Err(e) => {
+                    self.playing = false;
+                    self.simulation_error = Some(e.clone());
+                    self.status = e;
+                }
+            }
+        }
+    }
     fn submit(&mut self, ctx: &egui::Context, once: bool) -> bool {
         let scene = FittingScene {
             garment: self.scene.garment.clone(),
@@ -1438,6 +1476,28 @@ impl Atelier {
     }
 }
 impl eframe::App for Atelier {
+    /// Runs before every `ui`, and also while the window is minimised or covered (macOS draws
+    /// no frames then), so an AI agent's calls are answered either way.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drive_agent(ctx);
+        // `ui` steps the simulation; a hidden window still steps one an agent asked for.
+        let hidden = ctx.input(|i| i.viewport().visible() == Some(false));
+        if hidden
+            && self.playing
+            && matches!(
+                self.agent.running,
+                Some((_, agent_hub::Pending::Simulate { .. }))
+            )
+        {
+            self.take_simulation_result();
+            self.submit(ctx, false);
+            ctx.request_repaint_after(Duration::from_millis(16));
+        }
+    }
+    /// A clean quit takes the agents' connection file away at once.
+    fn on_exit(&mut self) {
+        self.agent.stop();
+    }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         if let Some(demo) = &mut self.demo {
             demo.input(input);
@@ -1577,26 +1637,7 @@ impl eframe::App for Atelier {
         }
         self.frames += 1;
         self.authoring.hover_edge = None;
-        let done = self.receive.lock().unwrap().take();
-        if let Some(done) = current_worker_result(done, self.generation) {
-            self.pending = false;
-            match done.result {
-                Ok((state, m)) => {
-                    self.simulation_error = None;
-                    self.document.dirty = true;
-                    self.smoke_applied |= done.had_grab;
-                    self.scene.state = state;
-                    self.status = "Dynamic simulation · OGC contacts".into();
-                    self.metrics = Some(m);
-                    self.advance_pose_transition();
-                }
-                Err(e) => {
-                    self.playing = false;
-                    self.simulation_error = Some(e.clone());
-                    self.status = e;
-                }
-            }
-        }
+        self.take_simulation_result();
         if !self.authoring.radial.blocked
             && !self.quick.blocked
             && ctx.input(|i| i.key_pressed(egui::Key::Space))
@@ -1693,6 +1734,7 @@ impl eframe::App for Atelier {
             self.skirt_draft_window(&ctx);
             self.trousers_draft_window(&ctx);
             self.history_window(&ctx);
+            self.assistant_window(&ctx);
             self.camera_props_window(&ctx);
             self.pleats_window(&ctx);
             self.mesh_select_window(&ctx);

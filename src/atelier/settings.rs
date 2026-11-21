@@ -68,6 +68,35 @@ pub(super) struct Preferences {
     pub(super) user_poses: std::collections::BTreeMap<String, fashioncraft::avatar_rig::Pose>,
     /// Which axes the placement gizmo follows (Settings › Gizmo).
     pub(super) gizmo_axes: super::gizmo::GizmoAxes,
+    /// AI agents and the Assistant panel (Settings › AI agents).
+    pub(super) ai: AiPrefs,
+}
+
+/// AI agents and the Assistant panel. API keys are not kept here: they go to the system's
+/// keychain (see `assistant`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(super) struct AiPrefs {
+    /// Whether MCP clients may work in this window through `fashioncraft-cli mcp`. Off until
+    /// the person turns it on.
+    pub(super) agents_allowed: bool,
+    /// The Assistant panel's provider: anthropic, openai, gemini or local.
+    pub(super) provider: String,
+    /// The model it asks; empty uses the provider's default where there is one.
+    pub(super) model: String,
+    /// The provider's address; empty uses the provider's default.
+    pub(super) base_url: String,
+}
+
+impl Default for AiPrefs {
+    fn default() -> Self {
+        Self {
+            agents_allowed: false,
+            provider: "anthropic".into(),
+            model: String::new(),
+            base_url: String::new(),
+        }
+    }
 }
 
 /// Most poses the user can keep, and the longest name one may have.
@@ -93,6 +122,7 @@ impl Default for Preferences {
             language: Default::default(),
             user_poses: Default::default(),
             gizmo_axes: Default::default(),
+            ai: Default::default(),
         }
     }
 }
@@ -255,6 +285,36 @@ pub(super) fn window(
                     .changed();
             });
             ui.separator();
+            let tr = |text| super::i18n::tr(prefs.language, text);
+            ui.heading(tr("AI agents"));
+            let allow = ui
+                .checkbox(
+                    &mut prefs.ai.agents_allowed,
+                    tr("Let AI agents use FashionCraft"),
+                )
+                .on_hover_text(tr(
+                    "MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's \
+                     gateway work in this window through fashioncraft-cli mcp. Off, nothing \
+                     listens.",
+                ));
+            edited |= allow.changed();
+            ui.small(tr(
+                "They work in the open window, with undo, and save and export only into \
+                 Documents/FashionCraft.",
+            ));
+            let entry = mcp_entry();
+            ui.horizontal(|ui| {
+                ui.small(tr("MCP client entry"));
+                if ui.small_button(tr("Copy")).clicked() {
+                    ui.ctx().copy_text(entry.clone());
+                }
+            });
+            ui.add(egui::Label::new(egui::RichText::new(&entry).monospace().small()).wrap());
+            ui.small(tr(
+                "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, \
+                 Gemini or a local model; set its connection in its own window.",
+            ));
+            ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Restore defaults").clicked() {
                     *prefs = Preferences::default();
@@ -264,6 +324,34 @@ pub(super) fn window(
             });
         });
     *changed |= edited;
+}
+
+/// The `mcpServers` entry that starts this installation's `fashioncraft-cli mcp`, for Claude
+/// Desktop, Cursor, LM Studio and most other MCP clients.
+fn mcp_entry() -> String {
+    // An AppImage runs its fashioncraft-cli as `<AppImage> cli` (see scripts/package-linux.sh).
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        return serde_json::to_string_pretty(&serde_json::json!({
+            "mcpServers": {"FashionCraft": {
+                "command": appimage.to_string_lossy(), "args": ["cli", "mcp"]
+            }}
+        }))
+        .unwrap_or_default();
+    }
+    let name = if cfg!(windows) {
+        "fashioncraft-cli.exe"
+    } else {
+        "fashioncraft-cli"
+    };
+    let cli = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join(name)))
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| name.into());
+    serde_json::to_string_pretty(&serde_json::json!({
+        "mcpServers": {"FashionCraft": {"command": cli, "args": ["mcp"]}}
+    }))
+    .unwrap_or_default()
 }
 
 /// Install the workspace chrome for the selected theme, and select that theme so

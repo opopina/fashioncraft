@@ -2376,6 +2376,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "African" => "Africana",
         "Asian" => "Asiática",
         "European" => "Europea",
+        "Underwear" => "Ropa interior",
+        "Painted on the skin; it does not change the simulation" => {
+            "Pintada en la piel; no cambia la simulación"
+        }
+        "Always on for avatars under 18 and with a skin" => {
+            "Siempre puesta en avatares menores de 18 años y con piel"
+        }
         "Hair colour" => "Color de pelo",
         "Natural" => "Natural",
         "Black" => "Negro",

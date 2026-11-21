@@ -753,6 +753,8 @@ pub const HAIR_COLOURS: [(&str, &str, [f32; 3]); 7] = [
 ];
 /// Colour of the underwear every skinned body wears, sRGB.
 pub const UNDERWEAR_COLOUR: [f32; 3] = [0.27, 0.27, 0.29];
+/// Age, in years, from which a body may go without underwear; younger ones always wear it.
+pub const ADULT_AGE: f64 = 18.;
 
 /// What a look is made of, by the names in [`SKINS`], [`EYE_COLOURS`], [`EYEBROWS`],
 /// [`EYELASHES`] and [`HAIR`]; none leaves it out.
@@ -765,6 +767,9 @@ pub struct LookChoice {
     pub hair: Option<&'static str>,
     /// One of [`HAIR_COLOURS`]; the hair's own colour when none.
     pub hair_colour: Option<&'static str>,
+    /// Leave out the underwear: only for adults, from [`ADULT_AGE`]; younger bodies wear it
+    /// whatever this says.
+    pub without_underwear: bool,
 }
 
 impl LookChoice {
@@ -783,6 +788,7 @@ impl LookChoice {
             eyelashes: Some(eyelashes),
             hair,
             hair_colour: None,
+            without_underwear: false,
         }
     }
 
@@ -840,7 +846,8 @@ pub fn make_look(
     if let Some(hair) = look.parts.iter_mut().find(|p| p.name.starts_with("hair/")) {
         hair.tint = tint;
     }
-    if let Some(skin) = choice.skin {
+    let bare = choice.without_underwear && body.settings.age_years >= ADULT_AGE;
+    if let (Some(skin), false) = (choice.skin, bare) {
         // A top as well for women and girls, and for any body with a woman's skin.
         let top = body.settings.gender < 0.75 || skin.contains("female");
         look.underwear = Some(Underwear {

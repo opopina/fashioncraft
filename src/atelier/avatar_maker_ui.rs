@@ -187,6 +187,18 @@ impl Atelier {
                             avatar_look::HAIR_COLOURS.iter().map(|(n, l, _)| (*n, *l)).collect();
                         pick(ui, "avatar.maker.hair.colour", &mut look.hair_colour, &colours, Some(tr("Natural")), ui_lang);
                         ui.end_row();
+                        // Children always wear it; adults may go without.
+                        let adult = body.age_years >= avatar_look::ADULT_AGE;
+                        let mut on = !look.without_underwear || !adult;
+                        ui.label(tr("Underwear"));
+                        let response = ui
+                            .add_enabled(adult && look.skin.is_some(), egui::Checkbox::without_text(&mut on))
+                            .on_hover_text(tr("Painted on the skin; it does not change the simulation"))
+                            .on_disabled_hover_text(tr("Always on for avatars under 18 and with a skin"));
+                        if response.changed() {
+                            look.without_underwear = !on;
+                        }
+                        ui.end_row();
                     });
                 egui::CollapsingHeader::new(tr("Measurements"))
                     .id_salt("avatar.maker.measures")

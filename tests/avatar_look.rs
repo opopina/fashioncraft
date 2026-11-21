@@ -237,3 +237,20 @@ fn thumbnails_show_the_body_on_a_clear_background() {
     assert_eq!(alpha(0, 0), 0, "corners are clear");
     assert_eq!(alpha(30, 45), 255, "the middle is the body");
 }
+
+#[test]
+fn only_adults_may_go_without_underwear() {
+    let targets = MacroTargets::bundled().unwrap();
+    let choice = avatar_look::LookChoice {
+        without_underwear: true,
+        ..avatar_look::PRESETS[0].look
+    };
+    for (age, bare) in [(30., true), (18., true), (17., false), (8., false)] {
+        let made = targets.make(&MacroBody::typical(0., age)).unwrap();
+        let look = avatar_look::make_look(&made, &choice).unwrap();
+        assert_eq!(look.underwear.is_none(), bare, "age {age}");
+    }
+    let made = targets.make(&MacroBody::typical(1., 30.)).unwrap();
+    let dressed = avatar_look::make_look(&made, &avatar_look::PRESETS[5].look).unwrap();
+    assert!(dressed.underwear.is_some(), "on unless asked");
+}

@@ -16,8 +16,9 @@ engraving portrait of a vicuña with its fleecy shoulders, three flat colours, n
 `scripts/fashioncraft-icon.py` turns it into the icon: it finds the drawing on the source's tile,
 recolours it by unmixing each pixel into ink, paper and field and repainting those shares in the
 template's colours (so fine strokes and antialiasing survive), continues the fleece a little past
-the source's rounder corners, frames it with the ears whole and the body running off the bottom,
-and adds the template's corners and thin rim. To remake the icons:
+the source's rounder corners, frames the head closely (68 % of the source's side, centred on the
+head, the ears whole and the neck running off the bottom), and adds the template's corners and
+thin rim. To remake the icons:
 
 ```sh
 python3 scripts/fashioncraft-icon.py

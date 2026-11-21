@@ -13,7 +13,8 @@ drawing and remakes the rest:
   app colour, so fine strokes, antialiased edges and lashes over the field keep their weight;
 - where the source's rounder corners cut the drawing, it continues the drawing a little past
   them by reflection, so the template's corners find fleece there too;
-- it frames the source's square, ears a little below the top, the body running off the bottom;
+- it frames the head closely, a square ZOOM times the source's side centred on the head, ears
+  whole just below the top, the neck running off the bottom;
 - the tile is a 512-unit rounded square with 112-unit corners, and, as in the ArtCraft icons,
   the drawing stops 5 units short of its edge, leaving a thin rim of the field all round.
 
@@ -31,6 +32,8 @@ from scipy import ndimage
 INK = np.array([0x0B, 0x0B, 0x0C], float)
 PAPER = np.array([0xEF, 0xE9, 0xDC], float)
 FUCHSIA = "DD2CCE"
+# How much of the source's side the icon shows: less is closer to the face.
+ZOOM = 0.68
 # The template: a 512-unit tile with 112-unit corners; the drawing stops 5 units short.
 CORNER, RIM = 112 / 512, 5 / 512
 
@@ -134,14 +137,17 @@ def figure_and_colours(source, field):
 
 
 def frame(fig, pad):
-    """The source's own square, centred on it, moved up when needed so the ears sit a little
-    below the top; the body runs off the bottom."""
+    """A square ZOOM times the source's side, centred on the head (the figure's upper part),
+    moved up when needed so the ears sit just below the top; the neck runs off the bottom."""
     h, w = fig.shape
     h, w = h - 2 * pad, w - 2 * pad
-    side = min(h, w)
+    side = int(min(h, w) * ZOOM)
     ear_top = np.where(fig.any(1))[0].min() - pad
-    top = min(h - side, int(ear_top - 0.04 * side))
-    left = (w - side) // 2
+    head = fig[pad + ear_top : pad + ear_top + int(0.45 * side), pad : pad + w]
+    cols = np.where(head.any(0))[0]
+    centre = (cols.min() + cols.max()) / 2
+    left = int(np.clip(centre - side / 2, 0, w - side))
+    top = int(np.clip(ear_top - 0.035 * side, 0, h - side))
     return side, pad + left, pad + top
 
 

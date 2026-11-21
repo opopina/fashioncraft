@@ -20,7 +20,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - run: python3 -m pip install --user pillow
+      # The runner's Python is externally managed (PEP 668): Pillow goes in a virtual environment
+      # put first on PATH, for the icon step of the packaging script.
+      - name: Python with Pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/py"
+          "$RUNNER_TEMP/py/bin/pip" install --quiet pillow
+          echo "$RUNNER_TEMP/py/bin" >> "$GITHUB_PATH"
       # Signed with the Developer ID identity when the repository provides one; ad hoc otherwise.
       - name: Package the app and disk image
         env:

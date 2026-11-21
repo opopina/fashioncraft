@@ -102,8 +102,9 @@ fn portable_asset(
         .file_name()
         .ok_or("Project needs a filename")?
         .to_string_lossy();
-    let relative =
-        PathBuf::from(format!("{stem}.assets")).join(format!("{kind}-{hash:016x}.{extension}"));
+    // Written with '/', which every platform reads, so a project saved on Windows opens on
+    // macOS and Linux too (a joined path would store a backslash there).
+    let relative = PathBuf::from(format!("{stem}.assets/{kind}-{hash:016x}.{extension}"));
     let destination = project.parent().unwrap_or(Path::new(".")).join(&relative);
     fs::create_dir_all(destination.parent().unwrap()).map_err(|e| e.to_string())?;
     if destination.exists() {

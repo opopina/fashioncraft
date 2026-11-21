@@ -50,6 +50,10 @@ mod chrome;
 mod command_palette;
 #[path = "atelier/commands.rs"]
 mod commands;
+#[path = "atelier/demo.rs"]
+mod demo;
+#[path = "atelier/demo_vest.rs"]
+mod demo_vest;
 #[path = "atelier/documents_ui.rs"]
 mod documents_ui;
 #[path = "atelier/drafting_ui.rs"]
@@ -243,7 +247,23 @@ pub fn run(
         renderer: eframe::Renderer::Wgpu,
         viewport: egui::ViewportBuilder::default()
             .with_icon(icon)
-            .with_inner_size(smoke_size.unwrap_or([1600., 980.]))
+            // Wayland's app_id (X11's WM_CLASS): the name of the installed .desktop entry, so
+            // launchers and docks match the window to its icon. It defaults to the title.
+            .with_app_id("io.github.opopina.fashioncraft")
+            // A size that fits a 13-inch laptop's screen (1440 × 900 points) with its menu bar
+            // and title bar; eframe also clamps it to the monitor;
+            // a demo opens at the size it records at, 16:9.
+            .with_inner_size(
+                smoke_size
+                    .or_else(demo::window_size)
+                    .unwrap_or([1440., 840.]),
+            )
+            // A demo stays in front: macOS stops drawing a covered window, which would stall it.
+            .with_window_level(if demo::window_size().is_some() {
+                egui::WindowLevel::AlwaysOnTop
+            } else {
+                egui::WindowLevel::Normal
+            })
             .with_min_inner_size([1100., 700.]),
         ..Default::default()
     };
@@ -296,6 +316,9 @@ pub fn run(
                 prefs_dirty: false,
                 inspector_tab: chrome::InspectorTab::Piece,
                 authoring_smoke: authoring_test.then(authoring_smoke::Smoke::new),
+                demo: demo::Demo::from_env(&output),
+                demo_points: Default::default(),
+                demo_points_before: Default::default(),
                 mesh_mm: m.target_edge_m * 1000.,
                 anisotropy: m.anisotropy,
                 mesh_axis: m.axis_degrees,
@@ -396,6 +419,12 @@ struct Atelier {
     prefs_dirty: bool,
     inspector_tab: chrome::InspectorTab,
     authoring_smoke: Option<authoring_smoke::Smoke>,
+    /// A scripted demo driving the interface (`FASHIONCRAFT_DEMO`).
+    demo: Option<demo::Demo>,
+    /// Controls that report themselves for the interface tests, this frame and the last, so
+    /// a demo can aim at them too.
+    demo_points: std::collections::HashMap<String, egui::Pos2>,
+    demo_points_before: std::collections::HashMap<String, egui::Pos2>,
     perf: Option<perf::PerfRun>,
     mesh_mm: f64,
     anisotropy: f64,
@@ -1127,15 +1156,33 @@ impl Atelier {
                 self.superimpose_panels(&ids, id == Id::SuperimposeOver);
             }
             Id::AddButton | Id::AddButtonhole => {
-                let panel = self
-                    .authoring
-                    .selected
-                    .clone()
-                    .ok_or("Select a panel first")?;
-                let command = self
-                    .centre_trim(&panel, id == Id::AddButtonhole)
-                    .ok_or("The piece has no mesh yet")?;
-                self.edit(command);
+                // As in other garment tools: choose it, then click where each one goes.
+                let buttonhole = id == Id::AddButtonhole;
+                if self.prefs.workspace.mode == layout::ViewMode::Garment {
+                    // No pattern view to click in: one at the middle of the selected piece.
+                    let panel = self
+                        .authoring
+                        .selected
+                        .clone()
+                        .ok_or("Select a panel first")?;
+                    let centre = self
+                        .piece_centre(&panel)
+                        .ok_or("The piece has no mesh yet")?;
+                    let command = self.trim_at(&panel, centre, buttonhole);
+                    self.edit(command);
+                    return Ok(());
+                }
+                self.set_authoring_tool(Tool::Edit, false);
+                self.authoring.trim_placement = Some(buttonhole);
+                self.status = i18n::tr(
+                    self.prefs.language,
+                    if buttonhole {
+                        "Click on a piece in 2D to place a buttonhole · Esc when done"
+                    } else {
+                        "Click on a piece in 2D to place a button · Esc when done"
+                    },
+                )
+                .into();
             }
             Id::FastenButtons => self.fasten(true),
             Id::AddGraphic => {
@@ -1380,6 +1427,9 @@ impl Atelier {
 }
 impl eframe::App for Atelier {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        if let Some(demo) = &mut self.demo {
+            demo.input(input);
+        }
         if let Some(smoke) = &mut self.authoring_smoke {
             smoke.input(input);
         }
@@ -1414,6 +1464,16 @@ impl eframe::App for Atelier {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.begin_demo_frame(&ctx);
+        // Placing buttons ends with Esc, another tool, or leaving the pattern view, however
+        // the tool changed (several places set it directly).
+        if self.authoring.trim_placement.is_some()
+            && (self.authoring.tool != Tool::Edit
+                || self.prefs.workspace.mode == layout::ViewMode::Garment
+                || ctx.input(|i| i.key_pressed(egui::Key::Escape)))
+        {
+            self.authoring.trim_placement = None;
+        }
         if !ctx.input(|i| i.focused) {
             // A hidden/blurred viewport must not retain an unfinished placement.
             // Existing cancellation restores the captured drape and invalidates
@@ -1534,15 +1594,18 @@ impl eframe::App for Atelier {
                 .on_hover_text("Early alpha · built on ClothCraft by erythrofr and contributors");
                 ui.separator();
                 let language = self.prefs.language;
+                // In a narrow window (a laptop screen) these buttons shrink to their symbols,
+                // so that every menu of the bar still fits.
+                let compact = ctx.content_rect().width() < 1560.;
                 if command_palette::launch_button(
                     ui,
                     can_open_palette,
-                    i18n::tr(language, "Commands…"),
+                    if compact { "⌕" } else { i18n::tr(language, "Commands…") },
                     language,
                 ) {
                     self.palette.begin();
                 }
-                let play = ui.button(i18n::tr(
+                let play_label = i18n::tr(
                     language,
                     if self.playing {
                         "⏸ Pause"
@@ -1551,12 +1614,26 @@ impl eframe::App for Atelier {
                     } else {
                         "▶ Simulate"
                     },
-                ));
+                );
+                let play = ui
+                    .button(if compact {
+                        if self.playing { "⏸" } else { "▶" }
+                    } else {
+                        play_label
+                    })
+                    .on_hover_text(play_label);
+                demo::mark(&ctx, "toolbar.simulate", play.rect);
                 self.smoke_target("simulate", play.rect.center());
                 if play.clicked() {
                     self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
                 }
-                let export_button = ui.button(i18n::tr(language, "Export")).on_hover_text("Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.");
+                let export_label = i18n::tr(language, "Export");
+                let export_button = ui
+                    .button(if compact { "📤" } else { export_label })
+                    .on_hover_text(format!(
+                        "{export_label}: {}",
+                        i18n::tr(language, "Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.")
+                    ));
                 self.smoke_target("export", export_button.rect.center());
                 if export_button.clicked() {
                     self.invoke_command(commands::CommandId::ExportSession, &ctx);
@@ -1781,6 +1858,8 @@ impl eframe::App for Atelier {
             }
             ctx.request_repaint_after(Duration::from_millis(30));
         }
+        // Last, once every window and dialog of the frame has reported where it is.
+        self.drive_demo(&ctx);
     }
 }
 

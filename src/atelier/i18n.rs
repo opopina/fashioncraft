@@ -2376,6 +2376,18 @@ fn spanish(text: &str) -> Option<&'static str> {
         "African" => "Africana",
         "Asian" => "Asiática",
         "European" => "Europea",
+        "Buttonhole placed · click for another, Esc when done" => {
+            "Ojal colocado · clic para otro, Esc para terminar"
+        }
+        "Button placed · click for another, Esc when done" => {
+            "Botón colocado · clic para otro, Esc para terminar"
+        }
+        "Click on a piece in 2D to place a buttonhole · Esc when done" => {
+            "Haz clic en una pieza en 2D para colocar un ojal · Esc para terminar"
+        }
+        "Click on a piece in 2D to place a button · Esc when done" => {
+            "Haz clic en una pieza en 2D para colocar un botón · Esc para terminar"
+        }
         "Underwear" => "Ropa interior",
         "Painted on the skin; it does not change the simulation" => {
             "Pintada en la piel; no cambia la simulación"

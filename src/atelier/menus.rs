@@ -612,22 +612,28 @@ impl Atelier {
                     let keys = keymap::label(self.prefs.keymap, id)
                         .or_else(|| id.descriptor().shortcut.map(String::from));
                     if let Some(keys) = keys {
-                        button = button.shortcut_text(keys);
+                        button = button.shortcut_text(keymap::shown(&keys));
                     }
                     let response = ui
                         .add_enabled(available.is_ok(), button)
                         .on_disabled_hover_text(
                             available.err().map_or("", |reason| reason.message()),
                         );
+                    super::demo::mark(
+                        ctx,
+                        format_args!("cmd:{}", id.descriptor().key),
+                        response.rect,
+                    );
                     if response.clicked() {
                         self.invoke_command(id, ctx);
                         ui.close();
                     }
                 }
                 Item::Sub(label, inner) => {
-                    ui.menu_button(i18n::tr(self.prefs.language, label), |ui| {
+                    let response = ui.menu_button(i18n::tr(self.prefs.language, label), |ui| {
                         self.menu_items(ui, inner, ctx, can_open_palette)
                     });
+                    super::demo::mark(ctx, format_args!("sub:{label}"), response.response.rect);
                 }
                 Item::Separator => {
                     ui.separator();
@@ -724,11 +730,12 @@ impl Atelier {
         ctx: &egui::Context,
         can_open_palette: bool,
     ) {
-        for (title, items) in MENUS {
-            let title = i18n::tr(self.prefs.language, title);
-            ui.menu_button(title, |ui| {
+        for (english, items) in MENUS {
+            let title = i18n::tr(self.prefs.language, english);
+            let response = ui.menu_button(title, |ui| {
                 self.menu_items(ui, items, ctx, can_open_palette)
             });
+            super::demo::mark(ctx, format_args!("menu:{english}"), response.response.rect);
         }
     }
 }

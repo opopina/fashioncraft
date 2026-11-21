@@ -145,6 +145,14 @@ impl Atelier {
         points
     }
 
+    /// Where arrangement point `id` is on screen, once the points have been shown.
+    pub(super) fn arrangement_point_screen(&self, id: &str) -> Option<egui::Pos2> {
+        let rect = self.authoring.selection.garment_rect?;
+        let (_, points) = self.authoring.arrangement.skin_points.as_ref()?;
+        let p = points.iter().find(|p| p.id == id)?;
+        self.camera.project(p.at.as_vec3(), rect)
+    }
+
     /// The arrangement point under `pointer`, among those facing the camera.
     fn point_under(
         &mut self,

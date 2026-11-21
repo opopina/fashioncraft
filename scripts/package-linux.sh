@@ -39,7 +39,7 @@ Exec=fashioncraft %f
 Icon=$app_id
 Terminal=false
 Categories=Graphics;3DGraphics;
-StartupWMClass=fashioncraft
+StartupWMClass=io.github.opopina.fashioncraft
 DESKTOP
 
 python3 - "$root/share/icons/hicolor" "$app_id" <<'PY'

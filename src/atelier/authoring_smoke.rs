@@ -965,6 +965,9 @@ impl Atelier {
         }
     }
     pub(super) fn smoke_target(&mut self, name: &str, p: egui::Pos2) {
+        if self.demo.is_some() {
+            self.demo_points.insert(name.into(), p);
+        }
         if let Some(smoke) = &mut self.authoring_smoke {
             smoke.targets.insert(name.into(), p);
         }

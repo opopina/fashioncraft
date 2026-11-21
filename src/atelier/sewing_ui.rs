@@ -178,6 +178,7 @@ fn sewing_primary_action(ui: &mut egui::Ui, editing: bool, easing_needed: bool) 
         [ui.available_width(), 34.],
         egui::Button::new(egui::RichText::new(label).strong()).fill(ui.visuals().selection.bg_fill),
     );
+    super::demo::mark(ui.ctx(), "sew.confirm", button.rect);
     button.clicked().then_some(easing_needed)
 }
 
@@ -294,10 +295,16 @@ impl Atelier {
         } else {
             at.x - 306.
         };
-        let at = egui::pos2(
-            x.clamp(bounds.left(), (bounds.right() - 306.).max(bounds.left())),
-            (at.y + 18.).clamp(bounds.top(), (bounds.bottom() - 330.).max(bounds.top())),
-        );
+        let at = if ready {
+            egui::pos2(
+                x.clamp(bounds.left(), (bounds.right() - 306.).max(bounds.left())),
+                (at.y + 18.).clamp(bounds.top(), (bounds.bottom() - 330.).max(bounds.top())),
+            )
+        } else {
+            // Only a hint while the next edge is picked: in the view's corner, not beside the
+            // pointer, where it would cover the pieces the next click is for.
+            bounds.left_top() + egui::vec2(8., 8.)
+        };
         egui::Window::new(i18n::tr(ui_lang, "Sewing at cursor"))
             .id(egui::Id::new("sewing-context"))
             .title_bar(false)
@@ -720,6 +727,32 @@ impl Atelier {
             ]
         }
     }
+    /// Which way the two picked edges meet, as a person means it: a click near an end of each
+    /// edge joins those ends (as segment sewing does in other garment tools); clicks near the
+    /// middles join the ends that lie nearer each other in 3D. Without this a seam between a
+    /// piece and a mirrored one came out twisted, its start sewn to the other's end.
+    fn natural_direction(&self) -> bool {
+        if let [ta, tb] = self.authoring.ends_t[..]
+            && (ta - 0.5).abs() > 0.2
+            && (tb - 0.5).abs() > 0.2
+        {
+            return (ta < 0.5) != (tb < 0.5);
+        }
+        let [a, b] = self.sewing_sides();
+        let (Some(ca), Some(cb)) = (self.sewing_curve(&a, false), self.sewing_curve(&b, false))
+        else {
+            return self.authoring.reverse;
+        };
+        let x = &self.scene.state.x;
+        let at = |c: &fashioncraft::garment::seam::BoundaryCurve, t: f64| -> glam::DVec3 {
+            c.point(t)
+                .iter()
+                .filter_map(|(v, w)| x.get(*v).map(|p| *p * *w))
+                .sum()
+        };
+        let (a0, a1, b0, b1) = (at(&ca, 0.), at(&ca, 1.), at(&cb, 0.), at(&cb, 1.));
+        a0.distance(b1) + a1.distance(b0) < a0.distance(b0) + a1.distance(b1)
+    }
     pub(super) fn sewing_curve(
         &self,
         refs: &[BoundaryRef],
@@ -794,6 +827,16 @@ impl Atelier {
         }
         self.authoring.error = None;
         self.select_boundary(edge);
+        // A partial range already runs the way its two clicks went: keep that direction.
+        if !self.authoring.sewing.chain_mode && !self.authoring.sewing.partial {
+            self.authoring
+                .ends_t
+                .truncate(self.authoring.ends.len().saturating_sub(1));
+            self.authoring.ends_t.push(t);
+            if self.authoring.ends.len() == 2 {
+                self.authoring.reverse = self.natural_direction();
+            }
+        }
         self.status = if self.sewing_sides().iter().all(|s| !s.is_empty()) {
             "Seam preview ready · click Sew beside the cursor or press Enter"
         } else {

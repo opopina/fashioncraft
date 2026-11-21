@@ -56,6 +56,33 @@ struct Packing {
     configs: Vec<[u32; 4]>,
     config_data: Vec<u8>,
 }
+/// A stitch's terms as a GPU term holds them, at most four. A seam sample joins two points of
+/// edges (two vertices each), but a tack (a fastened button, say) joins two points inside
+/// triangles: three vertices a side. Each side then keeps its two heaviest vertices, weighted
+/// to the same total, so the stitch still sums to zero; its point moves to the nearest edge of
+/// its triangle, a few millimetres at most. The CPU solvers keep every term.
+pub fn four_terms(terms: &[(usize, f64)]) -> Vec<(usize, f64)> {
+    if terms.len() <= 4 {
+        return terms.to_vec();
+    }
+    let mut out = Vec::with_capacity(4);
+    for positive in [true, false] {
+        let mut side: Vec<(usize, f64)> = terms
+            .iter()
+            .copied()
+            .filter(|(_, w)| (*w > 0.) == positive)
+            .collect();
+        let total: f64 = side.iter().map(|(_, w)| w).sum();
+        side.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
+        side.truncate(2);
+        let kept: f64 = side.iter().map(|(_, w)| w).sum();
+        if kept.abs() > 1e-15 {
+            out.extend(side.into_iter().map(|(v, w)| (v, w * total / kept)));
+        }
+    }
+    out
+}
+
 impl Term {
     fn new(ids: &[usize], kind: u32) -> Self {
         let mut t = Self {
@@ -835,11 +862,9 @@ impl Prepared {
         }
         for seam in &g.seams {
             for s in &seam.samples {
-                let mut t = Term::new(
-                    &s.point.terms.iter().map(|(i, _)| *i).collect::<Vec<_>>(),
-                    2,
-                );
-                for (i, (_, w)) in s.point.terms.iter().enumerate() {
+                let stitch = four_terms(&s.point.terms);
+                let mut t = Term::new(&stitch.iter().map(|(i, _)| *i).collect::<Vec<_>>(), 2);
+                for (i, (_, w)) in stitch.iter().enumerate() {
                     t.a[i] = *w as f32;
                 }
                 t.b[0] = (s.weight_m * seam.stiffness) as f32;

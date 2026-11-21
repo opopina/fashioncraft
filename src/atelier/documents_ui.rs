@@ -49,7 +49,9 @@ impl DocumentUi {
             pattern_import: Default::default(),
             svg_import: Default::default(),
             staged_avatar: None,
-            dirty: path.is_none() || modified,
+            // The example the app opens with is not the user's work until they change it, so
+            // New and Open do not ask to save it.
+            dirty: modified,
             path,
             last_recovery: Instant::now(),
             recovery: output.join(format!("recovery-{}.json", std::process::id())),

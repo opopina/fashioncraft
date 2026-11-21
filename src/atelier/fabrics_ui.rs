@@ -100,6 +100,7 @@ impl Atelier {
             self.pick_fabric_map(k);
         }
         for (name, rect) in appearance_targets {
+            super::demo::mark(ui.ctx(), name, rect);
             if let Some(smoke) = &mut self.authoring_smoke {
                 smoke.target_rect(ui, name, rect);
             }
@@ -214,7 +215,8 @@ impl Atelier {
                     ui.small(i18n::tr(ui_lang, "Without its own collision distance a fabric uses the scene's, in Simulation."));
                 });
                 if d.properties != before_properties { d.preset = None; }
-                ui.checkbox(&mut d.all_panels, i18n::tr(ui_lang, "Apply to all panels"));
+                let all = ui.checkbox(&mut d.all_panels, i18n::tr(ui_lang, "Apply to all panels"));
+                targets.push(("fabric_all".into(), all.rect.center()));
                 let button = ui.button(i18n::tr(ui_lang, "Apply fabric"));
                 targets.push(("fabric_apply".into(), button.rect.center()));
                 apply = button.clicked();

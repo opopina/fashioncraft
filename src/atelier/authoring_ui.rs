@@ -36,6 +36,9 @@ pub(super) enum Tool {
 }
 #[derive(Default)]
 pub(super) struct AuthoringUi {
+    /// Materials › Buttons › Button or Buttonhole: each click on a piece in 2D places one
+    /// there (true for buttonholes) until Esc or another tool.
+    pub trim_placement: Option<bool>,
     pub dart: Option<DartDraft>,
     /// Decoded images of the graphics on pieces.
     pub graphic_images: super::graphics_ui::GraphicImages,
@@ -101,6 +104,8 @@ pub(super) struct AuthoringUi {
     pub hover_edge: Option<BoundaryRef>,
     pub replace: bool,
     pub ends: Vec<BoundaryRef>,
+    /// Where each of `ends` was clicked, along its boundary (0 at its start, 1 at its end).
+    pub ends_t: Vec<f64>,
     pub reverse: bool,
     pub ease: bool,
     pub preview: Option<Placement>,
@@ -1296,6 +1301,7 @@ impl Atelier {
         });
     }
     pub(super) fn set_authoring_tool(&mut self, tool: Tool, rotate: bool) {
+        self.authoring.trim_placement = None;
         if self.authoring.tool == tool
             && (tool != Tool::Place || self.authoring.rotate == rotate)
             && !self.authoring.board.freehand.enabled
@@ -1893,7 +1899,7 @@ impl Atelier {
             self.authoring.draft.clear();
             self.authoring.tangents.clear();
             self.authoring.replace = false;
-            self.authoring.tool = Tool::Place;
+            // The pen stays in hand, so the next piece can be drawn straight away.
         }
     }
     pub(super) fn prepare_simulation(&mut self) -> bool {

@@ -221,16 +221,28 @@ fn reduce(
             break;
         }
         let first = usize::from(!closed);
-        let best = (first..m)
+        let options: Vec<(usize, f64, f64)> = (first..m)
             .filter(|&i| candidates.contains(&starts[i]))
             .map(|i| {
                 let previous = (i + m - 1) % m;
                 let joined = merged(&spans[previous], &spans[i]);
                 let (_, error) = fit_cubic(&joined.samples, joined.start_dir, joined.end_dir);
-                (i, error)
+                let length: f64 = joined.samples.windows(2).map(|w| w[0].distance(w[1])).sum();
+                (i, error, length)
             })
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((i, error)) = best else {
+            .collect();
+        // Errors that differ only by rounding are a tie (on an even arc they all do, and the
+        // rounding of sin and cos differs between platforms): the shortest joined span goes
+        // first, which keeps the remaining nodes evenly spread, then the lowest index.
+        let Some(least) = options.iter().map(|o| o.1).min_by(f64::total_cmp) else {
+            break;
+        };
+        let tie = least * (1. + 1e-6) + 1e-12;
+        let Some(&(i, error, _)) = options
+            .iter()
+            .filter(|o| o.1 <= tie)
+            .min_by(|a, b| a.2.total_cmp(&b.2).then(a.0.cmp(&b.0)))
+        else {
             break;
         };
         let previous = (i + m - 1) % m;

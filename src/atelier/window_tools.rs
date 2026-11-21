@@ -65,7 +65,7 @@ impl Atelier {
                 let available = commands::availability(id, self.command_context());
                 let key = keymap::label(self.prefs.keymap, id)
                     .or_else(|| id.descriptor().shortcut.map(String::from))
-                    .map_or_else(String::new, |k| format!(" · {k}"));
+                    .map_or_else(String::new, |k| format!(" · {}", keymap::shown(&k)));
                 let label = i18n::tr(self.prefs.language, label);
                 let tip = match &available {
                     Ok(()) => format!("{label}{key}"),

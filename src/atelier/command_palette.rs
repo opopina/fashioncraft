@@ -491,7 +491,7 @@ impl Palette {
                         let availability = commands::availability(id, context);
                         let name = super::i18n::tr(lang, descriptor.label);
                         let label = match descriptor.shortcut {
-                            Some(key) => format!("{name}   {key}"),
+                            Some(key) => format!("{name}   {}", super::keymap::shown(key)),
                             None => name.into(),
                         };
                         let row = ui.add_enabled(

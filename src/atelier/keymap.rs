@@ -118,6 +118,16 @@ pub(super) fn label(map: KeymapName, command: CommandId) -> Option<String> {
         .map(|b| format!("{}{}", b.mods.prefix(), b.key.name()))
 }
 
+/// `keys` ("Cmd+K") as this platform writes it: the command key is Ctrl outside macOS, as
+/// `egui::Modifiers::command` already presses it there.
+pub(super) fn shown(keys: &str) -> String {
+    if cfg!(target_os = "macos") {
+        keys.to_owned()
+    } else {
+        keys.replace("Cmd+", "Ctrl+")
+    }
+}
+
 /// The commands whose keys were pressed this frame, consuming those key presses.
 pub(super) fn pressed(map: KeymapName, ctx: &egui::Context) -> Vec<CommandId> {
     ctx.input_mut(|i| {
@@ -181,6 +191,17 @@ mod tests {
         assert_eq!(label(KeymapName::Classic, C::FreezePieces), None);
         // The compatible map is the default for new preferences.
         assert_eq!(KeymapName::default(), KeymapName::Compatible);
+    }
+
+    #[test]
+    fn the_command_key_reads_ctrl_outside_macos() {
+        let undo = super::shown("Shift+Cmd+Z");
+        if cfg!(target_os = "macos") {
+            assert_eq!(undo, "Shift+Cmd+Z");
+        } else {
+            assert_eq!(undo, "Shift+Ctrl+Z");
+        }
+        assert_eq!(super::shown("H"), "H");
     }
 
     #[test]

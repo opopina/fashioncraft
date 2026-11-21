@@ -142,6 +142,9 @@ impl Candidate {
             warnings.push("The avatar's own anchors and joints are kept.".into());
         }
         if crate::avatar_look::copy_look(path, &asset.0.path().join("look.json"))? {
+            // Its look file, not the OBJ's materials, gives it skin and hair: say so instead
+            // of warning that the OBJ's materials and texture coordinates are dropped.
+            warnings.retain(|w| !w.starts_with("Geometry only"));
             warnings.push("The avatar's skin, eyes and hair are kept.".into());
         }
         Ok(Self {

@@ -409,7 +409,9 @@ impl Atelier {
                                     }
                                     ui.label(tr(preset.name));
                                     ui.horizontal(|ui| {
-                                        if ui.small_button(tr("Use")).clicked() {
+                                        let use_button = ui.small_button(tr("Use"));
+                                        super::demo::mark(ctx, format_args!("library.use.{k}"), use_button.rect);
+                                        if use_button.clicked() {
                                             chosen = Some(k);
                                         }
                                         if ui
@@ -447,6 +449,8 @@ impl Atelier {
             match write_made_avatar(&self.output, &(preset.body)(), &preset.look) {
                 Ok(obj) => {
                     self.authoring.avatar_library.error = None;
+                    // The choice is made: the library gives way to the confirmation.
+                    self.authoring.avatar_library.open = false;
                     self.offer_avatar(&obj);
                     self.status = i18n::tr(
                         self.prefs.language,

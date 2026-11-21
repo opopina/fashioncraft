@@ -1080,6 +1080,14 @@ impl Atelier {
             -32. / self.authoring.board.scale as f64,
         )
     }
+    /// Window position of material point `material` of piece `i` on the 2D board.
+    pub(super) fn board_point_screen(&self, i: usize, material: DVec2) -> Option<egui::Pos2> {
+        let rect = self.authoring.selection.board_rect?;
+        self.project.template.panels.get(i)?;
+        let world = self.board_origin(i) + authoring::rotate_2d(material, self.board_angle(i));
+        // Off the visible board a click would land on another panel of the window.
+        Some(self.authoring.board.screen(rect, world)).filter(|p| rect.shrink(4.).contains(*p))
+    }
     pub(super) fn board_origin(&self, i: usize) -> DVec2 {
         let p = &self.project.template.panels[i];
         if let Some((_, origin)) = self
@@ -2073,7 +2081,41 @@ impl Atelier {
     ///
     /// Point placement and point grabbing both use [`Board::resolve_snap`], so
     /// the coordinate that lands is the one the on-canvas indicator promised.
+    /// Place a button or buttonhole where a click lands on a piece (edges and corners too: a
+    /// button on the centre front sits a stand's width from the edge, a few pixels at a small
+    /// zoom).
+    fn place_trim_at(&mut self, rect: egui::Rect, pos: egui::Pos2) {
+        let Some(buttonhole) = self.authoring.trim_placement else {
+            return;
+        };
+        let ui_lang = self.prefs.language;
+        let Some(hit) = self.board_hit(rect, pos) else {
+            return;
+        };
+        let i = hit.index;
+        let panel = self.project.template.panels[i].id.clone();
+        let world = self.authoring.board.world(rect, pos);
+        let material = authoring::rotate_2d(world - self.board_origin(i), -self.board_angle(i));
+        let command = self.trim_at(&panel, material, buttonhole);
+        if self.edit(command) {
+            self.authoring.selected = Some(panel);
+            self.status = i18n::tr(
+                ui_lang,
+                if buttonhole {
+                    "Buttonhole placed · click for another, Esc when done"
+                } else {
+                    "Button placed · click for another, Esc when done"
+                },
+            )
+            .into();
+        }
+    }
     fn board_press(&mut self, start: egui::Pos2, rect: egui::Rect, ctx: &egui::Context) {
+        // Placing buttons or buttonholes: the click places one (see `place_trim_at`); a press
+        // starts no drag or selection meanwhile.
+        if self.authoring.trim_placement.is_some() {
+            return;
+        }
         if self.authoring.tool == Tool::InternalLine && !self.internal_line_target(rect, start) {
             return;
         }
@@ -2727,7 +2769,9 @@ impl Atelier {
         if response.clicked()
             && let Some(pos) = pos
         {
-            if self.insert_hint_clicked(rect, pos) {
+            if self.authoring.trim_placement.is_some() {
+                self.place_trim_at(rect, pos);
+            } else if self.insert_hint_clicked(rect, pos) {
                 // Consumed by the visible insert marker.
             } else if let Some((panel, k)) = self.delete_badge_at(rect, pos) {
                 self.edit(Command::RemovePoint { panel, point: k });
@@ -2826,6 +2870,7 @@ impl Atelier {
         }
         if !response.ctx.egui_wants_keyboard_input() {
             if response.ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.authoring.trim_placement = None;
                 self.authoring.segments.pick = None;
                 self.authoring.board.clear_preview();
                 self.authoring.draft.clear();

@@ -25,6 +25,7 @@ fn button(ui: &mut egui::Ui, label: &str, name: &str, enabled: bool) -> bool {
     }
     #[cfg(test)]
     super::super::authoring_smoke::widget_harness::named(ui, &response, name);
+    super::super::demo::mark(ui.ctx(), name, response.rect);
     response.clicked()
 }
 impl ImportUi {

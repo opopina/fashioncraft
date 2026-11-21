@@ -57,14 +57,21 @@ pub(super) fn view_header(
                 icons::Icon::Settings,
                 i18n::tr(ui_lang, "Display options"),
             );
+            let which = if is_3d { "3d" } else { "2d" };
+            super::demo::mark(
+                ui.ctx(),
+                format_args!("header.{which}.settings"),
+                settings.rect,
+            );
             let fit = icons::icon_only(
                 ui,
                 icons::Icon::Fit,
                 26.,
                 false,
                 i18n::tr(ui_lang, "Frame all"),
-            )
-            .clicked();
+            );
+            super::demo::mark(ui.ctx(), format_args!("header.{which}.fit"), fit.rect);
+            let fit = fit.clicked();
             let camera = is_3d.then(|| {
                 icons::dropdown_button(
                     ui,
@@ -186,8 +193,9 @@ impl Atelier {
                     appearance_controls(ui, &mut self.prefs.viewport, self.viewport.supports_msaa4());
                     ui.separator();
                     ui.strong(i18n::tr(ui_lang, "Overlays"));
-                    ui.checkbox(&mut self.clean_view, i18n::tr(ui_lang, "Clean view · hide all annotations"))
+                    let clean = ui.checkbox(&mut self.clean_view, i18n::tr(ui_lang, "Clean view · hide all annotations"))
                         .on_hover_text(i18n::tr(ui_lang, "Show only the shaded garment and avatar. Keeps your overlay settings for later."));
+                    super::demo::mark(ui.ctx(), "view.clean", clean.rect);
                     ui.checkbox(&mut self.wire, i18n::tr(ui_lang, "Wireframe"));
                     ui.checkbox(&mut self.seam_links, i18n::tr(ui_lang, "Seam links"));
                     self.garment_display_controls(ui);

@@ -1139,7 +1139,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "Woman · petite",
         body: || crate::avatar_maker::MacroBody {
-            height: 0.3,
+            height: 0.36,
             weight: 0.4,
             asian: 1.,
             african: 0.,
@@ -1158,7 +1158,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "Woman · tall",
         body: || crate::avatar_maker::MacroBody {
-            height: 0.8,
+            height: 0.44,
             weight: 0.45,
             african: 1.,
             asian: 0.,
@@ -1251,7 +1251,7 @@ pub const PRESETS: &[Preset] = &[
         body: || crate::avatar_maker::MacroBody {
             muscle: 0.85,
             weight: 0.55,
-            height: 0.65,
+            height: 0.38,
             african: 1.,
             asian: 0.,
             european: 0.,

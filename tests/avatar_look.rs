@@ -254,3 +254,26 @@ fn only_adults_may_go_without_underwear() {
     let dressed = avatar_look::make_look(&made, &avatar_look::PRESETS[5].look).unwrap();
     assert!(dressed.underwear.is_some(), "on unless asked");
 }
+
+#[test]
+fn the_library_avatars_have_human_heights() {
+    let targets = MacroTargets::bundled().unwrap();
+    for preset in avatar_look::PRESETS {
+        let body = (preset.body)();
+        let made = targets.make(&body).unwrap();
+        let height = fashioncraft::avatar_shape::measure(&made.surface, &made.joints)
+            .unwrap()
+            .height_m;
+        let range = if body.age_years < 18. {
+            1.0..1.6
+        } else {
+            1.48..1.95
+        };
+        assert!(
+            range.contains(&height),
+            "{} is {:.2} m tall",
+            preset.name,
+            height
+        );
+    }
+}

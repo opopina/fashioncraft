@@ -107,6 +107,7 @@ impl Atelier {
                         for (axis, side, label) in [(MirrorAxis::X, -1, "← −X"), (MirrorAxis::X, 1, "+X →"), (MirrorAxis::Y, -1, "↓ −Y"), (MirrorAxis::Y, 1, "+Y ↑")] {
                             let button = ui.button(label).on_hover_text(i18n::tr(ui_lang, "Create and select an independent mirrored copy beside the source"));
                             if axis == MirrorAxis::X && side == 1 { self.smoke_target("quick_copy_x", button.rect.center()); }
+                            super::demo::mark(ui.ctx(), format_args!("quick.copy.{label}"), button.rect);
                             if button.clicked() {
                                 close = self.edit(Command::Mirror { panel: active.clone().unwrap(), axis, copy_side: Some(side) });
                             }

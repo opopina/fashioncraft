@@ -58,7 +58,7 @@ struct ObjDialog {
 }
 
 /// The ffmpeg program, looked for on the path and where Homebrew installs it.
-fn ffmpeg() -> Option<PathBuf> {
+pub(super) fn ffmpeg() -> Option<PathBuf> {
     [
         "ffmpeg",
         "/opt/homebrew/bin/ffmpeg",

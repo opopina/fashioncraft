@@ -335,6 +335,55 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Settings" => "Ajustes",
         "Window" => "Ventana",
         "Help" => "Ayuda",
+        // macOS menu bar: the application menu and the entries opened as windows.
+        "About FashionCraft" => "Acerca de FashionCraft",
+        "Settings…" => "Ajustes…",
+        "Services" => "Servicios",
+        "Hide FashionCraft" => "Ocultar FashionCraft",
+        "Hide Others" => "Ocultar otros",
+        "Show All" => "Mostrar todo",
+        "Quit FashionCraft" => "Salir de FashionCraft",
+        "Files & formats…" => "Archivos y formatos…",
+        "Presentation…" => "Presentación…",
+        "Presentation" => "Presentación",
+        "FreeSewing terms of use" => "Condiciones de uso de FreeSewing",
+        // Tool lists of the 2D and 3D tool rows.
+        "Simulating" => "Simulando",
+        "Ready" => "Listo",
+        "Seams of this piece" => "Costuras de esta pieza",
+        "Render quality (3D view)" => "Calidad de render (vista 3D)",
+        "Smooth edges" => "Bordes suaves",
+        "Soft ground shadow" => "Sombra suave en el suelo",
+        "Floor grid" => "Cuadrícula del suelo",
+        "Show trims and pins" => "Mostrar avíos y alfileres",
+        "Maps" => "Mapas",
+        "Properties" => "Propiedades",
+        "Property editor" => "Editor de propiedades",
+        "Design" => "Diseño",
+        "Search commands" => "Buscar comandos",
+        "Space" => "Espacio",
+        "No trims yet: add them from the 2D tool row." => {
+            "Aún no hay avíos: añádelos desde la fila de herramientas 2D."
+        }
+        "No graphics yet." => "Aún no hay gráficos.",
+        "Fabric type" => "Tipo de tejido",
+        "Particle distance (mm)" => "Distancia entre partículas (mm)",
+        // Properties › Piece › Seams.
+        "Name" => "Nombre",
+        "Joins" => "Une",
+        "Type" => "Tipo",
+        "Seam" => "Costura",
+        "Side A" => "Lado A",
+        "Side B" => "Lado B",
+        "segments" => "segmentos",
+        "More tools" => "Más herramientas",
+        "Shape by size" => "Forma por medidas",
+        "Shape by size…" => "Forma por medidas…",
+        "Select" => "Seleccionar",
+        "Select with" => "Seleccionar con",
+        "More tools: the corner triangle or a right-click" => {
+            "Más herramientas: el triángulo de la esquina o clic derecho"
+        }
         "New project" => "Nuevo proyecto",
         "Open project…" => "Abrir proyecto…",
         "Open" => "Abrir",
@@ -2058,6 +2107,36 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Skin" => "Piel",
         "Grey" => "Gris",
         "White sheet" => "Hoja blanca",
+        "Pattern information" => "Información del patrón",
+        "Mesh" => "Malla",
+        "Assign" => "Asignar",
+        "Copy fabric" => "Copiar tejido",
+        "Assign fabric" => "Asignar tejido",
+        "A new fabric with the same physics and look, cut from no piece yet" => {
+            "Un tejido nuevo con la misma física y aspecto, aún sin piezas"
+        }
+        "Pick a fabric in the list" => "Elige un tejido de la lista",
+        "Cut the selected pieces from the chosen fabric" => {
+            "Corta las piezas seleccionadas del tejido elegido"
+        }
+        "Pick a fabric in the list and select the pieces to cut from it" => {
+            "Elige un tejido de la lista y selecciona las piezas que se cortan de él"
+        }
+        "Face" => "Cara",
+        "State" => "Estado",
+        "Deactivated" => "Desactivada",
+        "Deactivated with seams" => "Desactivada con costuras",
+        "Time" => "Tiempo",
+        "Simulated time, and whether the solver runs on the graphics card or the processor" => {
+            "Tiempo simulado, y si el cálculo corre en la tarjeta gráfica o en el procesador"
+        }
+        "piece" => "pieza",
+        "seam" => "costura",
+        "seams" => "costuras",
+        "Pattern board" => "Tablero de patrones",
+        "Rulers and guides" => "Reglas y guías",
+        "Snap to" => "Ajustar a",
+        "Lock in 2D" => "Bloquear en 2D",
         "A white drafting sheet with tinted pieces instead of the grey board with white pieces" => {
             "Una hoja blanca con piezas tintadas en vez del tablero gris con piezas blancas"
         }

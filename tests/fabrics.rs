@@ -112,3 +112,71 @@ fn material_edit_updates_mass_and_only_selected_binding_while_preserving_drape()
     );
     assert_eq!(serde_json::to_vec(&t).unwrap(), before);
 }
+
+#[test]
+fn copying_a_fabric_keeps_its_physics_and_assigning_it_recuts_only_the_chosen_pieces() {
+    let t = GarmentTemplate::two_panel_demo();
+    let source = t.panels[0].fabric.clone();
+    let copied = apply(
+        &t,
+        Command::DuplicateFabric {
+            fabric: source.clone(),
+        },
+    )
+    .unwrap()
+    .template;
+    assert_eq!(copied.fabrics.len(), t.fabrics.len() + 1);
+    let copy = copied.fabrics.last().unwrap();
+    let original = copied.fabrics.iter().find(|f| f.id == source).unwrap();
+    assert_ne!(copy.id, source);
+    assert_eq!(copy.properties, original.properties);
+    assert!(copy.name.ends_with("copy"));
+    // A fresh copy is cut from no piece yet, and the template stays valid.
+    assert!(copied.panels.iter().all(|p| p.fabric != copy.id));
+    copied.compile().unwrap();
+
+    let chosen = vec![copied.panels[1].id.clone()];
+    let assigned = apply(
+        &copied,
+        Command::AssignFabric {
+            panels: chosen.clone(),
+            fabric: copy.id.clone(),
+        },
+    )
+    .unwrap()
+    .template;
+    assert_eq!(assigned.panels[1].fabric, copy.id);
+    assert_eq!(assigned.panels[0].fabric, copied.panels[0].fabric);
+    assigned.compile().unwrap();
+    // Assigning again changes nothing and says so; unknown fabrics and empty selections fail.
+    assert!(
+        apply(
+            &assigned,
+            Command::AssignFabric {
+                panels: chosen.clone(),
+                fabric: copy.id.clone(),
+            },
+        )
+        .is_err()
+    );
+    assert!(
+        apply(
+            &assigned,
+            Command::AssignFabric {
+                panels: chosen,
+                fabric: "no_such_fabric".into(),
+            },
+        )
+        .is_err()
+    );
+    assert!(
+        apply(
+            &assigned,
+            Command::AssignFabric {
+                panels: vec![],
+                fabric: copy.id.clone(),
+            },
+        )
+        .is_err()
+    );
+}

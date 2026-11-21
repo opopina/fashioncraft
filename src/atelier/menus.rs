@@ -499,7 +499,7 @@ use super::garment_display::GarmentStyle;
 
 impl Atelier {
     /// Whether a toggle command is on, for its menu item's highlight.
-    fn command_checked(&self, id: CommandId) -> bool {
+    pub(super) fn command_checked(&self, id: CommandId) -> bool {
         use CommandId as C;
         let display = &self.prefs.garment_display;
         match id {

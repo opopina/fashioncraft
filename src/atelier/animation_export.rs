@@ -373,8 +373,7 @@ impl Atelier {
             .collapsible(false)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Paper"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Paper"), |ui| {
                     egui::ComboBox::from_id_salt("print.paper")
                         .selected_text(i18n::tr(ui_lang, paper.label()))
                         .show_ui(ui, |ui| {
@@ -591,8 +590,7 @@ impl Atelier {
             ui.add_enabled(!remeshed, egui::Checkbox::new(&mut o.quads, i18n::tr(ui_lang, "Quads")))
                 .on_hover_text(i18n::tr(ui_lang, "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Units"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Units"), |ui| {
                 egui::ComboBox::from_id_salt("obj.units")
                     .selected_text(o.units.label())
                     .show_ui(ui, |ui| {

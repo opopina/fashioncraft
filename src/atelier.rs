@@ -98,6 +98,8 @@ mod measure3d_ui;
 mod menus;
 #[path = "atelier/mesh_select.rs"]
 mod mesh_select;
+#[path = "atelier/native_menu.rs"]
+mod native_menu;
 #[path = "atelier/object_browser_ui.rs"]
 mod object_browser_ui;
 #[path = "atelier/palette_ui.rs"]
@@ -326,6 +328,12 @@ pub fn run(
                 inspector_tab: chrome::InspectorTab::Piece,
                 authoring_smoke: authoring_test.then(authoring_smoke::Smoke::new),
                 demo: demo::Demo::from_env(&output),
+                // A demo and the smoke tests click the in-window menus.
+                native_menu: (!(smoke || drag_test || perf_test || authoring_test)
+                    && demo::window_size().is_none())
+                .then(|| native_menu::NativeMenu::install(&cc.egui_ctx))
+                .flatten(),
+                menu_windows: Default::default(),
                 demo_points: Default::default(),
                 demo_points_before: Default::default(),
                 window_checked: false,
@@ -343,7 +351,13 @@ pub fn run(
                 viewport: Viewport::new(render),
                 palette: Default::default(),
                 profiles: Default::default(),
-                tools_visible: true,
+                // The tools live in each view's row, as in desktop cloth tools; the rail stays
+                // for the smoke tests and demos that click it, and in Window › Tool rail.
+                tools_visible: smoke
+                    || drag_test
+                    || perf_test
+                    || authoring_test
+                    || demo::window_size().is_some(),
                 camera: Camera {
                     fov_degrees: camera_fov_degrees,
                     ..camera()
@@ -414,6 +428,11 @@ pub fn run(
 struct Atelier {
     profiles: workspace_profiles::ProfileUi,
     tools_visible: bool,
+    /// The menus in macOS's menu bar; None keeps them in the window (other systems, demos
+    /// and smoke tests).
+    native_menu: Option<native_menu::NativeMenu>,
+    /// Windows the macOS menu bar opens for entries the in-window menus show inline.
+    menu_windows: native_menu::MenuWindows,
     palette: command_palette::Palette,
     cadence: perf::Cadence,
     simulation_error: Option<String>,
@@ -1608,6 +1627,7 @@ impl eframe::App for Atelier {
             self.garment_display_shortcuts(&ctx);
             self.camera_shortcuts(&ctx);
         }
+        self.run_native_menu(&ctx, palette_blocked);
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
@@ -1624,56 +1644,114 @@ impl eframe::App for Atelier {
                         .color(ui.visuals().warn_fg_color),
                 )
                 .on_hover_text("Early alpha · built on ClothCraft by erythrofr and contributors");
-                ui.separator();
                 let language = self.prefs.language;
                 // In a narrow window (a laptop screen) these buttons shrink to their symbols,
-                // so that every menu of the bar still fits.
-                let compact = ctx.content_rect().width() < 1560.;
-                if command_palette::launch_button(
+                // so that every menu of the bar still fits. With the menus in macOS's menu bar
+                // they have the room.
+                let compact = self.native_menu.is_none() && ctx.content_rect().width() < 1560.;
+                ui.add_space(14.);
+                // Design or Animation, as cloth tools switch between the two ways of working.
+                let animation = self.authoring.animation.open;
+                if workspace::mode_switch(
                     ui,
-                    can_open_palette,
-                    if compact { workspace::symbols::COMMANDS } else { i18n::tr(language, "Commands…") },
-                    language,
-                ) {
-                    self.palette.begin();
+                    animation,
+                    [i18n::tr(language, "Design"), i18n::tr(language, "Animation")],
+                )
+                .is_some()
+                {
+                    self.invoke_command(commands::CommandId::OpenAnimation, &ctx);
                 }
-                let play_label = i18n::tr(
-                    language,
-                    if self.playing {
-                        "⏸ Pause"
-                    } else if self.authoring.ends.len() == 2 && !self.authoring.sewing.chain_mode {
-                        "▶ Sew and simulate"
-                    } else {
-                        "▶ Simulate"
-                    },
-                );
-                let play = ui
-                    .button(if compact {
+                if self.native_menu.is_none() {
+                    ui.separator();
+                    ui.scope(|ui| {
+                        workspace::menu_bar_style(ui);
+                        self.menu_bar(ui, &ctx, can_open_palette);
+                    });
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let play_label = i18n::tr(
+                        language,
+                        if self.playing {
+                            "⏸ Pause"
+                        } else if self.authoring.ends.len() == 2 && !self.authoring.sewing.chain_mode {
+                            "▶ Sew and simulate"
+                        } else {
+                            "▶ Simulate"
+                        },
+                    );
+                    // The one primary action of the bar: filled with FashionCraft's colour.
+                    let play_text = if compact {
                         if self.playing { workspace::symbols::PAUSE } else { workspace::symbols::PLAY }
                     } else {
                         play_label
-                    })
-                    .on_hover_text(play_label);
-                demo::mark(&ctx, "toolbar.simulate", play.rect);
-                self.smoke_target("simulate", play.rect.center());
-                if play.clicked() {
-                    self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
-                }
-                let export_label = i18n::tr(language, "Export");
-                let export_button = ui
-                    .button(if compact { workspace::symbols::EXPORT } else { export_label })
-                    .on_hover_text(format!(
-                        "{export_label}: {}",
-                        i18n::tr(language, "Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.")
-                    ));
-                self.smoke_target("export", export_button.rect.center());
-                if export_button.clicked() {
-                    self.invoke_command(commands::CommandId::ExportSession, &ctx);
-                }
-                ui.separator();
-                ui.scope(|ui| {
-                    workspace::menu_bar_style(ui);
-                    self.menu_bar(ui, &ctx, can_open_palette);
+                    };
+                    let play = ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(play_text)
+                                    .strong()
+                                    .color(Color32::from_rgb(0x1b, 0x1b, 0x1f)),
+                            )
+                            .fill(workspace::accent(ui.visuals()))
+                            .stroke(Stroke::NONE)
+                            .min_size(Vec2::new(0., 26.)),
+                        )
+                        .on_hover_text(format!("{play_label} · {}", i18n::tr(language, "Space")));
+                    demo::mark(&ctx, "toolbar.simulate", play.rect);
+                    self.smoke_target("simulate", play.rect.center());
+                    if play.clicked() {
+                        self.invoke_command(commands::CommandId::ToggleSimulation, &ctx);
+                    }
+                    let export_label = i18n::tr(language, "Export");
+                    let export_button = ui
+                        .add(
+                            egui::Button::new(if compact { workspace::symbols::EXPORT } else { export_label })
+                                .min_size(Vec2::new(0., 26.)),
+                        )
+                        .on_hover_text(format!(
+                            "{export_label}: {}",
+                            i18n::tr(language, "Saves the JSON project, the patterns, the OBJ garment and the previews into the session folder.")
+                        ));
+                    self.smoke_target("export", export_button.rect.center());
+                    if export_button.clicked() {
+                        self.invoke_command(commands::CommandId::ExportSession, &ctx);
+                    }
+                    for (id, icon, tip) in [
+                        (commands::CommandId::Redo, icons::Icon::Redo, "Redo"),
+                        (commands::CommandId::Undo, icons::Icon::Undo, "Undo"),
+                    ] {
+                        let available = commands::availability(id, self.command_context()).is_ok();
+                        let keys = keymap::label(self.prefs.keymap, id)
+                            .or_else(|| id.descriptor().shortcut.map(String::from))
+                            .map(|k| format!(" · {}", keymap::shown(&k)))
+                            .unwrap_or_default();
+                        let clicked = ui
+                            .add_enabled_ui(available, |ui| {
+                                icons::icon_only(
+                                    ui,
+                                    icon,
+                                    26.,
+                                    false,
+                                    &format!("{}{keys}", i18n::tr(language, tip)),
+                                )
+                            })
+                            .inner
+                            .clicked();
+                        if clicked {
+                            self.invoke_command(id, &ctx);
+                        }
+                    }
+                    // The command search sits in the middle of the room left between them.
+                    let search = ui.available_width().clamp(120., 340.);
+                    ui.add_space(((ui.available_width() - search) / 2.).max(8.));
+                    if command_palette::launch_button(
+                        ui,
+                        can_open_palette,
+                        i18n::tr(language, "Search commands"),
+                        language,
+                    ) {
+                        self.palette.begin();
+                    }
                 });
             });
         });
@@ -1700,6 +1778,7 @@ impl eframe::App for Atelier {
             self.script_window(&ctx);
             self.steam_window(&ctx);
             self.object_browser_window(&ctx);
+            self.native_menu_windows(&ctx, palette_idle);
         }
         if changed {
             // Apply immediately rather than on the next start: the window edits
@@ -1714,42 +1793,86 @@ impl eframe::App for Atelier {
         egui::Panel::bottom("status").show(ui, |ui| {
             self.cadence.update(std::time::Instant::now(), self.scene.state.time, self.generation, self.playing);
             ui.horizontal(|ui| {
-                ui.colored_label(
+                let ui_lang = self.prefs.language;
+                // The state as a dot (green at rest, fuchsia while simulating) and a word.
+                let (dot_rect, _) = ui.allocate_exact_size(Vec2::splat(10.), egui::Sense::hover());
+                ui.painter().circle_filled(
+                    dot_rect.center(),
+                    3.5,
                     if self.playing {
-                        workspace::ACCENT
+                        workspace::accent(ui.visuals())
                     } else {
-                        Color32::GRAY
+                        Color32::from_rgb(0x57, 0xab, 0x5a)
                     },
-                    i18n::tr(self.prefs.language, if self.playing { "Simulation" } else { "Pause" }),
                 );
-                ui.separator();
-                if let Some(speed) = self.cadence.speed {
-                    ui.colored_label(if speed >= 0.95 {workspace::ACCENT} else {Color32::GOLD},
-                        format!("{:.0} steps/s · {:.2}×", speed/self.settings.dt, speed))
-                        .on_hover_text("Actual physical time advanced per wall-clock second. Independent of render FPS.");
-                    ui.separator();
-                }
-                // The views at the right end: split, 3D only, 2D only.
+                ui.add_space(2.);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let ui_lang = self.prefs.language;
-                    for (label, hint, mode) in [
-                        ("2D", "2D only", layout::ViewMode::Patterns),
-                        ("3D", "3D only", layout::ViewMode::Garment),
-                        ("3D | 2D", "Split view", layout::ViewMode::Split),
+                    ui.label(
+                        egui::RichText::new(format!("FashionCraft {}", env!("CARGO_PKG_VERSION")))
+                            .small()
+                            .weak(),
+                    );
+                    ui.add_space(6.);
+                    // The views: split, 3D only, 2D only, as icons.
+                    for (icon, hint, mode) in [
+                        (icons::Icon::Sheet, "2D only", layout::ViewMode::Patterns),
+                        (icons::Icon::ViewIso, "3D only", layout::ViewMode::Garment),
+                        (icons::Icon::SplitView, "Split view", layout::ViewMode::Split),
                     ] {
-                        if ui
-                            .selectable_label(self.prefs.workspace.mode == mode, label)
-                            .on_hover_text(i18n::tr(ui_lang, hint))
-                            .clicked()
+                        if icons::icon_only(
+                            ui,
+                            icon,
+                            22.,
+                            self.prefs.workspace.mode == mode,
+                            i18n::tr(ui_lang, hint),
+                        )
+                        .clicked()
                         {
                             self.prefs.workspace.mode = mode;
                         }
                     }
-                    ui.separator();
-                    let status = i18n::status(self.prefs.language, &self.status);
+                    if let Some(speed) = self.cadence.speed {
+                        ui.add_space(8.);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{:.0} steps/s · {:.2}×",
+                                speed / self.settings.dt,
+                                speed
+                            ))
+                            .small()
+                            .color(if speed >= 0.95 {
+                                ui.visuals().weak_text_color()
+                            } else {
+                                Color32::GOLD
+                            }),
+                        )
+                        .on_hover_text("Actual physical time advanced per wall-clock second. Independent of render FPS.");
+                    }
+                    // Simulated time and where the solver runs, at rest as while simulating.
+                    ui.add_space(8.);
+                    let time = format!("{:.2}", self.scene.state.time);
+                    let time = if ui_lang == i18n::Language::Spanish {
+                        time.replace('.', ",")
+                    } else {
+                        time
+                    };
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} {time} s · {}",
+                            i18n::tr(ui_lang, "Time"),
+                            if self.gpu { "GPU" } else { "CPU" }
+                        ))
+                        .small()
+                        .weak(),
+                    )
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Simulated time, and whether the solver runs on the graphics card or the processor",
+                    ));
+                    let status = i18n::status(ui_lang, &self.status);
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         ui.add(egui::Label::new(status.as_ref()).truncate())
-                            .on_hover_text(status.as_ref());
+                        .on_hover_text(status.as_ref());
                     });
                 });
             });
@@ -1890,6 +2013,7 @@ impl eframe::App for Atelier {
             }
             ctx.request_repaint_after(Duration::from_millis(30));
         }
+        self.sync_native_menu(&ctx, palette_blocked, can_open_palette);
         // Last, once every window and dialog of the frame has reported where it is.
         self.drive_demo(&ctx);
     }

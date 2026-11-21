@@ -15,13 +15,13 @@ impl Atelier {
         let layered: Vec<String> = layers.keys().cloned().collect();
         let mut wanted = None;
         let mut reset = false;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Layer")).on_hover_text(i18n::tr(
-                ui_lang,
-                "Simulation layer. Where pieces of different layers touch, only the higher \
-                 (outer) one gives way, so it settles over the lower one. 0: no layer. Reset to \
-                 0 once the garment has settled",
-            ));
+        let help = i18n::tr(
+            ui_lang,
+            "Simulation layer. Where pieces of different layers touch, only the higher \
+             (outer) one gives way, so it settles over the lower one. 0: no layer. Reset to \
+             0 once the garment has settled",
+        );
+        super::workspace::prop_row_help(ui, i18n::tr(ui_lang, "Layer"), help, |ui| {
             if ui
                 .add_enabled(layer > 0, egui::Button::new("−").small())
                 .clicked()
@@ -49,23 +49,18 @@ impl Atelier {
         });
         let flipped = self.project.template.flipped_panels.contains(panel);
         let mut flip = false;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Normal"));
-            flip = ui
-                .selectable_label(
-                    flipped,
-                    if flipped {
-                        i18n::tr(ui_lang, "Flipped")
-                    } else {
-                        i18n::tr(ui_lang, "Flip")
-                    },
-                )
-                .on_hover_text(i18n::tr(
-                    ui_lang,
-                    "Swap the piece's front and back faces: the fabric's back colour shows on \
-                     the side that showed its front. Only the look changes",
-                ))
-                .clicked();
+        let help = i18n::tr(
+            ui_lang,
+            "Swap the piece's front and back faces: the fabric's back colour shows on \
+             the side that showed its front. Only the look changes",
+        );
+        super::workspace::prop_row_help(ui, i18n::tr(ui_lang, "Face"), help, |ui| {
+            ui.label(if flipped {
+                i18n::tr(ui_lang, "Flipped")
+            } else {
+                i18n::tr(ui_lang, "Normal")
+            });
+            flip = ui.small_button(i18n::tr(ui_lang, "Flip")).clicked();
         });
         if flip {
             self.edit(Command::FlipNormals {
@@ -202,15 +197,16 @@ pub(super) fn committed_value(
         draft = current;
     }
     let mut commit = false;
-    ui.horizontal(|ui| {
-        ui.label(field.label).on_hover_text(field.hover);
-        let response = ui.add(
-            egui::DragValue::new(&mut draft)
-                .range(field.range.clone())
-                .speed(field.speed)
-                .fixed_decimals(field.decimals)
-                .suffix(field.suffix),
-        );
+    super::workspace::prop_row(ui, field.label, |ui| {
+        let response = ui
+            .add(
+                egui::DragValue::new(&mut draft)
+                    .range(field.range.clone())
+                    .speed(field.speed)
+                    .fixed_decimals(field.decimals)
+                    .suffix(field.suffix),
+            )
+            .on_hover_text(field.hover);
         commit = response.drag_stopped() || (response.changed() && !response.dragged());
         if let Some(reset) = field.reset
             && current != reset

@@ -175,7 +175,7 @@ pub(super) fn window(
         .resizable(true)
         .default_width(340.)
         .show(ctx, |ui| {
-            ui.heading("Appearance");
+            super::workspace::group_title(ui, "Appearance");
             ui.horizontal(|ui| {
                 ui.label("Theme");
                 edited |= ui
@@ -211,7 +211,7 @@ pub(super) fn window(
             );
 
             ui.separator();
-            ui.heading("Board");
+            super::workspace::group_title(ui, "Board");
             ui.horizontal(|ui| {
                 ui.label("Snap step (mm)");
                 edited |= ui
@@ -224,7 +224,7 @@ pub(super) fn window(
             });
 
             ui.separator();
-            ui.heading("Overlays");
+            super::workspace::group_title(ui, "Overlays");
             edited |= ui
                 .checkbox(&mut prefs.seam_links, "Seam links enabled at startup")
                 .changed();
@@ -233,7 +233,7 @@ pub(super) fn window(
                 .changed();
 
             ui.separator();
-            ui.heading("Simulation defaults for next launch");
+            super::workspace::group_title(ui, "Simulation defaults for next launch");
             ui.horizontal(|ui| {
                 ui.label("Time step (s)");
                 edited |= ui

@@ -181,16 +181,17 @@ impl Atelier {
     pub(super) fn camera_controls(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
         ui.separator();
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Field of view"));
+        super::workspace::prop_row(ui, i18n::tr(ui_lang, "Field of view"), |ui| {
             let mut fov = self.camera.fov_radians().to_degrees();
-            if ui
-                .add(egui::Slider::new(&mut fov, FOV_RANGE_DEGREES).suffix("°"))
-                .on_hover_text(i18n::tr(
-                    ui_lang,
-                    "Vertical field of view; also sets the orthographic view's size",
-                ))
-                .changed()
+            if super::workspace::slim(
+                ui,
+                egui::Slider::new(&mut fov, FOV_RANGE_DEGREES).suffix("°"),
+            )
+            .on_hover_text(i18n::tr(
+                ui_lang,
+                "Vertical field of view; also sets the orthographic view's size",
+            ))
+            .changed()
             {
                 self.camera.fov_degrees = fov;
                 self.prefs.camera_fov_degrees = fov;

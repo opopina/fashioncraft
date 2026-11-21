@@ -171,8 +171,7 @@ impl Atelier {
                     measured * 1000.
                 ));
                 elastic_ui = true;
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Length"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Length"), |ui| {
                     ui.add(
                         egui::DragValue::new(&mut state.length_mm)
                             .range(1.0..=50_000.0)
@@ -180,8 +179,7 @@ impl Atelier {
                             .suffix(" mm"),
                     );
                 });
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Moves"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Moves"), |ui| {
                     for end in SegmentEnd::ALL {
                         ui.selectable_value(&mut state.moving, end, end_label(end))
                             .on_hover_text(match end {
@@ -200,8 +198,7 @@ impl Atelier {
                     });
                 }
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Match length to the"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Match length to the"), |ui| {
                     ui.selectable_value(&mut state.to_longer, false, i18n::tr(ui_lang, "shorter"));
                     ui.selectable_value(&mut state.to_longer, true, i18n::tr(ui_lang, "longer"));
                 });
@@ -220,8 +217,7 @@ impl Atelier {
                     });
                 }
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Match up at"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Match up at"), |ui| {
                     for end in SegmentEnd::ALL {
                         let label = match end {
                             SegmentEnd::Start => "start",
@@ -247,8 +243,7 @@ impl Atelier {
                     });
                 }
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Move out"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Move out"), |ui| {
                     ui.add(
                         egui::DragValue::new(&mut state.offset_mm)
                             .range(-1000.0..=1000.0)
@@ -266,8 +261,7 @@ impl Atelier {
                 });
                 ui.separator();
                 ui.strong(i18n::tr(ui_lang, "Internal lines from this segment"));
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Copies"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Copies"), |ui| {
                     ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
                     ui.label(i18n::tr(ui_lang, "every"));
                     ui.add(
@@ -300,8 +294,7 @@ impl Atelier {
                     state.branch_for = Some(key);
                     state.branch_at_mm = measured * 500.;
                 }
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Line at"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Line at"), |ui| {
                     ui.add(
                         egui::DragValue::new(&mut state.branch_at_mm)
                             .range(0.0..=measured * 1000.)
@@ -567,8 +560,7 @@ impl Atelier {
             .id_salt("outline-cleanup")
             .show(ui, |ui| {
                 let state = &mut self.authoring.segments;
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Copies"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Copies"), |ui| {
                     ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
                     ui.label(i18n::tr(ui_lang, "every"));
                     ui.add(
@@ -593,8 +585,7 @@ impl Atelier {
                     });
                 }
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Overlapping within"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Overlapping within"), |ui| {
                     ui.add(
                         egui::DragValue::new(&mut state.overlap_mm)
                             .range(0.0..=10.0)
@@ -638,10 +629,8 @@ impl Atelier {
                     )
                     .map_or(50., |r| (r * 100.).round());
                 }
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Curve points"));
-                    ui.add(
-                        egui::Slider::new(&mut state.curve_percent, 0.0..=100.0)
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Curve points"), |ui| {
+                    super::workspace::slim(ui, egui::Slider::new(&mut state.curve_percent, 0.0..=100.0)
                             .suffix(" %")
                             .fixed_decimals(0),
                     )
@@ -693,8 +682,7 @@ impl Atelier {
         let ui_lang = self.prefs.language;
         let state = &mut self.authoring.segments;
         let mut command = None;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Copies"));
+        super::workspace::prop_row(ui, i18n::tr(ui_lang, "Copies"), |ui| {
             ui.add(egui::DragValue::new(&mut state.copies).range(1..=50));
             ui.label(i18n::tr(ui_lang, "every"));
             ui.add(

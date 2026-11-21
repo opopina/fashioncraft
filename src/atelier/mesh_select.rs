@@ -286,8 +286,11 @@ impl Atelier {
                 if tool.shape == Some(SelectShape::Brush) {
                     ui.horizontal(|ui| {
                         ui.label(t("Brush size"));
-                        ui.add(egui::Slider::new(&mut tool.brush_px, BRUSH_PX).suffix(" pt"))
-                            .on_hover_text(t("[ and ] make it smaller and larger"));
+                        super::workspace::slim(
+                            ui,
+                            egui::Slider::new(&mut tool.brush_px, BRUSH_PX).suffix(" pt"),
+                        )
+                        .on_hover_text(t("[ and ] make it smaller and larger"));
                     });
                 }
                 ui.label(format!("{} {}", selected.len(), t("points selected")));

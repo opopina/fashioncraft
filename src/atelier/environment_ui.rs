@@ -33,8 +33,9 @@ pub(super) const PRESETS: [(&str, f64, usize, &str); 3] = [
 impl Atelier {
     pub(super) fn simulation_environment(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
-        ui.horizontal_wrapped(|ui| {
-            ui.label(i18n::tr(ui_lang, "Quality"));
+        use super::workspace::{group_title, prop_row};
+        prop_row(ui, i18n::tr(ui_lang, "Quality"), |ui| {
+            ui.spacing_mut().item_spacing.x = 2.;
             for (name, dt, iterations, hint) in PRESETS {
                 let current =
                     (self.settings.dt - dt).abs() < 1e-12 && self.settings.iterations == iterations;
@@ -51,13 +52,14 @@ impl Atelier {
                 }
             }
         });
-        ui.small(format!(
-            "Step {:.1} ms · {} iterations",
-            self.settings.dt * 1000.,
-            self.settings.iterations
-        ));
-        ui.horizontal_wrapped(|ui| {
-            ui.label(i18n::tr(ui_lang, "Friction"));
+        prop_row(ui, "", |ui| {
+            ui.small(format!(
+                "Step {:.1} ms · {} iterations",
+                self.settings.dt * 1000.,
+                self.settings.iterations
+            ));
+        });
+        prop_row(ui, i18n::tr(ui_lang, "Friction"), |ui| {
             ui.add(
                 egui::DragValue::new(&mut self.settings.friction)
                     .range(0.0..=1.5)
@@ -76,8 +78,7 @@ impl Atelier {
             }
         });
         let mut gap = self.settings.contact.radius * 1000.;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Collision distance"));
+        prop_row(ui, i18n::tr(ui_lang, "Collision distance"), |ui| {
             if ui
                 .add(
                     egui::DragValue::new(&mut gap)
@@ -98,20 +99,21 @@ impl Atelier {
             }
         });
         let mut fast = self.settings.max_substeps > 1;
-        if ui
-            .checkbox(&mut fast, i18n::tr(ui_lang, "Full-speed falls"))
-            .on_hover_text(i18n::tr(
-                ui_lang,
-                "Split a step into up to 16 shorter ones when the cloth moves faster than one step's \
-                 contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while \
-                 cloth moves fast; settled cloth is unaffected",
-            ))
-            .changed()
-        {
+        let changed = prop_row(ui, i18n::tr(ui_lang, "Full-speed falls"), |ui| {
+            ui.checkbox(&mut fast, "")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "Split a step into up to 16 shorter ones when the cloth moves faster than one step's \
+                     contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while \
+                     cloth moves fast; settled cloth is unaffected",
+                ))
+                .changed()
+        })
+        .inner;
+        if changed {
             self.settings.max_substeps = if fast { 16 } else { 1 };
         }
-        ui.separator();
-        ui.strong(i18n::tr(ui_lang, "Environment"));
+        group_title(ui, i18n::tr(ui_lang, "Environment"));
         let feet = self
             .scene
             .collider
@@ -122,20 +124,21 @@ impl Atelier {
             .fold(f64::INFINITY, f64::min);
         let feet = if feet.is_finite() { feet } else { 0. };
         let mut floor = self.settings.floor.is_some();
-        if ui
-            .checkbox(&mut floor, i18n::tr(ui_lang, "Floor"))
-            .on_hover_text(i18n::tr(
-                ui_lang,
-                "A physical floor the cloth can rest on; starts under the avatar's feet",
-            ))
-            .changed()
-        {
+        let changed = prop_row(ui, i18n::tr(ui_lang, "Floor"), |ui| {
+            ui.checkbox(&mut floor, "")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A physical floor the cloth can rest on; starts under the avatar's feet",
+                ))
+                .changed()
+        })
+        .inner;
+        if changed {
             self.settings.floor = floor.then_some(feet);
         }
         if let Some(height) = self.settings.floor.as_mut() {
             let mut mm = *height * 1000.;
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Floor height"));
+            prop_row(ui, i18n::tr(ui_lang, "Floor height"), |ui| {
                 if ui
                     .add(
                         egui::DragValue::new(&mut mm)
@@ -153,8 +156,7 @@ impl Atelier {
             });
         }
         let mut g = -self.settings.gravity.y;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Gravity"));
+        prop_row(ui, i18n::tr(ui_lang, "Gravity"), |ui| {
             if ui
                 .add(
                     egui::DragValue::new(&mut g)
@@ -180,16 +182,19 @@ impl Atelier {
 
     fn wind_controls(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
+        use super::workspace::prop_row;
         let mut on = self.settings.wind.is_some();
-        if ui
-            .checkbox(&mut on, i18n::tr(ui_lang, "Wind"))
-            .on_hover_text(i18n::tr(
-                ui_lang,
-                "A steady breeze. Cloth feels pressure drag where it faces the flow, and the same \
-                 drag slows it as it falls",
-            ))
-            .changed()
-        {
+        let changed = prop_row(ui, i18n::tr(ui_lang, "Wind"), |ui| {
+            ui.checkbox(&mut on, "")
+                .on_hover_text(i18n::tr(
+                    ui_lang,
+                    "A steady breeze. Cloth feels pressure drag where it faces the flow, and the same \
+                     drag slows it as it falls",
+                ))
+                .changed()
+        })
+        .inner;
+        if changed {
             self.settings.wind = on.then(Wind::default);
         }
         let Some(wind) = self.settings.wind.as_mut() else {
@@ -200,8 +205,7 @@ impl Atelier {
         // The direction the wind comes from, clockwise seen from above, 0° from +Z.
         let mut from = (-flat.x).atan2(-flat.z).to_degrees().rem_euclid(360.);
         let mut changed = false;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Wind speed"));
+        prop_row(ui, i18n::tr(ui_lang, "Wind speed"), |ui| {
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut speed)
@@ -216,8 +220,7 @@ impl Atelier {
                 ))
                 .changed();
         });
-        ui.horizontal_wrapped(|ui| {
-            ui.label(i18n::tr(ui_lang, "From"));
+        prop_row(ui, i18n::tr(ui_lang, "From"), |ui| {
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut from)

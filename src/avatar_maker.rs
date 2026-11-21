@@ -13,7 +13,10 @@
 //! (`assets/makehuman/anny-calibration.json`).
 use crate::avatar::SurfaceMesh;
 use glam::DVec3;
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, OnceLock},
+};
 
 const PACKED: &[u8] = include_bytes!("../assets/makehuman/macro-targets.bin");
 const MANNEQUIN_OBJ: &str = include_str!("../assets/makehuman/mannequin.obj");
@@ -393,8 +396,11 @@ struct Target {
 
 /// MakeHuman's base mesh (its body and joint helpers) and its macro targets.
 pub struct MacroTargets {
-    /// Base positions of the kept vertices, decimetres: the body, then the joint helpers.
+    /// Base positions of the kept vertices, decimetres: the body, then the helpers (joints,
+    /// and those the bundled parts are fitted to).
     base: Vec<DVec3>,
+    /// The base-mesh index of each kept vertex, ascending.
+    kept: Arc<[u32]>,
     /// Joint names and the kept vertices of their helpers.
     joints: Vec<(String, Vec<usize>)>,
     targets: BTreeMap<String, Target>,
@@ -405,6 +411,27 @@ pub struct MadeBody {
     pub surface: SurfaceMesh,
     /// Joint landmarks, metres, as the mannequin's `measurements.json` names them.
     pub joints: BTreeMap<String, DVec3>,
+    /// The settings it was made with.
+    pub settings: MacroBody,
+    /// Every kept base-mesh vertex as made, decimetres, before standing it on y = 0.
+    positions: Vec<DVec3>,
+    kept: Arc<[u32]>,
+    floor: f64,
+}
+
+impl MadeBody {
+    /// A part fitted to this body, metres, in the body's frame.
+    pub fn fit(&self, fitting: &crate::avatar_look::Fitting) -> Result<Vec<DVec3>, String> {
+        let at = |i: usize| {
+            let k = self.kept.binary_search(&u32::try_from(i).ok()?).ok()?;
+            Some(self.positions[k])
+        };
+        Ok(fitting
+            .fit(at)?
+            .into_iter()
+            .map(|p| DVec3::new(p.x, p.y - self.floor, p.z) * UNIT_M)
+            .collect())
+    }
 }
 
 struct Reader<'a> {
@@ -463,7 +490,19 @@ impl MacroTargets {
         if !(BODY_VERTICES..=100_000).contains(&kept) {
             return Err("The body targets keep an unexpected number of vertices".into());
         }
-        r.take(4 * kept)?; // base-mesh indices, for reference
+        let mut base_index = Vec::with_capacity(kept);
+        for k in 0..kept {
+            let i = r.u32()?;
+            let expected = if k < BODY_VERTICES {
+                k as u32
+            } else {
+                base_index[k - 1] + 1
+            };
+            if (k < BODY_VERTICES && i != expected) || i < expected {
+                return Err("The body targets' vertices are out of order".into());
+            }
+            base_index.push(i);
+        }
         let mut base = Vec::with_capacity(kept);
         for _ in 0..kept {
             base.push(DVec3::new(
@@ -530,6 +569,7 @@ impl MacroTargets {
         }
         Ok(Self {
             base,
+            kept: base_index.into(),
             joints,
             targets,
         })
@@ -601,7 +641,14 @@ impl MacroTargets {
                 .collect(),
             triangles: mannequin_triangles()?.to_vec(),
         };
-        Ok(MadeBody { surface, joints })
+        Ok(MadeBody {
+            surface,
+            joints,
+            settings: *settings,
+            positions,
+            kept: self.kept.clone(),
+            floor,
+        })
     }
 }
 
@@ -618,4 +665,11 @@ fn mannequin_triangles() -> Result<&'static [[usize; 3]], String> {
         })
         .as_deref()
         .map_err(Clone::clone)
+}
+
+/// Whether `surface` is made of MakeHuman's base body, as the mannequin and every made body
+/// are: the same vertices and triangles, so it has MakeHuman's texture coordinates.
+pub fn is_makehuman_body(surface: &SurfaceMesh) -> bool {
+    surface.vertices.len() == BODY_VERTICES
+        && mannequin_triangles().is_ok_and(|t| t == surface.triangles.as_slice())
 }

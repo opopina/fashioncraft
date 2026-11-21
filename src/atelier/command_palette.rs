@@ -128,6 +128,9 @@ fn aliases(id: CommandId) -> &'static str {
         CreateMakeHumanAvatar => {
             "makehuman create new avatar body mannequin gender age muscle weight"
         }
+        OpenAvatarLibrary => {
+            "avatar library presets ready made bodies skin hair eyes woman man child makehuman"
+        }
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",
         ToggleHistory => "history undo redo edits list go back",
         ToggleObjectBrowser => "object browser scene tree outliner pieces fabrics avatar list",

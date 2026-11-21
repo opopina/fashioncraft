@@ -33,8 +33,37 @@ pub struct DrawModel<'a> {
     /// Images of each material's fabric texture, by material index: its colours, its normal
     /// map and its roughness map (none where it has none).
     pub fabric_images: &'a [[Option<&'a GraphicImage>; 3]],
+    /// The avatar's skin and parts (eyes, hair…), when it has a look and it is shown.
+    pub avatar_look: Option<AvatarLookDraw<'a>>,
     pub display: DisplayOptions<'a>,
 }
+
+/// How the avatar looks beyond its colour: a skin image over its first triangles, and parts
+/// drawn with it.
+#[derive(Clone, Copy)]
+pub struct AvatarLookDraw<'a> {
+    /// The skin and the texture coordinates of the avatar's first triangles' corners (image
+    /// space: v down); further triangles (props) keep the avatar colour.
+    pub skin: Option<(&'a GraphicImage, &'a [[[f32; 2]; 3]])>,
+    pub parts: &'a [AvatarPartDraw<'a>],
+    /// Changes whenever the skin, the parts or their positions do.
+    pub key: u64,
+}
+
+/// A part of the avatar's look, already where the avatar is.
+#[derive(Clone, Copy)]
+pub struct AvatarPartDraw<'a> {
+    pub image: &'a GraphicImage,
+    pub vertices: &'a [Vec3],
+    pub triangles: &'a [[u32; 3]],
+    /// Texture coordinates of each triangle's corners (image space: v down).
+    pub uvs: &'a [[[f32; 2]; 3]],
+    /// Drawn only where the image is opaque.
+    pub cutout: bool,
+}
+
+/// Roughness of the avatar's skin and parts.
+const SKIN_ROUGHNESS: f32 = 0.55;
 
 /// Viewport display choices that never change the scene: which cloth triangles are shown,
 /// per-triangle colours, the avatar colour and the strain-map range.
@@ -318,8 +347,94 @@ struct ThickFace {
     look: Option<Surface>,
 }
 
-/// The vertex floats of a surface without a fabric texture.
-const NO_MAP: [f32; 6] = [0., 0., -1., 0., -1., -1.];
+/// Smooth normals of a triangle soup over `vertices`.
+fn smooth_normals(
+    vertices: &[Vec3],
+    triangles: impl Iterator<Item = [usize; 3]> + Clone,
+) -> Vec<Vec3> {
+    let mut normals = vec![Vec3::ZERO; vertices.len()];
+    for t in triangles {
+        let p = t.map(|i| vertices[i]);
+        let n = (p[1] - p[0]).cross(p[2] - p[0]);
+        for i in t {
+            normals[i] += n;
+        }
+    }
+    for n in &mut normals {
+        *n = n.normalize_or_zero();
+    }
+    normals
+}
+
+/// The avatar's vertex floats: its body (with the skin where it has one) and its look's parts.
+fn avatar_vertices(
+    avatar: &SurfaceMesh,
+    look: Option<AvatarLookDraw<'_>>,
+    layers: &[Option<u32>],
+    color: [f32; 3],
+) -> Vec<f32> {
+    let mut out = Vec::<f32>::new();
+    // A corner: position, normal, colour, no wireframe, roughness, back colour, no weave, and
+    // the image's texture coordinates and layer (-1 for none; relief -1 cuts out clear texels).
+    let mut corner = |p: Vec3, n: Vec3, color: [f32; 3], roughness: f32, map: [f32; 4]| {
+        out.extend_from_slice(&p.extend(1.).to_array());
+        out.extend_from_slice(&n.to_array());
+        out.extend_from_slice(&color);
+        out.extend_from_slice(&[0., 0., 0., 0., roughness]);
+        out.extend_from_slice(&color);
+        out.extend_from_slice(&[0.; 5]);
+        out.extend_from_slice(&map);
+        out.extend_from_slice(&[-1., -1.]);
+    };
+    let vertices: Vec<Vec3> = avatar.vertices.iter().map(|v| v.as_vec3()).collect();
+    let normals = smooth_normals(&vertices, avatar.triangles.iter().copied());
+    let skin = look
+        .and_then(|l| l.skin)
+        .zip(layers.first().copied().flatten());
+    for (k, t) in avatar.triangles.iter().enumerate() {
+        let uv = skin.and_then(|((_, uvs), layer)| Some((uvs.get(k)?, layer)));
+        for (c, i) in t.iter().enumerate() {
+            match uv {
+                Some((uv, layer)) => corner(
+                    vertices[*i],
+                    normals[*i],
+                    [1.; 3],
+                    SKIN_ROUGHNESS,
+                    [uv[c][0], uv[c][1], layer as f32, 0.],
+                ),
+                None => corner(vertices[*i], normals[*i], color, -1., [0., 0., -1., 0.]),
+            }
+        }
+    }
+    let Some(look) = look else { return out };
+    for (part, layer) in look.parts.iter().zip(layers.iter().skip(1)) {
+        let Some(layer) = layer else { continue };
+        let n = part.vertices.len() as u32;
+        let triangles = part
+            .triangles
+            .iter()
+            .filter(|t| t.iter().all(|i| *i < n))
+            .map(|t| t.map(|i| i as usize));
+        let normals = smooth_normals(part.vertices, triangles.clone());
+        for (t, uv) in triangles.zip(part.uvs) {
+            for (c, i) in t.iter().enumerate() {
+                corner(
+                    part.vertices[*i],
+                    normals[*i],
+                    [1.; 3],
+                    SKIN_ROUGHNESS,
+                    [
+                        uv[c][0],
+                        uv[c][1],
+                        *layer as f32,
+                        if part.cutout { -1. } else { 0. },
+                    ],
+                );
+            }
+        }
+    }
+    out
+}
 
 fn cloth_surface(
     appearance: Option<&crate::garment::appearance::FabricAppearance>,
@@ -811,7 +926,8 @@ pub struct Viewport {
     /// The see-through garment pipeline and its camera binding, built on first use.
     translucent: Option<(wgpu::RenderPipeline, wgpu::BindGroup)>,
     avatar_buffer: Option<wgpu::Buffer>,
-    avatar_key: (usize, usize, [u32; 3]),
+    /// What the avatar buffer was built from: its surface, colour, look and the look's layers.
+    avatar_key: (usize, usize, [u32; 3], u64, Vec<Option<u32>>),
     avatar_count: u32,
     graphics: graphics::GraphicLayer,
     fabric_maps: fabric_maps::FabricMaps,
@@ -983,7 +1099,7 @@ impl Viewport {
             view_bind,
             translucent: None,
             avatar_buffer: None,
-            avatar_key: (0, 0, [0; 3]),
+            avatar_key: (0, 0, [0; 3], 0, vec![]),
             avatar_count: 0,
             graphics,
             fabric_maps,
@@ -1017,6 +1133,7 @@ impl Viewport {
                 trims: &[],
                 graphics: &[],
                 fabric_images: &[],
+                avatar_look: None,
                 display: DisplayOptions::default(),
             },
             wire,
@@ -1046,6 +1163,7 @@ impl Viewport {
             trims,
             graphics,
             fabric_images,
+            avatar_look,
             display,
         } = model;
         let device = &self.render_state.device;
@@ -1116,12 +1234,26 @@ impl Viewport {
             avatar,
             state,
         );
-        let layers = self.fabric_maps.update(
+        // The avatar's images go in the same array, after the fabrics'.
+        let look_images: Vec<[Option<&GraphicImage>; 3]> = avatar_look
+            .iter()
+            .flat_map(|look| {
+                std::iter::once(look.skin.map(|(image, _)| image))
+                    .chain(look.parts.iter().map(|p| Some(p.image)))
+            })
+            .map(|image| [image, None, None])
+            .collect();
+        let mut layers = self.fabric_maps.update(
             device,
             &self.render_state.queue,
             &self.pipeline.get_bind_group_layout(1),
-            fabric_images,
+            &[fabric_images, &look_images].concat(),
         );
+        let look_layers: Vec<Option<u32>> = layers
+            .split_off(fabric_images.len().min(layers.len()))
+            .into_iter()
+            .map(|l| l[0])
+            .collect();
         let mut data = Vec::<f32>::new();
         let mut smooth = vec![Vec3::ZERO; state.x.len()];
         for t in &mesh.triangles {
@@ -1470,33 +1602,12 @@ impl Viewport {
                 avatar.vertices.as_ptr() as usize,
                 avatar.triangles.as_ptr() as usize,
                 display.avatar_color.map(f32::to_bits),
+                avatar_look.map_or(0, |l| l.key),
+                look_layers.clone(),
             );
             if key != self.avatar_key {
                 use wgpu::util::DeviceExt;
-                let mut body = Vec::<f32>::new();
-                let mut normals = vec![Vec3::ZERO; avatar.vertices.len()];
-                for t in &avatar.triangles {
-                    let p = t.map(|i| avatar.vertices[i].as_vec3());
-                    let n = (p[1] - p[0]).cross(p[2] - p[0]);
-                    for i in t {
-                        normals[*i] += n;
-                    }
-                }
-                for n in &mut normals {
-                    *n = n.normalize_or_zero();
-                }
-                for t in &avatar.triangles {
-                    let p = t.map(|i| avatar.vertices[i].as_vec3());
-                    for (i, v) in p.into_iter().enumerate() {
-                        body.extend_from_slice(&v.extend(1.).to_array());
-                        body.extend_from_slice(&normals[t[i]].to_array());
-                        body.extend_from_slice(&display.avatar_color);
-                        body.extend_from_slice(&[0., 0., 0., 0., -1.]);
-                        body.extend_from_slice(&display.avatar_color);
-                        body.extend_from_slice(&[0.; 5]);
-                        body.extend_from_slice(&NO_MAP);
-                    }
-                }
+                let body = avatar_vertices(avatar, avatar_look, &look_layers, display.avatar_color);
                 self.avatar_count = (body.len() / VERTEX_FLOATS) as u32;
                 self.avatar_key = key;
                 self.avatar_buffer = Some(device.create_buffer_init(
@@ -1509,7 +1620,7 @@ impl Viewport {
             }
         } else {
             self.avatar_count = 0;
-            self.avatar_key = (0, 0, [0; 3]);
+            self.avatar_key = (0, 0, [0; 3], 0, vec![]);
             self.avatar_buffer = None;
         }
         let bytes = bytemuck::cast_slice(&data);

@@ -773,6 +773,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "fashioncraft"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "clap",
+ "eframe",
+ "glam",
+ "i_overlay",
+ "image",
+ "miniz_oxide 0.8.9",
+ "naga",
+ "pollster 1.0.1",
+ "quick-xml",
+ "rayon",
+ "rfd",
+ "serde",
+ "serde_json",
+ "spade",
+ "svgtypes",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1162,6 +1187,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -1381,31 +1408,6 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
-
-[[package]]
-name = "fashioncraft"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "clap",
- "eframe",
- "glam",
- "i_overlay",
- "image",
- "miniz_oxide 0.8.9",
- "naga",
- "pollster 1.0.1",
- "quick-xml",
- "rayon",
- "rfd",
- "serde",
- "serde_json",
- "spade",
- "svgtypes",
- "tempfile",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "matchers"

@@ -2343,8 +2343,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "A build drawn as a real person of this age and gender might have" => {
             "Una complexión al azar, como la que podría tener una persona real de esta edad y género"
         }
-        "Shapes: MakeHuman (CC0). Settings and calibration by age: Anny, NAVER LABS Europe (Apache 2.0)." => {
-            "Formas: MakeHuman (CC0). Ajustes y calibración por edad: Anny, NAVER LABS Europe (Apache 2.0)."
+        "Shapes, skins, eyes and hair: MakeHuman (CC0). Settings and calibration by age: Anny, NAVER LABS Europe (Apache 2.0)." => {
+            "Formas, pieles, ojos y pelo: MakeHuman (CC0). Ajustes y calibración por edad: Anny, NAVER LABS Europe (Apache 2.0)."
         }
         "Underbust" => "Bajo busto",
         "Hips" => "Caderas",
@@ -2376,6 +2376,74 @@ fn spanish(text: &str) -> Option<&'static str> {
         "African" => "Africana",
         "Asian" => "Asiática",
         "European" => "Europea",
+        "Hair colour" => "Color de pelo",
+        "Natural" => "Natural",
+        "Black" => "Negro",
+        "Dark brown" => "Castaño oscuro",
+        "Medium brown" => "Castaño",
+        "Auburn" => "Caoba",
+        "Blonde" => "Rubio",
+        "Platinum" => "Platino",
+        "Side-swept bob" => "Bob ladeado",
+        "Braid" => "Trenza",
+        "Bob" => "Bob",
+        "Afro" => "Afro",
+        "Avatar library…" => "Biblioteca de avatares…",
+        "Avatar library" => "Biblioteca de avatares",
+        "Ready-made avatars with skin, eyes and hair. Use one as it is, or open it in Create avatar to change it." => {
+            "Avatares listos con piel, ojos y pelo. Usa uno tal cual o ábrelo en Crear avatar para cambiarlo."
+        }
+        "Use this avatar" => "Usar este avatar",
+        "Use" => "Usar",
+        "Customise…" => "Personalizar…",
+        "Open it in Create avatar" => "Abrirlo en Crear avatar",
+        "Bodies, skins, eyes and hair: MakeHuman (CC0). Settings by age: Anny, NAVER LABS Europe (Apache 2.0)." => {
+            "Cuerpos, pieles, ojos y pelo: MakeHuman (CC0). Ajustes por edad: Anny, NAVER LABS Europe (Apache 2.0)."
+        }
+        "Avatar from the library · confirm to replace the current one" => {
+            "Avatar de la biblioteca · confirma para reemplazar el actual"
+        }
+        "Woman · medium" => "Mujer · mediana",
+        "Woman · petite" => "Mujer · menuda",
+        "Woman · tall" => "Mujer · alta",
+        "Woman · curvy" => "Mujer · curvilínea",
+        "Woman · 55" => "Mujer · 55 años",
+        "Man · medium" => "Hombre · mediano",
+        "Man · slim" => "Hombre · delgado",
+        "Man · athletic" => "Hombre · atlético",
+        "Man · large" => "Hombre · corpulento",
+        "Man · 55" => "Hombre · 55 años",
+        "Girl · 8" => "Niña · 8 años",
+        "Boy · 8" => "Niño · 8 años",
+        "Look" => "Aspecto",
+        "Eyes" => "Ojos",
+        "Eyebrows" => "Cejas",
+        "Eyelashes" => "Pestañas",
+        "Hair" => "Pelo",
+        "Light skin, woman" => "Piel clara, mujer",
+        "Light skin, man" => "Piel clara, hombre",
+        "Dark skin, woman" => "Piel oscura, mujer",
+        "Dark skin, man" => "Piel oscura, hombre",
+        "East Asian skin, woman" => "Piel asiática, mujer",
+        "East Asian skin, man" => "Piel asiática, hombre",
+        "Light skin, mature woman" => "Piel clara, mujer madura",
+        "Light skin, mature man" => "Piel clara, hombre maduro",
+        "Dark skin, mature man" => "Piel oscura, hombre maduro",
+        "East Asian skin, mature woman" => "Piel asiática, mujer madura",
+        "Brown" => "Café",
+        "Light brown" => "Café claro",
+        "Blue" => "Azules",
+        "Green" => "Verdes",
+        "Thin" => "Finas",
+        "Long" => "Largo",
+        "Long lashes" => "Largas",
+        "Short" => "Corto",
+        "Cropped" => "Muy corto",
+        "Ponytail" => "Cola de caballo",
+        "Skin, eyes and hair" => "Piel, ojos y pelo",
+        "The avatar's skin, eyes and hair, where it has them (library and MakeHuman avatars)" => {
+            "La piel, los ojos y el pelo del avatar, si los tiene (avatares de la biblioteca y de MakeHuman)"
+        }
         "Make this body, then confirm it like an imported avatar" => {
             "Crear este cuerpo y confirmarlo como un avatar importado"
         }

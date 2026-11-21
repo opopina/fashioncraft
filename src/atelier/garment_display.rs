@@ -57,6 +57,9 @@ pub(super) struct GarmentDisplay {
     pub(super) garment: bool,
     /// Avatar colour, sRGB.
     pub(super) avatar_color: [u8; 3],
+    /// Show the avatar's skin, eyes and hair where it has them (avatars from the library or
+    /// made with MakeHuman).
+    pub(super) avatar_look: bool,
     /// One distinct colour per piece instead of the fabric colour.
     pub(super) piece_colors: bool,
     /// Tint frozen pieces so their state is visible at a glance.
@@ -111,6 +114,7 @@ impl Default for GarmentDisplay {
             avatar: true,
             garment: true,
             avatar_color: render::AVATAR_COLOR.map(linear_to_srgb),
+            avatar_look: true,
             piece_colors: false,
             state_colors: true,
             strain_max_percent: render::STRAIN_MAX * 100.,
@@ -450,6 +454,14 @@ impl Atelier {
                 }
             }
         });
+        ui.checkbox(
+            &mut display.avatar_look,
+            i18n::tr(ui_lang, "Skin, eyes and hair"),
+        )
+        .on_hover_text(i18n::tr(
+            ui_lang,
+            "The avatar's skin, eyes and hair, where it has them (library and MakeHuman avatars)",
+        ));
         ui.checkbox(&mut display.garment, i18n::tr(ui_lang, "Garment · Shift+C"));
         ui.checkbox(
             &mut display.piece_colors,

@@ -9,8 +9,9 @@ The targets come from the MakeHuman community repository at the revision in
 assets/makehuman/macro-targets.provenance.json. Only their data is used; no MakeHuman program
 code. Standard library only; the output is deterministic.
 
-Kept vertices: the body of base.obj (its first 13380 vertices, the mannequin's) and the
-vertices of its joint helper groups, in that order. Little-endian, deflated as a whole with a
+Kept vertices: the body of base.obj (its first 13380 vertices, the mannequin's), then the
+vertices of its joint helper groups and the other helper vertices that the avatar parts in
+assets/avatars/parts (eyes, hair…) are fitted to, in index order. Little-endian, deflated as a whole with a
 zlib wrapper:
   b"FCMH", u32 version = 1
   u32 K; K x u32 base-mesh index of each kept vertex; K x 3 x f32 base position (decimetres)
@@ -30,6 +31,29 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "assets/makehuman/base.obj"
 OUTPUT = ROOT / "assets/makehuman/macro-targets.bin"
 BODY = 13380
+
+
+def fit_references(path: Path) -> set:
+    """The base-mesh vertices a MakeHuman .mhclo fitting refers to."""
+    refs, inside = set(), False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith("#"):
+            continue
+        try:
+            values = [float(v) for v in parts]
+        except ValueError:
+            # A keyword: header lines may come among the vertices; other lists end them.
+            if parts[0] == "verts":
+                inside = True
+            elif parts[0] in ("delete_verts", "weights", "vertex_groups"):
+                inside = False
+            elif parts[0] in ("x_scale", "y_scale", "z_scale"):
+                refs |= {int(parts[1]), int(parts[2])}
+            continue
+        if inside:
+            refs |= {int(v) for v in values[: 3 if len(values) >= 9 else 1]}
+    return refs
 
 
 def target_files(targets: Path):
@@ -63,7 +87,10 @@ def main(targets: Path) -> None:
         elif parts[0] == "f" and group and group.startswith("joint-"):
             for token in parts[1:]:
                 groups.setdefault(group, set()).add(int(token.split("/")[0]) - 1)
-    kept = list(range(BODY)) + sorted({i for g in groups.values() for i in g})
+    fitted = set()
+    for fit in sorted((ROOT / "assets/avatars/parts").glob("*/*/fit.mhclo")):
+        fitted |= {i for i in fit_references(fit) if i >= BODY}
+    kept = list(range(BODY)) + sorted({i for g in groups.values() for i in g} | fitted)
     compact = {v: k for k, v in enumerate(kept)}
     blob = bytearray(b"FCMH" + struct.pack("<I", 1))
     blob += struct.pack(f"<I{len(kept)}I", len(kept), *kept)

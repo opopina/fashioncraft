@@ -36,6 +36,7 @@ Use **Space** to start or pause, **Grab** to pull the cloth and **Ctrl+S** to sa
 - **Simulation:** CPU and hybrid GPU VBD with OGC contact, smoothed Coulomb friction, a physical floor, gravity and quality presets, mouse grabbing and passive motion diagnostics.
 - **Documents:** Open, Save, Save As, portable avatar assets and local recovery. Keep a saved JSON and its adjacent `.assets` folder together.
 - **Starting assets:** six bundled pattern templates, native template JSON import, and static OBJ/glTF/GLB avatars through File → Import avatar. Avatar replacement preserves authored patterns but resets the drape and undo history; [supported geometry and limits](docs/avatar-import.md).
+- **Avatars:** Avatar → Avatar library… offers twelve ready-made bodies (women, men and children of several builds, ages and ancestries) with skin, eyes, eyebrows, eyelashes, hair and neutral underwear; Avatar → Create avatar (MakeHuman)… makes a new one from gender, age, build and twenty measurements, with its look. Bodies and looks are MakeHuman's CC0 assets; the settings follow NAVER LABS Europe's Anny.
 - **Avatar inspection:** Properties → Simulation reports the actual collision mesh and can check the current arrangement through the CPU solver's initialization gate. [Coverage and limits](docs/avatar-diagnostics.md): topology warnings are not an intersection or global containment certificate.
 - **DXF outlines:** File → Import DXF patterns previews units, layers and excluded data before adding selected closed outlines as editable pieces. Existing unchanged panels retain their drape. This is a [generic planar subset](docs/pattern-import.md), not industrial DXF-AAMA/ASTM.
 - **SVG outlines:** File → Import SVG patterns adds selected closed outlines from a [physically scaled SVG subset](docs/svg-import.md). Curves are sampled into polygon edges; unsupported artwork and nested or overlapping selected outlines are rejected rather than interpreted as sewing or holes.
@@ -123,7 +124,7 @@ The [architecture](docs/architecture.md), [handoff](docs/handoff.md) and [solver
 
 ## License and credits
 
-Original source and documentation are [MIT-licensed](LICENSE). The bundled MakeHuman assets retain their [CC0 notice and provenance](assets/makehuman/LICENSE.ASSETS.md); dependencies retain their own licenses. The project icon is documented in the [artwork record](assets/branding/README.md).
+Original source and documentation are [MIT-licensed](LICENSE). The bundled MakeHuman assets retain their [CC0 notice and provenance](assets/makehuman/LICENSE.ASSETS.md) (the avatar looks: [their provenance](assets/avatars/provenance.json)); dependencies retain their own licenses. The project icon is documented in the [artwork record](assets/branding/README.md).
 
 FashionCraft is built on ClothCraft by erythrofr and the ClothCraft contributors; their copyright notice is kept in [LICENSE](LICENSE) and [CONTRIBUTORS.md](CONTRIBUTORS.md) lists the people involved. Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork; the [integration notes](docs/firefly-integration.md) record provenance and fixes.
 

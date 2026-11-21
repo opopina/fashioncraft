@@ -58,6 +58,10 @@ pub(super) struct AuthoringUi {
     /// The avatar editor: measurements and a reshaped avatar.
     pub avatar_shape: super::avatar_shape_ui::AvatarShapeUi,
     pub avatar_maker: super::avatar_maker_ui::AvatarMakerUi,
+    /// Ready-made avatars with their looks.
+    pub avatar_library: super::avatar_library_ui::AvatarLibraryUi,
+    /// The current avatar's skin and parts, for the 3D view.
+    pub avatar_look: super::avatar_library_ui::LookCache,
     /// Drafting a T-shirt from measurements.
     pub shirt_draft: super::avatar_shape_ui::DraftUi,
     pub skirt_draft: super::avatar_shape_ui::SkirtDraftUi,

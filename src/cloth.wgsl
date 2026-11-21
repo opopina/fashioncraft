@@ -117,7 +117,8 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
     // control flow; faces without a texture ignore them.
     let layer = i32(max(in.map.z, 0.0));
     let texel = 1.0 / vec2f(textureDimensions(fabric_maps));
-    let image = textureSample(fabric_maps, fabric_sampler, in.map.xy, layer).rgb;
+    let image_rgba = textureSample(fabric_maps, fabric_sampler, in.map.xy, layer);
+    let image = image_rgba.rgb;
     let image_u = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(texel.x, 0.0), layer).rgb;
     let image_v = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(0.0, texel.y), layer).rgb;
     let dmap_dx = dpdx(in.map.xy);
@@ -125,6 +126,10 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
     // The normal and roughness maps, stored so that sampling returns their values.
     let normal_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.x, 0.0))).rgb;
     let rough_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.y, 0.0))).r;
+    // A negative relief marks a cut-out image (hair, eyelashes): clear texels are not drawn.
+    if in.map.z > -0.5 && in.map.w < 0.0 && image_rgba.a < 0.4 {
+        discard;
+    }
     if in.weave.x > 0.5 {
         let w = weave_height(threads, in.weave.x);
         // Threads finer than about a pixel fade to their mean, instead of shimmering.
@@ -149,7 +154,7 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
         if abs(det) > 1e-24 {
             let grad_u = (r1 * dmap_dx.x + r2 * dmap_dy.x) / det;
             let grad_v = (r1 * dmap_dx.y + r2 * dmap_dy.y) / det;
-            n = normalize(n - in.map.w * (slope.x * grad_u + slope.y * grad_v));
+            n = normalize(n - max(in.map.w, 0.0) * (slope.x * grad_u + slope.y * grad_v));
             // A normal map in the repeat's frame: red along it, green up it (against the
             // image's rows), blue out of the cloth.
             if in.detail.x > -0.5 {

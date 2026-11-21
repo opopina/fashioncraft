@@ -45,6 +45,17 @@ pub fn portable_avatar(source: &Path, project: &Path) -> Result<PathBuf, String>
             atomic_write(&dir.join(format!("{stem}.{kind}.json")), &bytes)?;
         }
     }
+    // And its look (skin, eyes, hair) as `<asset stem>.look.json`.
+    if crate::avatar_look::look_file(source).is_some() {
+        let saved = project.parent().unwrap_or(Path::new(".")).join(&relative);
+        let stem = saved
+            .file_stem()
+            .ok_or("Avatar asset needs a name")?
+            .to_string_lossy()
+            .into_owned();
+        let dir = saved.parent().unwrap_or(Path::new("."));
+        crate::avatar_look::copy_look(source, &dir.join(format!("{stem}.look.json")))?;
+    }
     Ok(relative)
 }
 

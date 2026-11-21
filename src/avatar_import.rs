@@ -141,6 +141,9 @@ impl Candidate {
             std::fs::copy(&joints, dir.join("measurements.json")).map_err(|e| e.to_string())?;
             warnings.push("The avatar's own anchors and joints are kept.".into());
         }
+        if crate::avatar_look::copy_look(path, &asset.0.path().join("look.json"))? {
+            warnings.push("The avatar's skin, eyes and hair are kept.".into());
+        }
         Ok(Self {
             source: path.to_owned(),
             vertices: mesh.vertices.len(),

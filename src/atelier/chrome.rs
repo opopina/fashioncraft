@@ -544,6 +544,20 @@ impl Atelier {
             )
             .collect();
         let display = self.prefs.garment_display;
+        let collider = self.scene.collider.clone();
+        let shown_avatar = (display.avatar && !self.project.avatar_removed)
+            .then_some(animated_avatar.as_deref().unwrap_or(&collider.surface));
+        // The avatar's skin and hair, moved with it as it is posed.
+        let look_shown = display.avatar_look && !display.schematic;
+        if let Some(body) = shown_avatar.filter(|_| look_shown) {
+            self.authoring
+                .avatar_look
+                .prepare(&self.project.avatar_path, body);
+        }
+        let mut look_parts = Vec::new();
+        let avatar_look = shown_avatar
+            .filter(|_| look_shown)
+            .and_then(|_| self.authoring.avatar_look.view(&mut look_parts));
         // Seam lines would float in the air when their pieces are hidden or isolated away.
         let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
         let texture_offsets = self.texture_offsets_per_face();
@@ -563,11 +577,7 @@ impl Atelier {
                 materials: &self.scene.garment.materials,
                 optics: Some(&optics),
                 sphere: None,
-                avatar: (display.avatar && !self.project.avatar_removed).then_some(
-                    animated_avatar
-                        .as_deref()
-                        .unwrap_or(&self.scene.collider.surface),
-                ),
+                avatar: shown_avatar,
                 // The contact and pressure maps ask the collider which cloth touches the avatar.
                 collider:
                     ((display.contacts || (self.heat && display.pressure)) && !self.clean_view)
@@ -582,6 +592,7 @@ impl Atelier {
                 trims: &trims,
                 graphics: &graphics,
                 fabric_images: &fabric_images,
+                avatar_look,
                 display: fashioncraft::render::DisplayOptions {
                     visible_faces: visible_faces.as_deref(),
                     face_colors: face_colors.as_deref(),

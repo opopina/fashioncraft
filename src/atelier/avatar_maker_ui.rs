@@ -1,22 +1,79 @@
 //! Create avatar (MakeHuman · Anny): a new body from MakeHuman's shapes with Anny's settings
 //! (gender, age in years, muscle, weight, height, proportions, bust and ancestry) and local
 //! measurements, measured as the sliders move. "Typical" and "Random realistic" follow Anny's
-//! WHO-calibrated distributions for the age and gender. The body is written next to the
-//! session's other files with its joints and anchors, then goes through the usual avatar import
-//! confirmation, as the avatar editor's does.
+//! WHO-calibrated distributions for the age and gender. Its look (skin, eyes, eyebrows,
+//! eyelashes and hair, MakeHuman's CC0 assets) is fitted to it. The body is written next to the
+//! session's other files with its joints, anchors and look, then goes through the usual avatar
+//! import confirmation, as the avatar editor's does.
 use super::*;
 use fashioncraft::{
+    avatar_look::{self, LookChoice},
     avatar_maker::{MEASURES, MacroBody, MacroTargets},
     avatar_shape::{self, BodyMeasurements},
 };
 
-#[derive(Default)]
 pub(super) struct AvatarMakerUi {
     pub open: bool,
     body: MacroBody,
+    look: LookChoice,
     /// The settings last measured, and what they measured.
     measured: Option<(MacroBody, Result<BodyMeasurements, String>)>,
     error: Option<String>,
+}
+
+impl Default for AvatarMakerUi {
+    fn default() -> Self {
+        Self {
+            open: false,
+            body: MacroBody::default(),
+            look: LookChoice::of(
+                "young_caucasian_female",
+                "brown",
+                "eyebrow001",
+                "eyelashes01",
+                Some("short02"),
+            ),
+            measured: None,
+            error: None,
+        }
+    }
+}
+
+impl AvatarMakerUi {
+    /// Start from `body` and `look` (a preset of the library).
+    pub(super) fn set(&mut self, body: MacroBody, look: LookChoice) {
+        self.body = body;
+        self.look = look;
+        self.error = None;
+    }
+}
+
+/// A choice among `options` (name, English label), or none.
+fn pick(
+    ui: &mut egui::Ui,
+    id: &str,
+    value: &mut Option<&'static str>,
+    options: &[(&'static str, &'static str)],
+    none: Option<&str>,
+    language: i18n::Language,
+) {
+    let label = |v: Option<&'static str>| match v {
+        Some(name) => options
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map_or(name, |(_, l)| i18n::tr(language, l)),
+        None => none.unwrap_or("—"),
+    };
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(label(*value))
+        .show_ui(ui, |ui| {
+            if none.is_some() {
+                ui.selectable_value(value, None, label(None));
+            }
+            for (name, _) in options {
+                ui.selectable_value(value, Some(*name), label(Some(*name)));
+            }
+        });
 }
 
 fn measure(body: &MacroBody) -> Result<BodyMeasurements, String> {
@@ -103,6 +160,34 @@ impl Atelier {
                             ui.end_row();
                         }
                     });
+                ui.add_space(4.);
+                ui.label(tr("Look"));
+                let look = &mut state.look;
+                egui::Grid::new("avatar.maker.look")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        let none = Some(tr("None"));
+                        ui.label(tr("Skin"));
+                        pick(ui, "avatar.maker.skin", &mut look.skin, &avatar_look::SKINS, Some(tr("Plain colour")), ui_lang);
+                        ui.end_row();
+                        ui.label(tr("Eyes"));
+                        pick(ui, "avatar.maker.eyes", &mut look.eyes, &avatar_look::EYE_COLOURS, none, ui_lang);
+                        ui.end_row();
+                        ui.label(tr("Eyebrows"));
+                        pick(ui, "avatar.maker.eyebrows", &mut look.eyebrows, &avatar_look::EYEBROWS, none, ui_lang);
+                        ui.end_row();
+                        ui.label(tr("Eyelashes"));
+                        pick(ui, "avatar.maker.eyelashes", &mut look.eyelashes, &avatar_look::EYELASHES, none, ui_lang);
+                        ui.end_row();
+                        ui.label(tr("Hair"));
+                        pick(ui, "avatar.maker.hair", &mut look.hair, &avatar_look::HAIR, none, ui_lang);
+                        ui.end_row();
+                        ui.label(tr("Hair colour"));
+                        let colours: Vec<(&'static str, &'static str)> =
+                            avatar_look::HAIR_COLOURS.iter().map(|(n, l, _)| (*n, *l)).collect();
+                        pick(ui, "avatar.maker.hair.colour", &mut look.hair_colour, &colours, Some(tr("Natural")), ui_lang);
+                        ui.end_row();
+                    });
                 egui::CollapsingHeader::new(tr("Measurements"))
                     .id_salt("avatar.maker.measures")
                     .show(ui, |ui| {
@@ -184,7 +269,7 @@ impl Atelier {
                     ui.colored_label(Color32::LIGHT_RED, e);
                 }
                 ui.small(tr(
-                    "Shapes: MakeHuman (CC0). Settings and calibration by age: Anny, NAVER LABS Europe (Apache 2.0).",
+                    "Shapes, skins, eyes and hair: MakeHuman (CC0). Settings and calibration by age: Anny, NAVER LABS Europe (Apache 2.0).",
                 ));
             });
         self.authoring.avatar_maker.open &= open;
@@ -193,17 +278,11 @@ impl Atelier {
         }
     }
 
-    /// Make the body, write it with its joints and anchors, and offer it for import.
+    /// Make the body, write it with its joints, anchors and look, and offer it for import.
     fn make_macro_avatar(&mut self) -> Result<(), String> {
-        let b = self.authoring.avatar_maker.body;
-        let made = MacroTargets::bundled()?.make(&b)?;
-        // A folder per body, named after its settings.
-        let key = format!("{b:?}");
-        let hash = key.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, c| {
-            (h ^ u64::from(c)).wrapping_mul(0x100_0000_01b3)
-        });
-        let dir = self.output.join(format!("avatar-makehuman-{hash:016x}"));
-        let obj = super::avatar_shape_ui::write_avatar(&dir, &made.surface, &made.joints)?;
+        let state = &self.authoring.avatar_maker;
+        let obj =
+            super::avatar_library_ui::write_made_avatar(&self.output, &state.body, &state.look)?;
         self.authoring.avatar_maker.error = None;
         self.offer_avatar(&obj);
         self.status = i18n::tr(

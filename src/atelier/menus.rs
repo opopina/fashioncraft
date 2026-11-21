@@ -631,7 +631,7 @@ impl Atelier {
                 }
                 Item::Sub(label, inner) => {
                     let response = ui.menu_button(i18n::tr(self.prefs.language, label), |ui| {
-                        self.menu_items(ui, inner, ctx, can_open_palette)
+                        scrolled(ui, |ui| self.menu_items(ui, inner, ctx, can_open_palette))
                     });
                     super::demo::mark(ctx, format_args!("sub:{label}"), response.response.rect);
                 }
@@ -733,11 +733,21 @@ impl Atelier {
         for (english, items) in MENUS {
             let title = i18n::tr(self.prefs.language, english);
             let response = ui.menu_button(title, |ui| {
-                self.menu_items(ui, items, ctx, can_open_palette)
+                scrolled(ui, |ui| self.menu_items(ui, items, ctx, can_open_palette))
             });
             super::demo::mark(ctx, format_args!("menu:{english}"), response.response.rect);
         }
     }
+}
+
+/// A menu's items, scrolling when the menu is taller than the room left below it on screen (a
+/// 1280 × 720 laptop): egui does not scroll menus, so their last items ran off the window.
+fn scrolled(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    let room = (ui.ctx().content_rect().bottom() - ui.max_rect().top() - 12.).max(120.);
+    egui::ScrollArea::vertical()
+        .max_height(room)
+        .auto_shrink([true, true])
+        .show(ui, add);
 }
 
 #[cfg(test)]

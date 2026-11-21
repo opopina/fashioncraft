@@ -319,6 +319,7 @@ pub fn run(
                 demo: demo::Demo::from_env(&output),
                 demo_points: Default::default(),
                 demo_points_before: Default::default(),
+                window_checked: false,
                 mesh_mm: m.target_edge_m * 1000.,
                 anisotropy: m.anisotropy,
                 mesh_axis: m.axis_degrees,
@@ -425,6 +426,8 @@ struct Atelier {
     /// a demo can aim at them too.
     demo_points: std::collections::HashMap<String, egui::Pos2>,
     demo_points_before: std::collections::HashMap<String, egui::Pos2>,
+    /// Whether the window was checked against its screen at start (see `ui`).
+    window_checked: bool,
     perf: Option<perf::PerfRun>,
     mesh_mm: f64,
     anisotropy: f64,
@@ -1465,6 +1468,26 @@ impl eframe::App for Atelier {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.begin_demo_frame(&ctx);
+        // A window larger than its screen (a 1280 × 800 laptop, say) starts maximized, so nothing
+        // is off screen or under the taskbar: eframe only clamps it to the monitor's full size. A
+        // demo or a smoke run keeps the size it asked for.
+        if !self.window_checked {
+            let (monitor, outer) =
+                ctx.input(|i| (i.viewport().monitor_size, i.viewport().outer_rect));
+            if let (Some(monitor), Some(outer)) = (monitor, outer) {
+                self.window_checked = true;
+                let fixed_size = self.demo.is_some()
+                    || self.smoke
+                    || self.drag_test
+                    || self.perf.is_some()
+                    || self.authoring_smoke.is_some();
+                if !fixed_size
+                    && (outer.width() > monitor.x - 16. || outer.height() > monitor.y - 64.)
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                }
+            }
+        }
         // Placing buttons ends with Esc, another tool, or leaving the pattern view, however
         // the tool changed (several places set it directly).
         if self.authoring.trim_placement.is_some()

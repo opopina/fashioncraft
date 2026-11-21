@@ -27,6 +27,10 @@ pub(super) struct DocumentUi {
     checked_recovery: bool,
     closing: bool,
     smoke_fixture: Option<PathBuf>,
+    /// The window title last sent. Sending one asks egui for another frame, so it is sent only
+    /// when it changes: sent every frame, the window redrew without end even when idle (four
+    /// CPU cores busy on a software-rendered Windows).
+    title_sent: String,
 }
 impl DocumentUi {
     fn dismiss_modals_for_close(&mut self, ctx: &egui::Context) {
@@ -58,6 +62,7 @@ impl DocumentUi {
             _recovery_lock: recovery_lock(output),
             checked_recovery: opened_a_document,
             closing: false,
+            title_sent: String::new(),
             smoke_fixture: None,
         }
     }
@@ -784,11 +789,15 @@ impl Atelier {
             .and_then(|p| p.file_name())
             .and_then(|s| s.to_str())
             .unwrap_or(i18n::tr(self.prefs.language, "Untitled"));
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
+        let title = format!(
             "{}{} — FashionCraft",
             name,
             if self.document.dirty { " *" } else { "" }
-        )));
+        );
+        if title != self.document.title_sent {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.document.title_sent = title;
+        }
         ctx.request_repaint_after(Duration::from_secs(5));
     }
 }

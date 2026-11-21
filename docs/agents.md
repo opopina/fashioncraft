@@ -124,3 +124,6 @@ the real fabric before manufacturing.
 
 `tests/agent.rs` and the tests in `src/assistant.rs` run without a network. They feed canned
 answers to the tool loop and to the MCP server.
+
+To see the Assistant at work without an API key, run `scripts/assistant-stand-in.py`, a local
+stand-in for both APIs; its header says how.

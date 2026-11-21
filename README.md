@@ -102,6 +102,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the [architecture notes](docs/archite
 
 FashionCraft is [MIT-licensed](LICENSE).
 
+FashionCraft is made by Ricardo Rivadeneira with Claude Opus 5.5, Anthropic's AI model.
+
 It started from [ClothCraft](https://github.com/erythrofr/ClothCraft) by erythrofr and the ClothCraft
 contributors (MIT). Its physics engine, document model and first editor come from there, and their
 copyright notice is kept in [LICENSE](LICENSE); [CONTRIBUTORS.md](CONTRIBUTORS.md) lists the people

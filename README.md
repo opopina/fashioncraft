@@ -57,7 +57,8 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
 - **2D patterns:** polygons, rectangles, ellipses, arc sectors, spirals and freehand shapes;
   internal lines, shapes and darts; mirrored pieces, booleans, trace, cut and sew, slash and
   spread, merge and unfold; rulers, smart guides and grid snapping. T-shirt, skirt and trousers
-  drafted from measurements. DXF and SVG import, and a 1:1 PDF print of the patterns.
+  drafted from measurements. DXF-AAMA and DXF-ASTM import and export for pattern CAD, plotters
+  and cutters; DXF and SVG import; and a 1:1 PDF print of the patterns.
 - **Sewing:** segment, free and M:N sewing, automatic sewing, easing, length checks, pleats and
   torn seams.
 - **3D garment:** arrangement points on the body, fold arrangement, superimpose, re-drape and auto
@@ -81,12 +82,19 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
 | Data | Opens | Saves or exports |
 |---|---|---|
 | Project | FashionCraft project JSON (also ClothCraft's) | Project JSON with its `.assets` folder |
-| 2D patterns | Closed outlines from DXF (generic planar) and SVG | 1:1 PDF, SVG |
+| 2D patterns | DXF-AAMA and DXF-ASTM (D6673) pieces; closed outlines from DXF (generic planar) and SVG | DXF-AAMA, DXF-ASTM (D6673), 1:1 PDF, SVG |
 | Avatar | OBJ, glTF/GLB, FBX, USD, Alembic; BVH motion | glTF/GLB, FBX |
 | Garment | — | OBJ + MTL, glTF/GLB, FBX, Alembic, USD/USDZ, PC2, MDD, OBJ sequence |
 
 Marvelous Designer and CLO project files are not supported; exchange formats are. See the
-[input/output contracts](docs/interoperability.md).
+[input/output contracts](docs/interoperability.md). DXF-AAMA/ASTM pieces carry:
+- their cut and sew lines;
+- notches;
+- grain line;
+- name, size and quantity;
+- units.
+
+Grading, fold lines and drill holes are not carried yet. See [what goes in and out](docs/dxf-aama-astm.md).
 
 ## Status
 

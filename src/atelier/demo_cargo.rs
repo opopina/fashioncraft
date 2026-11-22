@@ -19,13 +19,13 @@ type Outline = [([f64; 2], Option<[f64; 2]>); 7];
 /// One front leg, metres, y down from the waist: the crotch on the left, the side seam on the
 /// right, as the leg anchors lay a piece (its right goes to the outside of the leg on either
 /// leg). Waist 22.4 cm, hip 33.8 cm across, a 7 cm crotch extension 30 cm down, a wide straight
-/// leg to a 31 cm hem, 100 cm long.
+/// leg to a 31 cm hem, 95 cm long (ankle length: a longer hem is stepped on when walking).
 const FRONT: Outline = [
     ([0.091, 0.0], None),
     ([0.3147, 0.0], None),
     ([0.3381, 0.21], None),
-    ([0.3246, 1.0], None),
-    ([0.0131, 1.0], None),
+    ([0.3246, 0.95], None),
+    ([0.0131, 0.95], None),
     ([0.0, 0.30], None),
     ([0.0676, 0.21], None),
 ];
@@ -34,8 +34,8 @@ const BACK: Outline = [
     ([0.1316, 0.0], None),
     ([0.3553, 0.0], None),
     ([0.3787, 0.21], None),
-    ([0.3652, 1.0], None),
-    ([0.0537, 1.0], None),
+    ([0.3652, 0.95], None),
+    ([0.0537, 0.95], None),
     ([0.0, 0.30], None),
     ([0.1082, 0.21], None),
 ];

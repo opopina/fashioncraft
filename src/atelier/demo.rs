@@ -6,7 +6,8 @@
 //!     FASHIONCRAFT_DEMO=vest [FASHIONCRAFT_DEMO_RECORD=1] [FASHIONCRAFT_DEMO_CLEAN=1] fashioncraft
 //!
 //! `FASHIONCRAFT_DEMO_CLEAN=1` leaves out the cursor, the click ripples and the captions, for
-//! stills and for footage that gets its own titles in an editor.
+//! stills and for footage that gets its own titles in an editor. `FASHIONCRAFT_DEMO_MAX_WIDTH`
+//! (pixels, default 1920) caps the recording's width.
 //!
 //! The pointer and keys of the computer are ignored while it runs (only F9, pause or resume,
 //! and Shift+Escape, stop, are read), so a stray mouse cannot change what it does. Every step is
@@ -87,6 +88,8 @@ pub(super) enum Step {
     Click(Target),
     /// Move to the first target, press, move to the second while holding, release.
     Drag(Target, Target),
+    /// The same with the secondary button: in the 3D view, how a person turns the camera.
+    DragRight(Target, Target),
     /// Press a key.
     Key(egui::Key, egui::Modifiers),
     /// Type text into the focused field.
@@ -181,6 +184,8 @@ pub(super) struct Demo {
     /// Clicks shown as a fading ring: where and when.
     ripples: Vec<(egui::Pos2, f64)>,
     pressed: bool,
+    /// The button the next press uses (the secondary one during a DragRight).
+    drag_button: egui::PointerButton,
     /// Events for the next frame's input.
     events: Vec<egui::Event>,
     caption: Option<(String, f64)>,
@@ -220,6 +225,7 @@ impl Demo {
             cursor: egui::pos2(400., 300.),
             ripples: vec![],
             pressed: false,
+            drag_button: egui::PointerButton::Primary,
             events: vec![],
             caption: None,
             paused: false,
@@ -327,7 +333,7 @@ impl Demo {
         self.pressed = pressed;
         self.events.push(egui::Event::PointerButton {
             pos: self.cursor,
-            button: egui::PointerButton::Primary,
+            button: self.drag_button,
             pressed,
             modifiers: Default::default(),
         });
@@ -510,6 +516,7 @@ impl Atelier {
                         }
                         AfterGlide::Release => {
                             demo.button(false);
+                            demo.drag_button = egui::PointerButton::Primary;
                         }
                     }
                 }
@@ -614,10 +621,13 @@ impl Atelier {
                     }
                 }
             }
-            Step::Drag(a, b) => match (locate(self, ctx, a), locate(self, ctx, b)) {
+            Step::Drag(a, b) | Step::DragRight(a, b) => match (locate(self, ctx, a), locate(self, ctx, b)) {
                 (Some(from), Some(to)) => {
                     demo.seeking_since = None;
                     demo.note(&format!("· {label}"));
+                    if matches!(step, Step::DragRight(..)) {
+                        demo.drag_button = egui::PointerButton::Secondary;
+                    }
                     demo.phase = Some(Phase::Glide {
                         from: demo.cursor,
                         to: from,
@@ -822,6 +832,7 @@ fn describe(step: &Step) -> String {
         Step::Hover(t) => format!("hover {}", target(t)),
         Step::Click(t) => format!("click {}", target(t)),
         Step::Drag(a, b) => format!("drag {} → {}", target(a), target(b)),
+        Step::DragRight(a, b) => format!("right-drag {} → {}", target(a), target(b)),
         _ => String::new(),
     }
 }
@@ -837,6 +848,12 @@ fn start_recording(
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let path = out.join(format!("{name}-{stamp}.mp4"));
+    // Wider recordings keep detail for crops (a vertical video cut from a landscape window).
+    let max_width = std::env::var("FASHIONCRAFT_DEMO_MAX_WIDTH")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|w| (640..=7680).contains(w))
+        .unwrap_or(1920);
     let mut child = std::process::Command::new(ffmpeg)
         .args([
             "-y",
@@ -850,9 +867,11 @@ fn start_recording(
         ])
         .arg(format!("{}x{}", size[0], size[1]))
         .args(["-r", &FPS.to_string(), "-i", "-"])
+        .args(["-vf"])
+        .arg(format!(
+            "scale='min({max_width},iw)':-2:flags=lanczos,format=yuv420p"
+        ))
         .args([
-            "-vf",
-            "scale='min(1920,iw)':-2:flags=lanczos,format=yuv420p",
             "-c:v",
             "libx264",
             "-crf",

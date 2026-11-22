@@ -224,7 +224,14 @@ pub struct OgcWorld {
     /// Contact radius of each moving vertex (its fabric's collision distance). Empty: every
     /// contact uses the settings' radius.
     cloth_radius: Vec<f64>,
+    /// Whether `set_fixed` moved the fixed geometry (by more than `FIXED_MOVE_M`) since
+    /// [`OgcWorld::take_fixed_moved`] last asked.
+    fixed_moved: bool,
 }
+/// The shortest move of a fixed vertex that counts as the body moving: a body posed again in
+/// the same pose differs by rounding (about 1e-15 m), a moving limb by millimetres per step.
+const FIXED_MOVE_M: f64 = 1e-6;
+
 /// A fresh identity for fixed geometry, so caches keyed by it never mix two arrangements.
 fn next_spatial_id() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -243,6 +250,11 @@ impl OgcWorld {
         {
             return Err("New fixed geometry does not match the contact world".into());
         }
+        self.fixed_moved |= self
+            .fixed
+            .iter()
+            .zip(fixed)
+            .any(|(a, b)| a.distance_squared(*b) > FIXED_MOVE_M * FIXED_MOVE_M);
         self.fixed = fixed.to_vec();
         let x = self.positions(moving);
         let tb: Vec<_> = self
@@ -264,6 +276,12 @@ impl OgcWorld {
         self.candidates = None;
         self.spatial_id = next_spatial_id();
         Ok(())
+    }
+
+    /// Whether the fixed geometry has moved (`set_fixed` with positions more than a micrometre
+    /// away) since the last call, or since the world was made; asking clears it.
+    pub fn take_fixed_moved(&mut self) -> bool {
+        std::mem::take(&mut self.fixed_moved)
     }
 
     pub fn new(
@@ -357,6 +375,7 @@ impl OgcWorld {
             candidates: None,
             inert: vec![],
             cloth_radius: vec![],
+            fixed_moved: false,
         })
     }
     /// Give each moving vertex its own contact radius; fixed vertices keep the settings'

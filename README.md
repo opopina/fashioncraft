@@ -12,6 +12,16 @@ Reports with a small example are very welcome.
 
 ## See it
 
+Cargo trousers from scratch, then on the runway (47 seconds). A real 4 min 20 s session in
+FashionCraft (the pieces drawn on the board, sewing, cargo pockets with topstitching and buttons,
+denim, the simulation and a request to the new AI Assistant) shown in 24 seconds; then the same
+trousers walking, a Mixamo walk on FashionCraft's cloth solver, rendered in Blender Cycles.
+Titles in EffectCraft, edit in FilmCraft.
+
+[![Watch the cargo trousers video](docs/media/cargo-promo-poster.jpg)](docs/media/cargo-promo.mp4)
+
+Also on TikTok: [@ricoptech](https://www.tiktok.com/@ricoptech/video/7711128682286353682).
+
 A vest made from scratch in 2 minutes 37 seconds: an avatar from the library, the back and front
 drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey, and buttons
 fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).

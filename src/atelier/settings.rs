@@ -286,34 +286,63 @@ pub(super) fn window(
             });
             ui.separator();
             let tr = |text| super::i18n::tr(prefs.language, text);
-            ui.heading(tr("AI agents"));
-            let allow = ui
-                .checkbox(
+            super::workspace::group_title(ui, tr("AI agents"));
+            let allow = ui.horizontal(|ui| {
+                let allow = ui.checkbox(
                     &mut prefs.ai.agents_allowed,
                     tr("Let AI agents use FashionCraft"),
-                )
-                .on_hover_text(tr(
-                    "MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's \
-                     gateway work in this window through fashioncraft-cli mcp. Off, nothing \
-                     listens.",
-                ));
-            edited |= allow.changed();
-            ui.small(tr(
-                "They work in the open window, with undo, and save and export only into \
-                 Documents/FashionCraft.",
-            ));
-            let entry = mcp_entry();
-            ui.horizontal(|ui| {
-                ui.small(tr("MCP client entry"));
-                if ui.small_button(tr("Copy")).clicked() {
-                    ui.ctx().copy_text(entry.clone());
-                }
+                );
+                super::workspace::info_tip(
+                    ui,
+                    tr("MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's \
+                        gateway work in this window through fashioncraft-cli mcp. Off, nothing \
+                        listens."),
+                );
+                allow
             });
-            ui.add(egui::Label::new(egui::RichText::new(&entry).monospace().small()).wrap());
-            ui.small(tr(
-                "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, \
-                 Gemini or a local model; set its connection in its own window.",
-            ));
+            edited |= allow.inner.changed();
+            ui.label(
+                egui::RichText::new(tr(
+                    "They work in the open window, with undo, and save and export only into \
+                     Documents/FashionCraft.",
+                ))
+                .small()
+                .weak(),
+            );
+            let entry = mcp_entry();
+            // The client entry as a code card with its copy button, as developer docs show it.
+            egui::Frame::new()
+                .fill(ui.visuals().extreme_bg_color)
+                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                .corner_radius(8.)
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(tr("MCP client entry"))
+                                .small()
+                                .strong()
+                                .color(super::workspace::accent(ui.visuals())),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button(tr("Copy")).clicked() {
+                                ui.ctx().copy_text(entry.clone());
+                            }
+                        });
+                    });
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&entry).monospace().small()).wrap(),
+                    );
+                });
+            ui.label(
+                egui::RichText::new(tr(
+                    "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, \
+                     Gemini or a local model; set its connection in its own window.",
+                ))
+                .small()
+                .weak(),
+            );
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Restore defaults").clicked() {

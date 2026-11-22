@@ -109,26 +109,41 @@ impl Atelier {
                 }
             }
             ui.separator();
-            ui.label(super::garment_display::counted(count, "pin", "pins"));
-            if ui
-                .add_enabled(
-                    count > 0,
-                    egui::Button::new(i18n::tr(ui_lang, "Delete all pins")),
-                )
-                .clicked()
-            {
+            // Each count stays with its button when the capsule wraps.
+            let mut delete_pins = false;
+            let mut remove_tacks = false;
+            let tacks = self.project.template.tacks.len();
+            ui.horizontal(|ui| {
+                ui.label(super::garment_display::counted(
+                    count,
+                    i18n::tr(ui_lang, "pin"),
+                    i18n::tr(ui_lang, "pins"),
+                ));
+                delete_pins = ui
+                    .add_enabled(
+                        count > 0,
+                        egui::Button::new(i18n::tr(ui_lang, "Delete all pins")),
+                    )
+                    .clicked();
+            });
+            if delete_pins {
                 self.delete_all_pins();
             }
             ui.separator();
-            let tacks = self.project.template.tacks.len();
-            ui.label(super::garment_display::counted(tacks, "tack", "tacks"));
-            if ui
-                .add_enabled(
-                    tacks > 0,
-                    egui::Button::new(i18n::tr(ui_lang, "Remove tacks")),
-                )
-                .clicked()
-            {
+            ui.horizontal(|ui| {
+                ui.label(super::garment_display::counted(
+                    tacks,
+                    i18n::tr(ui_lang, "tack"),
+                    i18n::tr(ui_lang, "tacks"),
+                ));
+                remove_tacks = ui
+                    .add_enabled(
+                        tacks > 0,
+                        egui::Button::new(i18n::tr(ui_lang, "Remove tacks")),
+                    )
+                    .clicked();
+            });
+            if remove_tacks {
                 let ids = self
                     .project
                     .template

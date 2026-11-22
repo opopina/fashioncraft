@@ -371,69 +371,62 @@ impl Atelier {
         let lang = self.prefs.language;
         let tr = |text| i18n::tr(lang, text);
         let provider = self.assistant_provider();
-        egui::Grid::new("assistant.connection")
-            .num_columns(2)
-            .spacing([8., 6.])
-            .show(ui, |ui| {
-                ui.label(tr("Provider"));
-                egui::ComboBox::from_id_salt("assistant.provider")
-                    .selected_text(provider.label())
-                    .width(230.)
-                    .show_ui(ui, |ui| {
-                        for p in Provider::ALL {
-                            if ui.selectable_label(p == provider, p.label()).clicked()
-                                && p != provider
-                            {
-                                self.prefs.ai.provider = p.id().into();
-                                self.prefs.ai.model.clear();
-                                self.prefs.ai.base_url.clear();
-                                self.assistant.key_message = None;
-                            }
-                        }
-                    });
-                ui.end_row();
-                let provider = self.assistant_provider();
-                ui.label(tr("Model"));
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.prefs.ai.model)
-                        .hint_text(provider.model_hint())
-                        .desired_width(230.),
-                );
-                ui.end_row();
-                ui.label(tr("Address"));
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.prefs.ai.base_url)
-                        .hint_text(provider.default_base_url())
-                        .desired_width(230.),
-                );
-                ui.end_row();
-                if provider.needs_key() {
-                    ui.label(tr("API key"));
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.assistant.key_input)
-                                .password(true)
-                                .hint_text(tr("paste a key to save it"))
-                                .desired_width(160.),
-                        );
-                        if ui
-                            .add_enabled(
-                                !self.assistant.key_input.trim().is_empty(),
-                                egui::Button::new(tr("Save")),
-                            )
-                            .clicked()
+        super::workspace::group_title(ui, tr("Connection"));
+        super::workspace::prop_row(ui, tr("Provider"), |ui| {
+            egui::ComboBox::from_id_salt("assistant.provider")
+                .selected_text(provider.label())
+                .width(ui.available_width().min(230.))
+                .show_ui(ui, |ui| {
+                    for p in Provider::ALL {
+                        if ui.selectable_label(p == provider, p.label()).clicked() && p != provider
                         {
-                            self.assistant.key_message =
-                                assistant_keys::save(provider, &self.assistant.key_input)
-                                    .err()
-                                    .map(|e| format!("Could not save the key: {e}"));
-                            self.assistant.key_input.clear();
-                            self.assistant.key = None;
+                            self.prefs.ai.provider = p.id().into();
+                            self.prefs.ai.model.clear();
+                            self.prefs.ai.base_url.clear();
+                            self.assistant.key_message = None;
                         }
-                    });
-                    ui.end_row();
+                    }
+                });
+        });
+        let provider = self.assistant_provider();
+        super::workspace::prop_row(ui, tr("Model"), |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.prefs.ai.model)
+                    .hint_text(provider.model_hint())
+                    .desired_width(ui.available_width().min(230.)),
+            );
+        });
+        super::workspace::prop_row(ui, tr("Address"), |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.prefs.ai.base_url)
+                    .hint_text(provider.default_base_url())
+                    .desired_width(ui.available_width().min(230.)),
+            );
+        });
+        if provider.needs_key() {
+            super::workspace::prop_row(ui, tr("API key"), |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.assistant.key_input)
+                        .password(true)
+                        .hint_text(tr("paste a key to save it"))
+                        .desired_width((ui.available_width() - 64.).clamp(80., 166.)),
+                );
+                if ui
+                    .add_enabled(
+                        !self.assistant.key_input.trim().is_empty(),
+                        egui::Button::new(tr("Save")),
+                    )
+                    .clicked()
+                {
+                    self.assistant.key_message =
+                        assistant_keys::save(provider, &self.assistant.key_input)
+                            .err()
+                            .map(|e| format!("Could not save the key: {e}"));
+                    self.assistant.key_input.clear();
+                    self.assistant.key = None;
                 }
             });
+        }
         if provider.needs_key() {
             let (_, source) = self.assistant_key();
             ui.horizontal(|ui| match source {
@@ -455,12 +448,19 @@ impl Atelier {
             });
         }
         if let Some(message) = &self.assistant.key_message {
-            ui.small(message);
+            ui.colored_label(
+                ui.visuals().error_fg_color,
+                egui::RichText::new(message).small(),
+            );
         }
-        ui.small(tr(
-            "Your messages, the scene's summary and screenshots go to this provider. A local \
-             model keeps them on this computer.",
-        ));
+        ui.label(
+            egui::RichText::new(tr(
+                "Your messages, the scene's summary and screenshots go to this provider. A local \
+                 model keeps them on this computer.",
+            ))
+            .small()
+            .weak(),
+        );
     }
 
     pub(super) fn assistant_window(&mut self, ctx: &egui::Context) {
@@ -507,17 +507,45 @@ impl Atelier {
             .resizable(true)
             .show(ctx, |ui| {
                 let settings = self.assistant_settings();
+                let accent = super::workspace::accent(ui.visuals());
+                // Who answers, with a dot that is green when ready and FashionCraft's colour
+                // while a turn runs; the connection and a new chat as icons at the right.
                 ui.horizontal(|ui| {
                     let model = match settings.model() {
                         "" => tr("no model chosen"),
                         _ => settings.model(),
                     };
-                    ui.small(format!("{} · {model}", settings.provider.label()));
+                    let (dot, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
+                    ui.painter().circle_filled(
+                        dot.center(),
+                        3.5,
+                        if busy {
+                            accent
+                        } else if settings.missing().is_some() {
+                            ui.visuals().warn_fg_color
+                        } else {
+                            Color32::from_rgb(0x57, 0xab, 0x5a)
+                        },
+                    );
+                    ui.label(
+                        egui::RichText::new(settings.provider.label())
+                            .strong()
+                            .size(12.5),
+                    );
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(model).weak().size(12.)).truncate(),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add_enabled(!busy, egui::Button::new(tr("New chat")).small())
-                            .clicked()
-                        {
+                        let new_chat = ui.add_enabled_ui(!busy, |ui| {
+                            super::icons::icon_only(
+                                ui,
+                                super::icons::Icon::PagePlus,
+                                24.,
+                                false,
+                                tr("New chat"),
+                            )
+                        });
+                        if new_chat.inner.clicked() {
                             self.assistant.entries.clear();
                             *self
                                 .assistant
@@ -526,31 +554,63 @@ impl Atelier {
                                 .unwrap_or_else(|e| e.into_inner()) =
                                 Conversation::new(settings.provider);
                         }
-                        ui.toggle_value(&mut self.assistant.show_connection, tr("Connection"));
+                        if super::icons::icon_only(
+                            ui,
+                            super::icons::Icon::Settings,
+                            24.,
+                            self.assistant.show_connection,
+                            tr("Connection"),
+                        )
+                        .clicked()
+                        {
+                            self.assistant.show_connection = !self.assistant.show_connection;
+                        }
                     });
                 });
                 if self.assistant.show_connection || settings.missing().is_some() {
-                    ui.separator();
-                    self.assistant_connection(ui);
+                    ui.add_space(2.);
+                    egui::Frame::new()
+                        .fill(ui.visuals().extreme_bg_color)
+                        .corner_radius(8.)
+                        .inner_margin(egui::Margin::symmetric(10, 8))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            self.assistant_connection(ui);
+                        });
                 }
-                ui.separator();
-                let input_height = 96.;
+                ui.add_space(4.);
+                let input_height = 112.;
                 egui::ScrollArea::vertical()
                     .stick_to_bottom(true)
                     .auto_shrink([false, false])
                     .max_height((ui.available_height() - input_height).max(80.))
                     .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 6.;
                         if self.assistant.entries.is_empty() {
-                            ui.weak(tr("Ask for something to do in this project, for example: \
-                                 \"Draft a denim skirt for this avatar, simulate it and show \
-                                 me how it falls.\""));
+                            ui.add_space(24.);
+                            ui.vertical_centered(|ui| {
+                                ui.label(
+                                    egui::RichText::new(tr("What should we make?"))
+                                        .size(15.)
+                                        .color(accent),
+                                );
+                                ui.add_space(4.);
+                                ui.label(
+                                    egui::RichText::new(tr(
+                                        "Ask for something to do in this project, for example: \
+                                         \"Draft a denim skirt for this avatar, simulate it and \
+                                         show me how it falls.\"",
+                                    ))
+                                    .weak(),
+                                );
+                            });
                         }
                         for entry in &self.assistant.entries {
                             self.assistant_entry(ui, entry);
                         }
                         if busy {
                             ui.horizontal(|ui| {
-                                ui.spinner();
+                                ui.add(egui::Spinner::new().size(12.).color(accent));
                                 let running = matches!(
                                     self.assistant.entries.last(),
                                     Some(Entry::Tool { outcome: None, .. })
@@ -570,39 +630,68 @@ impl Atelier {
                             });
                         }
                     });
-                ui.separator();
-                // Enter sends; Shift+Enter starts a new line.
+                ui.add_space(6.);
+                // The message field and its send button share one rounded box, as chat apps
+                // draw it. Enter sends; Shift+Enter starts a new line.
                 let focused = ui.memory(|m| m.has_focus(input_id));
                 let enter = focused
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.assistant.input)
-                        .id(input_id)
-                        .hint_text(tr("Message the assistant (Enter sends)"))
-                        .desired_rows(2)
-                        .desired_width(f32::INFINITY),
-                );
-                ui.horizontal(|ui| {
-                    if busy {
-                        if ui.button(tr("Stop")).clicked()
-                            && let Some(worker) = &self.assistant.worker
-                        {
-                            worker.stop.store(true, Ordering::Relaxed);
-                        }
-                    } else if (ui
-                        .add_enabled(
-                            !self.assistant.input.trim().is_empty(),
-                            egui::Button::new(tr("Send")),
-                        )
-                        .clicked()
-                        || enter)
-                        && !self.assistant.input.trim().is_empty()
-                    {
-                        self.assistant_send(ctx);
-                        ctx.memory_mut(|m| m.request_focus(input_id));
-                    }
-                    ui.small(tr("Changes can be undone with Undo."));
-                });
+                let stroke = if focused {
+                    egui::Stroke::new(1., accent.gamma_multiply(0.8))
+                } else {
+                    ui.visuals().widgets.noninteractive.bg_stroke
+                };
+                egui::Frame::new()
+                    .fill(ui.visuals().extreme_bg_color)
+                    .stroke(stroke)
+                    .corner_radius(10.)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.assistant.input)
+                                .id(input_id)
+                                .frame(egui::Frame::NONE)
+                                .hint_text(tr("Message the assistant (Enter sends)"))
+                                .desired_rows(2)
+                                .desired_width(f32::INFINITY),
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(tr("Changes can be undone with Undo."))
+                                    .small()
+                                    .weak(),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if busy {
+                                        if ui.button(tr("Stop")).clicked()
+                                            && let Some(worker) = &self.assistant.worker
+                                        {
+                                            worker.stop.store(true, Ordering::Relaxed);
+                                        }
+                                    } else {
+                                        let ready = !self.assistant.input.trim().is_empty();
+                                        let send = ui.add_enabled(
+                                            ready,
+                                            egui::Button::new(
+                                                egui::RichText::new(tr("Send"))
+                                                    .strong()
+                                                    .color(Color32::from_rgb(0x1b, 0x1b, 0x1f)),
+                                            )
+                                            .fill(accent)
+                                            .stroke(egui::Stroke::NONE)
+                                            .corner_radius(7.),
+                                        );
+                                        if (send.clicked() || enter) && ready {
+                                            self.assistant_send(ctx);
+                                            ctx.memory_mut(|m| m.request_focus(input_id));
+                                        }
+                                    }
+                                },
+                            );
+                        });
+                    });
             });
         self.assistant.open &= open;
     }
@@ -610,21 +699,38 @@ impl Atelier {
     fn assistant_entry(&self, ui: &mut egui::Ui, entry: &Entry) {
         let lang = self.prefs.language;
         let tr = |text| i18n::tr(lang, text);
-        ui.add_space(4.);
+        let accent = super::workspace::accent(ui.visuals());
         match entry {
+            // The person's messages sit in a bubble at the right.
             Entry::You(text) => {
-                ui.label(egui::RichText::new(tr("You")).small().strong());
-                ui.add(egui::Label::new(text).wrap());
+                ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                    let width = ui.available_width() * 0.82;
+                    egui::Frame::new()
+                        .fill(ui.visuals().widgets.inactive.bg_fill)
+                        .corner_radius(egui::CornerRadius {
+                            nw: 12,
+                            ne: 12,
+                            sw: 12,
+                            se: 4,
+                        })
+                        .inner_margin(egui::Margin::symmetric(10, 7))
+                        .show(ui, |ui| {
+                            ui.set_max_width(width);
+                            ui.add(egui::Label::new(text).wrap().selectable(true));
+                        });
+                });
             }
+            // The assistant's answers read as text, under its name in FashionCraft's colour.
             Entry::Model(text) => {
                 ui.label(
                     egui::RichText::new(tr("Assistant"))
                         .small()
                         .strong()
-                        .color(ui.visuals().selection.bg_fill),
+                        .color(accent),
                 );
                 ui.add(egui::Label::new(text).wrap().selectable(true));
             }
+            // Each step in the project: a quiet row with its mark, name and detail.
             Entry::Tool {
                 name,
                 detail,
@@ -633,54 +739,77 @@ impl Atelier {
             } => {
                 let (mark, color) = match outcome {
                     None => ("…", ui.visuals().weak_text_color()),
-                    Some((false, _)) => ("✓", egui::Color32::from_rgb(90, 180, 110)),
+                    Some((false, _)) => ("✓", Color32::from_rgb(0x57, 0xab, 0x5a)),
                     Some((true, _)) => ("✗", ui.visuals().error_fg_color),
                 };
-                let response = ui
-                    .horizontal(|ui| {
-                        ui.label(egui::RichText::new(mark).color(color));
-                        ui.label(egui::RichText::new(tr(tool_label(name))).small());
-                        if !detail.is_empty() {
-                            ui.label(egui::RichText::new(detail).small().monospace().weak());
+                let frame = egui::Frame::new()
+                    .fill(ui.visuals().extreme_bg_color)
+                    .corner_radius(6.)
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(mark).color(color).strong());
+                            ui.label(egui::RichText::new(tr(tool_label(name))).small());
+                            if !detail.is_empty() {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(detail).small().monospace().weak(),
+                                    )
+                                    .truncate(),
+                                );
+                            }
+                        });
+                        if let Some((true, text)) = outcome {
+                            let shown: String = text.chars().take(1200).collect();
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(shown)
+                                        .small()
+                                        .color(ui.visuals().error_fg_color),
+                                )
+                                .wrap(),
+                            );
                         }
-                    })
-                    .response;
-                if let Some((is_error, text)) = outcome {
+                        for texture in pictures {
+                            let size = texture.size_vec2();
+                            let width = size.x.min(PICTURE_WIDTH).min(ui.available_width());
+                            ui.add(
+                                egui::Image::new(texture)
+                                    .fit_to_exact_size(egui::vec2(
+                                        width,
+                                        width * size.y / size.x.max(1.),
+                                    ))
+                                    .corner_radius(6.),
+                            );
+                        }
+                    });
+                if let Some((_, text)) = outcome {
                     let shown: String = text.chars().take(1200).collect();
-                    response.on_hover_text(shown.clone());
-                    if *is_error {
+                    frame.response.on_hover_text(shown);
+                }
+            }
+            Entry::Notice(text) => {
+                ui.vertical_centered(|ui| {
+                    ui.label(egui::RichText::new(text).small().italics().weak());
+                });
+            }
+            Entry::Problem(text) => {
+                egui::Frame::new()
+                    .fill(ui.visuals().error_fg_color.gamma_multiply(0.12))
+                    .corner_radius(6.)
+                    .inner_margin(egui::Margin::symmetric(8, 5))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
                         ui.add(
                             egui::Label::new(
-                                egui::RichText::new(shown)
+                                egui::RichText::new(text)
                                     .small()
                                     .color(ui.visuals().error_fg_color),
                             )
                             .wrap(),
                         );
-                    }
-                }
-                for texture in pictures {
-                    let size = texture.size_vec2();
-                    let width = size.x.min(PICTURE_WIDTH).min(ui.available_width());
-                    ui.add(
-                        egui::Image::new(texture)
-                            .fit_to_exact_size(egui::vec2(width, width * size.y / size.x.max(1.)))
-                            .corner_radius(4.),
-                    );
-                }
-            }
-            Entry::Notice(text) => {
-                ui.label(egui::RichText::new(text).small().italics().weak());
-            }
-            Entry::Problem(text) => {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(text)
-                            .small()
-                            .color(ui.visuals().error_fg_color),
-                    )
-                    .wrap(),
-                );
+                    });
             }
         }
     }

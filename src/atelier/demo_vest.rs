@@ -7,17 +7,17 @@ use std::{cell::Cell, rc::Rc};
 
 /// The script called `name`, if there is one.
 /// The demos [`script`] knows.
-pub(super) const NAMES: &[&str] = &["vest"];
+pub(super) const NAMES: &[&str] = &["vest", "outfit"];
 
 /// Whether the 3D camera looks along preset `view`.
-fn facing(a: &Atelier, view: PresetView) -> bool {
+pub(super) fn facing(a: &Atelier, view: PresetView) -> bool {
     let off = (a.camera.yaw - view.angles().0).rem_euclid(std::f32::consts::TAU);
     off < 0.05 || off > std::f32::consts::TAU - 0.05
 }
 
 /// Where piece `i` was put on the body, once it is no longer at the spot new pieces start at
 /// (above and in front of the avatar): the placement's translation, metres.
-fn placed(a: &Atelier, i: usize) -> Option<glam::DVec3> {
+pub(super) fn placed(a: &Atelier, i: usize) -> Option<glam::DVec3> {
     let panel = a.project.template.panels.get(i)?;
     (panel.placement.rotation_degrees.y.abs() > 1. || panel.placement.translation.y < 1.7)
         .then_some(panel.placement.translation)
@@ -39,6 +39,7 @@ fn on_the_body(a: &Atelier) -> bool {
 pub(super) fn script(name: &str) -> Option<Vec<Step>> {
     match name {
         "vest" => Some(vest()),
+        "outfit" => Some(super::demo_outfit::outfit()),
         _ => None,
     }
 }
@@ -79,10 +80,10 @@ const FRONT: [([f64; 2], Option<[f64; 2]>); 10] = [
 const BUTTONS: [f64; 4] = [0.30, 0.37, 0.44, 0.51];
 
 /// Where the drawing starts on the board: its view centre when drawing begins.
-type Origin = Rc<Cell<DVec2>>;
+pub(super) type Origin = Rc<Cell<DVec2>>;
 
 /// A board point `offset` metres from the origin, found when the step runs.
-fn board(origin: &Origin, offset: DVec2) -> Target {
+pub(super) fn board(origin: &Origin, offset: DVec2) -> Target {
     let origin = origin.clone();
     Target::Find(Box::new(move |a: &Atelier| {
         let rect = a.authoring.selection.board_rect?;
@@ -91,7 +92,7 @@ fn board(origin: &Origin, offset: DVec2) -> Target {
 }
 
 /// Click (or drag, for curve points) every point of an outline placed at `at`, then close it.
-fn draw(
+pub(super) fn draw(
     steps: &mut Vec<Step>,
     origin: &Origin,
     at: DVec2,
@@ -112,7 +113,11 @@ fn draw(
 
 /// A point of piece `index` (in the order they were made), from its outline as drawn: the
 /// piece keeps the outline moved so its lowest corner is at (0, 0).
-fn piece(index: usize, drawn: &'static [([f64; 2], Option<[f64; 2]>)], at: [f64; 2]) -> Target {
+pub(super) fn piece(
+    index: usize,
+    drawn: &'static [([f64; 2], Option<[f64; 2]>)],
+    at: [f64; 2],
+) -> Target {
     Target::Find(Box::new(move |a: &Atelier| {
         let lo = drawn.iter().fold(DVec2::splat(f64::INFINITY), |m, (p, _)| {
             m.min(DVec2::from_array(*p))
@@ -122,7 +127,11 @@ fn piece(index: usize, drawn: &'static [([f64; 2], Option<[f64; 2]>)], at: [f64;
 }
 
 /// The same point on piece `index`, a mirrored copy of `drawn`: its x runs the other way.
-fn mirrored(index: usize, drawn: &'static [([f64; 2], Option<[f64; 2]>)], at: [f64; 2]) -> Target {
+pub(super) fn mirrored(
+    index: usize,
+    drawn: &'static [([f64; 2], Option<[f64; 2]>)],
+    at: [f64; 2],
+) -> Target {
     Target::Find(Box::new(move |a: &Atelier| {
         let (lo, hi) = drawn.iter().fold(
             (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
@@ -134,7 +143,7 @@ fn mirrored(index: usize, drawn: &'static [([f64; 2], Option<[f64; 2]>)], at: [f
 }
 
 /// Buttons (or buttonholes) on the garment.
-fn count_trims(a: &Atelier, buttonholes: bool) -> usize {
+pub(super) fn count_trims(a: &Atelier, buttonholes: bool) -> usize {
     use fashioncraft::garment::trims::TrimKind;
     a.project
         .template
@@ -149,12 +158,12 @@ fn count_trims(a: &Atelier, buttonholes: bool) -> usize {
 }
 
 /// Arrangement point `id` on the avatar, once the points are shown.
-fn anchor(id: &'static str) -> Target {
+pub(super) fn anchor(id: &'static str) -> Target {
     Target::Find(Box::new(move |a: &Atelier| a.arrangement_point_screen(id)))
 }
 
 /// Open `menu`, go through `sub` (if any) and click the command `key`.
-fn menu(steps: &mut Vec<Step>, menu: &str, sub: Option<&str>, key: &str) {
+pub(super) fn menu(steps: &mut Vec<Step>, menu: &str, sub: Option<&str>, key: &str) {
     steps.push(click(&format!("menu:{menu}")));
     if let Some(sub) = sub {
         steps.push(Step::Hover(Target::widget(&format!("sub:{sub}"))));

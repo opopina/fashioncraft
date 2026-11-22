@@ -463,6 +463,16 @@ impl Atelier {
         );
     }
 
+    /// A turn is running (for the demo mode).
+    pub(super) fn assistant_busy(&self) -> bool {
+        self.assistant.worker.is_some()
+    }
+
+    /// How many entries the chat shows (for the demo mode).
+    pub(super) fn assistant_entries(&self) -> usize {
+        self.assistant.entries.len()
+    }
+
     pub(super) fn assistant_window(&mut self, ctx: &egui::Context) {
         // Development builds can send a first message on their own, for end-to-end tests
         // against a stand-in server.
@@ -658,7 +668,7 @@ impl Atelier {
                     .corner_radius(10.)
                     .inner_margin(egui::Margin::symmetric(10, 8))
                     .show(ui, |ui| {
-                        ui.add(
+                        let field = ui.add(
                             egui::TextEdit::multiline(&mut self.assistant.input)
                                 .id(input_id)
                                 .frame(egui::Frame::NONE)
@@ -666,6 +676,7 @@ impl Atelier {
                                 .desired_rows(2)
                                 .desired_width(f32::INFINITY),
                         );
+                        super::demo::mark(ui.ctx(), "assistant.input", field.rect);
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new(tr("Changes can be undone with Undo."))
@@ -694,6 +705,7 @@ impl Atelier {
                                             .stroke(egui::Stroke::NONE)
                                             .corner_radius(7.),
                                         );
+                                        super::demo::mark(ui.ctx(), "assistant.send", send.rect);
                                         if (send.clicked() || enter) && ready {
                                             self.assistant_send(ctx);
                                             ctx.memory_mut(|m| m.request_focus(input_id));

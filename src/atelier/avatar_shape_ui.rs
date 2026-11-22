@@ -581,31 +581,32 @@ impl Atelier {
                     .enumerate()
                     {
                         ui.label(i18n::tr(ui_lang, name));
-                        ui.add(
+                        let field = ui.add(
                             egui::DragValue::new(&mut state.values[k])
                                 .range(0.0..=250.0)
                                 .speed(0.5)
                                 .suffix(" cm"),
                         );
+                        super::demo::mark(ui.ctx(), format_args!("draft.trousers.{k}"), field.rect);
                         ui.end_row();
                     }
                 });
                 ui.horizontal(|ui| {
-                    if ui
+                    let button = ui
                         .button(i18n::tr(ui_lang, "From the avatar"))
                         .on_hover_text(i18n::tr(
                             ui_lang,
                             "Waist, hip, depths, rise, length and placement from the current avatar",
-                        ))
-                        .clicked()
-                    {
+                        ));
+                    super::demo::mark(ui.ctx(), "draft.trousers.from_avatar", button.rect);
+                    if button.clicked() {
                         from_avatar = true;
                     }
-                    if ui
+                    let button = ui
                         .button(i18n::tr(ui_lang, "Create"))
-                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with these trousers"))
-                        .clicked()
-                    {
+                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with these trousers"));
+                    super::demo::mark(ui.ctx(), "draft.trousers.create", button.rect);
+                    if button.clicked() {
                         create = true;
                     }
                 });

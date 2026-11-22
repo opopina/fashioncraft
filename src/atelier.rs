@@ -62,6 +62,8 @@ mod commands;
 mod demo;
 #[path = "atelier/demo_vest.rs"]
 mod demo_vest;
+#[path = "atelier/demo_outfit.rs"]
+mod demo_outfit;
 #[path = "atelier/documents_ui.rs"]
 mod documents_ui;
 #[path = "atelier/drafting_ui.rs"]

@@ -72,7 +72,9 @@ impl Atelier {
                  on the floor. 0 lets cloth slide freely",
             ));
             for (label, value) in [("None", 0.0), ("Cotton", DEFAULT_FRICTION), ("Grippy", 0.6)] {
-                if ui.small_button(label).clicked() {
+                let button = ui.small_button(label);
+                super::demo::mark(ui.ctx(), format_args!("friction.{label}"), button.rect);
+                if button.clicked() {
                     self.settings.friction = value;
                 }
             }

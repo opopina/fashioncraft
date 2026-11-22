@@ -6,7 +6,8 @@
 //!     FASHIONCRAFT_DEMO=vest [FASHIONCRAFT_DEMO_RECORD=1] [FASHIONCRAFT_DEMO_CLEAN=1] fashioncraft
 //!
 //! `FASHIONCRAFT_DEMO_CLEAN=1` leaves out the cursor, the click ripples and the captions, for
-//! stills and for footage that gets its own titles in an editor.
+//! stills and for footage that gets its own titles in an editor. `FASHIONCRAFT_DEMO_MAX_WIDTH`
+//! (pixels, default 1920) caps the recording's width.
 //!
 //! The pointer and keys of the computer are ignored while it runs (only F9, pause or resume,
 //! and Shift+Escape, stop, are read), so a stray mouse cannot change what it does. Every step is
@@ -837,6 +838,12 @@ fn start_recording(
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let path = out.join(format!("{name}-{stamp}.mp4"));
+    // Wider recordings keep detail for crops (a vertical video cut from a landscape window).
+    let max_width = std::env::var("FASHIONCRAFT_DEMO_MAX_WIDTH")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|w| (640..=7680).contains(w))
+        .unwrap_or(1920);
     let mut child = std::process::Command::new(ffmpeg)
         .args([
             "-y",
@@ -850,9 +857,11 @@ fn start_recording(
         ])
         .arg(format!("{}x{}", size[0], size[1]))
         .args(["-r", &FPS.to_string(), "-i", "-"])
+        .args(["-vf"])
+        .arg(format!(
+            "scale='min({max_width},iw)':-2:flags=lanczos,format=yuv420p"
+        ))
         .args([
-            "-vf",
-            "scale='min(1920,iw)':-2:flags=lanczos,format=yuv420p",
             "-c:v",
             "libx264",
             "-crf",

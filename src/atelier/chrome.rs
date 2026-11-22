@@ -307,6 +307,9 @@ impl Atelier {
                 if tab == InspectorTab::Fabric {
                     self.smoke_target("fabric_tab", button.rect.center());
                 }
+                if tab == InspectorTab::Simulation {
+                    super::demo::mark(ui.ctx(), "simulation_tab", button.rect);
+                }
             }
         });
         ui.separator();

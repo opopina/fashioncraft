@@ -15,6 +15,9 @@ Reports with a small example are very welcome.
 A vest made from scratch in 2 minutes 37 seconds: an avatar from the library, the back and front
 drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey, and buttons
 fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).
+Two more demos drive the same interface: `FASHIONCRAFT_DEMO=outfit` (trousers drafted from the
+avatar's measurements and an overshirt drawn by hand) and `FASHIONCRAFT_DEMO=cargo` (cargo trousers
+drawn piece by piece, with pockets, topstitching and denim).
 
 [![Watch the vest demo](docs/media/vest-demo-poster.jpg)](docs/media/vest-demo.mp4)
 
@@ -71,9 +74,12 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
   gender, age, build and twenty measurements, using MakeHuman's CC0 shapes with the settings of
   NAVER LABS Europe's Anny. Avatar import from OBJ, glTF, FBX, USD and Alembic; an avatar editor,
   tape and girth measures, an automatic skeleton, poses and BVH motion.
-- **Animation and export:** record takes; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD
-  point caches and OBJ sequences; capture video of the 3D view.
-- **Workspace:** English and Spanish, a command palette, Python scripting and project recovery.
+- **Animation and export:** record takes on the GPU or the CPU, with the cloth following a walking
+  body; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD point caches and OBJ sequences;
+  capture video of the 3D view.
+- **Workspace:** a dark desktop-studio interface: each view has a header and a tool band, display
+  menus and the current tool's controls float over the view, and property rows carry info tips.
+  English and Spanish, a command palette, Python scripting and project recovery.
 - **AI:** an Assistant chat (Window › Assistant) that drafts, dresses, simulates and checks
   garments for you with Claude, ChatGPT, Gemini or a local model, and an MCP server
   (`fashioncraft-cli mcp`) for Claude Desktop, Claude Code, Cursor and ArtCraft.
@@ -115,9 +121,11 @@ Grading, fold lines and drill holes are not carried yet. See [what goes in and o
 - **macOS:** the main platform, tested on Apple silicon.
 - **Linux:** being tested on Arch (Hyprland, NVIDIA).
 - **Windows:** tested on Windows 11 (x64): the installer and the full vest demo.
-- **Physics:** the GPU simulation is the fast path. Dense garments can still keep moving or snag on the
-  body (a sleeve on a spread thumb, for example), and the CPU path is slow on fine meshes. See
-  [the contact model](docs/ogc.md).
+- **Physics:** the GPU simulation is the fast path, for takes too: when the body moves, the GPU finds
+  contacts again within each step, so a walking leg no longer passes through the trousers. Dense
+  garments can still keep moving or snag on the body (a sleeve on a spread thumb, for example), a
+  little cloth can still sink into a bending knee in a walk, and the CPU path is slow on fine
+  meshes. See [the contact model](docs/ogc.md).
 
 ## Contributing
 

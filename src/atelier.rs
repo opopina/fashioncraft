@@ -64,6 +64,8 @@ mod demo;
 mod demo_vest;
 #[path = "atelier/demo_outfit.rs"]
 mod demo_outfit;
+#[path = "atelier/demo_cargo.rs"]
+mod demo_cargo;
 #[path = "atelier/documents_ui.rs"]
 mod documents_ui;
 #[path = "atelier/drafting_ui.rs"]
@@ -1784,10 +1786,12 @@ impl eframe::App for Atelier {
                             self.invoke_command(id, &ctx);
                         }
                     }
-                    // The command search sits in the middle of the room left between them.
+                    // The command search sits in the middle of the room left between them, and
+                    // only when there is room: in a narrow window it would cover the menus.
                     let search = ui.available_width().clamp(120., 340.);
                     ui.add_space(((ui.available_width() - search) / 2.).max(8.));
-                    if command_palette::launch_button(
+                    if ui.available_width() >= 128.
+                        && command_palette::launch_button(
                         ui,
                         can_open_palette,
                         i18n::tr(language, "Search commands"),

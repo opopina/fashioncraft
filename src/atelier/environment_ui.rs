@@ -60,13 +60,14 @@ impl Atelier {
             ));
         });
         prop_row(ui, i18n::tr(ui_lang, "Friction"), |ui| {
-            ui.add(
+            let field = ui.add(
                 egui::DragValue::new(&mut self.settings.friction)
                     .range(0.0..=1.5)
                     .speed(0.01)
                     .fixed_decimals(2),
-            )
-            .on_hover_text(i18n::tr(
+            );
+            super::demo::mark(ui.ctx(), "friction.value", field.rect);
+            field.on_hover_text(i18n::tr(
                 ui_lang,
                 "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and \
                  on the floor. 0 lets cloth slide freely",

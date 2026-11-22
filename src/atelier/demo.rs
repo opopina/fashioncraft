@@ -88,6 +88,8 @@ pub(super) enum Step {
     Click(Target),
     /// Move to the first target, press, move to the second while holding, release.
     Drag(Target, Target),
+    /// The same with the secondary button: in the 3D view, how a person turns the camera.
+    DragRight(Target, Target),
     /// Press a key.
     Key(egui::Key, egui::Modifiers),
     /// Type text into the focused field.
@@ -182,6 +184,8 @@ pub(super) struct Demo {
     /// Clicks shown as a fading ring: where and when.
     ripples: Vec<(egui::Pos2, f64)>,
     pressed: bool,
+    /// The button the next press uses (the secondary one during a DragRight).
+    drag_button: egui::PointerButton,
     /// Events for the next frame's input.
     events: Vec<egui::Event>,
     caption: Option<(String, f64)>,
@@ -221,6 +225,7 @@ impl Demo {
             cursor: egui::pos2(400., 300.),
             ripples: vec![],
             pressed: false,
+            drag_button: egui::PointerButton::Primary,
             events: vec![],
             caption: None,
             paused: false,
@@ -328,7 +333,7 @@ impl Demo {
         self.pressed = pressed;
         self.events.push(egui::Event::PointerButton {
             pos: self.cursor,
-            button: egui::PointerButton::Primary,
+            button: self.drag_button,
             pressed,
             modifiers: Default::default(),
         });
@@ -511,6 +516,7 @@ impl Atelier {
                         }
                         AfterGlide::Release => {
                             demo.button(false);
+                            demo.drag_button = egui::PointerButton::Primary;
                         }
                     }
                 }
@@ -615,10 +621,13 @@ impl Atelier {
                     }
                 }
             }
-            Step::Drag(a, b) => match (locate(self, ctx, a), locate(self, ctx, b)) {
+            Step::Drag(a, b) | Step::DragRight(a, b) => match (locate(self, ctx, a), locate(self, ctx, b)) {
                 (Some(from), Some(to)) => {
                     demo.seeking_since = None;
                     demo.note(&format!("· {label}"));
+                    if matches!(step, Step::DragRight(..)) {
+                        demo.drag_button = egui::PointerButton::Secondary;
+                    }
                     demo.phase = Some(Phase::Glide {
                         from: demo.cursor,
                         to: from,
@@ -823,6 +832,7 @@ fn describe(step: &Step) -> String {
         Step::Hover(t) => format!("hover {}", target(t)),
         Step::Click(t) => format!("click {}", target(t)),
         Step::Drag(a, b) => format!("drag {} → {}", target(a), target(b)),
+        Step::DragRight(a, b) => format!("right-drag {} → {}", target(a), target(b)),
         _ => String::new(),
     }
 }

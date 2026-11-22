@@ -7,7 +7,7 @@ use std::{cell::Cell, rc::Rc};
 
 /// The script called `name`, if there is one.
 /// The demos [`script`] knows.
-pub(super) const NAMES: &[&str] = &["vest", "outfit"];
+pub(super) const NAMES: &[&str] = &["vest", "outfit", "cargo"];
 
 /// Whether the 3D camera looks along preset `view`.
 pub(super) fn facing(a: &Atelier, view: PresetView) -> bool {
@@ -40,6 +40,7 @@ pub(super) fn script(name: &str) -> Option<Vec<Step>> {
     match name {
         "vest" => Some(vest()),
         "outfit" => Some(super::demo_outfit::outfit()),
+        "cargo" => Some(super::demo_cargo::cargo()),
         _ => None,
     }
 }

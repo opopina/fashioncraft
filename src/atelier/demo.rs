@@ -621,28 +621,30 @@ impl Atelier {
                     }
                 }
             }
-            Step::Drag(a, b) | Step::DragRight(a, b) => match (locate(self, ctx, a), locate(self, ctx, b)) {
-                (Some(from), Some(to)) => {
-                    demo.seeking_since = None;
-                    demo.note(&format!("· {label}"));
-                    if matches!(step, Step::DragRight(..)) {
-                        demo.drag_button = egui::PointerButton::Secondary;
+            Step::Drag(a, b) | Step::DragRight(a, b) => {
+                match (locate(self, ctx, a), locate(self, ctx, b)) {
+                    (Some(from), Some(to)) => {
+                        demo.seeking_since = None;
+                        demo.note(&format!("· {label}"));
+                        if matches!(step, Step::DragRight(..)) {
+                            demo.drag_button = egui::PointerButton::Secondary;
+                        }
+                        demo.phase = Some(Phase::Glide {
+                            from: demo.cursor,
+                            to: from,
+                            started: now,
+                            then: AfterGlide::PressThenGlide(to),
+                        });
                     }
-                    demo.phase = Some(Phase::Glide {
-                        from: demo.cursor,
-                        to: from,
-                        started: now,
-                        then: AfterGlide::PressThenGlide(to),
-                    });
-                }
-                _ => {
-                    if demo.retry(index, now) {
-                        demo.script[index] = step;
-                        return;
+                    _ => {
+                        if demo.retry(index, now) {
+                            demo.script[index] = step;
+                            return;
+                        }
+                        demo.fail(&label, "not on screen")
                     }
-                    demo.fail(&label, "not on screen")
                 }
-            },
+            }
             Step::Key(key, modifiers) => {
                 for pressed in [true, false] {
                     demo.events.push(egui::Event::Key {

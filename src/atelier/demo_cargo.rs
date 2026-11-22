@@ -15,6 +15,8 @@ use glam::DVec2;
 use std::{cell::Cell, rc::Rc};
 
 type Outline = [([f64; 2], Option<[f64; 2]>); 7];
+/// One end of a seam the demo clicks: the piece, its outline and the point near the edge.
+type SeamEnd = (usize, &'static Outline, [f64; 2]);
 
 /// One front leg, metres, y down from the waist: the crotch on the left, the side seam on the
 /// right, as the leg anchors lay a piece (its right goes to the outside of the leg on either
@@ -390,10 +392,7 @@ pub(super) fn cargo() -> Vec<Step> {
     // the centre and the crotch, and the two backs the same.
     let f = &FRONT;
     let b = &BACK;
-    let seams: Vec<(
-        (usize, &'static Outline, [f64; 2]),
-        (usize, &'static Outline, [f64; 2]),
-    )> = vec![
+    let seams: Vec<(SeamEnd, SeamEnd)> = vec![
         // Side, upper: waist corner (1) down to the hip (2).
         (
             (FRONT_RIGHT, &FRONT, along(corner(f, 1), corner(f, 2), 0.15)),

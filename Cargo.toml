@@ -1,6 +1,6 @@
 [package]
 name = "fashioncraft"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "3D garment design and cloth simulation: pattern editor, sewing and draping on an avatar"
 license = "MIT"

@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub(super) enum Language {
     #[default]
+    #[serde(alias = "English")]
     English,
+    #[serde(alias = "Spanish", alias = "español", alias = "Español")]
     Spanish,
 }
 

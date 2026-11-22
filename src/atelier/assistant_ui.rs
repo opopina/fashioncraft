@@ -470,8 +470,19 @@ impl Atelier {
             self.assistant.test_message_checked = true;
             if let Ok(text) = std::env::var("FASHIONCRAFT_ASSISTANT_SEND") {
                 self.assistant.open = true;
-                self.assistant.input = text;
-                self.assistant_send(ctx);
+                // A test message never reaches a provider on the internet: with a mistyped or
+                // unread preferences file the address would be the real API's.
+                let address = self.assistant_settings().base_url().to_owned();
+                if fashioncraft::assistant::is_local_address(&address) {
+                    self.assistant.input = text;
+                    self.assistant_send(ctx);
+                } else {
+                    self.assistant.entries.push(Entry::Problem(format!(
+                        "FASHIONCRAFT_ASSISTANT_SEND talks only to a server on this computer, \
+                         such as scripts/assistant-stand-in.py, and the address is {address}. \
+                         Nothing was sent."
+                    )));
+                }
             }
         }
         self.assistant_updates(ctx);

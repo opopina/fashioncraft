@@ -164,14 +164,38 @@ fn finite_or(value: f64, fallback: f64) -> f64 {
 }
 
 /// Read preferences from `path`. A missing, unreadable, truncated or corrupt
-/// file yields the defaults; no error is propagated and nothing panics.
+/// file yields the defaults; no error is propagated and nothing panics. A file
+/// with one bad value keeps every other section: only the section that does not
+/// read (for example an unknown language) falls back to its default.
 pub(super) fn load(path: &Path) -> Preferences {
     let Ok(text) = std::fs::read_to_string(path) else {
         return Preferences::default();
     };
-    let mut prefs: Preferences = serde_json::from_str(&text).unwrap_or_default();
+    let mut prefs = parse(&text);
     prefs.sanitize();
     prefs
+}
+
+fn parse(text: &str) -> Preferences {
+    if let Ok(prefs) = serde_json::from_str(text) {
+        return prefs;
+    }
+    let Ok(serde_json::Value::Object(read)) = serde_json::from_str::<serde_json::Value>(text)
+    else {
+        return Preferences::default();
+    };
+    let Ok(serde_json::Value::Object(mut kept)) = serde_json::to_value(Preferences::default())
+    else {
+        return Preferences::default();
+    };
+    for (key, value) in read {
+        let mut trial = kept.clone();
+        trial.insert(key.clone(), value.clone());
+        if serde_json::from_value::<Preferences>(serde_json::Value::Object(trial)).is_ok() {
+            kept.insert(key, value);
+        }
+    }
+    serde_json::from_value(serde_json::Value::Object(kept)).unwrap_or_default()
 }
 
 /// Write preferences to `path`, creating the parent directory when needed.
@@ -398,6 +422,20 @@ pub(super) fn apply(ctx: &egui::Context, prefs: &Preferences) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_bad_value_keeps_the_other_preferences() {
+        let prefs = super::parse(
+            r#"{"language": "Klingon", "ai": {"agents_allowed": true,
+                "base_url": "http://127.0.0.1:18765/v1"}}"#,
+        );
+        assert_eq!(prefs.language, super::super::i18n::Language::English);
+        assert!(prefs.ai.agents_allowed);
+        assert_eq!(prefs.ai.base_url, "http://127.0.0.1:18765/v1");
+        let spanish = super::parse(r#"{"language": "Spanish"}"#);
+        assert_eq!(spanish.language, super::super::i18n::Language::Spanish);
+        assert_eq!(super::parse("not json"), super::Preferences::default());
+    }
+
     use super::*;
 
     fn sample() -> Preferences {

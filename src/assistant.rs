@@ -550,6 +550,31 @@ pub fn openai_request(settings: &Settings, messages: &[Value]) -> Value {
     json!({"model": settings.model(), "messages": all, "tools": tools})
 }
 
+/// Whether `url` points at this computer (localhost, 127.x.x.x or ::1): a local model or the
+/// stand-in server, never a provider on the internet.
+pub fn is_local_address(url: &str) -> bool {
+    let rest = url
+        .trim()
+        .split_once("://")
+        .map_or(url.trim(), |(_, rest)| rest);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let authority = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = if let Some(bracketed) = authority.strip_prefix('[') {
+        bracketed.split(']').next().unwrap_or_default()
+    } else {
+        authority.split(':').next().unwrap_or_default()
+    };
+    let host = host.to_ascii_lowercase();
+    host == "localhost"
+        || host.ends_with(".localhost")
+        || host == "::1"
+        || host
+            .parse::<std::net::Ipv4Addr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
 /// A failed request, for the person: the provider's own message and what usually fixes it.
 pub fn describe_error(status: u16, body: &Value) -> String {
     // OpenAI and Anthropic answer {"error": {...}}; Gemini's compatible API, [{"error": ...}].
@@ -926,6 +951,33 @@ mod tests {
         };
         let (body, beta) = anthropic_request(&haiku, &[]);
         assert!(!beta && body.get("fallbacks").is_none() && body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn only_this_computer_counts_as_local() {
+        for local in [
+            "http://127.0.0.1:18765/v1",
+            "http://localhost:11434/v1",
+            "http://127.9.9.9/v1",
+            "http://[::1]:8080/v1",
+            "http://studio.localhost/v1",
+            "localhost:1234",
+        ] {
+            assert!(is_local_address(local), "{local}");
+        }
+        for remote in [
+            Provider::Anthropic.default_base_url(),
+            Provider::OpenAi.default_base_url(),
+            Provider::Gemini.default_base_url(),
+            "http://127.0.0.1.example.com/v1",
+            "http://localhost.example.com/v1",
+            "http://user@evil.example/v1",
+            "http://10.0.0.5:11434/v1",
+            "",
+        ] {
+            assert!(!is_local_address(remote), "{remote}");
+        }
+        assert!(is_local_address(Provider::Local.default_base_url()));
     }
 
     #[test]

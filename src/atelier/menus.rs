@@ -67,6 +67,7 @@ const FILE: &[Item] = &[
         &[
             Run("SVG patterns…", C::ImportSvg),
             Run("DXF patterns…", C::ImportDxf),
+            Run("DXF-AAMA / ASTM patterns…", C::ImportDxfAama),
             Run("OBJ…", C::ImportAvatar),
             Run("FBX…", C::ImportAvatar),
             Run("glTF…", C::ImportAvatar),
@@ -81,6 +82,7 @@ const FILE: &[Item] = &[
         "Export",
         &[
             Run("Session files (OBJ, patterns, previews)", C::ExportSession),
+            Run("DXF-AAMA / ASTM patterns…", C::ExportDxfAama),
             Run("OBJ…", C::ExportObj),
             Run("OBJ (selected)…", C::ExportObjSelected),
             Run("FBX…", C::ExportFbx),

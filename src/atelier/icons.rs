@@ -94,10 +94,222 @@ pub(super) enum Icon {
     Skeleton,
     /// A shirt drawn in outline: the technical view.
     Technical,
+    /// A push pin: pins that hold cloth in place.
+    Pin,
+    /// A four-hole button: buttons, buttonholes and other trims.
+    Button,
+    /// A free curve: freehand outlines.
+    Curve,
+    /// A pentagon: pieces drawn corner by corner.
+    Polygon,
+    /// A bin: delete.
+    Trash,
+    /// Two arrows pointing apart: give a view the whole window.
+    Expand,
+    /// An iron: steam that shrinks or stretches cloth.
+    Iron,
+    /// A snowflake: freeze pieces where they are.
+    Snowflake,
+    /// A zigzag: pleats.
+    Pleat,
+    /// Points around a centre: arrangement points.
+    Points,
+    /// A wave: puckering.
+    Wave,
+    /// A dashed line over a line: topstitches and tapes.
+    Stitch,
+    /// Two overlapping sheets: superimpose pieces.
+    Layers,
+    /// Scissors: cut a piece.
+    Scissors,
+    /// The corners of a frame: select part of the mesh.
+    SelectArea,
+    /// A window split down the middle: the 3D and 2D views side by side.
+    SplitView,
+    /// A pattern sheet: the 2D view alone.
+    Sheet,
+    /// A padlock: lock pieces or lines in 2D.
+    Lock,
+    /// A paintbrush: paint a selection onto the mesh.
+    Brush,
+    /// A lasso loop: select by drawing around.
+    Lasso,
+    /// A pin inside a selection frame: pin a boxed area.
+    PinBox,
+    /// A pin inside a lasso loop: pin a drawn area.
+    PinLasso,
+    /// A style line under the pointer: edit it.
+    StyleEdit,
+    /// A style line with a two-way arrow: slide it.
+    StyleMove,
+    /// A style line with a diagonal arrow: scale it.
+    StyleScale,
+    /// A style line ending in a pencil: draw a new one.
+    StyleDraw,
+    /// A pin driven into the body: pins follow the avatar.
+    PinAttach,
+    /// A pin lifted off the body.
+    PinDetach,
+    /// A sheet torn in two along a ragged edge.
+    Tear,
+    /// A ragged tear line with its points: edit a tear.
+    TearEdit,
+    /// The reset arrow around a sheet: reset the 2D arrangement.
+    ResetSheet,
+    /// The reset arrow around a dot: reset only the selection.
+    ResetSelected,
+    /// A sheet with a folded-back flap.
+    Fold,
+    /// Cloth dropping over a rounded body.
+    Drape,
+    /// Arrows closing in on a torso: fit to the body.
+    FitBody,
+    /// Two free curves joined by stitches.
+    SewFree,
+    /// Two segments on one side sewn to one on the other (M:N).
+    SewChain,
+    /// Two free curves sewn to one (M:N free).
+    SewChainFree,
+    /// A square split into four: a quad mesh.
+    Quads,
+    /// A square cut into triangles: a triangle mesh.
+    Triangles,
+    /// A fine grid with an up arrow: a denser mesh.
+    MeshFiner,
+    /// A coarse grid with a down arrow: a lighter mesh.
+    MeshCoarser,
+    /// An arrow coming down onto a sheet: lay it over.
+    LayerOver,
+    /// An arrow coming up under a sheet: tuck it under.
+    LayerUnder,
+    /// Two sheets side by side with an arrow between.
+    LayerSide,
+    /// A water drop: thaw (unfreeze).
+    Drop,
+    /// A shield: strengthen.
+    Shield,
+    /// A solid block seen from the front: solidify.
+    Block,
+    /// A pattern piece with its neck notch and grainline.
+    Piece,
+    /// A pattern piece struck through: deactivate.
+    PieceOff,
+    /// A pattern piece with a tick: activate.
+    PieceOn,
+    /// A pattern piece with its seam, struck through.
+    PieceSeamOff,
+    /// A tape measure following the body.
+    Tape,
+    /// A height dimension: caps and a vertical arrow.
+    Height,
+    /// A loop around a torso: body circumference.
+    Girth,
+    /// A loop with an arrow: garment circumference.
+    Loop,
+    /// A dimension line with end caps: a straight measure.
+    Dimension,
+    /// A rectangle with its width marked above: shape by size.
+    ShapeSize,
+    /// A figure with a raised arm: pose.
+    Pose,
+    /// A bust beside a slider: edit the avatar.
+    AvatarEdit,
+    /// Two busts: the avatar library.
+    AvatarLibrary,
+    /// A frame with its four handles: select all.
+    SelectAll,
+    /// A clipboard: paste.
+    Paste,
+    /// A line with a new point on it.
+    AddPoint,
+    /// A curve with a tangent handle: smooth a curve.
+    Smooth,
+    /// A line pushed out to a boundary.
+    Extend,
+    /// One line trimmed at a boundary, another extended to it.
+    Trim,
+    /// A square turning into a circle: replace the outline.
+    Replace,
+    /// A spiral.
+    Spiral,
+    /// A line inside a piece outline.
+    InternalLine,
+    /// A rectangle inside a piece outline.
+    InternalRect,
+    /// A circle inside a piece outline.
+    InternalCircle,
+    /// A diamond dart inside a piece outline.
+    InternalDart,
+    /// An outline being traced through its points.
+    Trace,
+    /// Two crossing guidelines.
+    Guide,
+    /// Two boxes lined up on one edge: smart guides.
+    Align,
+    /// An open padlock.
+    Unlock,
+    /// A piece slashed into a fan and spread.
+    Spread,
+    /// A pattern piece with a plus: duplicate it.
+    PiecePlus,
+    /// Stitches with a spark: sew automatically.
+    AutoSew,
+    /// A measured length with a tick: check lengths.
+    LengthCheck,
+    /// A band of tape laid along a seam.
+    TapeBand,
+    /// A roll of tape.
+    TapeRoll,
+    /// Topstitching on both sides of a seam.
+    StitchSeam,
+    /// Topstitching along a free curve.
+    StitchFree,
+    /// A cord laid along an edge.
+    Piping,
+    /// A buttonhole slot.
+    Buttonhole,
+    /// A button sewn on with a cross: fasten.
+    Fasten,
+    /// A zip with its teeth and pull.
+    Zipper,
+    /// A picture with corner handles: transform a graphic.
+    GraphicMove,
+    /// A swatch with woven waves: texture.
+    Texture,
+    /// One folded pleat.
+    PleatSingle,
+    /// Pleats held by a row of stitches.
+    PleatSew,
+    /// An eye: show only the selection.
+    Eye,
+    /// A name tag: piece names.
+    Tag,
+    /// Three overlapping circles: random colours.
+    Colours,
+    /// A block pulled apart by two arrows: stress.
+    Force,
+    /// Arrows pressing on a surface.
+    Pressure,
+    /// A ball over its soft shadow.
+    Shadow,
+    /// A floor plane in perspective.
+    Floor,
+    /// A sheet of paper with a turned corner.
+    Page,
+    /// A new sheet of paper.
+    PagePlus,
+    /// An L-shaped ruler: rulers.
+    RulerCorner,
+    /// A lightning bolt: quick actions.
+    Bolt,
+    /// A cut gem: high-quality view.
+    Gem,
+    /// A solid disc: plain colour.
+    Swatch,
 }
 
 #[cfg(test)]
-const ALL: [Icon; 45] = [
+const ALL: [Icon; 151] = [
     Icon::Select,
     Icon::Edit,
     Icon::Pen,
@@ -143,6 +355,112 @@ const ALL: [Icon; 45] = [
     Icon::Garment,
     Icon::Skeleton,
     Icon::Technical,
+    Icon::Pin,
+    Icon::Button,
+    Icon::Curve,
+    Icon::Polygon,
+    Icon::Trash,
+    Icon::Expand,
+    Icon::Iron,
+    Icon::Snowflake,
+    Icon::Pleat,
+    Icon::Points,
+    Icon::Wave,
+    Icon::Stitch,
+    Icon::Layers,
+    Icon::Scissors,
+    Icon::SelectArea,
+    Icon::SplitView,
+    Icon::Sheet,
+    Icon::Lock,
+    Icon::Brush,
+    Icon::Lasso,
+    Icon::PinBox,
+    Icon::PinLasso,
+    Icon::StyleEdit,
+    Icon::StyleMove,
+    Icon::StyleScale,
+    Icon::StyleDraw,
+    Icon::PinAttach,
+    Icon::PinDetach,
+    Icon::Tear,
+    Icon::TearEdit,
+    Icon::ResetSheet,
+    Icon::ResetSelected,
+    Icon::Fold,
+    Icon::Drape,
+    Icon::FitBody,
+    Icon::SewFree,
+    Icon::SewChain,
+    Icon::SewChainFree,
+    Icon::Quads,
+    Icon::Triangles,
+    Icon::MeshFiner,
+    Icon::MeshCoarser,
+    Icon::LayerOver,
+    Icon::LayerUnder,
+    Icon::LayerSide,
+    Icon::Drop,
+    Icon::Shield,
+    Icon::Block,
+    Icon::Piece,
+    Icon::PieceOff,
+    Icon::PieceOn,
+    Icon::PieceSeamOff,
+    Icon::Tape,
+    Icon::Height,
+    Icon::Girth,
+    Icon::Loop,
+    Icon::Dimension,
+    Icon::ShapeSize,
+    Icon::Pose,
+    Icon::AvatarEdit,
+    Icon::AvatarLibrary,
+    Icon::SelectAll,
+    Icon::Paste,
+    Icon::AddPoint,
+    Icon::Smooth,
+    Icon::Extend,
+    Icon::Trim,
+    Icon::Replace,
+    Icon::Spiral,
+    Icon::InternalLine,
+    Icon::InternalRect,
+    Icon::InternalCircle,
+    Icon::InternalDart,
+    Icon::Trace,
+    Icon::Guide,
+    Icon::Align,
+    Icon::Unlock,
+    Icon::Spread,
+    Icon::PiecePlus,
+    Icon::AutoSew,
+    Icon::LengthCheck,
+    Icon::TapeBand,
+    Icon::TapeRoll,
+    Icon::StitchSeam,
+    Icon::StitchFree,
+    Icon::Piping,
+    Icon::Buttonhole,
+    Icon::Fasten,
+    Icon::Zipper,
+    Icon::GraphicMove,
+    Icon::Texture,
+    Icon::PleatSingle,
+    Icon::PleatSew,
+    Icon::Eye,
+    Icon::Tag,
+    Icon::Colours,
+    Icon::Force,
+    Icon::Pressure,
+    Icon::Shadow,
+    Icon::Floor,
+    Icon::Page,
+    Icon::PagePlus,
+    Icon::RulerCorner,
+    Icon::Bolt,
+    Icon::Gem,
+    Icon::Swatch,
 ];
 
 // ---------------------------------------------------------------------------
@@ -192,6 +510,46 @@ fn arc(center: [f32; 2], radius: f32, start_deg: f32, end_deg: f32, segments: us
             center[1] + radius * angle.sin(),
         ]);
     }
+    Prim::Path { points }
+}
+
+/// Sample an elliptical arc. Angles are in degrees, `y` grows downward.
+fn ellipse(
+    center: [f32; 2],
+    radius_x: f32,
+    radius_y: f32,
+    start_deg: f32,
+    end_deg: f32,
+    segments: usize,
+) -> Prim {
+    let segments = segments.max(2);
+    let points = (0..=segments)
+        .map(|step| {
+            let t = step as f32 / segments as f32;
+            let angle = (start_deg + (end_deg - start_deg) * t).to_radians();
+            [
+                center[0] + radius_x * angle.cos(),
+                center[1] + radius_y * angle.sin(),
+            ]
+        })
+        .collect();
+    Prim::Path { points }
+}
+
+/// Sample an Archimedean spiral growing from `inner` to `outer` radius over `turns` turns.
+fn spiral(center: [f32; 2], inner: f32, outer: f32, turns: f32, segments: usize) -> Prim {
+    let segments = segments.max(2);
+    let points = (0..=segments)
+        .map(|step| {
+            let t = step as f32 / segments as f32;
+            let angle = t * turns * std::f32::consts::TAU;
+            let radius = inner + (outer - inner) * t;
+            [
+                center[0] + radius * angle.cos(),
+                center[1] + radius * angle.sin(),
+            ]
+        })
+        .collect();
     Prim::Path { points }
 }
 
@@ -592,6 +950,808 @@ pub(super) fn geometry(icon: Icon) -> Vec<Prim> {
             dot([0.50, 0.64], 0.025),
             dot([0.50, 0.76], 0.025),
         ],
+        Icon::Pin => vec![
+            closed(&[
+                [0.36, 0.12],
+                [0.64, 0.12],
+                [0.59, 0.38],
+                [0.72, 0.54],
+                [0.28, 0.54],
+                [0.41, 0.38],
+            ]),
+            seg([0.50, 0.54], [0.50, 0.90]),
+        ],
+        Icon::Button => vec![
+            circle([0.50, 0.50], 0.34),
+            dot([0.42, 0.42], 0.045),
+            dot([0.58, 0.42], 0.045),
+            dot([0.42, 0.58], 0.045),
+            dot([0.58, 0.58], 0.045),
+        ],
+        Icon::Curve => vec![cubic(
+            [0.12, 0.78],
+            [0.30, 0.08],
+            [0.70, 0.92],
+            [0.88, 0.22],
+            18,
+        )],
+        Icon::Iron => vec![
+            closed(&[[0.12, 0.70], [0.30, 0.38], [0.80, 0.38], [0.88, 0.70]]),
+            path(&[[0.42, 0.38], [0.46, 0.20], [0.78, 0.20], [0.78, 0.38]]),
+            dot([0.32, 0.84], 0.035),
+            dot([0.50, 0.84], 0.035),
+            dot([0.68, 0.84], 0.035),
+        ],
+        Icon::Snowflake => vec![
+            seg([0.50, 0.12], [0.50, 0.88]),
+            seg([0.17, 0.31], [0.83, 0.69]),
+            seg([0.17, 0.69], [0.83, 0.31]),
+        ],
+        Icon::Pleat => vec![
+            path(&[
+                [0.12, 0.28],
+                [0.30, 0.72],
+                [0.48, 0.28],
+                [0.66, 0.72],
+                [0.84, 0.28],
+            ]),
+            seg([0.12, 0.86], [0.88, 0.86]),
+        ],
+        Icon::Points => vec![
+            dot([0.24, 0.28], 0.06),
+            dot([0.76, 0.28], 0.06),
+            dot([0.24, 0.72], 0.06),
+            dot([0.76, 0.72], 0.06),
+            circle([0.50, 0.50], 0.10),
+        ],
+        Icon::Wave => vec![
+            cubic([0.10, 0.50], [0.30, 0.18], [0.40, 0.82], [0.50, 0.50], 10),
+            cubic([0.50, 0.50], [0.60, 0.18], [0.70, 0.82], [0.90, 0.50], 10),
+        ],
+        Icon::Stitch => vec![
+            seg([0.10, 0.36], [0.24, 0.36]),
+            seg([0.38, 0.36], [0.52, 0.36]),
+            seg([0.66, 0.36], [0.80, 0.36]),
+            seg([0.10, 0.66], [0.90, 0.66]),
+        ],
+        Icon::Layers => vec![
+            stroke_rect([0.14, 0.14], [0.62, 0.62]),
+            stroke_rect([0.38, 0.38], [0.86, 0.86]),
+        ],
+        Icon::Scissors => vec![
+            circle([0.28, 0.74], 0.11),
+            circle([0.72, 0.74], 0.11),
+            seg([0.35, 0.65], [0.76, 0.14]),
+            seg([0.65, 0.65], [0.24, 0.14]),
+        ],
+        Icon::SelectArea => vec![
+            path(&[[0.12, 0.34], [0.12, 0.12], [0.34, 0.12]]),
+            path(&[[0.66, 0.12], [0.88, 0.12], [0.88, 0.34]]),
+            path(&[[0.88, 0.66], [0.88, 0.88], [0.66, 0.88]]),
+            path(&[[0.34, 0.88], [0.12, 0.88], [0.12, 0.66]]),
+        ],
+        Icon::SplitView => vec![
+            stroke_rect([0.12, 0.20], [0.88, 0.80]),
+            seg([0.50, 0.20], [0.50, 0.80]),
+        ],
+        Icon::Brush => vec![
+            seg([0.86, 0.14], [0.58, 0.42]),
+            closed(&[[0.52, 0.38], [0.62, 0.48], [0.54, 0.56], [0.44, 0.46]]),
+            cubic([0.44, 0.46], [0.26, 0.50], [0.20, 0.70], [0.14, 0.86], 10),
+            cubic([0.14, 0.86], [0.32, 0.84], [0.50, 0.76], [0.54, 0.56], 10),
+        ],
+        Icon::Lasso => vec![
+            cubic([0.36, 0.64], [0.06, 0.58], [0.08, 0.14], [0.50, 0.14], 14),
+            cubic([0.50, 0.14], [0.94, 0.14], [0.94, 0.62], [0.36, 0.64], 14),
+            cubic([0.36, 0.64], [0.28, 0.72], [0.42, 0.80], [0.30, 0.92], 8),
+        ],
+        Icon::PinBox => vec![
+            path(&[[0.10, 0.28], [0.10, 0.10], [0.28, 0.10]]),
+            path(&[[0.72, 0.10], [0.90, 0.10], [0.90, 0.28]]),
+            path(&[[0.90, 0.72], [0.90, 0.90], [0.72, 0.90]]),
+            path(&[[0.28, 0.90], [0.10, 0.90], [0.10, 0.72]]),
+            closed(&[
+                [0.41, 0.24],
+                [0.59, 0.24],
+                [0.56, 0.40],
+                [0.65, 0.50],
+                [0.35, 0.50],
+                [0.44, 0.40],
+            ]),
+            seg([0.50, 0.50], [0.50, 0.76]),
+        ],
+        Icon::PinLasso => vec![
+            cubic([0.34, 0.84], [0.04, 0.72], [0.06, 0.10], [0.50, 0.10], 14),
+            cubic([0.50, 0.10], [0.96, 0.10], [0.96, 0.80], [0.46, 0.84], 14),
+            cubic([0.34, 0.84], [0.30, 0.90], [0.36, 0.94], [0.28, 0.96], 6),
+            closed(&[
+                [0.43, 0.26],
+                [0.57, 0.26],
+                [0.55, 0.40],
+                [0.63, 0.48],
+                [0.37, 0.48],
+                [0.45, 0.40],
+            ]),
+            seg([0.50, 0.48], [0.50, 0.68]),
+        ],
+        Icon::StyleEdit => vec![
+            cubic([0.10, 0.88], [0.18, 0.46], [0.40, 0.82], [0.56, 0.42], 18),
+            closed(&[
+                [0.58, 0.10],
+                [0.58, 0.52],
+                [0.68, 0.43],
+                [0.75, 0.58],
+                [0.81, 0.55],
+                [0.74, 0.41],
+                [0.88, 0.41],
+            ]),
+        ],
+        Icon::StyleMove => vec![
+            cubic([0.10, 0.88], [0.18, 0.46], [0.40, 0.82], [0.56, 0.42], 18),
+            seg([0.50, 0.16], [0.92, 0.16]),
+            arrow_head([0.48, 0.16], [-1.0, 0.0], 0.13, 35.0),
+            arrow_head([0.94, 0.16], [1.0, 0.0], 0.13, 35.0),
+        ],
+        Icon::StyleScale => vec![
+            cubic([0.10, 0.88], [0.18, 0.46], [0.40, 0.82], [0.56, 0.42], 18),
+            seg([0.66, 0.32], [0.90, 0.08]),
+            arrow_head([0.92, 0.06], [1.0, -1.0], 0.13, 35.0),
+            arrow_head([0.64, 0.34], [-1.0, 1.0], 0.13, 35.0),
+        ],
+        Icon::StyleDraw => vec![
+            cubic([0.10, 0.88], [0.18, 0.46], [0.40, 0.82], [0.56, 0.42], 18),
+            closed(&[
+                [0.56, 0.42],
+                [0.687, 0.377],
+                [0.927, 0.137],
+                [0.843, 0.053],
+                [0.603, 0.293],
+            ]),
+            seg([0.603, 0.293], [0.687, 0.377]),
+        ],
+        Icon::PinAttach => vec![
+            closed(&[
+                [0.36, 0.08],
+                [0.64, 0.08],
+                [0.59, 0.30],
+                [0.72, 0.44],
+                [0.28, 0.44],
+                [0.41, 0.30],
+            ]),
+            seg([0.50, 0.44], [0.50, 0.80]),
+            seg([0.10, 0.72], [0.90, 0.72]),
+        ],
+        Icon::PinDetach => vec![
+            closed(&[
+                [0.28, 0.06],
+                [0.52, 0.06],
+                [0.48, 0.24],
+                [0.58, 0.36],
+                [0.22, 0.36],
+                [0.32, 0.24],
+            ]),
+            seg([0.40, 0.36], [0.40, 0.58]),
+            seg([0.10, 0.80], [0.90, 0.80]),
+            seg([0.80, 0.62], [0.80, 0.30]),
+            arrow_head([0.80, 0.26], [0.0, -1.0], 0.13, 35.0),
+        ],
+        Icon::Tear => vec![
+            closed(&[
+                [0.08, 0.16],
+                [0.46, 0.16],
+                [0.38, 0.34],
+                [0.48, 0.52],
+                [0.38, 0.70],
+                [0.44, 0.86],
+                [0.08, 0.86],
+            ]),
+            closed(&[
+                [0.58, 0.16],
+                [0.92, 0.16],
+                [0.92, 0.86],
+                [0.56, 0.86],
+                [0.50, 0.70],
+                [0.60, 0.52],
+                [0.50, 0.34],
+            ]),
+        ],
+        Icon::TearEdit => vec![
+            path(&[
+                [0.50, 0.08],
+                [0.38, 0.30],
+                [0.58, 0.50],
+                [0.40, 0.70],
+                [0.52, 0.92],
+            ]),
+            dot([0.38, 0.30], 0.055),
+            dot([0.58, 0.50], 0.055),
+            dot([0.40, 0.70], 0.055),
+            seg([0.16, 0.10], [0.16, 0.90]),
+            seg([0.84, 0.10], [0.84, 0.90]),
+        ],
+        Icon::ResetSheet => vec![
+            arc([0.50, 0.50], 0.30, 20.0, 320.0, 26),
+            arrow_head([0.73, 0.31], [0.643, 0.766], 0.16, 30.0),
+            stroke_rect([0.38, 0.40], [0.62, 0.60]),
+        ],
+        Icon::ResetSelected => vec![
+            arc([0.50, 0.50], 0.30, 20.0, 320.0, 26),
+            arrow_head([0.73, 0.31], [0.643, 0.766], 0.16, 30.0),
+            dot([0.50, 0.50], 0.08),
+        ],
+        Icon::Fold => vec![
+            closed(&[[0.12, 0.18], [0.54, 0.18], [0.54, 0.82], [0.12, 0.82]]),
+            closed(&[[0.54, 0.18], [0.86, 0.32], [0.86, 0.94], [0.54, 0.82]]),
+        ],
+        Icon::Drape => vec![
+            arc([0.50, 0.66], 0.22, 180.0, 360.0, 16),
+            path(&[
+                [0.10, 0.90],
+                [0.16, 0.62],
+                [0.30, 0.40],
+                [0.50, 0.34],
+                [0.70, 0.40],
+                [0.84, 0.62],
+                [0.90, 0.90],
+            ]),
+            seg([0.50, 0.06], [0.50, 0.20]),
+            arrow_head([0.50, 0.24], [0.0, 1.0], 0.13, 35.0),
+        ],
+        Icon::FitBody => vec![
+            closed(&[[0.34, 0.14], [0.66, 0.14], [0.62, 0.86], [0.38, 0.86]]),
+            seg([0.04, 0.50], [0.24, 0.50]),
+            arrow_head([0.26, 0.50], [1.0, 0.0], 0.13, 35.0),
+            seg([0.96, 0.50], [0.76, 0.50]),
+            arrow_head([0.74, 0.50], [-1.0, 0.0], 0.13, 35.0),
+        ],
+        Icon::SewFree => vec![
+            cubic([0.24, 0.12], [0.10, 0.40], [0.38, 0.60], [0.22, 0.88], 14),
+            cubic([0.76, 0.12], [0.62, 0.40], [0.90, 0.60], [0.74, 0.88], 14),
+            seg([0.25, 0.34], [0.72, 0.40]),
+            seg([0.72, 0.62], [0.26, 0.68]),
+        ],
+        Icon::SewChain => vec![
+            seg([0.24, 0.10], [0.24, 0.44]),
+            seg([0.24, 0.56], [0.24, 0.90]),
+            seg([0.76, 0.10], [0.76, 0.90]),
+            seg([0.24, 0.27], [0.76, 0.36]),
+            seg([0.24, 0.73], [0.76, 0.64]),
+        ],
+        Icon::SewChainFree => vec![
+            cubic([0.24, 0.10], [0.14, 0.22], [0.32, 0.34], [0.22, 0.44], 8),
+            cubic([0.22, 0.56], [0.14, 0.66], [0.32, 0.78], [0.24, 0.90], 8),
+            cubic([0.76, 0.10], [0.64, 0.40], [0.90, 0.60], [0.76, 0.90], 14),
+            seg([0.26, 0.27], [0.72, 0.34]),
+            seg([0.26, 0.73], [0.74, 0.66]),
+        ],
+        Icon::Quads => vec![
+            stroke_rect([0.12, 0.12], [0.88, 0.88]),
+            seg([0.50, 0.12], [0.50, 0.88]),
+            seg([0.12, 0.50], [0.88, 0.50]),
+        ],
+        Icon::Triangles => vec![
+            stroke_rect([0.12, 0.12], [0.88, 0.88]),
+            seg([0.50, 0.12], [0.50, 0.88]),
+            seg([0.12, 0.50], [0.88, 0.50]),
+            seg([0.12, 0.50], [0.50, 0.12]),
+            seg([0.12, 0.88], [0.88, 0.12]),
+            seg([0.50, 0.88], [0.88, 0.50]),
+        ],
+        Icon::MeshFiner => vec![
+            stroke_rect([0.08, 0.30], [0.70, 0.92]),
+            seg([0.287, 0.30], [0.287, 0.92]),
+            seg([0.493, 0.30], [0.493, 0.92]),
+            seg([0.08, 0.507], [0.70, 0.507]),
+            seg([0.08, 0.713], [0.70, 0.713]),
+            seg([0.86, 0.42], [0.86, 0.10]),
+            arrow_head([0.86, 0.06], [0.0, -1.0], 0.13, 35.0),
+        ],
+        Icon::MeshCoarser => vec![
+            stroke_rect([0.08, 0.30], [0.70, 0.92]),
+            seg([0.39, 0.30], [0.39, 0.92]),
+            seg([0.08, 0.61], [0.70, 0.61]),
+            seg([0.86, 0.06], [0.86, 0.38]),
+            arrow_head([0.86, 0.42], [0.0, 1.0], 0.13, 35.0),
+        ],
+        Icon::LayerOver => vec![
+            stroke_rect([0.10, 0.58], [0.90, 0.90]),
+            seg([0.50, 0.08], [0.50, 0.42]),
+            arrow_head([0.50, 0.46], [0.0, 1.0], 0.13, 35.0),
+        ],
+        Icon::LayerUnder => vec![
+            stroke_rect([0.10, 0.10], [0.90, 0.42]),
+            seg([0.50, 0.92], [0.50, 0.58]),
+            arrow_head([0.50, 0.54], [0.0, -1.0], 0.13, 35.0),
+        ],
+        Icon::LayerSide => vec![
+            stroke_rect([0.06, 0.24], [0.40, 0.76]),
+            stroke_rect([0.60, 0.24], [0.94, 0.76]),
+            seg([0.44, 0.50], [0.54, 0.50]),
+            arrow_head([0.56, 0.50], [1.0, 0.0], 0.10, 35.0),
+        ],
+        Icon::Drop => vec![
+            arc([0.50, 0.62], 0.24, -30.0, 210.0, 18),
+            seg([0.708, 0.50], [0.50, 0.12]),
+            seg([0.292, 0.50], [0.50, 0.12]),
+        ],
+        Icon::Shield => vec![
+            closed(&[
+                [0.50, 0.08],
+                [0.84, 0.20],
+                [0.80, 0.56],
+                [0.50, 0.90],
+                [0.20, 0.56],
+                [0.16, 0.20],
+            ]),
+            seg([0.50, 0.08], [0.50, 0.90]),
+        ],
+        Icon::Block => vec![
+            stroke_rect([0.10, 0.10], [0.90, 0.90]),
+            stroke_rect([0.30, 0.30], [0.70, 0.70]),
+            seg([0.10, 0.10], [0.30, 0.30]),
+            seg([0.90, 0.10], [0.70, 0.30]),
+            seg([0.90, 0.90], [0.70, 0.70]),
+            seg([0.10, 0.90], [0.30, 0.70]),
+        ],
+        Icon::Piece => vec![
+            closed(&[
+                [0.18, 0.12],
+                [0.40, 0.12],
+                [0.50, 0.24],
+                [0.60, 0.12],
+                [0.82, 0.12],
+                [0.86, 0.88],
+                [0.14, 0.88],
+            ]),
+            seg([0.50, 0.40], [0.50, 0.76]),
+            arrow_head([0.50, 0.38], [0.0, -1.0], 0.10, 35.0),
+            arrow_head([0.50, 0.78], [0.0, 1.0], 0.10, 35.0),
+        ],
+        Icon::PieceOff => vec![
+            closed(&[
+                [0.18, 0.12],
+                [0.40, 0.12],
+                [0.50, 0.24],
+                [0.60, 0.12],
+                [0.82, 0.12],
+                [0.86, 0.88],
+                [0.14, 0.88],
+            ]),
+            seg([0.08, 0.94], [0.92, 0.06]),
+        ],
+        Icon::PieceOn => vec![
+            closed(&[
+                [0.18, 0.12],
+                [0.40, 0.12],
+                [0.50, 0.24],
+                [0.60, 0.12],
+                [0.82, 0.12],
+                [0.86, 0.88],
+                [0.14, 0.88],
+            ]),
+            path(&[[0.32, 0.54], [0.46, 0.68], [0.70, 0.40]]),
+        ],
+        Icon::PieceSeamOff => vec![
+            closed(&[
+                [0.18, 0.12],
+                [0.40, 0.12],
+                [0.50, 0.24],
+                [0.60, 0.12],
+                [0.82, 0.12],
+                [0.86, 0.88],
+                [0.14, 0.88],
+            ]),
+            seg([0.22, 0.76], [0.34, 0.76]),
+            seg([0.44, 0.76], [0.56, 0.76]),
+            seg([0.66, 0.76], [0.78, 0.76]),
+            seg([0.08, 0.94], [0.92, 0.06]),
+        ],
+        Icon::Tape => vec![
+            cubic([0.08, 0.72], [0.32, 0.18], [0.68, 0.18], [0.92, 0.72], 18),
+            seg([0.279, 0.416], [0.329, 0.502]),
+            seg([0.50, 0.315], [0.50, 0.415]),
+            seg([0.721, 0.416], [0.671, 0.502]),
+            dot([0.08, 0.72], 0.045),
+            dot([0.92, 0.72], 0.045),
+        ],
+        Icon::Height => vec![
+            seg([0.50, 0.16], [0.50, 0.84]),
+            seg([0.30, 0.08], [0.70, 0.08]),
+            seg([0.30, 0.92], [0.70, 0.92]),
+            arrow_head([0.50, 0.12], [0.0, -1.0], 0.13, 35.0),
+            arrow_head([0.50, 0.88], [0.0, 1.0], 0.13, 35.0),
+        ],
+        Icon::Girth => vec![
+            seg([0.26, 0.08], [0.26, 0.92]),
+            seg([0.74, 0.08], [0.74, 0.92]),
+            ellipse([0.50, 0.50], 0.40, 0.14, 0.0, 360.0, 28),
+        ],
+        Icon::Loop => vec![
+            ellipse([0.50, 0.50], 0.40, 0.22, 0.0, 360.0, 28),
+            arrow_head([0.62, 0.712], [1.0, -0.15], 0.13, 35.0),
+        ],
+        Icon::Dimension => vec![
+            seg([0.18, 0.82], [0.82, 0.18]),
+            seg([0.06, 0.74], [0.26, 0.94]),
+            seg([0.74, 0.06], [0.94, 0.26]),
+            arrow_head([0.16, 0.84], [-1.0, 1.0], 0.13, 35.0),
+            arrow_head([0.84, 0.16], [1.0, -1.0], 0.13, 35.0),
+        ],
+        Icon::ShapeSize => vec![
+            stroke_rect([0.14, 0.40], [0.86, 0.88]),
+            seg([0.14, 0.18], [0.86, 0.18]),
+            seg([0.14, 0.10], [0.14, 0.26]),
+            seg([0.86, 0.10], [0.86, 0.26]),
+        ],
+        Icon::Pose => vec![
+            circle([0.52, 0.14], 0.09),
+            seg([0.50, 0.25], [0.46, 0.58]),
+            path(&[[0.30, 0.92], [0.46, 0.58], [0.62, 0.92]]),
+            path(&[
+                [0.18, 0.10],
+                [0.30, 0.34],
+                [0.48, 0.34],
+                [0.70, 0.44],
+                [0.84, 0.30],
+            ]),
+        ],
+        Icon::AvatarEdit => vec![
+            circle([0.38, 0.30], 0.14),
+            arc([0.38, 0.90], 0.30, 180.0, 360.0, 16),
+            seg([0.84, 0.10], [0.84, 0.90]),
+            circle([0.84, 0.40], 0.07),
+        ],
+        Icon::AvatarLibrary => vec![
+            circle([0.66, 0.26], 0.11),
+            arc([0.66, 0.70], 0.22, 215.0, 360.0, 12),
+            circle([0.40, 0.36], 0.13),
+            arc([0.40, 0.92], 0.28, 180.0, 360.0, 14),
+        ],
+        Icon::SelectAll => vec![
+            stroke_rect([0.18, 0.18], [0.82, 0.82]),
+            dot([0.18, 0.18], 0.06),
+            dot([0.82, 0.18], 0.06),
+            dot([0.82, 0.82], 0.06),
+            dot([0.18, 0.82], 0.06),
+        ],
+        Icon::Paste => vec![
+            stroke_rect([0.18, 0.16], [0.82, 0.92]),
+            stroke_rect([0.36, 0.08], [0.64, 0.24]),
+            seg([0.32, 0.46], [0.68, 0.46]),
+            seg([0.32, 0.64], [0.60, 0.64]),
+        ],
+        Icon::AddPoint => vec![
+            seg([0.10, 0.82], [0.90, 0.30]),
+            dot([0.50, 0.56], 0.07),
+            seg([0.24, 0.08], [0.24, 0.36]),
+            seg([0.10, 0.22], [0.38, 0.22]),
+        ],
+        Icon::Smooth => vec![
+            cubic([0.10, 0.80], [0.30, 0.20], [0.70, 0.90], [0.90, 0.30], 18),
+            seg([0.24, 0.507], [0.76, 0.593]),
+            dot([0.24, 0.507], 0.04),
+            dot([0.76, 0.593], 0.04),
+            dot([0.50, 0.55], 0.055),
+        ],
+        Icon::Extend => vec![
+            seg([0.08, 0.50], [0.74, 0.50]),
+            arrow_head([0.76, 0.50], [1.0, 0.0], 0.13, 35.0),
+            seg([0.88, 0.14], [0.88, 0.86]),
+        ],
+        Icon::Trim => vec![
+            seg([0.62, 0.10], [0.62, 0.90]),
+            seg([0.10, 0.36], [0.62, 0.36]),
+            seg([0.74, 0.36], [0.90, 0.36]),
+            seg([0.10, 0.68], [0.50, 0.68]),
+            arrow_head([0.58, 0.68], [1.0, 0.0], 0.10, 35.0),
+        ],
+        Icon::Replace => vec![
+            stroke_rect([0.06, 0.30], [0.38, 0.62]),
+            circle([0.74, 0.46], 0.18),
+            seg([0.44, 0.46], [0.52, 0.46]),
+            arrow_head([0.54, 0.46], [1.0, 0.0], 0.10, 35.0),
+        ],
+        Icon::Spiral => vec![spiral([0.50, 0.50], 0.04, 0.38, 2.25, 54)],
+        Icon::InternalLine => vec![
+            stroke_rect([0.08, 0.08], [0.92, 0.92]),
+            seg([0.28, 0.70], [0.72, 0.30]),
+            dot([0.28, 0.70], 0.05),
+            dot([0.72, 0.30], 0.05),
+        ],
+        Icon::InternalRect => vec![
+            stroke_rect([0.08, 0.08], [0.92, 0.92]),
+            stroke_rect([0.30, 0.34], [0.70, 0.66]),
+        ],
+        Icon::InternalCircle => vec![
+            stroke_rect([0.08, 0.08], [0.92, 0.92]),
+            circle([0.50, 0.50], 0.20),
+        ],
+        Icon::InternalDart => vec![
+            stroke_rect([0.08, 0.08], [0.92, 0.92]),
+            closed(&[[0.50, 0.22], [0.62, 0.50], [0.50, 0.78], [0.38, 0.50]]),
+        ],
+        Icon::Trace => vec![
+            path(&[[0.14, 0.40], [0.50, 0.14], [0.86, 0.40]]),
+            dot([0.50, 0.14], 0.05),
+            dot([0.86, 0.40], 0.05),
+            dot([0.72, 0.84], 0.05),
+            dot([0.28, 0.84], 0.05),
+            dot([0.14, 0.40], 0.05),
+        ],
+        Icon::Guide => vec![
+            seg([0.06, 0.36], [0.94, 0.36]),
+            seg([0.64, 0.06], [0.64, 0.94]),
+            dot([0.64, 0.36], 0.06),
+        ],
+        Icon::Align => vec![
+            seg([0.06, 0.36], [0.94, 0.36]),
+            stroke_rect([0.14, 0.36], [0.42, 0.66]),
+            stroke_rect([0.58, 0.36], [0.86, 0.84]),
+        ],
+        Icon::Unlock => vec![
+            stroke_rect([0.24, 0.46], [0.76, 0.86]),
+            arc([0.50, 0.24], 0.15, 180.0, 360.0, 12),
+            seg([0.65, 0.24], [0.65, 0.46]),
+            seg([0.35, 0.24], [0.35, 0.32]),
+            dot([0.50, 0.65], 0.045),
+        ],
+        Icon::Spread => vec![
+            arc([0.50, 0.88], 0.72, 240.0, 300.0, 12),
+            seg([0.50, 0.88], [0.14, 0.256]),
+            seg([0.50, 0.88], [0.86, 0.256]),
+            seg([0.50, 0.88], [0.40, 0.167]),
+            seg([0.50, 0.88], [0.60, 0.167]),
+        ],
+        Icon::PiecePlus => vec![
+            closed(&[
+                [0.10, 0.10],
+                [0.28, 0.10],
+                [0.36, 0.18],
+                [0.44, 0.10],
+                [0.62, 0.10],
+                [0.66, 0.70],
+                [0.06, 0.70],
+            ]),
+            seg([0.80, 0.62], [0.80, 0.94]),
+            seg([0.64, 0.78], [0.96, 0.78]),
+        ],
+        Icon::AutoSew => vec![
+            seg([0.14, 0.14], [0.14, 0.86]),
+            seg([0.54, 0.14], [0.54, 0.86]),
+            seg([0.14, 0.30], [0.54, 0.42]),
+            seg([0.54, 0.50], [0.14, 0.62]),
+            seg([0.14, 0.70], [0.54, 0.80]),
+            seg([0.80, 0.08], [0.80, 0.40]),
+            seg([0.64, 0.24], [0.96, 0.24]),
+        ],
+        Icon::LengthCheck => vec![
+            seg([0.10, 0.28], [0.90, 0.28]),
+            seg([0.10, 0.16], [0.10, 0.40]),
+            seg([0.90, 0.16], [0.90, 0.40]),
+            path(&[[0.30, 0.64], [0.46, 0.80], [0.74, 0.50]]),
+        ],
+        Icon::TapeBand => vec![
+            stroke_rect([0.08, 0.34], [0.92, 0.66]),
+            seg([0.16, 0.50], [0.30, 0.50]),
+            seg([0.43, 0.50], [0.57, 0.50]),
+            seg([0.70, 0.50], [0.84, 0.50]),
+        ],
+        Icon::TapeRoll => vec![
+            circle([0.42, 0.42], 0.30),
+            circle([0.42, 0.42], 0.11),
+            seg([0.42, 0.72], [0.94, 0.72]),
+        ],
+        Icon::StitchSeam => vec![
+            seg([0.08, 0.50], [0.92, 0.50]),
+            seg([0.10, 0.28], [0.24, 0.28]),
+            seg([0.43, 0.28], [0.57, 0.28]),
+            seg([0.76, 0.28], [0.90, 0.28]),
+            seg([0.10, 0.72], [0.24, 0.72]),
+            seg([0.43, 0.72], [0.57, 0.72]),
+            seg([0.76, 0.72], [0.90, 0.72]),
+        ],
+        Icon::StitchFree => vec![
+            arc([0.50, 0.95], 0.60, 222.0, 238.0, 4),
+            arc([0.50, 0.95], 0.60, 248.0, 264.0, 4),
+            arc([0.50, 0.95], 0.60, 276.0, 292.0, 4),
+            arc([0.50, 0.95], 0.60, 302.0, 318.0, 4),
+            seg([0.10, 0.80], [0.90, 0.80]),
+        ],
+        Icon::Piping => vec![
+            seg([0.08, 0.36], [0.62, 0.36]),
+            seg([0.08, 0.64], [0.62, 0.64]),
+            circle([0.76, 0.50], 0.15),
+        ],
+        Icon::Buttonhole => vec![
+            arc([0.30, 0.50], 0.12, 90.0, 270.0, 8),
+            arc([0.70, 0.50], 0.12, -90.0, 90.0, 8),
+            seg([0.30, 0.38], [0.70, 0.38]),
+            seg([0.30, 0.62], [0.70, 0.62]),
+            seg([0.14, 0.30], [0.14, 0.70]),
+            seg([0.86, 0.30], [0.86, 0.70]),
+        ],
+        Icon::Fasten => vec![
+            circle([0.50, 0.50], 0.32),
+            seg([0.40, 0.40], [0.60, 0.60]),
+            seg([0.60, 0.40], [0.40, 0.60]),
+        ],
+        Icon::Zipper => vec![
+            seg([0.50, 0.06], [0.50, 0.66]),
+            seg([0.36, 0.14], [0.50, 0.14]),
+            seg([0.50, 0.26], [0.64, 0.26]),
+            seg([0.36, 0.38], [0.50, 0.38]),
+            seg([0.50, 0.50], [0.64, 0.50]),
+            stroke_rect([0.40, 0.66], [0.60, 0.92]),
+        ],
+        Icon::GraphicMove => vec![
+            stroke_rect([0.16, 0.16], [0.84, 0.84]),
+            dot([0.16, 0.16], 0.055),
+            dot([0.84, 0.16], 0.055),
+            dot([0.84, 0.84], 0.055),
+            dot([0.16, 0.84], 0.055),
+            path(&[
+                [0.28, 0.70],
+                [0.44, 0.46],
+                [0.56, 0.60],
+                [0.64, 0.52],
+                [0.74, 0.70],
+            ]),
+        ],
+        Icon::Texture => vec![
+            stroke_rect([0.12, 0.12], [0.88, 0.88]),
+            cubic([0.12, 0.38], [0.37, 0.22], [0.63, 0.52], [0.88, 0.38], 14),
+            cubic([0.12, 0.64], [0.37, 0.48], [0.63, 0.78], [0.88, 0.64], 14),
+        ],
+        Icon::PleatSingle => vec![path(&[
+            [0.08, 0.30],
+            [0.64, 0.30],
+            [0.36, 0.70],
+            [0.92, 0.70],
+        ])],
+        Icon::PleatSew => vec![
+            path(&[
+                [0.08, 0.16],
+                [0.29, 0.56],
+                [0.50, 0.16],
+                [0.71, 0.56],
+                [0.92, 0.16],
+            ]),
+            seg([0.10, 0.80], [0.26, 0.80]),
+            seg([0.42, 0.80], [0.58, 0.80]),
+            seg([0.74, 0.80], [0.90, 0.80]),
+        ],
+        Icon::Eye => vec![
+            cubic([0.06, 0.50], [0.30, 0.16], [0.70, 0.16], [0.94, 0.50], 16),
+            cubic([0.94, 0.50], [0.70, 0.84], [0.30, 0.84], [0.06, 0.50], 16),
+            circle([0.50, 0.50], 0.13),
+        ],
+        Icon::Tag => vec![
+            closed(&[
+                [0.08, 0.30],
+                [0.62, 0.30],
+                [0.92, 0.50],
+                [0.62, 0.70],
+                [0.08, 0.70],
+            ]),
+            dot([0.68, 0.50], 0.045),
+            seg([0.18, 0.50], [0.48, 0.50]),
+        ],
+        Icon::Colours => vec![
+            circle([0.37, 0.38], 0.22),
+            circle([0.63, 0.38], 0.22),
+            circle([0.50, 0.62], 0.22),
+        ],
+        Icon::Force => vec![
+            stroke_rect([0.38, 0.32], [0.62, 0.68]),
+            seg([0.10, 0.50], [0.32, 0.50]),
+            arrow_head([0.08, 0.50], [-1.0, 0.0], 0.13, 35.0),
+            seg([0.68, 0.50], [0.90, 0.50]),
+            arrow_head([0.92, 0.50], [1.0, 0.0], 0.13, 35.0),
+        ],
+        Icon::Pressure => vec![
+            seg([0.30, 0.10], [0.30, 0.44]),
+            arrow_head([0.30, 0.48], [0.0, 1.0], 0.13, 35.0),
+            seg([0.70, 0.10], [0.70, 0.44]),
+            arrow_head([0.70, 0.48], [0.0, 1.0], 0.13, 35.0),
+            cubic([0.06, 0.66], [0.36, 0.54], [0.64, 0.54], [0.94, 0.66], 14),
+        ],
+        Icon::Shadow => vec![
+            circle([0.50, 0.38], 0.24),
+            ellipse([0.50, 0.82], 0.32, 0.08, 0.0, 360.0, 24),
+        ],
+        Icon::Floor => vec![
+            closed(&[[0.22, 0.36], [0.78, 0.36], [0.94, 0.80], [0.06, 0.80]]),
+            seg([0.50, 0.36], [0.50, 0.80]),
+            seg([0.14, 0.58], [0.86, 0.58]),
+        ],
+        Icon::Page => vec![
+            closed(&[
+                [0.20, 0.08],
+                [0.62, 0.08],
+                [0.82, 0.28],
+                [0.82, 0.92],
+                [0.20, 0.92],
+            ]),
+            path(&[[0.62, 0.08], [0.62, 0.28], [0.82, 0.28]]),
+        ],
+        Icon::PagePlus => vec![
+            closed(&[
+                [0.14, 0.06],
+                [0.48, 0.06],
+                [0.64, 0.22],
+                [0.64, 0.74],
+                [0.14, 0.74],
+            ]),
+            path(&[[0.48, 0.06], [0.48, 0.22], [0.64, 0.22]]),
+            seg([0.80, 0.62], [0.80, 0.94]),
+            seg([0.64, 0.78], [0.96, 0.78]),
+        ],
+        Icon::RulerCorner => vec![
+            closed(&[
+                [0.10, 0.10],
+                [0.90, 0.10],
+                [0.90, 0.30],
+                [0.30, 0.30],
+                [0.30, 0.90],
+                [0.10, 0.90],
+            ]),
+            seg([0.46, 0.10], [0.46, 0.20]),
+            seg([0.68, 0.10], [0.68, 0.20]),
+            seg([0.10, 0.46], [0.20, 0.46]),
+            seg([0.10, 0.68], [0.20, 0.68]),
+        ],
+        Icon::Bolt => vec![closed(&[
+            [0.58, 0.06],
+            [0.22, 0.56],
+            [0.48, 0.56],
+            [0.40, 0.94],
+            [0.78, 0.42],
+            [0.53, 0.42],
+            [0.66, 0.06],
+        ])],
+        Icon::Gem => vec![
+            closed(&[
+                [0.20, 0.36],
+                [0.34, 0.16],
+                [0.66, 0.16],
+                [0.80, 0.36],
+                [0.50, 0.86],
+            ]),
+            seg([0.20, 0.36], [0.80, 0.36]),
+            path(&[[0.40, 0.16], [0.36, 0.36], [0.50, 0.86]]),
+            path(&[[0.60, 0.16], [0.64, 0.36], [0.50, 0.86]]),
+        ],
+        Icon::Swatch => vec![dot([0.50, 0.50], 0.30)],
+        Icon::Lock => vec![
+            stroke_rect([0.24, 0.46], [0.76, 0.86]),
+            arc([0.50, 0.32], 0.15, 180.0, 360.0, 12),
+            seg([0.35, 0.32], [0.35, 0.46]),
+            seg([0.65, 0.32], [0.65, 0.46]),
+            dot([0.50, 0.65], 0.045),
+        ],
+        Icon::Sheet => vec![
+            stroke_rect([0.12, 0.20], [0.88, 0.80]),
+            seg([0.12, 0.40], [0.88, 0.40]),
+            seg([0.34, 0.20], [0.34, 0.80]),
+        ],
+        Icon::Expand => vec![
+            path(&[[0.58, 0.16], [0.84, 0.16], [0.84, 0.42]]),
+            seg([0.84, 0.16], [0.58, 0.42]),
+            path(&[[0.42, 0.84], [0.16, 0.84], [0.16, 0.58]]),
+            seg([0.16, 0.84], [0.42, 0.58]),
+        ],
+        Icon::Trash => vec![
+            seg([0.18, 0.27], [0.82, 0.27]),
+            path(&[[0.40, 0.27], [0.42, 0.15], [0.58, 0.15], [0.60, 0.27]]),
+            path(&[[0.27, 0.27], [0.32, 0.86], [0.68, 0.86], [0.73, 0.27]]),
+        ],
+        Icon::Polygon => vec![closed(&[
+            [0.50, 0.14],
+            [0.86, 0.40],
+            [0.72, 0.84],
+            [0.28, 0.84],
+            [0.14, 0.40],
+        ])],
     }
 }
 
@@ -673,9 +1833,11 @@ pub(super) fn glyph(
 }
 
 /// Background and icon colours for one button state.
+/// The tool in use is tinted with the accent and drawn in it, not filled solid: a row of
+/// solid accent squares shouted over the work.
 fn button_fill(visuals: &egui::Visuals, active: bool, hovered: bool) -> Color32 {
     if active {
-        visuals.selection.bg_fill
+        super::workspace::accent(visuals).gamma_multiply(if hovered { 0.30 } else { 0.20 })
     } else if hovered {
         visuals.widgets.hovered.bg_fill
     } else {
@@ -685,7 +1847,7 @@ fn button_fill(visuals: &egui::Visuals, active: bool, hovered: bool) -> Color32 
 
 fn button_ink(visuals: &egui::Visuals, active: bool) -> Color32 {
     if active {
-        visuals.selection.stroke.color
+        super::workspace::accent(visuals)
     } else {
         visuals.text_color()
     }
@@ -795,6 +1957,207 @@ pub(super) fn icon_only(
     with_tip(response, tip)
 }
 
+/// A square icon button standing for a group of tools, with a small triangle in its corner as
+/// desktop design tools draw it. The second value is true when the group's list should open: a
+/// click on the triangle or a secondary click. A plain click runs the tool shown.
+pub(super) fn flyout_button(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    size: f32,
+    active: bool,
+    tip: &str,
+) -> (Response, bool) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::click());
+    let corner = size * 0.38;
+    let on_corner = response.clicked()
+        && response
+            .interact_pointer_pos()
+            .is_some_and(|p| p.x >= rect.right() - corner && p.y >= rect.bottom() - corner);
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        let fill = button_fill(visuals, active, response.hovered());
+        if fill != Color32::TRANSPARENT {
+            ui.painter().rect_filled(rect, CornerRadius::same(3), fill);
+        }
+        let ink = button_ink(visuals, active);
+        glyph(ui.painter(), rect.shrink(size * 0.2), icon, ink, 1.5);
+        let tip_point = rect.right_bottom() - Vec2::splat(3.);
+        ui.painter().add(Shape::convex_polygon(
+            vec![
+                tip_point,
+                tip_point - Vec2::new(0., 4.),
+                tip_point - Vec2::new(4., 0.),
+            ],
+            ink.gamma_multiply(0.75),
+            Stroke::NONE,
+        ));
+    }
+    let open = on_corner || response.secondary_clicked();
+    (with_tip(response, tip), open)
+}
+
+/// The width a [`menu_row`] needs for `label` and `keys`.
+pub(super) fn menu_row_width(ui: &egui::Ui, label: &str, keys: &str) -> f32 {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let measure = |text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE)
+            .size()
+            .x
+    };
+    36. + measure(label) + 28. + measure(keys) + 10.
+}
+
+/// One row of a tool group's list: its icon, its name and its keys, highlighted when it is the
+/// tool in use. Returns the click response.
+pub(super) fn menu_row(
+    ui: &mut egui::Ui,
+    icon: Option<Icon>,
+    label: &str,
+    keys: &str,
+    checked: bool,
+) -> Response {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let visuals = ui.visuals();
+    let ink = if ui.is_enabled() {
+        visuals.text_color()
+    } else {
+        visuals.weak_text_color()
+    };
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font.clone(), ink);
+    let keys = ui
+        .painter()
+        .layout_no_wrap(keys.to_owned(), font, visuals.weak_text_color());
+    let height = 26.0;
+    let width = menu_row_width(ui, label, keys.text()).max(ui.available_width());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        // The row in use is only tinted, its icon (or a check) in the accent colour: a filled
+        // bar per choice made the list loud.
+        let accent = super::workspace::accent(visuals);
+        let fill = if response.hovered() {
+            visuals.widgets.hovered.bg_fill
+        } else if checked {
+            accent.gamma_multiply(0.14)
+        } else {
+            Color32::TRANSPARENT
+        };
+        if fill != Color32::TRANSPARENT {
+            ui.painter().rect_filled(rect, CornerRadius::same(3), fill);
+        }
+        let icon_rect = Rect::from_center_size(
+            egui::pos2(rect.left() + 8. + 9., rect.center().y),
+            Vec2::splat(16.),
+        );
+        match icon {
+            Some(icon) => glyph(
+                ui.painter(),
+                icon_rect,
+                icon,
+                if checked { accent } else { ink },
+                1.5,
+            ),
+            None if checked => {
+                let mark = icon_rect.shrink(3.);
+                let at = |x: f32, y: f32| mark.min + Vec2::new(x * mark.width(), y * mark.height());
+                ui.painter().add(Shape::line(
+                    vec![at(0.08, 0.55), at(0.38, 0.84), at(0.92, 0.18)],
+                    Stroke::new(1.6, accent),
+                ));
+            }
+            None => {}
+        }
+        ui.painter().galley(
+            egui::pos2(rect.left() + 36., rect.center().y - galley.size().y * 0.5),
+            galley,
+            ink,
+        );
+        let keys_size = keys.size();
+        ui.painter().galley(
+            egui::pos2(
+                rect.right() - 10. - keys_size.x,
+                rect.center().y - keys_size.y * 0.5,
+            ),
+            keys,
+            ink,
+        );
+    }
+    response
+}
+
+/// One row of a display menu: a check in FashionCraft's colour when on, the item's icon, its
+/// name and its keys, as desktop 3D tools list what a view shows.
+pub(super) fn check_row(
+    ui: &mut egui::Ui,
+    checked: bool,
+    icon: Icon,
+    label: &str,
+    keys: &str,
+) -> Response {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let visuals = ui.visuals();
+    let ink = if ui.is_enabled() {
+        visuals.text_color()
+    } else {
+        visuals.weak_text_color()
+    };
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font.clone(), ink);
+    let keys = ui
+        .painter()
+        .layout_no_wrap(keys.to_owned(), font, visuals.weak_text_color());
+    let width = (64. + galley.size().x + 28. + keys.size().x + 10.).max(ui.available_width());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 28.), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(3), visuals.widgets.hovered.bg_fill);
+        }
+        let accent = super::workspace::accent(visuals);
+        if checked {
+            let mark = Rect::from_center_size(
+                egui::pos2(rect.left() + 14., rect.center().y),
+                Vec2::splat(11.),
+            );
+            let at = |x: f32, y: f32| mark.min + Vec2::new(x * mark.width(), y * mark.height());
+            ui.painter().add(Shape::line(
+                vec![at(0.05, 0.55), at(0.38, 0.86), at(0.95, 0.15)],
+                Stroke::new(1.8, accent),
+            ));
+        }
+        glyph(
+            ui.painter(),
+            Rect::from_center_size(
+                egui::pos2(rect.left() + 39., rect.center().y),
+                Vec2::splat(17.),
+            ),
+            icon,
+            ink,
+            1.5,
+        );
+        ui.painter().galley(
+            egui::pos2(rect.left() + 58., rect.center().y - galley.size().y * 0.5),
+            galley,
+            ink,
+        );
+        let keys_size = keys.size();
+        ui.painter().galley(
+            egui::pos2(
+                rect.right() - 10. - keys_size.x,
+                rect.center().y - keys_size.y * 0.5,
+            ),
+            keys,
+            ink,
+        );
+    }
+    response
+}
+
 fn with_tip(response: Response, tip: &str) -> Response {
     if tip.is_empty() {
         response
@@ -883,7 +2246,7 @@ mod tests {
         // Recorded per icon. If a glyph silently loses its geometry (or gains a
         // stray primitive), the count changes and this fails instead of the
         // blank button reaching the user.
-        let expected: [(Icon, usize); 45] = [
+        let expected: [(Icon, usize); 151] = [
             (Icon::Select, 1),
             (Icon::Edit, 3),
             (Icon::Pen, 3),
@@ -929,6 +2292,112 @@ mod tests {
             (Icon::Garment, 1),
             (Icon::Skeleton, 5),
             (Icon::Technical, 5),
+            (Icon::Pin, 2),
+            (Icon::Button, 5),
+            (Icon::Curve, 1),
+            (Icon::Polygon, 1),
+            (Icon::Trash, 3),
+            (Icon::Expand, 4),
+            (Icon::Iron, 5),
+            (Icon::Snowflake, 3),
+            (Icon::Pleat, 2),
+            (Icon::Points, 5),
+            (Icon::Wave, 2),
+            (Icon::Stitch, 4),
+            (Icon::Layers, 2),
+            (Icon::Scissors, 4),
+            (Icon::SelectArea, 4),
+            (Icon::SplitView, 2),
+            (Icon::Sheet, 3),
+            (Icon::Lock, 5),
+            (Icon::Brush, 4),
+            (Icon::Lasso, 3),
+            (Icon::PinBox, 6),
+            (Icon::PinLasso, 5),
+            (Icon::StyleEdit, 2),
+            (Icon::StyleMove, 4),
+            (Icon::StyleScale, 4),
+            (Icon::StyleDraw, 3),
+            (Icon::PinAttach, 3),
+            (Icon::PinDetach, 5),
+            (Icon::Tear, 2),
+            (Icon::TearEdit, 6),
+            (Icon::ResetSheet, 3),
+            (Icon::ResetSelected, 3),
+            (Icon::Fold, 2),
+            (Icon::Drape, 4),
+            (Icon::FitBody, 5),
+            (Icon::SewFree, 4),
+            (Icon::SewChain, 5),
+            (Icon::SewChainFree, 5),
+            (Icon::Quads, 3),
+            (Icon::Triangles, 6),
+            (Icon::MeshFiner, 7),
+            (Icon::MeshCoarser, 5),
+            (Icon::LayerOver, 3),
+            (Icon::LayerUnder, 3),
+            (Icon::LayerSide, 4),
+            (Icon::Drop, 3),
+            (Icon::Shield, 2),
+            (Icon::Block, 6),
+            (Icon::Piece, 4),
+            (Icon::PieceOff, 2),
+            (Icon::PieceOn, 2),
+            (Icon::PieceSeamOff, 5),
+            (Icon::Tape, 6),
+            (Icon::Height, 5),
+            (Icon::Girth, 3),
+            (Icon::Loop, 2),
+            (Icon::Dimension, 5),
+            (Icon::ShapeSize, 4),
+            (Icon::Pose, 4),
+            (Icon::AvatarEdit, 4),
+            (Icon::AvatarLibrary, 4),
+            (Icon::SelectAll, 5),
+            (Icon::Paste, 4),
+            (Icon::AddPoint, 4),
+            (Icon::Smooth, 5),
+            (Icon::Extend, 3),
+            (Icon::Trim, 5),
+            (Icon::Replace, 4),
+            (Icon::Spiral, 1),
+            (Icon::InternalLine, 4),
+            (Icon::InternalRect, 2),
+            (Icon::InternalCircle, 2),
+            (Icon::InternalDart, 2),
+            (Icon::Trace, 6),
+            (Icon::Guide, 3),
+            (Icon::Align, 3),
+            (Icon::Unlock, 5),
+            (Icon::Spread, 5),
+            (Icon::PiecePlus, 3),
+            (Icon::AutoSew, 7),
+            (Icon::LengthCheck, 4),
+            (Icon::TapeBand, 4),
+            (Icon::TapeRoll, 3),
+            (Icon::StitchSeam, 7),
+            (Icon::StitchFree, 5),
+            (Icon::Piping, 3),
+            (Icon::Buttonhole, 6),
+            (Icon::Fasten, 3),
+            (Icon::Zipper, 6),
+            (Icon::GraphicMove, 6),
+            (Icon::Texture, 3),
+            (Icon::PleatSingle, 1),
+            (Icon::PleatSew, 4),
+            (Icon::Eye, 3),
+            (Icon::Tag, 3),
+            (Icon::Colours, 3),
+            (Icon::Force, 5),
+            (Icon::Pressure, 5),
+            (Icon::Shadow, 2),
+            (Icon::Floor, 3),
+            (Icon::Page, 2),
+            (Icon::PagePlus, 4),
+            (Icon::RulerCorner, 5),
+            (Icon::Bolt, 1),
+            (Icon::Gem, 4),
+            (Icon::Swatch, 1),
         ];
         // A new variant without a recorded count is itself a regression.
         assert_eq!(expected.len(), ALL.len());

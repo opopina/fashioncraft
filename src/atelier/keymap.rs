@@ -118,11 +118,14 @@ pub(super) fn label(map: KeymapName, command: CommandId) -> Option<String> {
         .map(|b| format!("{}{}", b.mods.prefix(), b.key.name()))
 }
 
-/// `keys` ("Cmd+K") as this platform writes it: the command key is Ctrl outside macOS, as
-/// `egui::Modifiers::command` already presses it there.
+/// `keys` ("Cmd+K") as this platform writes it: with the Mac's symbols on macOS (⌘K), and with
+/// Ctrl outside it, as `egui::Modifiers::command` already presses it there.
 pub(super) fn shown(keys: &str) -> String {
     if cfg!(target_os = "macos") {
-        keys.to_owned()
+        // As Mac menus write them: ⇧⌘Z, ⌥7.
+        keys.replace("Shift+", "⇧")
+            .replace("Alt+", "⌥")
+            .replace("Cmd+", "⌘")
     } else {
         keys.replace("Cmd+", "Ctrl+")
     }
@@ -197,7 +200,8 @@ mod tests {
     fn the_command_key_reads_ctrl_outside_macos() {
         let undo = super::shown("Shift+Cmd+Z");
         if cfg!(target_os = "macos") {
-            assert_eq!(undo, "Shift+Cmd+Z");
+            assert_eq!(undo, "⇧⌘Z");
+            assert_eq!(super::shown("Alt+7"), "⌥7");
         } else {
             assert_eq!(undo, "Shift+Ctrl+Z");
         }

@@ -658,3 +658,166 @@ impl Atelier {
         }
     }
 }
+
+/// The measurements each drafted garment takes, by name, in the drafting windows' order
+/// (centimetres). Agents name them in `draft_garment`.
+const SHIRT_FIELDS: [&str; 8] = [
+    "bust", "hip", "ease", "length", "shoulder", "sleeve", "cuff", "top",
+];
+const SKIRT_FIELDS: [&str; 7] = [
+    "waist",
+    "hip",
+    "ease",
+    "hip_depth",
+    "length",
+    "flare",
+    "waist_height",
+];
+const TROUSERS_FIELDS: [&str; 8] = [
+    "waist",
+    "hip",
+    "ease",
+    "hip_depth",
+    "rise",
+    "length",
+    "hem",
+    "waist_height",
+];
+
+/// `values` with the named `overrides` (centimetres) set; an unknown name is an error.
+fn with_overrides<const N: usize>(
+    mut values: [f64; N],
+    names: &[&str; N],
+    overrides: &BTreeMap<String, f64>,
+) -> Result<[f64; N], String> {
+    for (name, value) in overrides {
+        let Some(i) = names.iter().position(|n| n == name) else {
+            return Err(format!(
+                "unknown measurement '{name}'; this garment takes {}",
+                names.join(", ")
+            ));
+        };
+        if !value.is_finite() || *value < 0. || *value > 400. {
+            return Err(format!("{name} = {value} cm is out of range"));
+        }
+        values[i] = *value;
+    }
+    Ok(values)
+}
+
+fn listed<const N: usize>(names: &[&str; N], values: &[f64; N]) -> String {
+    names
+        .iter()
+        .zip(values)
+        .map(|(n, v)| format!("{n} {v:.1}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+impl Atelier {
+    /// Drafts a garment for an agent, as the drafting windows' Create does: the window's
+    /// values, or the avatar's when `from_avatar`, with `overrides` (centimetres) on top.
+    /// Reports the measurements used.
+    pub(super) fn agent_draft(
+        &mut self,
+        kind: &str,
+        from_avatar: bool,
+        overrides: &BTreeMap<String, f64>,
+    ) -> Result<String, String> {
+        use fashioncraft::garment::presets;
+        let (template, used) = match kind {
+            "tshirt" => {
+                let base = if from_avatar {
+                    self.avatar_shirt_values()?
+                } else {
+                    self.authoring.shirt_draft.values
+                };
+                let v = with_overrides(base, &SHIRT_FIELDS, overrides)?;
+                let m = v.map(|x| x / 100.);
+                let template = presets::tshirt(
+                    &presets::TshirtMeasurements {
+                        bust_m: m[0],
+                        hip_m: m[1],
+                        ease_m: m[2],
+                        length_m: m[3],
+                        shoulder_m: m[4],
+                        sleeve_m: m[5],
+                        cuff_m: m[6],
+                        top_m: m[7],
+                    },
+                    2,
+                )
+                .map_err(|e| format!("{e} (cm: {})", listed(&SHIRT_FIELDS, &v)))?;
+                // Kept for the drafting window only once the pattern is made.
+                self.authoring.shirt_draft.values = v;
+                (template, listed(&SHIRT_FIELDS, &v))
+            }
+            "skirt" => {
+                let base = if from_avatar {
+                    self.avatar_skirt_values()?
+                } else {
+                    self.authoring.skirt_draft.values
+                };
+                let v = with_overrides(base, &SKIRT_FIELDS, overrides)?;
+                let m = v.map(|x| x / 100.);
+                let template = presets::skirt(
+                    &presets::SkirtMeasurements {
+                        waist_m: m[0],
+                        hip_m: m[1],
+                        ease_m: m[2],
+                        hip_depth_m: m[3],
+                        length_m: m[4],
+                        flare_m: m[5],
+                        waist_height_m: m[6],
+                    },
+                    2,
+                )
+                .map_err(|e| format!("{e} (cm: {})", listed(&SKIRT_FIELDS, &v)))?;
+                // Kept for the drafting window only once the pattern is made.
+                self.authoring.skirt_draft.values = v;
+                (template, listed(&SKIRT_FIELDS, &v))
+            }
+            "trousers" => {
+                let base = if from_avatar {
+                    self.avatar_trouser_values()?
+                } else {
+                    self.authoring.trousers_draft.values
+                };
+                let v = with_overrides(base, &TROUSERS_FIELDS, overrides)?;
+                let m = v.map(|x| x / 100.);
+                let template = presets::trousers(
+                    &presets::TrousersMeasurements {
+                        waist_m: m[0],
+                        hip_m: m[1],
+                        ease_m: m[2],
+                        hip_depth_m: m[3],
+                        rise_m: m[4],
+                        length_m: m[5],
+                        hem_m: m[6],
+                        waist_height_m: m[7],
+                    },
+                    2,
+                )
+                .map_err(|e| format!("{e} (cm: {})", listed(&TROUSERS_FIELDS, &v)))?;
+                // Kept for the drafting window only once the pattern is made.
+                self.authoring.trousers_draft.values = v;
+                (template, listed(&TROUSERS_FIELDS, &v))
+            }
+            other => return Err(format!("unknown garment kind '{other}'")),
+        };
+        let mut project =
+            FittingProject::basic(GarmentKind::Tshirt, 2, self.project.avatar_path.clone());
+        project.template = template;
+        project.avatar_pose = self.project.avatar_pose.clone();
+        project.scene_objects = self.project.scene_objects.clone();
+        if !self.load(project) {
+            return Err(self.status.clone());
+        }
+        let garment = match kind {
+            "tshirt" => "a t-shirt",
+            "skirt" => "a skirt",
+            _ => "trousers",
+        };
+        Ok(format!("Drafted {garment} (cm): {used}"))
+    }
+}

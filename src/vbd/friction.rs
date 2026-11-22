@@ -62,7 +62,8 @@ impl FrictionTerm {
 
 /// Friction data for every contact of `contacts`, from the positions `x` at detection and the
 /// positions `start` at the start of the step (fixed obstacles included). `None` for contacts
-/// that push with no force, or when μ is zero.
+/// that push with no force, or when μ is zero. Contacts are independent, so they are computed
+/// in parallel, in their order.
 pub fn friction_terms(
     contacts: &ContactSet,
     x: &[DVec3],
@@ -76,13 +77,15 @@ pub fn friction_terms(
     let eps = STICK_SPEED_M_S * settings.dt;
     contacts
         .contacts
-        .iter()
+        .par_iter()
         .enumerate()
         .map(|(i, c)| {
             let r = contacts.radius(i, settings.contact.radius);
-            let gradients: Vec<DVec3> = (0..c.count)
-                .map(|i| c.block(x, c.vertices[i], r, k).1)
-                .collect();
+            let mut gradients = [DVec3::ZERO; 4];
+            for (g, &v) in gradients.iter_mut().zip(&c.vertices[..c.count]) {
+                *g = c.block(x, v, r, k).1;
+            }
+            let gradients = &gradients[..c.count];
             if gradients.iter().any(|g| !g.is_finite()) {
                 return None;
             }

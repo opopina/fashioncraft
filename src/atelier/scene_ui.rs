@@ -184,8 +184,7 @@ impl Atelier {
                             remove = Some(k);
                         }
                     });
-                    ui.horizontal(|ui| {
-                        ui.label(i18n::tr(ui_lang, "Position"));
+                    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Position"), |ui| {
                         for (axis, v) in ["X", "Y", "Z"].iter().zip(object.translation.iter_mut()) {
                             let mut mm = *v * 1000.;
                             if ui
@@ -201,8 +200,7 @@ impl Atelier {
                             }
                         }
                     });
-                    ui.horizontal(|ui| {
-                        ui.label(i18n::tr(ui_lang, "Turn"));
+                    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Turn"), |ui| {
                         for (axis, v) in ["X", "Y", "Z"]
                             .iter()
                             .zip(object.rotation_degrees.iter_mut())
@@ -216,8 +214,7 @@ impl Atelier {
                             );
                         }
                     });
-                    ui.horizontal(|ui| {
-                        ui.label(i18n::tr(ui_lang, "Scale"));
+                    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Scale"), |ui| {
                         ui.add(
                             egui::DragValue::new(&mut object.scale)
                                 .range(0.0001..=1000.)

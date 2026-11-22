@@ -27,14 +27,12 @@ fn object_trim_controls(ui: &mut egui::Ui, ui_lang: i18n::Language, trim: &Trim)
     let mut turn = *turn_degrees;
     let mut percent = *scale * 100.;
     let mut done = false;
-    ui.horizontal(|ui| {
-        ui.label(i18n::tr(ui_lang, "Position"));
+    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Position"), |ui| {
         for value in [&mut centre_mm.x, &mut centre_mm.y] {
             done |= commit(&ui.add(egui::DragValue::new(value).speed(0.5).suffix(" mm")));
         }
     });
-    ui.horizontal(|ui| {
-        ui.label(i18n::tr(ui_lang, "Size"));
+    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Size"), |ui| {
         done |= commit(
             &ui.add(
                 egui::DragValue::new(&mut percent)

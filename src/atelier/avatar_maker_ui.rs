@@ -85,7 +85,7 @@ fn measure(body: &MacroBody) -> Result<BodyMeasurements, String> {
 fn between(ui: &mut egui::Ui, value: &mut f64, low: &str, high: &str) {
     ui.horizontal(|ui| {
         ui.small(low);
-        ui.add(egui::Slider::new(value, 0.0..=1.0).show_value(false));
+        super::workspace::slim(ui, egui::Slider::new(value, 0.0..=1.0).show_value(false));
         ui.small(high);
     });
 }
@@ -120,8 +120,7 @@ impl Atelier {
                         between(ui, &mut body.gender, tr("Female"), tr("Male"));
                         ui.end_row();
                         ui.label(tr("Age"));
-                        ui.add(
-                            egui::Slider::new(&mut body.age_years, 1.0..=90.0)
+                        super::workspace::slim(ui, egui::Slider::new(&mut body.age_years, 1.0..=90.0)
                                 .step_by(1.)
                                 .suffix(tr(" years")),
                         );
@@ -132,17 +131,17 @@ impl Atelier {
                             ("Height", &mut body.height),
                         ] {
                             ui.label(tr(name));
-                            ui.add(egui::Slider::new(value, 0.0..=1.0).custom_formatter(percent));
+                            super::workspace::slim(ui, egui::Slider::new(value, 0.0..=1.0).custom_formatter(percent));
                             ui.end_row();
                         }
                         ui.label(tr("Proportions"));
                         between(ui, &mut body.proportions, tr("Ideal"), tr("Uncommon"));
                         ui.end_row();
                         ui.label(tr("Bust size"));
-                        ui.add(egui::Slider::new(&mut body.cupsize, 0.0..=1.0).custom_formatter(percent));
+                        super::workspace::slim(ui, egui::Slider::new(&mut body.cupsize, 0.0..=1.0).custom_formatter(percent));
                         ui.end_row();
                         ui.label(tr("Bust firmness"));
-                        ui.add(egui::Slider::new(&mut body.firmness, 0.0..=1.0).custom_formatter(percent));
+                        super::workspace::slim(ui, egui::Slider::new(&mut body.firmness, 0.0..=1.0).custom_formatter(percent));
                         ui.end_row();
                     });
                 ui.add_space(4.);
@@ -156,7 +155,7 @@ impl Atelier {
                             ("European", &mut body.european),
                         ] {
                             ui.label(tr(name));
-                            ui.add(egui::Slider::new(value, 0.0..=1.0).custom_formatter(percent));
+                            super::workspace::slim(ui, egui::Slider::new(value, 0.0..=1.0).custom_formatter(percent));
                             ui.end_row();
                         }
                     });
@@ -209,8 +208,7 @@ impl Atelier {
                             .show(ui, |ui| {
                                 for (k, (_, label)) in MEASURES.iter().enumerate() {
                                     ui.label(tr(label));
-                                    ui.add(
-                                        egui::Slider::new(&mut body.measures[k], -1.0..=1.0)
+                                    super::workspace::slim(ui, egui::Slider::new(&mut body.measures[k], -1.0..=1.0)
                                             .custom_formatter(|v, _| format!("{:+.0} %", v * 100.)),
                                     );
                                     ui.end_row();

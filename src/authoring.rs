@@ -667,6 +667,16 @@ pub enum Command {
         properties: FabricProperties,
         all_panels: bool,
     },
+    /// Add a copy of a fabric (its physics and its look) under a new id, cut from no piece
+    /// yet.
+    DuplicateFabric {
+        fabric: String,
+    },
+    /// Cut `panels` from an existing fabric.
+    AssignFabric {
+        panels: Vec<String>,
+        fabric: String,
+    },
 }
 
 impl Command {
@@ -779,6 +789,8 @@ impl Command {
             Self::RemoveTrim { .. } => "Remove trim",
             Self::RepeatTrim { .. } => "Repeat trim",
             Self::Fabric { .. } => "Fabric",
+            Self::DuplicateFabric { .. } => "Copy fabric",
+            Self::AssignFabric { .. } => "Assign fabric",
         }
     }
 }
@@ -3667,6 +3679,49 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 }
             }
             selected = Some(panel);
+        }
+        Command::DuplicateFabric { fabric } => {
+            let original = template
+                .fabrics
+                .iter()
+                .find(|f| f.id == fabric)
+                .cloned()
+                .ok_or("Fabric not found")?;
+            let id = unused_id("fabric", template.fabrics.iter().map(|f| f.id.clone()));
+            if let Some(optics) = template.fabric_appearance.get(&fabric).cloned() {
+                template.fabric_appearance.insert(id.clone(), optics);
+            }
+            template.fabrics.push(Fabric {
+                id,
+                name: format!("{} copy", original.name),
+                properties: original.properties,
+            });
+        }
+        Command::AssignFabric { panels, fabric } => {
+            if !template.fabrics.iter().any(|f| f.id == fabric) {
+                return Err("Fabric not found".into());
+            }
+            if panels.is_empty() {
+                return Err("Select the pieces to cut from this fabric".into());
+            }
+            for id in &panels {
+                if !template.panels.iter().any(|p| &p.id == id) {
+                    return Err(format!("Panel {id} not found"));
+                }
+            }
+            let mut changed = false;
+            for p in template
+                .panels
+                .iter_mut()
+                .filter(|p| panels.contains(&p.id))
+            {
+                changed |= p.fabric != fabric;
+                p.fabric = fabric.clone();
+            }
+            if !changed {
+                return Err("Already cut from this fabric".into());
+            }
+            selected = panels.first().cloned();
         }
         Command::Polygon {
             mut points,

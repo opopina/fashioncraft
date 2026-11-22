@@ -40,9 +40,11 @@ impl Default for DraftingUi {
     }
 }
 impl Atelier {
-    pub(super) fn primitive_menu(&mut self, ui: &mut egui::Ui) {
+    /// 2D Pattern › Shapes › Shape by size: a rectangle, ellipse or arc sector of an exact
+    /// size, added at the board's centre.
+    pub(super) fn primitive_menu_body(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
-        ui.menu_button(i18n::tr(ui_lang, "Shapes"), |ui| {
+        {
             let d = &mut self.authoring.drafting;
             ui.horizontal(|ui| {
                 for (kind, label) in [
@@ -71,7 +73,8 @@ impl Atelier {
                 d.size_mm[1] = d.size_mm[0];
             }
             if d.kind == Primitive::Sector {
-                ui.add(
+                super::workspace::slim(
+                    ui,
                     egui::Slider::new(&mut d.sweep, 5. ..=355.).text(i18n::tr(ui_lang, "Angle")),
                 );
                 ui.small(i18n::tr(
@@ -104,7 +107,7 @@ impl Atelier {
                 }
             }
             self.spiral_menu(ui);
-        });
+        }
     }
     pub(super) fn drafting_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
         let ui_lang = self.prefs.language;
@@ -171,13 +174,15 @@ impl Atelier {
                 });
             }
         } else {
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Linked copy"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Linked copy"), |ui| {
                 for (axis, name) in [(MirrorAxis::X, "X"), (MirrorAxis::Y, "Y")] {
                     let button = ui.button(name).on_hover_text(i18n::tr(ui_lang, "Create a mirrored partner. Later shape edits update both pieces; undo restores both."));
                     self.smoke_target_ui(ui, &format!("linked_mirror_{name}"), button.rect);
                     if button.clicked() {
-                        self.edit(Command::LinkedMirror { panel: panel.into(), axis });
+                        self.edit(Command::LinkedMirror {
+                            panel: panel.into(),
+                            axis,
+                        });
                     }
                 }
             });
@@ -423,8 +428,7 @@ impl Atelier {
             let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
             at = at.clamp(1, segments);
             let mut open = false;
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Open at segment"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Open at segment"), |ui| {
                 ui.add(egui::DragValue::new(&mut at).range(1..=segments));
                 open = ui
                     .small_button(i18n::tr(ui_lang, "Open"))
@@ -498,8 +502,7 @@ impl Atelier {
         if straight {
             let d = &mut self.authoring.drafting;
             let mut open = false;
-            ui.horizontal_wrapped(|ui| {
-                ui.label(i18n::tr(ui_lang, "Slash and spread"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Slash and spread"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut d.spread_degrees)
                         .range(0.1..=90.)
@@ -528,8 +531,7 @@ impl Atelier {
         }
         if !line.closed {
             let mut command = None;
-            ui.horizontal_wrapped(|ui| {
-                ui.label(i18n::tr(ui_lang, "Extend to outline"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Extend to outline"), |ui| {
                 for (label, at_start) in [("Start", true), ("End", false)] {
                     if ui
                         .small_button(label)
@@ -551,8 +553,7 @@ impl Atelier {
                 let id = egui::Id::new(("split_line_at", &edge.panel, &name));
                 let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
                 at = at.clamp(1, line.points.len() - 2);
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Split at point"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Split at point"), |ui| {
                     ui.add(egui::DragValue::new(&mut at).range(1..=line.points.len() - 2));
                     if ui
                         .small_button(i18n::tr(ui_lang, "Split"))
@@ -571,8 +572,7 @@ impl Atelier {
                 let segments = line.points.len() - 1;
                 let mut at: usize = ui.data_mut(|d| *d.get_temp_mut_or(id, 1));
                 at = at.clamp(1, segments);
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Trim segment"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Trim segment"), |ui| {
                     ui.add(egui::DragValue::new(&mut at).range(1..=segments));
                     if ui
                         .small_button(i18n::tr(ui_lang, "Cut away"))
@@ -628,15 +628,17 @@ impl Atelier {
             });
         }
         let d = &mut self.authoring.drafting;
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Ruffle width"));
+        super::workspace::prop_row(ui, i18n::tr(ui_lang, "Ruffle width"), |ui| {
             ui.add(
                 egui::DragValue::new(&mut d.width_mm)
                     .range(5. ..=1000.)
                     .suffix(" mm"),
             );
         });
-        ui.add(egui::Slider::new(&mut d.ratio, 1. ..=4.).text(i18n::tr(ui_lang, "Length ×")));
+        super::workspace::slim(
+            ui,
+            egui::Slider::new(&mut d.ratio, 1. ..=4.).text(i18n::tr(ui_lang, "Length ×")),
+        );
         if ui
             .button(i18n::tr(ui_lang, "Create and sew a ruffle"))
             .clicked()

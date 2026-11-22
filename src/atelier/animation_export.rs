@@ -176,6 +176,11 @@ impl Atelier {
         else {
             return Ok(());
         };
+        self.export_gltf_to(&path)
+    }
+
+    /// The glTF export to `path`, without a dialog (agents use it too).
+    pub(super) fn export_gltf_to(&mut self, path: &std::path::Path) -> Result<(), String> {
         let take = self.current_take();
         let bodies = match (take, &self.project.avatar_animation) {
             (Some(take), Some(animation)) => Some(
@@ -202,7 +207,7 @@ impl Atelier {
             avatar: self.prefs.garment_display.avatar.then_some(&avatar),
             take: take.map(|t| (t, bodies)),
         };
-        fashioncraft::gltf_export::write(&scene, &path)?;
+        fashioncraft::gltf_export::write(&scene, path)?;
         self.status = format!(
             "Exported {}{}",
             path.display(),
@@ -373,8 +378,7 @@ impl Atelier {
             .collapsible(false)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Paper"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Paper"), |ui| {
                     egui::ComboBox::from_id_salt("print.paper")
                         .selected_text(i18n::tr(ui_lang, paper.label()))
                         .show_ui(ui, |ui| {
@@ -456,6 +460,16 @@ impl Atelier {
         else {
             return Ok(());
         };
+        self.export_obj_to(ctx, &path)
+    }
+
+    /// The OBJ export to `path` with the export window's options, without a dialog (agents use
+    /// it too).
+    pub(super) fn export_obj_to(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
         let dialog = &self.authoring.media3d.obj;
         let mut options = dialog.options.clone();
         options.pieces = dialog
@@ -513,7 +527,7 @@ impl Atelier {
             avatar: avatar.then_some(self.scene.collider.surface.as_ref()),
             atlas: atlas.as_ref(),
         };
-        let summary = fashioncraft::obj_export::write(&scene, &options, &path)?;
+        let summary = fashioncraft::obj_export::write(&scene, &options, path)?;
         self.status = format!(
             "Exported {}: {} vertices, {} faces, {} textures",
             path.display(),
@@ -591,8 +605,7 @@ impl Atelier {
             ui.add_enabled(!remeshed, egui::Checkbox::new(&mut o.quads, i18n::tr(ui_lang, "Quads")))
                 .on_hover_text(i18n::tr(ui_lang, "Neighbouring triangles joined into quads where they make a flat, convex, nearly rectangular one"));
             ui.checkbox(&mut dialog.avatar, i18n::tr(ui_lang, "Include the avatar and scene objects"));
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Units"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Units"), |ui| {
                 egui::ComboBox::from_id_salt("obj.units")
                     .selected_text(o.units.label())
                     .show_ui(ui, |ui| {

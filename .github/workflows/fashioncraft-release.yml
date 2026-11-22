@@ -55,9 +55,11 @@ jobs:
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
-          $imports = & $dumpbin /dependents target\release\fashioncraft.exe | Out-String
-          Write-Output $imports
-          if ($imports -match '(?i)vcruntime|msvcp') { throw 'fashioncraft.exe still imports the Visual C++ runtime' }
+          foreach ($exe in 'fashioncraft.exe', 'fashioncraft-cli.exe') {
+            $imports = & $dumpbin /dependents "target\release\$exe" | Out-String
+            Write-Output $imports
+            if ($imports -match '(?i)vcruntime|msvcp') { throw "$exe still imports the Visual C++ runtime" }
+          }
       - name: WiX Toolset
         run: dotnet tool install --global wix --version 5.0.2
       - name: Package the installer

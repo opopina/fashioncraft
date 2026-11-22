@@ -242,8 +242,7 @@ impl Atelier {
                     .changed();
                 ui.end_row();
                 ui.label(i18n::tr(ui_lang, "Opacity"));
-                changed |= ui
-                    .add(egui::Slider::new(&mut opacity, 0.0..=100.0).suffix(" %"))
+                changed |= super::workspace::slim(ui, egui::Slider::new(&mut opacity, 0.0..=100.0).suffix(" %"))
                     .changed();
                 ui.end_row();
             });

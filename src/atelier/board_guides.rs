@@ -183,7 +183,7 @@ fn ruler_rects(rect: egui::Rect) -> RulerRects {
 impl Atelier {
     /// Rulers are drawn and used only while the board is not rotated: they measure along the
     /// screen axes, which match the board axes only then.
-    fn rulers_active(&self) -> bool {
+    pub(super) fn rulers_active(&self) -> bool {
         self.prefs.pattern_display.rulers && self.authoring.board.view_rotation.abs() < 1e-9
     }
 

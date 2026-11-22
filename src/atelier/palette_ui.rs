@@ -24,7 +24,7 @@ pub(super) fn palette_row(ui: &mut egui::Ui, palette: &mut Vec<[u8; 3]>, color: 
                 ui.painter().rect_stroke(
                     rect,
                     3.,
-                    egui::Stroke::new(2., ui.visuals().selection.bg_fill),
+                    egui::Stroke::new(2., super::workspace::accent(ui.visuals())),
                     egui::StrokeKind::Outside,
                 );
             }

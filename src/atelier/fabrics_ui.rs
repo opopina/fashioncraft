@@ -146,14 +146,17 @@ impl Atelier {
             .id_salt("fabric_controls").default_open(true).show(ui, |ui| {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
                 let old = d.preset;
-                let combo = egui::ComboBox::from_id_salt("fabric_preset")
-                    .selected_text(d.preset.map(|i| PRESETS[i].name).unwrap_or(i18n::tr(ui_lang, "Choose a fabric type")))
-                    .show_ui(ui, |ui| {
-                        for (i, p) in PRESETS.iter().enumerate() {
-                            let response = ui.selectable_value(&mut d.preset, Some(i), p.name);
-                            targets.push((format!("fabric_preset_{}", p.id), response.rect.center()));
-                        }
-                    });
+                let combo = super::workspace::prop_row(ui, i18n::tr(ui_lang, "Fabric type"), |ui| {
+                    egui::ComboBox::from_id_salt("fabric_preset")
+                        .selected_text(d.preset.map(|i| PRESETS[i].name).unwrap_or(i18n::tr(ui_lang, "Choose a fabric type")))
+                        .show_ui(ui, |ui| {
+                            for (i, p) in PRESETS.iter().enumerate() {
+                                let response = ui.selectable_value(&mut d.preset, Some(i), p.name);
+                                targets.push((format!("fabric_preset_{}", p.id), response.rect.center()));
+                            }
+                        })
+                })
+                .inner;
                 targets.push(("fabric_presets".into(), combo.response.rect.center()));
                 if d.preset != old && let Some(i) = d.preset {
                     let preset = &PRESETS[i];
@@ -166,7 +169,10 @@ impl Atelier {
                     ui.small(PRESETS[i].evidence);
                     ui.hyperlink_to(i18n::tr(ui_lang, "Measurement source"), PRESETS[i].source);
                 }
-                let name = ui.text_edit_singleline(&mut d.name);
+                let name = super::workspace::prop_row(ui, i18n::tr(ui_lang, "Name"), |ui| {
+                    ui.text_edit_singleline(&mut d.name)
+                })
+                .inner;
                 if let Some(smoke) = &mut self.authoring_smoke {
                     smoke.appearance_text_target(ui, &name);
                 }
@@ -177,15 +183,17 @@ impl Atelier {
                 let mut thickness = p.thickness * 1000.;
                 if value(ui, i18n::tr(ui_lang, "Thickness"), &mut thickness, 0.01, 0.02, 5., " mm") { p.thickness = thickness / 1000.; }
                 let mut own = p.collision_distance.is_some();
-                if ui
-                    .checkbox(&mut own, i18n::tr(ui_lang, "Own collision distance"))
-                    .on_hover_text(
-                        i18n::tr(ui_lang, "Gap the simulator keeps between this fabric and the avatar, the floor or \
-                         other cloth; two fabrics keep the mean of theirs. Off: the scene's \
-                         Collision distance in Simulation"),
-                    )
-                    .changed()
-                {
+                let own_changed = super::workspace::prop_row(ui, i18n::tr(ui_lang, "Own collision distance"), |ui| {
+                    ui.checkbox(&mut own, "")
+                        .on_hover_text(
+                            i18n::tr(ui_lang, "Gap the simulator keeps between this fabric and the avatar, the floor or \
+                             other cloth; two fabrics keep the mean of theirs. Off: the scene's \
+                             Collision distance in Simulation"),
+                        )
+                        .changed()
+                })
+                .inner;
+                if own_changed {
                     p.collision_distance = own.then_some(scene_gap);
                 }
                 if let Some(gap) = p.collision_distance.as_mut() {
@@ -197,7 +205,7 @@ impl Atelier {
                     p.internal_damping = damping_ms / 1000.;
                 }
                 ui.small(i18n::tr(ui_lang, "Internal damping settles stretching and bending; the piece as a whole still moves freely."));
-                ui.label(i18n::tr(ui_lang, "Stretch under 5 N on a 5 cm strip"));
+                super::workspace::group_title(ui, i18n::tr(ui_lang, "Stretch under 5 N on a 5 cm strip"));
                 ui.small(i18n::tr(ui_lang, "The larger the %, the more the fabric stretches. This is not the strain at failure."));
                 for (axis, label) in ["Warp", "Weft"].iter().enumerate() {
                     if value(ui, i18n::tr(ui_lang, label), &mut d.extension[axis], 0.1, 0.1, 100., " %")
@@ -320,8 +328,7 @@ fn value(
     max: f64,
     suffix: &str,
 ) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
+    super::workspace::prop_row(ui, label, |ui| {
         ui.add(
             egui::DragValue::new(v)
                 .speed(speed)
@@ -357,7 +364,7 @@ fn appearance_controls(
 ) -> Option<Option<fashioncraft::garment::appearance::FabricAppearance>> {
     let lang = extras.language;
     let tr = |text: &'static str| super::i18n::tr(lang, text);
-    ui.strong(tr("Fabric appearance"));
+    super::workspace::group_title(ui, tr("Fabric appearance"));
     ui.small(tr(
         "Shared by panels using this fabric. Does not change its mechanics.",
     ));
@@ -370,8 +377,7 @@ fn appearance_controls(
         *draft = custom.then(Default::default);
     }
     if let Some(value) = draft {
-        ui.horizontal(|ui| {
-            ui.label(tr("Color (sRGB)"));
+        super::workspace::prop_row(ui, tr("Color (sRGB)"), |ui| {
             let swatch = ui.color_edit_button_srgb(&mut value.color_srgb);
             #[cfg(test)]
             super::authoring_smoke::widget_harness::named(ui, &swatch, "appearance.color");
@@ -408,8 +414,10 @@ fn appearance_controls(
                 targets.push((key, response.rect));
             }
         });
-        let roughness =
-            ui.add(egui::Slider::new(&mut value.roughness, 0.0..=1.0).text(tr("Roughness")));
+        let roughness = super::workspace::prop_row(ui, tr("Roughness"), |ui| {
+            super::workspace::slim(ui, egui::Slider::new(&mut value.roughness, 0.0..=1.0))
+        })
+        .inner;
         #[cfg(test)]
         super::authoring_smoke::widget_harness::named(ui, &roughness, "appearance.roughness");
         targets.push((
@@ -433,8 +441,7 @@ fn appearance_controls(
             }
         });
         use fashioncraft::garment::appearance::{Weave, WeaveKind};
-        ui.horizontal(|ui| {
-            ui.label(tr("Weave"));
+        super::workspace::prop_row(ui, tr("Weave"), |ui| {
             let label = value
                 .weave
                 .as_ref()
@@ -459,8 +466,7 @@ fn appearance_controls(
                 });
         });
         if let Some(w) = value.weave.as_mut() {
-            ui.horizontal(|ui| {
-                ui.label(tr("Thread spacing"));
+            super::workspace::prop_row(ui, tr("Thread spacing"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut w.spacing_mm)
                         .range(0.05..=20.0)
@@ -469,11 +475,12 @@ fn appearance_controls(
                         .suffix(" mm"),
                 );
             });
-            ui.add(egui::Slider::new(&mut w.contrast, 0.0..=1.0).text(tr("Weave contrast")));
+            super::workspace::prop_row(ui, tr("Weave contrast"), |ui| {
+                super::workspace::slim(ui, egui::Slider::new(&mut w.contrast, 0.0..=1.0));
+            });
             let _: &Weave = w;
         }
-        ui.horizontal(|ui| {
-            ui.label(tr("Look thickness"));
+        super::workspace::prop_row(ui, tr("Look thickness"), |ui| {
             ui.add(
                 egui::DragValue::new(&mut value.render_thickness_mm)
                     .range(0.0..=fashioncraft::garment::appearance::MAX_RENDER_THICKNESS_MM)
@@ -485,8 +492,7 @@ fn appearance_controls(
                 tr("Draw the cloth this thick, with a rim along its outline; the simulation is unchanged"),
             );
         });
-        ui.horizontal(|ui| {
-            ui.label(tr("Texture"));
+        super::workspace::prop_row(ui, tr("Texture"), |ui| {
             if value.texture.is_some() {
                 ui.label(extras.texture_name.as_deref().unwrap_or(tr("image")));
             }
@@ -504,8 +510,7 @@ fn appearance_controls(
             }
         });
         if let Some(t) = value.texture.as_mut() {
-            ui.horizontal(|ui| {
-                ui.label(tr("Repeat"));
+            super::workspace::prop_row(ui, tr("Repeat"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut t.width_mm)
                         .range(1.0..=5000.)
@@ -523,8 +528,7 @@ fn appearance_controls(
                         .suffix(" mm"),
                 );
             });
-            ui.horizontal(|ui| {
-                ui.label(tr("Angle"));
+            super::workspace::prop_row(ui, tr("Angle"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut t.rotation_degrees)
                         .range(-360.0..=360.)
@@ -532,16 +536,18 @@ fn appearance_controls(
                         .suffix("°"),
                 );
             });
-            ui.add(
-                egui::Slider::new(
-                    &mut t.relief_mm,
-                    0.0..=fashioncraft::garment::appearance::MAX_TEXTURE_RELIEF_MM,
+            super::workspace::prop_row(ui, tr("Relief (mm)"), |ui| {
+                super::workspace::slim(
+                    ui,
+                    egui::Slider::new(
+                        &mut t.relief_mm,
+                        0.0..=fashioncraft::garment::appearance::MAX_TEXTURE_RELIEF_MM,
+                    ),
                 )
-                .text(tr("Relief (mm)")),
-            )
-            .on_hover_text(tr(
-                "Bright parts of the image stand out by this much; 0 is flat",
-            ));
+                .on_hover_text(tr(
+                    "Bright parts of the image stand out by this much; 0 is flat",
+                ));
+            });
             ui.small(tr("The colours tint the image: white shows it as it is."));
             for (k, label, hover) in [
                 (
@@ -560,8 +566,7 @@ fn appearance_controls(
                 } else {
                     &mut t.roughness_asset_id
                 };
-                ui.horizontal(|ui| {
-                    ui.label(tr(label));
+                super::workspace::prop_row(ui, tr(label), |ui| {
                     let pick = if id.is_some() {
                         tr("Replace…")
                     } else {

@@ -42,7 +42,7 @@ impl Atelier {
             let delta = b - a;
             let a = self.authoring.board.screen(rect, a);
             let b = self.authoring.board.screen(rect, b);
-            let color = ui.visuals().selection.stroke.color;
+            let color = super::workspace::accent(ui.visuals());
             painter.line_segment([a, b], Stroke::new(2., color));
             for point in [a, b] {
                 painter.circle_filled(point, 4., color);

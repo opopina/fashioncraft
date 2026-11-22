@@ -63,7 +63,8 @@ impl Atelier {
         let ui_lang = self.prefs.language;
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!("{} faces marked", self.issue.faces.len()));
-            ui.add(
+            super::workspace::slim(
+                ui,
                 egui::Slider::new(&mut self.issue.radius, 4. ..=48.)
                     .text(i18n::tr(ui_lang, "Brush px")),
             );

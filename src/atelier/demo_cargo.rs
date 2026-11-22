@@ -1,7 +1,7 @@
 //! The demo for the promo video: wide trousers designed from scratch in the new interface, every
 //! change made with a visible gesture, the way a designer works. Each piece is drawn on the 2D
 //! board with the polygon tool, placed on its point of the body, sewn edge to edge, simulated,
-//! adjusted at the hem, given a fabric, and coloured by the Assistant asked in Spanish.
+//! adjusted at the hem, given a fabric, and coloured by the Assistant asked in English.
 //!
 //!     FASHIONCRAFT_DEMO=cargo FASHIONCRAFT_DEMO_RECORD=1 FASHIONCRAFT_GPU_COMPUTE=0 fashioncraft
 //!
@@ -18,26 +18,27 @@ type Outline = [([f64; 2], Option<[f64; 2]>); 7];
 
 /// One front leg, metres, y down from the waist: the crotch on the left, the side seam on the
 /// right, as the leg anchors lay a piece (its right goes to the outside of the leg on either
-/// leg). Waist 22.4 cm, hip 33.8 cm across, a 7 cm crotch extension 30 cm down, a wide straight
-/// leg to a 31 cm hem, 95 cm long (ankle length: a longer hem is stepped on when walking).
+/// leg). A cargo cut: 22 cm at the waist (88 cm round with the backs), the hip 18 cm down, a
+/// 24 cm rise, a straight wide leg to a 28 cm hem, 95 cm long (ankle length: a longer hem is
+/// stepped on when walking).
 const FRONT: Outline = [
-    ([0.091, 0.0], None),
-    ([0.3147, 0.0], None),
-    ([0.3381, 0.21], None),
-    ([0.3246, 0.95], None),
-    ([0.0131, 0.95], None),
-    ([0.0, 0.30], None),
-    ([0.0676, 0.21], None),
+    ([0.085, 0.0], None),
+    ([0.305, 0.0], None),
+    ([0.33, 0.18], None),
+    ([0.30, 0.95], None),
+    ([0.02, 0.95], None),
+    ([0.0, 0.24], None),
+    ([0.06, 0.17], None),
 ];
-/// One back leg: the same, with a longer crotch extension (11 cm) and more seat.
+/// One back leg: the same waist and side seam lengths, more seat and a longer crotch extension.
 const BACK: Outline = [
-    ([0.1316, 0.0], None),
-    ([0.3553, 0.0], None),
-    ([0.3787, 0.21], None),
-    ([0.3652, 0.95], None),
-    ([0.0537, 0.95], None),
-    ([0.0, 0.30], None),
-    ([0.1082, 0.21], None),
+    ([0.12, 0.0], None),
+    ([0.34, 0.0], None),
+    ([0.37, 0.18], None),
+    ([0.335, 0.95], None),
+    ([0.045, 0.95], None),
+    ([0.0, 0.25], None),
+    ([0.10, 0.16], None),
 ];
 /// The pieces once the starting rectangle is gone.
 const FRONT_RIGHT: usize = 0;
@@ -46,7 +47,7 @@ const BACK_RIGHT: usize = 2;
 const BACK_LEFT: usize = 3;
 
 /// What the Assistant is asked, typed letter by letter.
-const ASK: &str = "Pon el pantalón en color crudo y vuelve a simular la caída.";
+const ASK: &str = "Make the trousers ecru and simulate the drape again.";
 
 /// A point `f` of the way along an edge from its waist end `top` to its other end.
 fn along(top: [f64; 2], other: [f64; 2], f: f64) -> [f64; 2] {
@@ -71,6 +72,16 @@ fn trousers_on_body(a: &Atelier) -> bool {
     let centre = x.iter().map(|p| p.y).sum::<f64>() / x.len() as f64;
     let highest = x.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
     highest > 0.95 && (0.35..0.95).contains(&centre)
+}
+
+/// The inspector: right of the 2D board.
+fn inspector() -> Target {
+    Target::Find(Box::new(|a: &Atelier| {
+        a.authoring
+            .selection
+            .board_rect
+            .map(|r| egui::pos2(r.right() + 130., r.center().y))
+    }))
 }
 
 /// The cargo pocket on a front leg, stitched on three sides (its top is the opening): the
@@ -151,11 +162,11 @@ pub(super) fn cargo() -> Vec<Step> {
     let base_seams = Rc::new(Cell::new(0usize));
     let entries = Rc::new(Cell::new(0usize));
     let mut s = vec![
-        act("start from the default workspace, in Spanish", |a, ctx| {
+        act("start from the default workspace, in English", |a, ctx| {
             a.prefs.workspace = Default::default();
             a.prefs.garment_display = Default::default();
             a.clean_view = false;
-            a.prefs.language = i18n::Language::Spanish;
+            a.prefs.language = i18n::Language::English;
             a.dispatch_command(commands::CommandId::SplitView, ctx)
         }),
         Step::Wait(1.0),
@@ -168,12 +179,12 @@ pub(super) fn cargo() -> Vec<Step> {
             },
         ),
         Step::Record(true),
-        caption("FashionCraft · un pantalón ancho desde cero"),
+        caption("FashionCraft · cargo trousers from scratch"),
         Step::Wait(2.0),
-        caption("Un proyecto nuevo"),
+        caption("A new project"),
     ];
     menu(&mut s, "File", None, "file.new");
-    s.extend([Step::Wait(0.8), caption("Un avatar de la biblioteca")]);
+    s.extend([Step::Wait(0.8), caption("An avatar from the library")]);
     menu(&mut s, "Avatar", None, "avatar.library");
     s.extend([
         Step::Wait(2.0),
@@ -186,7 +197,7 @@ pub(super) fn cargo() -> Vec<Step> {
             20.,
         ),
         Step::Wait(1.2),
-        caption("El tablero 2D a pantalla completa para dibujar"),
+        caption("The 2D board full screen, to draw on"),
     ]);
     menu(&mut s, "Window", None, "workspace.view_patterns");
     s.extend([
@@ -208,7 +219,7 @@ pub(super) fn cargo() -> Vec<Step> {
         guard("the board shows the whole drawing area", |a| {
             (250.0..=700.0).contains(&a.authoring.board.scale)
         }),
-        caption("Herramienta polígono: clic en cada esquina del delantero"),
+        caption("Polygon tool: click each corner of the front"),
         click("menu:2D Pattern"),
         Step::Hover(Target::widget("sub:Create")),
         click("cmd:tool.draw"),
@@ -228,7 +239,7 @@ pub(super) fn cargo() -> Vec<Step> {
             3.,
         ),
         Step::Wait(0.4),
-        caption("El otro delantero: el avatar le da la vuelta al colocarlo"),
+        caption("The other front: the avatar flips it when it is placed"),
     ]);
     draw(&mut s, &origin, at[1], &FRONT);
     s.extend([
@@ -238,7 +249,7 @@ pub(super) fn cargo() -> Vec<Step> {
             3.,
         ),
         Step::Wait(0.4),
-        caption("Los traseros, con más tiro"),
+        caption("The backs, with a longer rise"),
     ]);
     draw(&mut s, &origin, at[2], &BACK);
     s.push(until(
@@ -251,7 +262,7 @@ pub(super) fn cargo() -> Vec<Step> {
     s.extend([
         until("four legs", |a| a.project.template.panels.len() >= 5, 3.),
         Step::Wait(0.6),
-        caption("El rectángulo inicial sobra: seleccionarlo y Supr"),
+        caption("The starter rectangle goes: select it, press Delete"),
         click("menu:2D Pattern"),
         Step::Hover(Target::widget("sub:Edit")),
         click("cmd:tool.edit"),
@@ -269,14 +280,14 @@ pub(super) fn cargo() -> Vec<Step> {
             3.,
         ),
         Step::Wait(0.6),
-        caption("De vuelta a la vista dividida: 3D y 2D"),
+        caption("Back to the split view: 3D and 2D"),
     ]);
     menu(&mut s, "Window", None, "workspace.view_split");
     s.extend([
         Step::Wait(0.8),
         click("header.2d.fit"),
         Step::Wait(0.6),
-        caption("Los puntos de colocación del avatar"),
+        caption("The avatar's placement points"),
     ]);
     menu(
         &mut s,
@@ -286,7 +297,7 @@ pub(super) fn cargo() -> Vec<Step> {
     );
     s.extend([
         Step::Wait(0.8),
-        caption("Cada pieza a su punto: clic en la pieza, luego en el muslo"),
+        caption("Each piece to its point: click the piece, then the thigh"),
         Step::Click(piece(FRONT_RIGHT, &FRONT, [0.17, 0.5])),
         Step::Click(anchor("thigh-right-front")),
         Step::Wait(0.8),
@@ -298,7 +309,7 @@ pub(super) fn cargo() -> Vec<Step> {
                 .iter()
                 .all(|&i| placed(a, i).is_some_and(|t| t.z > 0.))
         }),
-        caption("8 gira la cámara a la espalda"),
+        caption("8 turns the camera to the back"),
         Step::Key(egui::Key::Num8, egui::Modifiers::NONE),
         until(
             "the camera faces the back",
@@ -317,7 +328,7 @@ pub(super) fn cargo() -> Vec<Step> {
                 .iter()
                 .all(|&i| placed(a, i).is_some_and(|t| t.z < 0.))
         }),
-        caption("2 vuelve al frente"),
+        caption("2 brings it to the front again"),
         Step::Key(egui::Key::Num2, egui::Modifiers::NONE),
         Step::Wait(0.8),
     ]);
@@ -327,6 +338,41 @@ pub(super) fn cargo() -> Vec<Step> {
         Some("Avatar"),
         "display.arrangement_points",
     );
+    // Before sewing and trims (a piece with trims keeps its contour): the fronts' hems wider.
+    // The corner snaps into line with the hip point above it: a straight side, 2.5 cm wider.
+    s.extend([
+        Step::Wait(0.5),
+        caption("One tweak before sewing: drag the hem corner out, in line with the hip"),
+        Step::Drag(
+            piece(FRONT_RIGHT, &FRONT, corner(&FRONT, 3)),
+            piece(
+                FRONT_RIGHT,
+                &FRONT,
+                [corner(&FRONT, 3)[0] + 0.035, corner(&FRONT, 3)[1]],
+            ),
+        ),
+        Step::Wait(0.5),
+        Step::Drag(
+            piece(FRONT_LEFT, &FRONT, corner(&FRONT, 3)),
+            piece(
+                FRONT_LEFT,
+                &FRONT,
+                [corner(&FRONT, 3)[0] + 0.035, corner(&FRONT, 3)[1]],
+            ),
+        ),
+        Step::Wait(0.6),
+        guard("both front hems line up with the hip", |a| {
+            [FRONT_RIGHT, FRONT_LEFT].iter().all(|&i| {
+                a.project
+                    .template
+                    .panels
+                    .get(i)
+                    .and_then(|p| p.polygon.as_ref())
+                    .and_then(|p| p.points.get(3))
+                    .is_some_and(|q| q[0] > corner(&FRONT, 3)[0] + 0.02)
+            })
+        }),
+    ]);
     s.extend([
         Step::Wait(0.5),
         act("count the seams there are", {
@@ -336,7 +382,7 @@ pub(super) fn cargo() -> Vec<Step> {
                 Ok(())
             }
         }),
-        caption("Coser: clic cerca de la cintura en un borde, luego en su pareja"),
+        caption("Sewing: click near the waist on one edge, then on its partner"),
     ]);
     menu(&mut s, "Sewing", None, "tool.sew");
     s.push(Step::Wait(0.4));
@@ -411,7 +457,7 @@ pub(super) fn cargo() -> Vec<Step> {
     // Cargo pockets: an internal line on each front leg, over the outside of the thigh, then a
     // free topstitch along it (finishing a line leaves it selected).
     s.push(caption(
-        "Bolsillos cargo: una línea interna en cada delantero, y su pespunte",
+        "Cargo pockets: an internal line on each front, then its topstitch",
     ));
     // Closer to the two fronts to draw them (the wheel zooms toward the cursor).
     s.push(Step::Scroll(piece(FRONT_RIGHT, &FRONT, [0.45, 0.5]), 260.));
@@ -451,7 +497,7 @@ pub(super) fn cargo() -> Vec<Step> {
         ));
         s.push(Step::Wait(0.4));
     }
-    s.push(caption("Un botón en cada bolsillo"));
+    s.push(caption("A button on each pocket"));
     menu(&mut s, "Materials", Some("Buttons"), "trim.button");
     for leg in [FRONT_RIGHT, FRONT_LEFT] {
         s.push(Step::Click(piece(leg, &FRONT, POCKET_BUTTON)));
@@ -466,7 +512,7 @@ pub(super) fn cargo() -> Vec<Step> {
         ),
         click("header.2d.fit"),
         Step::Wait(0.6),
-        caption("Pespunte de pretina en la cintura de cada pieza"),
+        caption("Waistband topstitch on every piece"),
         click("menu:2D Pattern"),
         Step::Hover(Target::widget("sub:Edit")),
         click("cmd:tool.edit"),
@@ -494,64 +540,49 @@ pub(super) fn cargo() -> Vec<Step> {
         ));
     }
     s.extend([
-        Step::Wait(0.5),
-        caption("Un ajuste antes de simular: el bajo 4 cm más ancho, arrastrando su esquina"),
-        Step::Drag(
-            piece(FRONT_RIGHT, &FRONT, corner(&FRONT, 3)),
-            piece(
-                FRONT_RIGHT,
-                &FRONT,
-                [corner(&FRONT, 3)[0] + 0.04, corner(&FRONT, 3)[1]],
-            ),
-        ),
-        Step::Wait(0.5),
-        Step::Drag(
-            piece(FRONT_LEFT, &FRONT, corner(&FRONT, 3)),
-            piece(
-                FRONT_LEFT,
-                &FRONT,
-                [corner(&FRONT, 3)[0] + 0.04, corner(&FRONT, 3)[1]],
-            ),
-        ),
         Step::Wait(0.8),
-        caption("Algodón sobre la piel: fricción 0,6 en la pestaña Simulación"),
+        caption("The fabric: a firm denim twill on every piece"),
+        Step::Click(piece(FRONT_RIGHT, &FRONT, [0.17, 0.5])),
+        click("fabric_tab"),
+        click("fabric_presets"),
+        click("fabric_preset_denim"),
+        Step::Wait(0.6),
+        // The preset's notes push "Apply to all panels" and "Apply fabric" below the fold.
+        Step::Scroll(inspector(), -600.),
+        Step::Wait(0.8),
+        click("fabric_all"),
+        click("fabric_apply"),
+        Step::Wait(0.6),
+        guard("every piece is denim", |a| {
+            let t = &a.project.template;
+            t.panels.iter().all(|p| {
+                t.fabrics
+                    .iter()
+                    .any(|f| f.id == p.fabric && f.name.starts_with("Denim"))
+            })
+        }),
+        Step::Wait(0.6),
+        caption("Denim on skin: friction 0.1 in the Simulation tab"),
         click("simulation_tab"),
         Step::Wait(0.8),
-        Step::Scroll(
-            // The inspector: right of the 2D board.
-            Target::Find(Box::new(|a: &Atelier| {
-                a.authoring
-                    .selection
-                    .board_rect
-                    .map(|r| egui::pos2(r.right() + 130., r.center().y))
-            })),
-            -600.,
-        ),
+        Step::Scroll(inspector(), -600.),
         Step::Wait(1.0),
         click("friction.value"),
         Step::Key(egui::Key::A, egui::Modifiers::COMMAND),
-        Step::Type("0.6".into()),
+        Step::Type("0.1".into()),
         Step::Key(egui::Key::Enter, egui::Modifiers::NONE),
         Step::Wait(0.5),
-        guard("the friction is 0.6", |a| {
-            (a.settings.friction - 0.6).abs() < 1e-6
+        guard("the friction is 0.1", |a| {
+            (a.settings.friction - 0.1).abs() < 1e-6
         }),
         Step::Wait(0.6),
-        caption("Simular: el pantalón cae sobre el avatar"),
+        caption("Simulate: the trousers drape over the avatar"),
         click("toolbar.simulate"),
         Step::Wait(32.0),
         click("toolbar.simulate"),
         guard("the trousers hang on the body", trousers_on_body),
         Step::Wait(0.8),
-        caption("La tela: algodón ligero en todas las piezas"),
-        Step::Click(piece(FRONT_RIGHT, &FRONT, [0.17, 0.5])),
-        click("fabric_tab"),
-        click("fabric_presets"),
-        click("fabric_preset_cotton"),
-        click("fabric_all"),
-        click("fabric_apply"),
-        Step::Wait(1.0),
-        caption("El Asistente: se le pide en español"),
+        caption("The Assistant: just ask in plain English"),
     ]);
     menu(&mut s, "Window", None, "window.assistant");
     s.extend([
@@ -583,7 +614,7 @@ pub(super) fn cargo() -> Vec<Step> {
             "the trousers hang on the body after the Assistant",
             trousers_on_body,
         ),
-        caption("Girar la cámara: arrastrar con el botón derecho"),
+        caption("Orbit the camera: right-click and drag"),
         Step::DragRight(view3d(-160.), view3d(160.)),
         Step::Wait(0.4),
         Step::DragRight(view3d(-160.), view3d(160.)),
@@ -592,7 +623,7 @@ pub(super) fn cargo() -> Vec<Step> {
         Step::Wait(0.4),
         Step::DragRight(view3d(-160.), view3d(160.)),
         Step::Wait(1.0),
-        caption("Hecho en FashionCraft · open source"),
+        caption("Made in FashionCraft · open source"),
         Step::Wait(2.5),
         caption(""),
         Step::Record(false),

@@ -11,6 +11,8 @@
 //!
 //! [`plan`] lays the bar out without AppKit, so it is checked on every system; the AppKit part
 //! (macOS only) turns the plan into menus and reports which items were chosen.
+// Outside macOS only the tests use the plan, so the build alone sees it as dead code.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 use super::commands::{self, CommandId};
 use super::i18n::{self, Language};
 use super::keymap::{self, KeymapName};

@@ -3,6 +3,7 @@
 //! preferences. A provider's environment variable (ANTHROPIC_API_KEY…) works too.
 use fashioncraft::assistant::Provider;
 
+#[cfg(any(target_os = "macos", windows))]
 const SERVICE: &str = "FashionCraft";
 
 fn account(provider: Provider) -> String {

@@ -164,6 +164,21 @@ the notches, the piece texts or the units. **That still needs a pattern CAD:** G
 Optitex or Audaces, which a workshop has. Valentina and Seamly2D write these files but do not
 open them.
 
+### Checked in CADCraft
+
+CADCraft 0.20.1, the ArtCraft family's general CAD, opened the ASTM T-shirt the same day. It drew
+the front, back and pocket with their cut and sew lines, the curved neckline, the grain lines,
+the Piece System Text and the Style System Text below the pieces.
+
+![The ASTM sample T-shirt open in CADCraft](screenshots/dxf-astm-in-cadcraft.png)
+
+Opening a `.dxf` by double-click or `open -a CADCraft` failed: "cannot open files in the
+'AutoCAD Interchange Format' format". CADCraft 0.20.1 declares only its own DXF type
+(`ai.storyteller.cadcraft.dxf`), and macOS had given `.dxf` files another one
+(`org.libreoffice.dxf-document`, registered by LibreOffice). Started with the path as its
+argument, CADCraft reads the file. The fault is CADCraft's
+packaging, not this file.
+
 ## Where each rule comes from
 
 ASTM D6673 is a paid standard and was not consulted. Marvelous Designer and CLO files were not

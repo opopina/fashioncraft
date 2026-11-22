@@ -2103,6 +2103,45 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Save project as…" => "Guardar proyecto como…",
         "Import avatar…" => "Importar avatar…",
         "Import DXF patterns…" => "Importar patrones DXF…",
+        "Import DXF-AAMA / ASTM patterns…" => "Importar patrones DXF-AAMA / ASTM…",
+        "Export DXF-AAMA / ASTM patterns…" => "Exportar patrones DXF-AAMA / ASTM…",
+        "DXF-AAMA / ASTM patterns…" => "Patrones DXF-AAMA / ASTM…",
+        "DXF-AAMA / ASTM patterns" => "Patrones DXF-AAMA / ASTM",
+        "Import DXF-AAMA / ASTM patterns" => "Importar patrones DXF-AAMA / ASTM",
+        "Dialect" => "Dialecto",
+        "Garment size" => "Talla",
+        "Metric (mm)" => "Métrico (mm)",
+        "English (inches)" => "Inglés (pulgadas)",
+        "Only the selected pieces" => "Solo las piezas seleccionadas",
+        "Pieces to cut" => "Piezas a cortar",
+        "As drawn, and mirrored (the file's Quantity: R,L)." => {
+            "Tal como están y en espejo (el Quantity: R,L del archivo)."
+        }
+        "Each piece is a block with its cut and sew lines, notches, grain line, name, size and quantity. Curves are written as points within 0.25 mm. No grading yet." => {
+            "Cada pieza es un bloque con su línea de corte y de costura, piquetes, línea de hilo, nombre, talla y cantidad. Las curvas se escriben como puntos a menos de 0,25 mm. Aún sin escalado de tallas."
+        }
+        "Save DXF…" => "Guardar DXF…",
+        "Choose DXF…" => "Elegir DXF…",
+        "mm per unit (blank = file units)" => "mm por unidad (vacío = unidades del archivo)",
+        "Update" => "Actualizar",
+        "Scale changed — update and review again" => {
+            "Cambió la escala: actualiza y revisa otra vez"
+        }
+        "sample size" => "talla base",
+        "size" => "talla",
+        "boundaries" => "bordes",
+        "notches" => "piquetes",
+        "grain" => "hilo",
+        "seam allowance" => "margen de costura",
+        "Not imported" => "No se importa",
+        "Mesh spacing (mm, 3–500)" => "Separación de malla (mm, 3–500)",
+        "The sew line becomes the piece; the cut line becomes its seam allowance. Pieces arrive unsewn, to the right of the avatar." => {
+            "La línea de costura es la pieza; la de corte, su margen de costura. Las piezas llegan sin coser, a la derecha del avatar."
+        }
+        "Import the selected pieces; what is listed above stays out" => {
+            "Importar las piezas elegidas; lo listado arriba se queda fuera"
+        }
+        "Add pieces" => "Añadir piezas",
         "Import SVG patterns…" => "Importar patrones SVG…",
         "Front view" => "Vista frontal",
         "Back view" => "Vista trasera",

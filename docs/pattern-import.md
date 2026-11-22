@@ -1,5 +1,10 @@
 # Import DXF pattern outlines
 
+> **Apparel DXF (DXF-AAMA or DXF-ASTM)?** Use File → Import → DXF-AAMA / ASTM patterns.
+> Choosing such a file here opens that importer instead. It keeps what this one cannot: cut
+> and sew lines as a seam allowance, notches, grain line, piece names, sizes and quantities.
+> See [DXF-AAMA and DXF-ASTM](dxf-aama-astm.md). This page covers plain drawings.
+
 Use **File → Import DXF patterns…** and choose a local ASCII DXF. Review the
 preview, select closed outlines, choose an existing fabric and mesh spacing,
 acknowledge excluded data, then **Add panels**. The operation adds unsewn pieces
@@ -51,8 +56,9 @@ the import modal and continues the normal unsaved-document flow.
 - Supported header units: inches, feet, millimetres, centimetres and metres;
   other values require an explicit scale. Nondefault extrusion, blocks,
   text, splines, widths and unsupported entities are reported. Non-geometry
-  DXF sections are not imported. No code-page conversion or industrial
-  DXF-AAMA/DXF-ASTM semantics are implemented.
+  DXF sections are not imported. This reader gives a plain drawing no apparel meaning.
+  Files laid out as DXF-AAMA/ASTM (a block per piece with its cut line on layer 1) go to
+  the apparel importer.
 
 The CPU adapter is `src/pattern_import.rs`; native controls live in
 `src/atelier/pattern_import_ui.rs` and use the existing document/history adapter.

@@ -143,9 +143,26 @@ The samples are in `tests/fixtures/dxf-aama/`:
 
 No sample comes from Marvelous Designer or CLO.
 
-**Not yet checked in a second application.** Opening these files in another pattern CAD
-(Gerber, Lectra, Optitex, Audaces, Valentina/Seamly2D), or at least in a general DXF reader,
-is the next validation step.
+### Checked in LibreCAD
+
+On 2026-11-21 the four samples were opened in LibreCAD 2.2.1.6, a free general DXF CAD. It was
+the official arm64 build, SHA-256 checked against the GitHub release. Its own DXF reader
+(libdxfrw) drew all four with `LibreCAD dxf2png` without complaint. In its window, the ASTM
+T-shirt opened with:
+
+- each piece a block (`FRONT_M`, `BACK_M`, `POCKET_M`), placed by its INSERT; in the
+  drawings, the hand-written yoke is turned 90° as its INSERT asks;
+- the file's numbered layers listed in the layer tree;
+- the cut and sew lines, the arc of the hand-written front, the turn and curve points, the grain
+  lines and the texts are all drawn.
+
+![The ASTM sample T-shirt open in LibreCAD, with its three piece blocks](screenshots/dxf-astm-in-librecad.png)
+
+LibreCAD shows that the files are sound DXF with their blocks, layers and geometry where they
+belong. It knows nothing of apparel, so it says nothing about how a pattern CAD reads
+the notches, the piece texts or the units. **That still needs a pattern CAD:** Gerber, Lectra,
+Optitex or Audaces, which a workshop has. Valentina and Seamly2D write these files but do not
+open them.
 
 ## Where each rule comes from
 

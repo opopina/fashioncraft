@@ -67,6 +67,7 @@ const FILE: &[Item] = &[
         &[
             Run("SVG patterns…", C::ImportSvg),
             Run("DXF patterns…", C::ImportDxf),
+            Run("DXF-AAMA / ASTM patterns…", C::ImportDxfAama),
             Run("OBJ…", C::ImportAvatar),
             Run("FBX…", C::ImportAvatar),
             Run("glTF…", C::ImportAvatar),
@@ -81,6 +82,7 @@ const FILE: &[Item] = &[
         "Export",
         &[
             Run("Session files (OBJ, patterns, previews)", C::ExportSession),
+            Run("DXF-AAMA / ASTM patterns…", C::ExportDxfAama),
             Run("OBJ…", C::ExportObj),
             Run("OBJ (selected)…", C::ExportObjSelected),
             Run("FBX…", C::ExportFbx),
@@ -437,6 +439,7 @@ const WINDOW: &[Item] = &[
     Run("Library", C::ToggleLibrary),
     Run("Object browser", C::ToggleObjectBrowser),
     Run("History", C::ToggleHistory),
+    Run("Assistant", C::ToggleAssistant),
     S,
     Run("Reset layout", C::ResetLayout),
     X(Custom::ToolRail),
@@ -499,7 +502,7 @@ use super::garment_display::GarmentStyle;
 
 impl Atelier {
     /// Whether a toggle command is on, for its menu item's highlight.
-    fn command_checked(&self, id: CommandId) -> bool {
+    pub(super) fn command_checked(&self, id: CommandId) -> bool {
         use CommandId as C;
         let display = &self.prefs.garment_display;
         match id {
@@ -585,6 +588,7 @@ impl Atelier {
             C::OpenAvatarLibrary => self.authoring.avatar_library.open,
             C::DraftTshirt => self.authoring.shirt_draft.open,
             C::ToggleHistory => self.authoring.history_ui.open,
+            C::ToggleAssistant => self.assistant.open,
             C::ToggleObjectBrowser => self.authoring.object_browser.open,
             C::DraftSkirt => self.authoring.skirt_draft.open,
             C::AttachPins => self.project.template.pins_attached,

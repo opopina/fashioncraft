@@ -36,13 +36,23 @@ impl Atelier {
         egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Simulation state")))
             .id_salt("activation")
             .show(ui, |ui| {
-                ui.small(match state {
-                    None => i18n::tr(ui_lang, "Active: simulated and colliding"),
-                    Some(false) => i18n::tr(ui_lang, "Deactivated: held in place, other cloth passes through it"),
-                    Some(true) => {
-                        i18n::tr(ui_lang, "Deactivated with its seams: held in place, not sewn, other cloth passes through it")
-                    }
-                });
+                let (word, help) = match state {
+                    None => ("Active", "Active: simulated and colliding"),
+                    Some(false) => (
+                        "Deactivated",
+                        "Deactivated: held in place, other cloth passes through it",
+                    ),
+                    Some(true) => (
+                        "Deactivated with seams",
+                        "Deactivated with its seams: held in place, not sewn, other cloth passes through it",
+                    ),
+                };
+                super::workspace::prop_row_help(
+                    ui,
+                    i18n::tr(ui_lang, "State"),
+                    i18n::tr(ui_lang, help),
+                    |ui| ui.label(i18n::tr(ui_lang, word)),
+                );
                 ui.horizontal_wrapped(|ui| {
                     if ui
                         .button(i18n::tr(ui_lang, "Deactivate"))
@@ -86,8 +96,7 @@ impl Atelier {
                     }
                 });
                 ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Superimpose"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Superimpose"), |ui| {
                     if ui
                         .button(i18n::tr(ui_lang, "Over"))
                         .on_hover_text(i18n::tr(ui_lang, "Lay the selected pieces on the outside of the pieces they are sewn to"))

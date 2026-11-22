@@ -20,6 +20,8 @@ Anny, Copyright (C) 2025 NAVER Corporation, is licensed under the Apache License
 
 Rust dependencies are resolved by `Cargo.lock` and retain their respective upstream licenses. They are not vendored here. Consult each dependency's manifest/notices when preparing a binary distribution.
 
+The Assistant (`src/assistant.rs`, `src/atelier/assistant_ui.rs`) reaches model providers over HTTPS with [ureq](https://github.com/algesten/ureq) and [rustls](https://github.com/rustls/rustls), trusting Mozilla's root certificates as packaged by [webpki-roots](https://github.com/rustls/webpki-roots) (the certificate data is CDLA-Permissive-2.0). API keys are kept with [keyring](https://github.com/hwchen/keyring-rs) in the macOS keychain or the Windows credential manager.
+
 Research and public manual references are recorded in `docs/research.md`, `docs/research-patterns.md`, `docs/ogc.md` and `docs/manual-study.md`. Citations do not imply that upstream implementations, assets or trademarks are included or licensed by this project.
 
 ## ClothCraft source

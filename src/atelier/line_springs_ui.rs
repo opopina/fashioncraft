@@ -49,8 +49,7 @@ impl Atelier {
         {
             let mut edited = spring.clone();
             let mut commit = false;
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Ratio"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Ratio"), |ui| {
                 let r = ui.add(
                     egui::DragValue::new(&mut edited.ratio)
                         .range(30.0..=100.0)

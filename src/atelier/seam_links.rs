@@ -110,9 +110,12 @@ impl Atelier {
                     Vec2::X
                 };
                 let tick = Vec2::new(-direction.y, direction.x) * 3.;
-                for end in [a, b] {
-                    painter.line_segment([end - tick, end + tick], Stroke::new(1.2, color));
-                    painter.circle_filled(end, if selected { 2.5 } else { 1.8 }, color);
+                // On the 3D garment an unchosen link is only its faint dashes.
+                if !in_3d || selected {
+                    for end in [a, b] {
+                        painter.line_segment([end - tick, end + tick], Stroke::new(1.2, color));
+                        painter.circle_filled(end, if selected { 2.5 } else { 1.8 }, color);
+                    }
                 }
                 if selected && i == guides.len() / 2 {
                     let middle = a.lerp(b, 0.5);

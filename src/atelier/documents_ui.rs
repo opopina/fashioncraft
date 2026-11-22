@@ -4,6 +4,8 @@ use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult};
 use std::time::Instant;
 #[path = "avatar_import_ui.rs"]
 mod avatar_import_ui;
+#[path = "dxf_aama_ui.rs"]
+mod dxf_aama_ui;
 #[path = "pattern_import_ui.rs"]
 mod pattern_import_ui;
 #[path = "svg_import_ui.rs"]
@@ -15,6 +17,7 @@ pub(super) struct DocumentUi {
     browser: template_browser::Browser,
     avatar_import: avatar_import_ui::ImportUi,
     pattern_import: pattern_import_ui::ImportUi,
+    dxf_aama: dxf_aama_ui::DxfAamaUi,
     svg_import: svg_import_ui::ImportUi,
     staged_avatar: Option<fashioncraft::avatar_import::StagedAvatar>,
     path: Option<PathBuf>,
@@ -39,6 +42,7 @@ impl DocumentUi {
             // A modal's early return must not bypass dirty-document protection.
             self.avatar_import = Default::default();
             self.pattern_import = Default::default();
+            self.dxf_aama.import = Default::default();
             self.svg_import = Default::default();
             self.browser.open = false;
             self.browser.confirming = false;
@@ -51,6 +55,7 @@ impl DocumentUi {
             browser: Default::default(),
             avatar_import: Default::default(),
             pattern_import: Default::default(),
+            dxf_aama: Default::default(),
             svg_import: Default::default(),
             staged_avatar: None,
             // The example the app opens with is not the user's work until they change it, so
@@ -285,7 +290,17 @@ impl Atelier {
                     .add_filter("ASCII DXF", &["dxf"])
                     .pick_file()
                 {
-                    self.document.pattern_import.choose(&path);
+                    // An apparel DXF goes to the importer that keeps its allowances, notches
+                    // and grain.
+                    let apparel = fashioncraft::garment::dxf_aama::load(&path)
+                        .is_ok_and(|text| fashioncraft::garment::dxf_aama::is_apparel(&text));
+                    if apparel {
+                        self.document.pattern_import = Default::default();
+                        self.document.dxf_aama.import.begin(&self.project.template);
+                        self.document.dxf_aama.import.choose(&path);
+                    } else {
+                        self.document.pattern_import.choose(&path);
+                    }
                 }
             }
             Some(Action::Cancel) => self.document.pattern_import = Default::default(),
@@ -509,6 +524,25 @@ impl Atelier {
         project.state = Some(self.scene.state.clone());
         project.animation_take = self.take_to_save();
         project
+    }
+    /// Saves to `path` without a dialog, as Save does (agents use it). Returns the path.
+    pub(super) fn save_document_to(
+        &mut self,
+        ctx: &egui::Context,
+        path: PathBuf,
+    ) -> Result<String, String> {
+        self.pause_document(ctx);
+        if !self.commit_placement() {
+            return Err(self.status.clone());
+        }
+        self.snapshot_document()
+            .save(&path)
+            .map_err(|e| e.to_string())?;
+        self.document.path = Some(path.clone());
+        self.document.dirty = false;
+        self.remove_recovery();
+        self.status = format!("Saved {}", path.display());
+        Ok(path.display().to_string())
     }
     pub(super) fn save_document(&mut self, ctx: &egui::Context, save_as: bool) -> bool {
         self.pause_document(ctx);
@@ -735,6 +769,10 @@ impl Atelier {
         self.document.dismiss_modals_for_close(ctx);
         self.svg_import_tick(ctx);
         if self.document.svg_import.open {
+            return;
+        }
+        self.dxf_aama_tick(ctx);
+        if self.document.dxf_aama.import.open {
             return;
         }
         self.pattern_import_tick(ctx);

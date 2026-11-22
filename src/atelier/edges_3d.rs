@@ -202,20 +202,17 @@ impl Atelier {
                 {
                     continue;
                 }
+                // Piece outlines stay a faint hairline on the garment; the chosen piece and
+                // the edge under the pointer take the accent, sewing ends their pink.
+                let accent = super::workspace::accent(ui.visuals());
                 let color = if endpoint.is_some() {
                     Color32::from_rgb(248, 117, 188)
-                } else if active || hover || selected {
-                    Color32::GOLD
-                } else if let Some(s) = self
-                    .project
-                    .template
-                    .seams
-                    .iter()
-                    .find(|s| s.references().any(|r| same_edge(&edge, r)))
-                {
-                    super::seam_links::seam_color(&s.id)
+                } else if active || hover {
+                    accent
+                } else if selected {
+                    accent.gamma_multiply(0.7)
                 } else {
-                    Color32::from_rgb(81, 166, 206)
+                    Color32::from_white_alpha(70)
                 };
                 for pair in ids.windows(2) {
                     if let (Some(a), Some(b)) = (
@@ -226,9 +223,9 @@ impl Atelier {
                             [a, b],
                             Stroke::new(
                                 if active || hover || endpoint.is_some() {
-                                    1.5
+                                    1.6
                                 } else {
-                                    1.3
+                                    0.8
                                 },
                                 color,
                             ),

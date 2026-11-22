@@ -51,6 +51,7 @@ fn aliases(id: CommandId) -> &'static str {
         RecoverSnapshot => "recovery autosave crash",
         ImportAvatar => "avatar body obj mannequin import",
         ImportDxf => "dxf aama astm cad import",
+        ImportDxfAama => "dxf aama astm d6673 cad plotter cutter workshop import pattern",
         ImportSvg => "svg vector import",
         OpenTemplates => "template library catalog block",
         Undo => "undo back revert",
@@ -112,6 +113,7 @@ fn aliases(id: CommandId) -> &'static str {
         CaptureView3d => "snapshot capture png screenshot 3d view",
         CaptureVideo => "video capture mp4 movie take animation record",
         ExportGltf => "export gltf glb 3d model web blender unity unreal",
+        ExportDxfAama => "export dxf aama astm d6673 cad plotter cutter workshop pattern",
         ExportObj => "export obj mtl mesh wavefront thick uv units",
         ExportObjSelected => "export obj selected pieces mesh",
         ExportMdd => "export mdd point cache take animation lightwave",
@@ -133,6 +135,7 @@ fn aliases(id: CommandId) -> &'static str {
         }
         DraftTshirt => "tshirt t-shirt draft pattern measurements bust hip sleeve size",
         ToggleHistory => "history undo redo edits list go back",
+        ToggleAssistant => "assistant ai agent chat claude chatgpt gemini model help ask",
         ToggleObjectBrowser => "object browser scene tree outliner pieces fabrics avatar list",
         DraftSkirt => "skirt draft pattern measurements waist hip flare length size",
         DraftTrousers => {
@@ -369,14 +372,67 @@ pub(super) fn launch_shortcut(ctx: &egui::Context, enabled: bool) -> bool {
         })
 }
 
+/// The command search of the top bar: a field that opens the command palette, with `label`
+/// as its placeholder and the palette's keys on its right.
 pub(super) fn launch_button(
     ui: &mut egui::Ui,
     enabled: bool,
     label: &str,
     language: super::i18n::Language,
 ) -> bool {
+    let width = ui.available_width().clamp(120., 340.);
     let response = ui
-        .add_enabled(enabled, egui::Button::new(label))
+        .add_enabled_ui(enabled, |ui| {
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(width, 26.), egui::Sense::click());
+            if ui.is_rect_visible(rect) {
+                let visuals = ui.visuals();
+                let stroke = if response.hovered() {
+                    visuals.widgets.hovered.bg_stroke
+                } else {
+                    visuals.widgets.inactive.bg_stroke
+                };
+                ui.painter().rect(
+                    rect,
+                    5.,
+                    visuals.extreme_bg_color,
+                    stroke,
+                    egui::StrokeKind::Inside,
+                );
+                let weak = visuals.weak_text_color();
+                super::icons::glyph(
+                    ui.painter(),
+                    egui::Rect::from_center_size(
+                        egui::pos2(rect.left() + 16., rect.center().y),
+                        egui::Vec2::splat(14.),
+                    ),
+                    super::icons::Icon::Search,
+                    weak,
+                    1.5,
+                );
+                ui.painter().text(
+                    egui::pos2(rect.left() + 30., rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    label,
+                    egui::FontId::proportional(12.5),
+                    weak,
+                );
+                let keys = if cfg!(target_os = "macos") {
+                    "⇧⌘P"
+                } else {
+                    "Ctrl+Shift+P"
+                };
+                ui.painter().text(
+                    egui::pos2(rect.right() - 10., rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    keys,
+                    egui::FontId::proportional(11.5),
+                    weak,
+                );
+            }
+            response
+        })
+        .inner
         .on_hover_text(super::i18n::tr(
             language,
             "Search actions · Ctrl/Cmd+Shift+P",

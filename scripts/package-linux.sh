@@ -17,13 +17,14 @@ case $arch in arm64) arch=aarch64 ;; esac
 dist=dist
 root="$dist/linux/fashioncraft-$version"
 
-cargo build --locked --release --features desktop --bin fashioncraft
+cargo build --locked --release --features desktop --bin fashioncraft --bin fashioncraft-cli
 
 rm -rf "$dist/linux"
 mkdir -p "$root/bin" "$root/share/fashioncraft/assets/makehuman" "$root/share/applications" \
     "$root/share/doc/fashioncraft"
-cp target/release/fashioncraft "$root/bin/"
-strip "$root/bin/fashioncraft" 2>/dev/null || true
+# fashioncraft-cli beside it: AI agents start `fashioncraft-cli mcp`.
+cp target/release/fashioncraft target/release/fashioncraft-cli "$root/bin/"
+strip "$root/bin/fashioncraft" "$root/bin/fashioncraft-cli" 2>/dev/null || true
 for file in mannequin.obj arrangement.json measurements.json LICENSE.ASSETS.md provenance.json; do
     cp "assets/makehuman/$file" "$root/share/fashioncraft/assets/makehuman/"
 done
@@ -66,6 +67,11 @@ if [ -n "${APPIMAGETOOL:-}" ]; then
     cat > "$appdir/AppRun" <<'APPRUN'
 #!/bin/sh
 here=$(dirname "$(readlink -f "$0")")
+# `FashionCraft.AppImage cli mcp` runs fashioncraft-cli, for AI agents.
+if [ "${1:-}" = cli ]; then
+    shift
+    exec "$here/usr/bin/fashioncraft-cli" "$@"
+fi
 exec "$here/usr/bin/fashioncraft" "$@"
 APPRUN
     chmod +x "$appdir/AppRun"

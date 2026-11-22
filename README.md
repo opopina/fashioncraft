@@ -25,6 +25,9 @@ Also on TikTok: [@ricoptech](https://www.tiktok.com/@ricoptech/video/77111286822
 A vest made from scratch in 2 minutes 37 seconds: an avatar from the library, the back and front
 drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey, and buttons
 fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).
+Two more demos drive the same interface: `FASHIONCRAFT_DEMO=outfit` (trousers drafted from the
+avatar's measurements and an overshirt drawn by hand) and `FASHIONCRAFT_DEMO=cargo` (cargo trousers
+drawn piece by piece, with pockets, topstitching and denim).
 
 [![Watch the vest demo](docs/media/vest-demo-poster.jpg)](docs/media/vest-demo.mp4)
 
@@ -67,7 +70,8 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
 - **2D patterns:** polygons, rectangles, ellipses, arc sectors, spirals and freehand shapes;
   internal lines, shapes and darts; mirrored pieces, booleans, trace, cut and sew, slash and
   spread, merge and unfold; rulers, smart guides and grid snapping. T-shirt, skirt and trousers
-  drafted from measurements. DXF and SVG import, and a 1:1 PDF print of the patterns.
+  drafted from measurements. DXF-AAMA and DXF-ASTM import and export for pattern CAD, plotters
+  and cutters; DXF and SVG import; and a 1:1 PDF print of the patterns.
 - **Sewing:** segment, free and M:N sewing, automatic sewing, easing, length checks, pleats and
   torn seams.
 - **3D garment:** arrangement points on the body, fold arrangement, superimpose, re-drape and auto
@@ -80,32 +84,58 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
   gender, age, build and twenty measurements, using MakeHuman's CC0 shapes with the settings of
   NAVER LABS Europe's Anny. Avatar import from OBJ, glTF, FBX, USD and Alembic; an avatar editor,
   tape and girth measures, an automatic skeleton, poses and BVH motion.
-- **Animation and export:** record takes; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD
-  point caches and OBJ sequences; capture video of the 3D view.
-- **Workspace:** English and Spanish, a command palette, Python scripting and project recovery.
+- **Animation and export:** record takes on the GPU or the CPU, with the cloth following a walking
+  body; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD point caches and OBJ sequences;
+  capture video of the 3D view.
+- **Workspace:** a dark desktop-studio interface: each view has a header and a tool band, display
+  menus and the current tool's controls float over the view, and property rows carry info tips.
+  English and Spanish, a command palette, Python scripting and project recovery.
+- **AI:** an Assistant chat (Window › Assistant) that drafts, dresses, simulates and checks
+  garments for you with Claude, ChatGPT, Gemini or a local model, and an MCP server
+  (`fashioncraft-cli mcp`) for Claude Desktop, Claude Code, Cursor and ArtCraft.
 
 ![The avatar library](docs/screenshots/avatar-library.png)
+
+## AI agents
+
+Ask the Assistant (**Window › Assistant**) for something like "Draft a denim skirt for this avatar,
+simulate it and show me how it falls". It works in the open project as you watch, and Undo takes
+any step back. Choose Claude, ChatGPT, Gemini or a local model under **Connection** and paste your
+API key. The key is saved in the system keychain.
+
+MCP clients can drive FashionCraft too. Turn on **Settings › AI agents › Let AI agents use
+FashionCraft** and copy the entry shown there into Claude Desktop, Claude Code, Cursor or another
+MCP client. See [AI agents and the Assistant](docs/agents.md).
 
 ## Files
 
 | Data | Opens | Saves or exports |
 |---|---|---|
 | Project | FashionCraft project JSON (also ClothCraft's) | Project JSON with its `.assets` folder |
-| 2D patterns | Closed outlines from DXF (generic planar) and SVG | 1:1 PDF, SVG |
+| 2D patterns | DXF-AAMA and DXF-ASTM (D6673) pieces; closed outlines from DXF (generic planar) and SVG | DXF-AAMA, DXF-ASTM (D6673), 1:1 PDF, SVG |
 | Avatar | OBJ, glTF/GLB, FBX, USD, Alembic; BVH motion | glTF/GLB, FBX |
 | Garment | — | OBJ + MTL, glTF/GLB, FBX, Alembic, USD/USDZ, PC2, MDD, OBJ sequence |
 
 Marvelous Designer and CLO project files are not supported; exchange formats are. See the
-[input/output contracts](docs/interoperability.md).
+[input/output contracts](docs/interoperability.md). DXF-AAMA/ASTM pieces carry:
+- their cut and sew lines;
+- notches;
+- grain line;
+- name, size and quantity;
+- units.
+
+Grading, fold lines and drill holes are not carried yet. See [what goes in and out](docs/dxf-aama-astm.md).
 
 ## Status
 
 - **macOS:** the main platform, tested on Apple silicon.
 - **Linux:** being tested on Arch (Hyprland, NVIDIA).
-- **Windows:** not tested yet.
-- **Physics:** the GPU simulation is the fast path. Dense garments can still keep moving or snag on the
-  body (a sleeve on a spread thumb, for example), and the CPU path is slow on fine meshes. See
-  [the contact model](docs/ogc.md).
+- **Windows:** tested on Windows 11 (x64): the installer and the full vest demo.
+- **Physics:** the GPU simulation is the fast path, for takes too: when the body moves, the GPU finds
+  contacts again within each step, so a walking leg no longer passes through the trousers. Dense
+  garments can still keep moving or snag on the body (a sleeve on a spread thumb, for example), a
+  little cloth can still sink into a bending knee in a walk, and the CPU path is slow on fine
+  meshes. See [the contact model](docs/ogc.md).
 
 ## Contributing
 

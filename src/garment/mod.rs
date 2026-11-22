@@ -7,6 +7,7 @@ pub mod curvefit;
 pub mod curves;
 pub mod diagnostics;
 pub mod domain;
+pub mod dxf_aama;
 pub mod dxf_import;
 pub mod embedding;
 pub mod export;

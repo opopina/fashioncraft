@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub(super) enum Language {
     #[default]
+    #[serde(alias = "English")]
     English,
+    #[serde(alias = "Spanish", alias = "español", alias = "Español")]
     Spanish,
 }
 
@@ -335,6 +337,55 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Settings" => "Ajustes",
         "Window" => "Ventana",
         "Help" => "Ayuda",
+        // macOS menu bar: the application menu and the entries opened as windows.
+        "About FashionCraft" => "Acerca de FashionCraft",
+        "Settings…" => "Ajustes…",
+        "Services" => "Servicios",
+        "Hide FashionCraft" => "Ocultar FashionCraft",
+        "Hide Others" => "Ocultar otros",
+        "Show All" => "Mostrar todo",
+        "Quit FashionCraft" => "Salir de FashionCraft",
+        "Files & formats…" => "Archivos y formatos…",
+        "Presentation…" => "Presentación…",
+        "Presentation" => "Presentación",
+        "FreeSewing terms of use" => "Condiciones de uso de FreeSewing",
+        // Tool lists of the 2D and 3D tool rows.
+        "Simulating" => "Simulando",
+        "Ready" => "Listo",
+        "Seams of this piece" => "Costuras de esta pieza",
+        "Render quality (3D view)" => "Calidad de render (vista 3D)",
+        "Smooth edges" => "Bordes suaves",
+        "Soft ground shadow" => "Sombra suave en el suelo",
+        "Floor grid" => "Cuadrícula del suelo",
+        "Show trims and pins" => "Mostrar avíos y alfileres",
+        "Maps" => "Mapas",
+        "Properties" => "Propiedades",
+        "Property editor" => "Editor de propiedades",
+        "Design" => "Diseño",
+        "Search commands" => "Buscar comandos",
+        "Space" => "Espacio",
+        "No trims yet: add them from the 2D tool row." => {
+            "Aún no hay avíos: añádelos desde la fila de herramientas 2D."
+        }
+        "No graphics yet." => "Aún no hay gráficos.",
+        "Fabric type" => "Tipo de tejido",
+        "Particle distance (mm)" => "Distancia entre partículas (mm)",
+        // Properties › Piece › Seams.
+        "Name" => "Nombre",
+        "Joins" => "Une",
+        "Type" => "Tipo",
+        "Seam" => "Costura",
+        "Side A" => "Lado A",
+        "Side B" => "Lado B",
+        "segments" => "segmentos",
+        "More tools" => "Más herramientas",
+        "Shape by size" => "Forma por medidas",
+        "Shape by size…" => "Forma por medidas…",
+        "Select" => "Seleccionar",
+        "Select with" => "Seleccionar con",
+        "More tools: the corner triangle or a right-click" => {
+            "Más herramientas: el triángulo de la esquina o clic derecho"
+        }
         "New project" => "Nuevo proyecto",
         "Open project…" => "Abrir proyecto…",
         "Open" => "Abrir",
@@ -1238,6 +1289,64 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Swap A / B" => "Intercambiar A / B",
         "Swap seam ends · F" => "Intercambiar extremos de costura · F",
         "T-shirt from measurements" => "Camiseta por medidas",
+        "AI agents" => "Agentes de IA",
+        "Let AI agents use FashionCraft" => "Dejar que los agentes de IA usen FashionCraft",
+        "MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's gateway work in this window through fashioncraft-cli mcp. Off, nothing listens." => {
+            "Los clientes MCP como Claude Desktop, Claude Code, Cursor o la pasarela de ArtCraft trabajan en esta ventana a través de fashioncraft-cli mcp. Apagado, nada escucha."
+        }
+        "They work in the open window, with undo, and save and export only into Documents/FashionCraft." => {
+            "Trabajan en la ventana abierta, con deshacer, y solo guardan y exportan en Documentos/FashionCraft."
+        }
+        "MCP client entry" => "Entrada para el cliente MCP",
+        "Assistant" => "Asistente",
+        "You" => "Tú",
+        "Connection" => "Conexión",
+        "New chat" => "Nuevo chat",
+        "Provider" => "Proveedor",
+        "Model" => "Modelo",
+        "Address" => "Dirección",
+        "API key" => "Clave de API",
+        "paste a key to save it" => "pega una clave para guardarla",
+        "Save" => "Guardar",
+        "Forget it" => "Olvidarla",
+        "Using the key in" => "Usando la clave de",
+        "No key yet: create one in the provider's console." => {
+            "Aún no hay clave: crea una en la consola del proveedor."
+        }
+        "A key is saved in the macOS keychain." => "Hay una clave guardada en el llavero de macOS.",
+        "A key is saved in the Windows credential manager." => {
+            "Hay una clave guardada en el administrador de credenciales de Windows."
+        }
+        "A key is saved in a private file in FashionCraft's session folder." => {
+            "Hay una clave guardada en un archivo privado de la carpeta de sesión de FashionCraft."
+        }
+        "Your messages, the scene's summary and screenshots go to this provider. A local model keeps them on this computer." => {
+            "Tus mensajes, el resumen de la escena y las capturas van a este proveedor. Un modelo local los deja en este ordenador."
+        }
+        "no model chosen" => "ningún modelo elegido",
+        "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
+            "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
+        }
+        "Stopping after this step…" => "Deteniendo tras este paso…",
+        "Working in the project…" => "Trabajando en el proyecto…",
+        "Thinking…" => "Pensando…",
+        "Message the assistant (Enter sends)" => "Escribe al asistente (Intro envía)",
+        "Send" => "Enviar",
+        "Changes can be undone with Undo." => "Los cambios se pueden deshacer con Deshacer.",
+        "The assistant stopped unexpectedly." => "El asistente se detuvo de forma inesperada.",
+        "Reading the scene" => "Leyendo la escena",
+        "Looking up commands" => "Buscando comandos",
+        "Running a command" => "Ejecutando un comando",
+        "Drafting a pattern" => "Trazando un patrón",
+        "Changing the fabric" => "Cambiando la tela",
+        "Changing the colour" => "Cambiando el color",
+        "Looking at the 3D view" => "Mirando la vista 3D",
+        "Saving the project" => "Guardando el proyecto",
+        "Exporting the garment" => "Exportando la prenda",
+        "Using a tool" => "Usando una herramienta",
+        "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, Gemini or a local model; set its connection in its own window." => {
+            "El Asistente (Ventana › Asistente) trabaja en esta ventana con Claude, ChatGPT, Gemini o un modelo local; su conexión se configura en su propia ventana."
+        }
         "Tack" => "Hilván",
         "Target" => "Objetivo",
         "Technical view · Alt+0" => "Vista técnica · Alt+0",
@@ -1994,6 +2103,45 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Save project as…" => "Guardar proyecto como…",
         "Import avatar…" => "Importar avatar…",
         "Import DXF patterns…" => "Importar patrones DXF…",
+        "Import DXF-AAMA / ASTM patterns…" => "Importar patrones DXF-AAMA / ASTM…",
+        "Export DXF-AAMA / ASTM patterns…" => "Exportar patrones DXF-AAMA / ASTM…",
+        "DXF-AAMA / ASTM patterns…" => "Patrones DXF-AAMA / ASTM…",
+        "DXF-AAMA / ASTM patterns" => "Patrones DXF-AAMA / ASTM",
+        "Import DXF-AAMA / ASTM patterns" => "Importar patrones DXF-AAMA / ASTM",
+        "Dialect" => "Dialecto",
+        "Garment size" => "Talla",
+        "Metric (mm)" => "Métrico (mm)",
+        "English (inches)" => "Inglés (pulgadas)",
+        "Only the selected pieces" => "Solo las piezas seleccionadas",
+        "Pieces to cut" => "Piezas a cortar",
+        "As drawn, and mirrored (the file's Quantity: R,L)." => {
+            "Tal como están y en espejo (el Quantity: R,L del archivo)."
+        }
+        "Each piece is a block with its cut and sew lines, notches, grain line, name, size and quantity. Curves are written as points within 0.25 mm. No grading yet." => {
+            "Cada pieza es un bloque con su línea de corte y de costura, piquetes, línea de hilo, nombre, talla y cantidad. Las curvas se escriben como puntos a menos de 0,25 mm. Aún sin escalado de tallas."
+        }
+        "Save DXF…" => "Guardar DXF…",
+        "Choose DXF…" => "Elegir DXF…",
+        "mm per unit (blank = file units)" => "mm por unidad (vacío = unidades del archivo)",
+        "Update" => "Actualizar",
+        "Scale changed — update and review again" => {
+            "Cambió la escala: actualiza y revisa otra vez"
+        }
+        "sample size" => "talla base",
+        "size" => "talla",
+        "boundaries" => "bordes",
+        "notches" => "piquetes",
+        "grain" => "hilo",
+        "seam allowance" => "margen de costura",
+        "Not imported" => "No se importa",
+        "Mesh spacing (mm, 3–500)" => "Separación de malla (mm, 3–500)",
+        "The sew line becomes the piece; the cut line becomes its seam allowance. Pieces arrive unsewn, to the right of the avatar." => {
+            "La línea de costura es la pieza; la de corte, su margen de costura. Las piezas llegan sin coser, a la derecha del avatar."
+        }
+        "Import the selected pieces; what is listed above stays out" => {
+            "Importar las piezas elegidas; lo listado arriba se queda fuera"
+        }
+        "Add pieces" => "Añadir piezas",
         "Import SVG patterns…" => "Importar patrones SVG…",
         "Front view" => "Vista frontal",
         "Back view" => "Vista trasera",
@@ -2058,6 +2206,41 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Skin" => "Piel",
         "Grey" => "Gris",
         "White sheet" => "Hoja blanca",
+        "Pattern information" => "Información del patrón",
+        "Mesh" => "Malla",
+        "pin" => "alfiler",
+        "pins" => "alfileres",
+        "tack" => "hilván",
+        "tacks" => "hilvanes",
+        "What should we make?" => "¿Qué hacemos hoy?",
+        "Assign" => "Asignar",
+        "Copy fabric" => "Copiar tejido",
+        "Assign fabric" => "Asignar tejido",
+        "A new fabric with the same physics and look, cut from no piece yet" => {
+            "Un tejido nuevo con la misma física y aspecto, aún sin piezas"
+        }
+        "Pick a fabric in the list" => "Elige un tejido de la lista",
+        "Cut the selected pieces from the chosen fabric" => {
+            "Corta las piezas seleccionadas del tejido elegido"
+        }
+        "Pick a fabric in the list and select the pieces to cut from it" => {
+            "Elige un tejido de la lista y selecciona las piezas que se cortan de él"
+        }
+        "Face" => "Cara",
+        "State" => "Estado",
+        "Deactivated" => "Desactivada",
+        "Deactivated with seams" => "Desactivada con costuras",
+        "Time" => "Tiempo",
+        "Simulated time, and whether the solver runs on the graphics card or the processor" => {
+            "Tiempo simulado, y si el cálculo corre en la tarjeta gráfica o en el procesador"
+        }
+        "piece" => "pieza",
+        "seam" => "costura",
+        "seams" => "costuras",
+        "Pattern board" => "Tablero de patrones",
+        "Rulers and guides" => "Reglas y guías",
+        "Snap to" => "Ajustar a",
+        "Lock in 2D" => "Bloquear en 2D",
         "A white drafting sheet with tinted pieces instead of the grey board with white pieces" => {
             "Una hoja blanca con piezas tintadas en vez del tablero gris con piezas blancas"
         }

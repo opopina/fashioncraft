@@ -1,5 +1,6 @@
 # Builds FashionCraft's portable Windows release:
-#   dist\fashioncraft-<version>-windows-x64-portable.zip   fashioncraft.exe, assets\ and the licences
+#   dist\fashioncraft-<version>-windows-x64-portable.zip   fashioncraft.exe, fashioncraft-cli.exe (for
+#                                                           AI agents), assets\ and the licences
 #   dist\fashioncraft.ico                                   the icon, 16 to 256 px, for an installer
 # The name follows the ArtCraft launcher's `<app>-<version>-<os>-<arch>[-portable].<ext>`. The
 # program finds its assets in assets\ beside it and keeps its work in %APPDATA%\FashionCraft.
@@ -13,12 +14,12 @@ $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select
 $dist = 'dist'
 $stage = Join-Path $dist 'windows\FashionCraft'
 
-cargo build --locked --release --features desktop --bin fashioncraft
+cargo build --locked --release --features desktop --bin fashioncraft --bin fashioncraft-cli
 if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
 
 if (Test-Path (Join-Path $dist 'windows')) { Remove-Item -Recurse -Force (Join-Path $dist 'windows') }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'assets\makehuman') | Out-Null
-Copy-Item target\release\fashioncraft.exe $stage
+Copy-Item target\release\fashioncraft.exe, target\release\fashioncraft-cli.exe $stage
 foreach ($file in 'mannequin.obj', 'arrangement.json', 'measurements.json', 'LICENSE.ASSETS.md', 'provenance.json') {
     Copy-Item (Join-Path 'assets\makehuman' $file) (Join-Path $stage 'assets\makehuman')
 }

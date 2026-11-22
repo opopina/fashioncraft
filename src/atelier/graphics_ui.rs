@@ -347,7 +347,7 @@ impl Atelier {
             return;
         };
         let painter = ui.painter().with_clip_rect(rect);
-        let color = ui.visuals().selection.bg_fill;
+        let color = super::workspace::accent(ui.visuals());
         let stroke = egui::Stroke::new(1.5, color);
         painter.add(egui::Shape::closed_line(corners.to_vec(), stroke));
         for c in corners {

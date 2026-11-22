@@ -20,10 +20,8 @@ const fn alpha(rgb: u32, a: u8) -> Color32 {
 
 /// FashionCraft's fuchsia: selected things, active tools, the wordmark.
 pub(super) const ACCENT: Color32 = hex(0xdd2cce);
-/// Text and icons drawn on the fuchsia.
-const ON_ACCENT: Color32 = hex(0x1b1b1f);
 /// The fuchsia as text on dark and on light surfaces.
-const APP_INK_DARK: Color32 = ACCENT;
+const APP_INK_DARK: Color32 = hex(0xe65fd9);
 const APP_INK_LIGHT: Color32 = hex(0xa0128f);
 /// Corners of buttons, fields, menus and windows; panels stay square.
 const RADIUS: egui::CornerRadius = egui::CornerRadius::same(3);
@@ -53,17 +51,19 @@ struct Tokens {
     shadow: Color32,
 }
 
+// Graphite: the mid greys of desktop 3D and cloth tools, lighter than ArtCraft's near-black so
+// a long session is easier on the eyes and the fuchsia reads as an accent, not a glare.
 const DARK: Tokens = Tokens {
-    bg: hex(0x121316),
-    panel: hex(0x101014),
-    controls: hex(0x1e1f22),
-    sunken: hex(0x060607),
-    ink: hex(0xf2f1ee),
+    bg: hex(0x26272b),
+    panel: hex(0x2c2d31),
+    controls: hex(0x3a3b40),
+    sunken: hex(0x1f2023),
+    ink: hex(0xe8e8ea),
     ink_strong: Color32::WHITE,
-    muted: alpha(0xf2f1ee, 153),
-    line: alpha(0xffffff, 38),
-    line_strong: alpha(0xf2f1ee, 102),
-    wash: alpha(0xffffff, 26),
+    muted: hex(0xa4a6ad),
+    line: alpha(0xffffff, 22),
+    line_strong: alpha(0xffffff, 64),
+    wash: alpha(0xffffff, 18),
     accent_ink: APP_INK_DARK,
     warn: hex(0xffc14d),
     bad: hex(0xf87171),
@@ -96,11 +96,378 @@ pub(super) fn app_ink(visuals: &egui::Visuals) -> Color32 {
     }
 }
 
-/// A section title in an inspector or window: small capitals, as ArtCraft labels its groups.
+/// Whether the dark appearance is installed: [`section`] titles have no `Ui` to ask.
+static DARK_THEME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// FashionCraft's colour, solid, for what must stand out: a primary button, a handle, the line
+/// under the chosen tab. Selected rows and tools only take a tint of it
+/// (`visuals.selection.bg_fill`).
+pub(super) fn accent(visuals: &egui::Visuals) -> Color32 {
+    app_ink(visuals)
+}
+
+/// A section title in an inspector or window: a short name in FashionCraft's colour, as
+/// desktop cloth tools title their property groups, not capitals in a box.
 pub(super) fn section(text: impl Into<String>) -> egui::RichText {
-    egui::RichText::new(text.into().to_uppercase())
-        .small()
+    let dark = DARK_THEME.load(std::sync::atomic::Ordering::Relaxed);
+    egui::RichText::new(text.into())
         .strong()
+        .color(if dark { APP_INK_DARK } else { APP_INK_LIGHT })
+}
+
+/// A group title inside a tab, where a collapsing section would be too much.
+pub(super) fn group_title(ui: &mut egui::Ui, text: &str) {
+    ui.add_space(6.);
+    ui.label(section(text));
+}
+
+/// Width of the names column of a property editor.
+fn label_width(ui: &egui::Ui) -> f32 {
+    (ui.available_width() * 0.42).clamp(88., 150.)
+}
+
+/// One row of a property editor: its name on the left, in a column of its own, and its
+/// controls on the right, as desktop cloth tools lay out their properties.
+pub(super) fn prop_row<R>(
+    ui: &mut egui::Ui,
+    label: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.horizontal(|ui| {
+        let width = label_width(ui);
+        let weak = ui.visuals().weak_text_color();
+        ui.allocate_ui_with_layout(
+            Vec2::new(width, ui.spacing().interact_size.y),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_width(width);
+                ui.add(egui::Label::new(egui::RichText::new(label).color(weak)).truncate());
+            },
+        );
+        add(ui)
+    })
+}
+
+/// A property row whose explanation sits in a small ⓘ beside the label, shown on hover,
+/// instead of a paragraph in the panel.
+pub(super) fn prop_row_help<R>(
+    ui: &mut egui::Ui,
+    label: &str,
+    help: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.horizontal(|ui| {
+        let width = label_width(ui);
+        let weak = ui.visuals().weak_text_color();
+        ui.allocate_ui_with_layout(
+            Vec2::new(width, ui.spacing().interact_size.y),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_width(width);
+                ui.spacing_mut().item_spacing.x = 5.;
+                ui.add(egui::Label::new(egui::RichText::new(label).color(weak)).truncate());
+                info_tip(ui, help);
+            },
+        );
+        add(ui)
+    })
+}
+
+/// A small circled "i" that shows `help` on hover.
+pub(super) fn info_tip(ui: &mut egui::Ui, help: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(13.), egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let colour = if response.hovered() {
+            accent(ui.visuals())
+        } else {
+            ui.visuals().weak_text_color().gamma_multiply(0.8)
+        };
+        let painter = ui.painter();
+        painter.circle_stroke(rect.center(), 5.8, egui::Stroke::new(1., colour));
+        painter.circle_filled(rect.center() - Vec2::new(0., 2.6), 0.75, colour);
+        painter.line_segment(
+            [
+                rect.center() - Vec2::new(0., 0.9),
+                rect.center() + Vec2::new(0., 3.),
+            ],
+            egui::Stroke::new(1.1, colour),
+        );
+    }
+    response.on_hover_text(help)
+}
+
+/// A slider drawn thin: a 2 px rail, the travelled part in FashionCraft's colour and a small
+/// round handle. egui sizes a slider's handle from the row height, so the row is lowered for
+/// the slider alone.
+pub(super) fn slim(ui: &mut egui::Ui, slider: egui::Slider<'_>) -> egui::Response {
+    ui.scope(|ui| {
+        let accent = accent(ui.visuals());
+        let spacing = ui.spacing_mut();
+        spacing.interact_size.y = 12.;
+        spacing.slider_rail_height = 2.;
+        let visuals = ui.visuals_mut();
+        visuals.selection.bg_fill = accent;
+        visuals.slider_trailing_fill = true;
+        visuals.handle_shape = egui::style::HandleShape::Circle;
+        ui.add(slider)
+    })
+    .inner
+}
+
+/// A pane's title, centred on its own row as desktop tools title their panels.
+pub(super) fn pane_title(ui: &mut egui::Ui, text: &str) -> egui::Rect {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 24.), egui::Sense::hover());
+    let visuals = ui.visuals();
+    ui.painter()
+        .rect_filled(rect, 0., visuals.faint_bg_color.gamma_multiply(0.5));
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text,
+        egui::FontId::proportional(12.),
+        visuals.weak_text_color(),
+    );
+    rect
+}
+
+/// An icon tab: the icon, in FashionCraft's colour and underlined when chosen; its name shows
+/// on hover.
+pub(super) fn icon_tab<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    current: &mut T,
+    value: T,
+    icon: super::icons::Icon,
+    label: &str,
+    width: f32,
+) -> egui::Response {
+    let chosen = *current == value;
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 32.), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        let color = if chosen {
+            accent(visuals)
+        } else if response.hovered() {
+            visuals.strong_text_color()
+        } else {
+            visuals.weak_text_color()
+        };
+        super::icons::glyph(
+            ui.painter(),
+            egui::Rect::from_center_size(rect.center(), Vec2::splat(18.)),
+            icon,
+            color,
+            1.5,
+        );
+        if chosen {
+            let y = rect.bottom() - 1.;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(rect.left() + 6., y),
+                    egui::pos2(rect.right() - 6., y),
+                ],
+                Stroke::new(2., accent(visuals)),
+            );
+        }
+    }
+    if response.clicked() {
+        *current = value;
+    }
+    response.on_hover_text(label)
+}
+
+/// One row of a browser list: a colour swatch, the name, a quiet detail on the right, tinted
+/// when chosen.
+pub(super) fn list_row(
+    ui: &mut egui::Ui,
+    swatch: Option<Color32>,
+    name: &str,
+    detail: &str,
+    chosen: bool,
+) -> egui::Response {
+    let width = ui.available_width();
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 28.), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        let fill = if chosen {
+            visuals.selection.bg_fill
+        } else if response.hovered() {
+            visuals.widgets.hovered.bg_fill
+        } else {
+            Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(rect, 3., fill);
+        let mut x = rect.left() + 8.;
+        if let Some(swatch) = swatch {
+            let square =
+                egui::Rect::from_center_size(egui::pos2(x + 9., rect.center().y), Vec2::splat(18.));
+            ui.painter().rect_filled(square, 3., swatch);
+            ui.painter().rect_stroke(
+                square,
+                3.,
+                Stroke::new(1., visuals.widgets.inactive.bg_stroke.color),
+                egui::StrokeKind::Inside,
+            );
+            x += 28.;
+        }
+        let detail_galley = ui.painter().layout_no_wrap(
+            detail.to_owned(),
+            egui::FontId::proportional(11.),
+            visuals.weak_text_color(),
+        );
+        let detail_width = detail_galley.size().x;
+        ui.painter().galley(
+            egui::pos2(
+                rect.right() - 8. - detail_width,
+                rect.center().y - detail_galley.size().y * 0.5,
+            ),
+            detail_galley,
+            visuals.weak_text_color(),
+        );
+        let ink = if chosen {
+            visuals.selection.stroke.color
+        } else {
+            visuals.text_color()
+        };
+        let name_galley = egui::WidgetText::from(egui::RichText::new(name).color(ink)).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            (rect.right() - 16. - detail_width - x).max(20.),
+            egui::TextStyle::Body,
+        );
+        ui.painter().galley(
+            egui::pos2(x, rect.center().y - name_galley.size().y * 0.5),
+            name_galley,
+            ink,
+        );
+    }
+    response
+}
+
+/// Design or Animation: the two ways of working, as a two-part switch. Returns the side chosen
+/// this frame.
+pub(super) fn mode_switch(ui: &mut egui::Ui, animation: bool, labels: [&str; 2]) -> Option<bool> {
+    let mut chosen = None;
+    egui::Frame::new()
+        .fill(ui.visuals().extreme_bg_color)
+        .corner_radius(5)
+        .inner_margin(2)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = 2.;
+            for (k, label) in labels.into_iter().enumerate() {
+                let on = animation == (k == 1);
+                let visuals = ui.visuals();
+                let text = egui::RichText::new(label).color(if on {
+                    visuals.strong_text_color()
+                } else {
+                    visuals.weak_text_color()
+                });
+                let button = egui::Button::new(text)
+                    .fill(if on {
+                        visuals.widgets.inactive.bg_fill
+                    } else {
+                        Color32::TRANSPARENT
+                    })
+                    .stroke(Stroke::NONE)
+                    .min_size(Vec2::new(0., 22.));
+                if ui.add(button).clicked() && !on {
+                    chosen = Some(k == 1);
+                }
+            }
+        });
+    chosen
+}
+
+/// A capsule floating at the bottom centre of a view, for what the current tool needs right
+/// now (its step, its options, its confirm button). It never pushes the view down, as rows
+/// under the toolbar did, and it is not drawn at all when `add` shows nothing.
+pub(super) fn floating_capsule(
+    ctx: &egui::Context,
+    id: &str,
+    pane: egui::Rect,
+    add: impl FnOnce(&mut egui::Ui),
+) {
+    egui::Area::new(egui::Id::new(id))
+        .order(egui::Order::Middle)
+        .pivot(egui::Align2::CENTER_BOTTOM)
+        .fixed_pos(pane.center_bottom() - Vec2::new(0., 18.))
+        .show(ctx, |ui| {
+            ui.set_max_width((pane.width() - 40.).max(200.));
+            let visuals = ui.visuals().clone();
+            let mut prepared = egui::Frame::new()
+                .fill(visuals.window_fill.gamma_multiply(0.95))
+                .stroke(Stroke::new(
+                    1.,
+                    visuals.widgets.noninteractive.bg_stroke.color,
+                ))
+                .corner_radius(12)
+                .inner_margin(egui::Margin::symmetric(12, 6))
+                .shadow(visuals.popup_shadow)
+                .begin(ui);
+            prepared.content_ui.vertical(add);
+            let used = prepared.content_ui.min_rect();
+            let key = egui::Id::new((id, "capsule-rect"));
+            if used.width() > 2. && used.height() > 2. {
+                let drawn = prepared.end(ui).rect;
+                ctx.data_mut(|d| d.insert_temp(key, drawn));
+            } else {
+                ctx.data_mut(|d| d.remove::<egui::Rect>(key));
+            }
+        });
+}
+
+/// `place` moved up clear of the floating capsule `id` when the two would overlap, so
+/// corner labels of a view stay readable when the capsule is wide.
+pub(super) fn clear_of_capsule(ctx: &egui::Context, id: &str, place: egui::Rect) -> egui::Rect {
+    let capsule: Option<egui::Rect> = ctx.data(|d| d.get_temp(egui::Id::new((id, "capsule-rect"))));
+    match capsule {
+        Some(capsule) if capsule.expand(4.).intersects(place) => {
+            place.translate(Vec2::new(0., capsule.top() - 6. - place.bottom()))
+        }
+        _ => place,
+    }
+}
+
+/// One tab of a row of tabs: its name, underlined in FashionCraft's colour when chosen.
+pub(super) fn tab<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    current: &mut T,
+    value: T,
+    label: &str,
+) -> egui::Response {
+    let chosen = *current == value;
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, Color32::WHITE);
+    let size = Vec2::new(galley.size().x + 20., 30.);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.visuals();
+        let color = if chosen {
+            accent(visuals)
+        } else if response.hovered() {
+            visuals.strong_text_color()
+        } else {
+            visuals.weak_text_color()
+        };
+        ui.painter()
+            .galley(rect.center() - galley.size() * 0.5, galley, color);
+        if chosen {
+            let y = rect.bottom() - 1.;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(rect.left() + 6., y),
+                    egui::pos2(rect.right() - 6., y),
+                ],
+                Stroke::new(2., accent(visuals)),
+            );
+        }
+    }
+    if response.clicked() {
+        *current = value;
+    }
+    response
 }
 
 /// Pristine egui base styles, captured before the first install. Deriving each
@@ -118,9 +485,11 @@ fn bases(ctx: &egui::Context) -> &'static (egui::Style, egui::Style) {
 
 /// Theme-independent geometry and text sizes: dense enough for an editor.
 fn geometry(style: &mut egui::Style) {
-    style.spacing.item_spacing = Vec2::new(8., 6.);
-    style.spacing.button_padding = Vec2::new(10., 6.);
-    style.spacing.interact_size.y = 28.;
+    style.spacing.item_spacing = Vec2::new(8., 5.);
+    style.spacing.button_padding = Vec2::new(8., 4.);
+    style.spacing.interact_size.y = 24.;
+    style.spacing.slider_rail_height = 2.;
+    style.spacing.slider_width = 120.;
     style.spacing.menu_margin = egui::Margin::same(4);
     style.spacing.scroll = egui::style::ScrollStyle {
         bar_width: 8.,
@@ -160,13 +529,22 @@ fn visuals(visuals: &mut egui::Visuals, t: &Tokens) {
     visuals.override_text_color = None;
     visuals.weak_text_color = Some(t.muted);
     visuals.hyperlink_color = t.accent_ink;
-    visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke = Stroke::new(1., ON_ACCENT);
+    // What is chosen is tinted with the fuchsia and named in it, not filled solid: solid
+    // fuchsia tabs, rows and choices shouted over the work.
+    visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(
+        ACCENT.r(),
+        ACCENT.g(),
+        ACCENT.b(),
+        if t.bg == DARK.bg { 60 } else { 40 },
+    );
+    visuals.selection.stroke = Stroke::new(1., t.accent_ink);
+    visuals.handle_shape = egui::style::HandleShape::Circle;
+    visuals.slider_trailing_fill = true;
     visuals.warn_fg_color = t.warn;
     visuals.error_fg_color = t.bad;
     visuals.striped = false;
-    // Section headers sit on a full-width band, as property groups do.
-    visuals.collapsing_header_frame = true;
+    // Section headers are a coloured title with its arrow, not a band.
+    visuals.collapsing_header_frame = false;
     for (w, fill, stroke, fg) in [
         (&mut visuals.widgets.noninteractive, t.bg, t.line, t.ink),
         (&mut visuals.widgets.inactive, t.controls, t.line, t.ink),
@@ -287,13 +665,13 @@ fn install_fonts(ctx: &egui::Context) {
 /// must be one egui can draw with the installed fonts (checked by a test), or the button shows
 /// an empty box: several emoji outside the basic plane, such as a magnifier, cannot be.
 pub(super) mod symbols {
-    pub const COMMANDS: &str = "⌘";
     pub const PLAY: &str = "▶";
     pub const PAUSE: &str = "⏸";
     pub const EXPORT: &str = "⬆";
 }
 
 fn install(ctx: &egui::Context, dark: bool) {
+    DARK_THEME.store(dark, std::sync::atomic::Ordering::Relaxed);
     install_fonts(ctx);
     let base = bases(ctx);
     let mut style = if dark { base.1.clone() } else { base.0.clone() };
@@ -329,52 +707,8 @@ pub(super) fn menu_bar_style(ui: &mut egui::Ui) {
 }
 
 impl Atelier {
-    pub(super) fn panel_browser(&mut self, ui: &mut egui::Ui) {
-        let ui_lang = self.prefs.language;
-        let mut select = None;
-        egui::CollapsingHeader::new(section(format!(
-            "{} ({})",
-            i18n::tr(ui_lang, "Pieces"),
-            self.project.template.panels.len()
-        )))
-        .id_salt("panel_browser")
-        .default_open(true)
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .id_salt("panel_list")
-                .max_height(115.)
-                .show(ui, |ui| {
-                    for panel in &self.project.template.panels {
-                        let name = if self.project.template.locked_panels.contains(&panel.id) {
-                            format!("{} · locked in 2D", panel.name)
-                        } else {
-                            panel.name.clone()
-                        };
-                        if ui
-                            .selectable_label(
-                                self.authoring.selected.as_ref() == Some(&panel.id),
-                                name,
-                            )
-                            .on_hover_text(format!("{} · select in both views", panel.id))
-                            .clicked()
-                        {
-                            select = Some(panel.id.clone());
-                        }
-                    }
-                });
-        });
-        if let Some(id) = select {
-            self.set_authoring_tool(Tool::Edit, false);
-            self.cancel_preview();
-            self.select_panel(id, ui.input(|i| i.modifiers.shift));
-            self.authoring.edge = None;
-        }
-        self.archive_list(ui);
-        ui.separator();
-    }
-
     /// Archived pieces, each with Restore and Delete; hidden while the archive is empty.
-    fn archive_list(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn archive_list(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
         if self.project.template.archive.is_empty() {
             return;
@@ -413,17 +747,37 @@ impl Atelier {
     pub(super) fn export_information(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
         ui.collapsing(section(i18n::tr(ui_lang, "Files & formats")), |ui| {
+            self.files_and_formats(ui)
+        });
+    }
+
+    /// The formats FashionCraft reads and writes, and where exports go.
+    pub(super) fn files_and_formats(&self, ui: &mut egui::Ui) {
+        let ui_lang = self.prefs.language;
+        {
             ui.label(i18n::tr(ui_lang, "Import"));
             ui.small(i18n::tr(ui_lang, "FashionCraft project and template JSON"));
-            ui.small(i18n::tr(ui_lang, "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX"));
-            ui.small(i18n::tr(ui_lang, "Pattern outlines: generic ASCII DXF · physical SVG subsets"));
+            ui.small(i18n::tr(
+                ui_lang,
+                "Static avatars: OBJ · glTF · GLB · VRM · STL · PLY · COLLADA · FBX",
+            ));
+            ui.small(i18n::tr(
+                ui_lang,
+                "Pattern outlines: generic ASCII DXF · physical SVG subsets",
+            ));
             ui.label(i18n::tr(ui_lang, "Export"));
             ui.small(i18n::tr(ui_lang, "Project and template JSON · garment OBJ (welded, quads, retopology, baked look) · glTF · GLB · FBX · USD · USDZ · Alembic · MDD and PC2 caches · SVG patterns · fiber guides"));
-            ui.small(i18n::tr(ui_lang, "Industrial DXF and PDF are not yet supported."));
+            ui.small(i18n::tr(
+                ui_lang,
+                "Industrial DXF and PDF are not yet supported.",
+            ));
             ui.separator();
-            ui.small(i18n::tr(ui_lang, "Export folder (files replaced on every export):"));
+            ui.small(i18n::tr(
+                ui_lang,
+                "Export folder (files replaced on every export):",
+            ));
             ui.label(egui::RichText::new(self.output.display().to_string()).small());
-        });
+        }
     }
 }
 
@@ -439,7 +793,7 @@ mod tests {
         let mut output = ctx.run_ui(Default::default(), |_| {});
         output.textures_delta.clear();
         use super::symbols::*;
-        for symbol in [COMMANDS, PLAY, PAUSE, EXPORT] {
+        for symbol in [PLAY, PAUSE, EXPORT] {
             let shown = ctx.fonts_mut(|f| f.has_glyphs(&egui::FontId::proportional(13.), symbol));
             assert!(shown, "{symbol} has no glyph in the workspace fonts");
         }

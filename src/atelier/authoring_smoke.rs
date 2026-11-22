@@ -399,6 +399,17 @@ const WORKFLOW_ACTIONS: &[(&str, Vec2)] = &[
     ("lasso_points", Vec2::ZERO),
 ];
 
+/// Targets that live in a tool list (`window_tools`), with the target of the corner (or the
+/// » button) that opens that list.
+const LIST_OPENERS: &[(&str, &str)] = &[
+    ("replace", "flyout_shapes"),
+    ("selection_box", "flyout_select_2d"),
+    ("selection_lasso", "flyout_select_2d"),
+    ("selection_panels", "flyout_select_2d"),
+    ("selection_points", "flyout_select_2d"),
+    ("quick_open", "tools_overflow_2d"),
+];
+
 pub(super) struct Smoke {
     svg: Option<SvgProbe>,
     appearance: Option<AppearanceProbe>,
@@ -411,6 +422,9 @@ pub(super) struct Smoke {
     action: usize,
     tick: usize,
     origin: Option<egui::Pos2>,
+    /// The pointer is opening the tool list that holds this action's target; the action runs
+    /// once the list shows it.
+    opening: bool,
     start: Instant,
     pub finished: bool,
     undo_observed: bool,
@@ -506,6 +520,7 @@ impl Smoke {
             action: 0,
             tick: 0,
             origin: None,
+            opening: false,
             start: Instant::now(),
             finished: false,
             undo_observed: false,
@@ -591,6 +606,14 @@ impl Smoke {
         self.tick += 1;
         if self.tick == 3 {
             self.origin = self.targets.get(key).copied();
+            // A target inside a closed tool list: open the list first.
+            self.opening = false;
+            if self.origin.is_none()
+                && let Some(&(_, opener)) = LIST_OPENERS.iter().find(|(inside, _)| *inside == key)
+            {
+                self.origin = self.targets.get(opener).copied();
+                self.opening = self.origin.is_some();
+            }
         }
         if matches!(key, "lasso_points" | "box_points") {
             if let (Some(origin), Some(end)) =
@@ -635,7 +658,12 @@ impl Smoke {
                 });
             }
         }
-        if self.tick >= 10 && self.origin.is_some() {
+        if self.tick >= 10 && self.opening {
+            // The list is open now: run the action itself on the next pass.
+            self.tick = 0;
+            self.origin = None;
+            self.opening = false;
+        } else if self.tick >= 10 && self.origin.is_some() {
             eprintln!(
                 "Authoring smoke: completed {}/{} ({key})",
                 self.action + 1,
@@ -962,6 +990,15 @@ impl Atelier {
                 Some(egui::Align::Center),
                 egui::style::ScrollAnimation::none(),
             );
+        }
+    }
+    /// Targets that are not on screen this frame (a closed tool list), so that a stale position
+    /// is never clicked.
+    pub(super) fn forget_smoke_targets(&mut self, names: &[&str]) {
+        if let Some(smoke) = &mut self.authoring_smoke {
+            for name in names {
+                smoke.targets.remove(*name);
+            }
         }
     }
     pub(super) fn smoke_target(&mut self, name: &str, p: egui::Pos2) {

@@ -793,78 +793,533 @@ pub(super) fn strain_readout(
 }
 
 impl Atelier {
-    /// The display toggles floating at the top-left corner of the 3D view: avatar, garment,
-    /// strain map, X-ray skeleton and technical view.
+    /// The display capsules floating at the top-left corner of the 3D view, as desktop cloth
+    /// tools have them: each icon opens a menu of what it governs, with a check on what is
+    /// shown. Render (quality and garment style), what is shown (garment, trims, avatar), the
+    /// maps, and isolating the selection.
     pub(super) fn display_overlay(&mut self, ctx: &egui::Context, rect: egui::Rect) {
+        self.display_capsules(
+            ctx,
+            "display_overlay",
+            rect.min + egui::vec2(10., 10.),
+            &DISPLAY_GROUPS,
+        );
+    }
+
+    /// The corners of the 3D view: the world axes at the bottom left, as a camera reads them,
+    /// and a quiet label at the bottom right naming what is chosen (a seam and its type, or
+    /// the pieces).
+    pub(super) fn paint_view_corners_3d(&self, ui: &egui::Ui, rect: egui::Rect) {
+        let painter = ui.painter().with_clip_rect(rect);
+        let matrix = self.camera.matrix(rect.width() / rect.height());
+        let target = self.camera.target.as_dvec3();
+        let reach = f64::from(self.camera.distance.max(0.01)) * 0.1;
+        let origin = rect.left_bottom() + egui::vec2(30., -30.);
+        let center = super::gizmo::project_matrix(matrix, rect, target);
+        let axes = [
+            (glam::DVec3::X, "X", Color32::from_rgb(0xE5, 0x53, 0x4B)),
+            (glam::DVec3::Y, "Y", Color32::from_rgb(0x57, 0xAB, 0x5A)),
+            (glam::DVec3::Z, "Z", Color32::from_rgb(0x53, 0x9B, 0xF5)),
+        ];
+        for (axis, name, color) in axes {
+            let Some(direction) = center
+                .zip(super::gizmo::project_matrix(
+                    matrix,
+                    rect,
+                    target + axis * reach,
+                ))
+                .map(|(a, b)| b - a)
+            else {
+                continue;
+            };
+            // An axis pointing straight at the camera shrinks to a dot, as it should.
+            let length = direction.length();
+            let end = if length > 1e-3 {
+                origin + direction / length * 20. * (length / (length + 4.))
+            } else {
+                origin
+            };
+            painter.line_segment([origin, end], egui::Stroke::new(2., color));
+            painter.text(
+                end + (end - origin).normalized() * 7.,
+                egui::Align2::CENTER_CENTER,
+                name,
+                egui::FontId::proportional(9.5),
+                color,
+            );
+        }
+        let chosen = if let Some(seam) = self
+            .authoring
+            .selection
+            .seam
+            .as_ref()
+            .and_then(|id| self.project.template.seams.iter().find(|s| &s.id == id))
+        {
+            Some(format!(
+                "{} · {}:{}",
+                seam.id,
+                1 + seam.a_tail.len(),
+                1 + seam.b_tail.len()
+            ))
+        } else if self.authoring.selection.panels.len() > 1 {
+            Some(pieces(self.authoring.selection.panels.len()))
+        } else {
+            self.authoring.selected.as_ref().and_then(|id| {
+                self.project
+                    .template
+                    .panels
+                    .iter()
+                    .find(|p| &p.id == id)
+                    .map(|p| p.name.clone())
+            })
+        };
+        if let Some(text) = chosen {
+            let galley = painter.layout_no_wrap(
+                text,
+                egui::FontId::proportional(11.),
+                Color32::from_white_alpha(220),
+            );
+            let size = galley.size() + egui::vec2(16., 6.);
+            let place = super::workspace::clear_of_capsule(
+                ui.ctx(),
+                "garment-capsule",
+                egui::Rect::from_min_size(rect.right_bottom() - size - egui::vec2(12., 10.), size),
+            );
+            painter.rect_filled(
+                place,
+                size.y * 0.5,
+                Color32::from_rgba_unmultiplied(28, 29, 32, 150),
+            );
+            painter.galley(place.min + egui::vec2(8., 3.), galley, Color32::WHITE);
+        }
+    }
+
+    /// The same capsules for the 2D pattern view: pattern information, the board, rulers and
+    /// guides, snapping and locking. `rect` is the board canvas; the capsules clear the rulers
+    /// when those are shown.
+    pub(super) fn board_display_overlay(&mut self, ctx: &egui::Context, rect: egui::Rect) {
+        let inset = if self.rulers_active() { 18. + 8. } else { 10. };
+        self.display_capsules(
+            ctx,
+            "board_display_overlay",
+            rect.min + egui::vec2(inset, inset),
+            &BOARD_DISPLAY_GROUPS,
+        );
+    }
+
+    fn display_capsules(
+        &mut self,
+        ctx: &egui::Context,
+        id: &str,
+        at: egui::Pos2,
+        groups: &[&[DisplayMenu]],
+    ) {
         let ui_lang = self.prefs.language;
-        egui::Area::new(egui::Id::new("display_overlay"))
-            .fixed_pos(rect.min + egui::vec2(10., 10.))
+        egui::Area::new(egui::Id::new(id))
+            .fixed_pos(at)
             .order(egui::Order::Middle)
             .show(ctx, |ui| {
-                let visuals = ui.visuals();
-                egui::Frame::new()
-                    .fill(visuals.window_fill.gamma_multiply(0.92))
-                    .stroke(visuals.window_stroke)
-                    .corner_radius(3.)
-                    .inner_margin(4.)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 2.;
-                            let display = &mut self.prefs.garment_display;
-                            let toggles: [(super::icons::Icon, bool, &str); 5] = [
-                                (
-                                    super::icons::Icon::Avatar,
-                                    display.avatar,
-                                    "Avatar · Shift+A",
-                                ),
-                                (
-                                    super::icons::Icon::Garment,
-                                    display.garment,
-                                    "Garment · Shift+C",
-                                ),
-                                (
-                                    super::icons::Icon::Gradient,
-                                    self.heat,
-                                    "Strain map · Alt+7",
-                                ),
-                                (
-                                    super::icons::Icon::Skeleton,
-                                    self.authoring.pose.skeleton,
-                                    "Show skeleton (X-ray)",
-                                ),
-                                (
-                                    super::icons::Icon::Technical,
-                                    display.schematic,
-                                    "Technical view · Alt+0",
-                                ),
-                            ];
-                            for (k, (icon, on, tip)) in toggles.into_iter().enumerate() {
-                                if super::icons::icon_only(
-                                    ui,
-                                    icon,
-                                    26.,
-                                    on,
-                                    i18n::tr(ui_lang, tip),
-                                )
-                                .clicked()
-                                {
-                                    match k {
-                                        0 => display.avatar = !display.avatar,
-                                        1 => display.garment = !display.garment,
-                                        2 => self.heat = !self.heat,
-                                        3 => {
-                                            self.authoring.pose.skeleton =
-                                                !self.authoring.pose.skeleton
-                                        }
-                                        _ => display.schematic = !display.schematic,
-                                    }
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.;
+                    for group in groups {
+                        let visuals = ui.visuals();
+                        egui::Frame::new()
+                            .fill(visuals.window_fill.gamma_multiply(0.88))
+                            .stroke(egui::Stroke::new(
+                                1.,
+                                visuals.widgets.noninteractive.bg_stroke.color,
+                            ))
+                            .corner_radius(9.)
+                            .inner_margin(3.)
+                            .show(ui, |ui| {
+                                ui.spacing_mut().item_spacing.x = 2.;
+                                for menu in group.iter() {
+                                    self.display_menu(ui, ctx, menu, ui_lang);
                                 }
-                            }
-                        });
-                    });
+                            });
+                    }
+                });
             });
     }
+
+    /// Whether a display setting kept outside the command registry is on.
+    fn view_checked(&self, kind: ViewToggle) -> bool {
+        let viewport = &self.prefs.viewport;
+        let pattern = &self.prefs.pattern_display;
+        let board = &self.authoring.board;
+        match kind {
+            ViewToggle::Wireframe => self.wire,
+            ViewToggle::SeamLinks => self.seam_links,
+            ViewToggle::Floor => viewport.floor,
+            ViewToggle::Grid => viewport.grid,
+            ViewToggle::Shadow => viewport.shadow,
+            ViewToggle::Smooth => {
+                viewport.anti_aliasing == crate::render::appearance::AntiAliasing::Msaa4
+            }
+            ViewToggle::PieceNames2d => pattern.names,
+            ViewToggle::Lengths2d => pattern.lengths,
+            ViewToggle::Measurements2d => pattern.measurements,
+            ViewToggle::BoardGrid => pattern.grid,
+            ViewToggle::WhiteSheet => pattern.white_sheet,
+            ViewToggle::Silhouette => pattern.silhouette,
+            ViewToggle::Rulers => pattern.rulers,
+            ViewToggle::Guides => pattern.guides,
+            ViewToggle::SnapGrid => board.snap,
+            ViewToggle::SmartGuides => board.smart_guides,
+        }
+    }
+
+    fn toggle_view(&mut self, kind: ViewToggle) {
+        let viewport = &mut self.prefs.viewport;
+        let pattern = &mut self.prefs.pattern_display;
+        let board = &mut self.authoring.board;
+        match kind {
+            ViewToggle::Wireframe => self.wire = !self.wire,
+            ViewToggle::SeamLinks => self.seam_links = !self.seam_links,
+            ViewToggle::Floor => viewport.floor = !viewport.floor,
+            ViewToggle::Grid => viewport.grid = !viewport.grid,
+            ViewToggle::Shadow => viewport.shadow = !viewport.shadow,
+            ViewToggle::Smooth => {
+                use crate::render::appearance::AntiAliasing;
+                viewport.anti_aliasing = if viewport.anti_aliasing == AntiAliasing::Msaa4 {
+                    AntiAliasing::Off
+                } else {
+                    AntiAliasing::Msaa4
+                }
+            }
+            ViewToggle::PieceNames2d => pattern.names = !pattern.names,
+            ViewToggle::Lengths2d => pattern.lengths = !pattern.lengths,
+            ViewToggle::Measurements2d => pattern.measurements = !pattern.measurements,
+            ViewToggle::BoardGrid => pattern.grid = !pattern.grid,
+            ViewToggle::WhiteSheet => pattern.white_sheet = !pattern.white_sheet,
+            ViewToggle::Silhouette => pattern.silhouette = !pattern.silhouette,
+            ViewToggle::Rulers => pattern.rulers = !pattern.rulers,
+            ViewToggle::Guides => pattern.guides = !pattern.guides,
+            ViewToggle::SnapGrid => board.snap = !board.snap,
+            ViewToggle::SmartGuides => board.smart_guides = !board.smart_guides,
+        }
+        self.prefs_dirty = true;
+    }
+
+    /// One icon of the display capsules and the menu it opens (or, for a single toggle, the
+    /// toggle itself).
+    fn display_menu(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        menu: &DisplayMenu,
+        ui_lang: i18n::Language,
+    ) {
+        let on = menu.items.iter().any(|item| match *item {
+            DisplayItem::Cmd(id, ..) => menu.lit_by.contains(&id) && self.command_checked(id),
+            DisplayItem::View(kind, ..) => {
+                menu.lit_views.contains(&kind) && self.view_checked(kind)
+            }
+            DisplayItem::Sep => false,
+        });
+        let single = menu.items.len() == 1;
+        let response =
+            super::icons::icon_only(ui, menu.icon, 26., on, i18n::tr(ui_lang, menu.title));
+        if single {
+            if response.clicked()
+                && let DisplayItem::Cmd(id, ..) = menu.items[0]
+            {
+                self.invoke_command(id, ctx);
+            }
+            return;
+        }
+        let width = menu
+            .items
+            .iter()
+            .map(|item| match *item {
+                DisplayItem::Cmd(id, _, label) => {
+                    super::icons::menu_row_width(ui, i18n::tr(ui_lang, label), &self.tool_keys(id))
+                        + 22.
+                }
+                DisplayItem::View(_, _, label) => {
+                    super::icons::menu_row_width(ui, i18n::tr(ui_lang, label), "") + 22.
+                }
+                DisplayItem::Sep => 0.,
+            })
+            .fold(230., f32::max);
+        egui::Popup::menu(&response).show(|ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing.y = 1.;
+            ui.add_space(2.);
+            ui.label(egui::RichText::new(i18n::tr(ui_lang, menu.title)).strong());
+            ui.separator();
+            for item in menu.items {
+                match *item {
+                    DisplayItem::Cmd(id, icon, label) => {
+                        let keys = self.tool_keys(id);
+                        if super::icons::check_row(
+                            ui,
+                            self.command_checked(id),
+                            icon,
+                            i18n::tr(ui_lang, label),
+                            &keys,
+                        )
+                        .clicked()
+                        {
+                            self.invoke_command(id, ctx);
+                        }
+                    }
+                    DisplayItem::View(kind, icon, label) => {
+                        if super::icons::check_row(
+                            ui,
+                            self.view_checked(kind),
+                            icon,
+                            i18n::tr(ui_lang, label),
+                            "",
+                        )
+                        .clicked()
+                        {
+                            self.toggle_view(kind);
+                        }
+                    }
+                    DisplayItem::Sep => {
+                        ui.separator();
+                    }
+                }
+            }
+        });
+    }
 }
+
+/// A display setting kept outside the command registry.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewToggle {
+    Wireframe,
+    SeamLinks,
+    Floor,
+    Grid,
+    Shadow,
+    Smooth,
+    PieceNames2d,
+    Lengths2d,
+    Measurements2d,
+    BoardGrid,
+    WhiteSheet,
+    Silhouette,
+    Rulers,
+    Guides,
+    SnapGrid,
+    SmartGuides,
+}
+
+#[derive(Clone, Copy)]
+enum DisplayItem {
+    Cmd(super::commands::CommandId, super::icons::Icon, &'static str),
+    View(ViewToggle, super::icons::Icon, &'static str),
+    Sep,
+}
+
+/// One icon of the display capsules: its menu, and which of its items light the icon up.
+struct DisplayMenu {
+    icon: super::icons::Icon,
+    title: &'static str,
+    items: &'static [DisplayItem],
+    lit_by: &'static [super::commands::CommandId],
+    lit_views: &'static [ViewToggle],
+}
+
+mod display_groups {
+    use super::super::commands::CommandId as C;
+    use super::super::icons::Icon;
+    use super::DisplayItem::{Cmd, Sep, View};
+    use super::{DisplayMenu, ViewToggle};
+
+    pub(super) const RENDER: &[DisplayMenu] = &[
+        DisplayMenu {
+            icon: Icon::Gem,
+            title: "Render quality (3D view)",
+            items: &[
+                Cmd(C::HighQualityView, Icon::Gem, "High-quality 3D view"),
+                View(ViewToggle::Smooth, Icon::Curve, "Smooth edges"),
+                Sep,
+                View(ViewToggle::Shadow, Icon::Shadow, "Soft ground shadow"),
+                View(ViewToggle::Floor, Icon::Floor, "Floor"),
+                View(ViewToggle::Grid, Icon::Grid, "Floor grid"),
+            ],
+            lit_by: &[C::HighQualityView],
+            lit_views: &[],
+        },
+        DisplayMenu {
+            icon: Icon::Fabric,
+            title: "Garment style",
+            items: &[
+                Cmd(
+                    C::StyleTexturedThick,
+                    Icon::Fabric,
+                    "Textured with thickness",
+                ),
+                Cmd(C::StyleTextured, Icon::Texture, "Textured"),
+                Cmd(C::StylePlain, Icon::Swatch, "Plain colour"),
+                Cmd(C::StyleTranslucent, Icon::Layers, "Translucent"),
+                Sep,
+                Cmd(C::TechnicalView, Icon::Technical, "Technical view"),
+                View(ViewToggle::Wireframe, Icon::Triangles, "Wireframe"),
+            ],
+            lit_by: &[],
+            lit_views: &[],
+        },
+    ];
+
+    pub(super) const SHOW: &[DisplayMenu] = &[
+        DisplayMenu {
+            icon: Icon::Garment,
+            title: "Show garment",
+            items: &[
+                Cmd(C::ToggleGarment, Icon::Garment, "Show garment"),
+                Sep,
+                Cmd(
+                    C::ShowInternalLines,
+                    Icon::InternalLine,
+                    "Show internal lines",
+                ),
+                Cmd(C::ShowGraphics, Icon::Graphic, "Show graphics"),
+                Cmd(C::ShowPieceNames, Icon::Tag, "Show piece names"),
+                View(ViewToggle::SeamLinks, Icon::Seam, "Seam links"),
+                Cmd(C::RandomPieceColours, Icon::Colours, "Random piece colours"),
+            ],
+            lit_by: &[C::ToggleGarment],
+            lit_views: &[],
+        },
+        DisplayMenu {
+            icon: Icon::Button,
+            title: "Show trims and pins",
+            items: &[
+                Cmd(C::ShowTrims, Icon::Button, "Show trims"),
+                Cmd(C::ShowPins, Icon::Pin, "Show pins"),
+            ],
+            lit_by: &[C::ShowTrims],
+            lit_views: &[],
+        },
+        DisplayMenu {
+            icon: Icon::Avatar,
+            title: "Show avatar",
+            items: &[
+                Cmd(C::ToggleAvatar, Icon::Avatar, "Show avatar"),
+                Sep,
+                Cmd(C::ToggleSkeleton, Icon::Skeleton, "Show joints"),
+                Cmd(
+                    C::ToggleArrangementPoints,
+                    Icon::Points,
+                    "Show arrangement points",
+                ),
+            ],
+            lit_by: &[C::ToggleAvatar],
+            lit_views: &[],
+        },
+    ];
+
+    pub(super) const MAPS: &[DisplayMenu] = &[DisplayMenu {
+        icon: Icon::Gradient,
+        title: "Maps",
+        items: &[
+            Cmd(C::StrainMap, Icon::Gradient, "Strain map"),
+            Cmd(C::StressMap, Icon::Force, "Stress map"),
+            Cmd(C::PressureMap, Icon::Pressure, "Pressure map"),
+        ],
+        lit_by: &[C::StrainMap, C::StressMap, C::PressureMap],
+        lit_views: &[],
+    }];
+
+    pub(super) const PATTERN_INFO: &[DisplayMenu] = &[
+        DisplayMenu {
+            icon: Icon::Tag,
+            title: "Pattern information",
+            items: &[
+                View(ViewToggle::PieceNames2d, Icon::Tag, "Piece names"),
+                View(ViewToggle::Lengths2d, Icon::Dimension, "Segment lengths"),
+                View(ViewToggle::Measurements2d, Icon::Measure, "2D measurements"),
+            ],
+            lit_by: &[],
+            lit_views: &[ViewToggle::Lengths2d],
+        },
+        DisplayMenu {
+            icon: Icon::Page,
+            title: "Pattern board",
+            items: &[
+                View(ViewToggle::WhiteSheet, Icon::Page, "White sheet"),
+                View(ViewToggle::BoardGrid, Icon::Grid, "Grid"),
+                View(ViewToggle::Silhouette, Icon::Avatar, "Avatar silhouette"),
+            ],
+            lit_by: &[],
+            lit_views: &[ViewToggle::WhiteSheet],
+        },
+        DisplayMenu {
+            icon: Icon::RulerCorner,
+            title: "Rulers and guides",
+            items: &[
+                View(ViewToggle::Rulers, Icon::RulerCorner, "Rulers"),
+                View(ViewToggle::Guides, Icon::Guide, "Guides"),
+            ],
+            lit_by: &[],
+            lit_views: &[ViewToggle::Rulers],
+        },
+    ];
+
+    pub(super) const BOARD_TOOLS: &[DisplayMenu] = &[
+        DisplayMenu {
+            icon: Icon::Snap,
+            title: "Snap to",
+            items: &[
+                View(ViewToggle::SnapGrid, Icon::Grid, "Snap to grid"),
+                Cmd(C::ToggleSnapToPattern, Icon::Points, "Snap to pattern"),
+                View(ViewToggle::SmartGuides, Icon::Align, "Smart guides"),
+            ],
+            lit_by: &[C::ToggleSnapToPattern],
+            lit_views: &[ViewToggle::SnapGrid, ViewToggle::SmartGuides],
+        },
+        DisplayMenu {
+            icon: Icon::Lock,
+            title: "Lock in 2D",
+            items: &[
+                Cmd(
+                    C::LockSelectedPieces,
+                    Icon::Lock,
+                    "Lock selected pieces in 2D",
+                ),
+                Cmd(C::LockAllPieces, Icon::Lock, "Lock all pieces in 2D"),
+                Cmd(C::UnlockAllPieces, Icon::Unlock, "Unlock all pieces in 2D"),
+                Sep,
+                Cmd(
+                    C::LockInternalLines,
+                    Icon::Lock,
+                    "Lock all internal lines in 2D",
+                ),
+                Cmd(
+                    C::UnlockInternalLines,
+                    Icon::Unlock,
+                    "Unlock all internal lines in 2D",
+                ),
+            ],
+            lit_by: &[],
+            lit_views: &[],
+        },
+    ];
+
+    pub(super) const ISOLATE: &[DisplayMenu] = &[DisplayMenu {
+        icon: Icon::Eye,
+        title: "Isolate selection",
+        items: &[Cmd(C::IsolateSelection, Icon::Eye, "Isolate selection")],
+        lit_by: &[C::IsolateSelection],
+        lit_views: &[],
+    }];
+}
+
+/// The capsules, left to right.
+const DISPLAY_GROUPS: [&[DisplayMenu]; 4] = [
+    display_groups::RENDER,
+    display_groups::SHOW,
+    display_groups::MAPS,
+    display_groups::ISOLATE,
+];
+
+/// The 2D view's capsules, left to right.
+const BOARD_DISPLAY_GROUPS: [&[DisplayMenu]; 2] =
+    [display_groups::PATTERN_INFO, display_groups::BOARD_TOOLS];
 
 #[cfg(test)]
 mod tests {

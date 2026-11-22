@@ -1,5 +1,39 @@
 # Repository handoff
 
+## GPU recording with a moving body — 21 November 2026
+
+Recording a take with GPU compute on let a walking leg pass through trousers; the CPU solver
+kept the cloth in front of it. The recorder moves the body up to `BODY_STEP_M` (1.5 mm) per
+step, while one OGC detection lets a vertex move at most 0.45 of its gap (under 1.35 mm inside
+the 3 mm contact radius). The CPU detects again within a step when 1 % of the vertices reach
+their bounds; `GpuVbd` detected once per step, so the leg gained on the cloth every step until
+it crossed it.
+
+`OgcWorld::set_fixed` now notes when the body really moves (more than 1 µm; a body posed again
+differs by rounding). After such a move (a take, a pose change in progress) the next GPU step
+reads its iterate back after every sweep and finds contacts again under the CPU's rule. With a
+still body the step is unchanged, one detection and one submission: the 5 s settle of the walk
+take below is byte for byte the one before the fix. Friction terms, rebuilt at each detection,
+are computed in parallel (25 ms to 2 ms for the trousers below), which keeps the extra
+detections cheap on both backends.
+
+`tests/moving_collider.rs` sweeps a cylinder through a square of cloth at 1.1 m/s, stepped as
+the recorder does: on the CPU (ordinary suite) and the GPU (`--ignored`) no cloth vertex enters
+it and the middle of the cloth moves with it (before the fix the GPU let 119 vertices in).
+`tests/gpu_recording.rs` now also checks that no cloth ends inside the raised arm; the GPU keeps
+the cloth on the arm longer than before (5.1 cm against 4.0 cm; CPU 3.1 cm).
+
+Walk take (`fc-take` in the video project: drafted trousers, 4035 vertices, the built-in walk,
+2.6 s, 32 iterations, contact stiffness 2·10⁶, friction 0.3; Apple M1 Max), cloth vertices more
+than 1 mm inside the body per walking frame, mean / most: GPU before 296 / 507, GPU now 68 /
+160, CPU 58 / 104. Wall time, 5 s settle plus the walk, in the same conditions: GPU before 46 s,
+GPU now 49–51 s; CPU 404 s at `75bcc49`, 200 s now with the parallel friction terms (the CPU
+take is byte for byte the same). Both backends still let some cloth in at the knee. In the
+cylinder sweep, run further than the test does, the same happens once the cloth folds onto
+itself in front of the cylinder: a vertex between the body and a close fold gets a tiny ball,
+stops, and the body overtakes it (OGC bounds do not account for the body's own motion). The knee
+is probably the same case; it is not verified or addressed here.
+
 ## Editor transitions and workspace profiles — 26 October 2026
 
 PR #111 merged as `07c4988`. The production cancellation and installation
@@ -469,7 +503,7 @@ Read [OGC contracts](ogc.md) before changing the solver. Full historical reports
 
 1. Reduce exact f64 contact processing and synchronization costs while preserving movement restrictions. GPU BVH refit/query and conservative rejection have explicit overflow retries; precise geometry/incidence still require CPU work. Native 60 physical steps/s is not established across all dense garments and full trajectories. Do not describe this as a fully GPU solver.
 2. Allocations/material caches are reused, and cooperative workgroups improved occupancy. Avoid full per-step transfers and validate dense/animated scenes. `gpu_compute_ms` excludes CPU work and transfers.
-3. Isotropic bounds restrict sliding; the hybrid backend refreshes once per step. The later sparse directional extension is documented above and in [directional contact](directional-contact.md). Further GPU refresh/directional changes need separate validation.
+3. Isotropic bounds restrict sliding. The hybrid backend refreshes contacts inside a step only after the body moved (since 21 November 2026, see the section at the top); with a still body it detects once per step. The later sparse directional extension is documented above and in [directional contact](directional-contact.md). Further GPU refresh/directional changes need separate validation.
 4. Seams remain finite penalties. Exclusions are local to sewn correspondences, with no guarantee for those pairs. Investigate sewn topology or augmented coupling to close seams without degenerating triangles.
 5. Friction, animated avatars, multilayer thickness and calibrated materials remain absent. OGC forces are per pair and their calibration depends on resolution.
 6. Preserve physical tests: finite differences, action/reaction, objectivity, internal C2 join, VF/EE crossing, accumulated bounds, invalid initial state, pins and mouse grabbing. Intersection diagnostics use floating-point tolerances, not exact predicates.

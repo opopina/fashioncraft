@@ -157,7 +157,10 @@ pub(super) fn controls(
             ),
         ] {
             ui.horizontal(|ui| {
-                let response = ui.add(egui::Slider::new(value, range.clone()).show_value(false));
+                let response = super::workspace::slim(
+                    ui,
+                    egui::Slider::new(value, range.clone()).show_value(false),
+                );
                 #[cfg(test)]
                 super::authoring_smoke::widget_harness::named(ui, &response, id);
                 #[cfg(not(test))]

@@ -47,6 +47,7 @@ pub enum CommandId {
     RecoverSnapshot,
     ImportAvatar,
     ImportDxf,
+    ImportDxfAama,
     ImportSvg,
     OpenTemplates,
     Undo,
@@ -108,6 +109,7 @@ pub enum CommandId {
     CaptureView3d,
     CaptureVideo,
     ExportGltf,
+    ExportDxfAama,
     ExportObj,
     ExportObjSelected,
     ExportMdd,
@@ -123,6 +125,7 @@ pub enum CommandId {
     OpenAvatarLibrary,
     DraftTshirt,
     ToggleHistory,
+    ToggleAssistant,
     ToggleObjectBrowser,
     DraftSkirt,
     DraftTrousers,
@@ -631,6 +634,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ImportDxf,
         "file.import_dxf",
         "Import DXF patterns…",
+        File,
+        None,
+        TemplateHistory,
+        LocalFilesystem
+    ),
+    entry!(
+        ImportDxfAama,
+        "file.import_dxf_aama",
+        "Import DXF-AAMA / ASTM patterns…",
         File,
         None,
         TemplateHistory,
@@ -1186,6 +1198,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NativeWorkspace
     ),
     entry!(
+        ExportDxfAama,
+        "export.dxf_aama",
+        "Export DXF-AAMA / ASTM patterns…",
+        Simulation,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
         ExportObj,
         "export.obj",
         "Export OBJ…",
@@ -1315,6 +1336,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         ToggleHistory,
         "window.history",
         "History",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleAssistant,
+        "window.assistant",
+        "Assistant",
         Workspace,
         None,
         Preference,

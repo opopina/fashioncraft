@@ -213,9 +213,12 @@ impl GpuVbd {
         let mut part = settings.clone();
         part.dt = settings.dt / parts as f64;
         part.max_substeps = 1;
-        let mut metrics = self.step_inner(solver, state, &part, grab)?;
+        // The body (the avatar) moved since the last GPU step, as it does while a take is
+        // recorded or a pose changes.
+        let moved = solver.world.take_fixed_moved();
+        let mut metrics = self.step_inner(solver, state, &part, grab, moved)?;
         for _ in 1..parts {
-            let next = self.step_inner(solver, state, &part, grab)?;
+            let next = self.step_inner(solver, state, &part, grab, moved)?;
             metrics.detection_ms += next.detection_ms;
             metrics.detection_updates += next.detection_updates;
             metrics.broad_phase_rebuilds += next.broad_phase_rebuilds;
@@ -229,12 +232,19 @@ impl GpuVbd {
         metrics.solve_ms = elapsed - metrics.detection_ms;
         Ok(metrics)
     }
+    /// One step: the GPU sweeps the vertices within the contacts' movement bounds. With a
+    /// still body that is all, one detection per step. When the body has moved (`refresh`),
+    /// the cloth it pushes must go as far as the body did, further than one detection's
+    /// bounds allow (0.45 of its gap): the iterate is read back after every sweep, and when
+    /// enough vertices reach their bounds (`refresh_fraction`), contacts are found again where
+    /// the cloth now is and the remaining sweeps go on from there, as the CPU does.
     fn step_inner(
         &self,
         solver: &mut VbdSolver,
         state: &mut State,
         settings: &VbdSettings,
         grab: Option<&Grab>,
+        refresh: bool,
     ) -> Result<VbdMetrics, String> {
         settings.validate()?;
         let start = Instant::now();
@@ -275,18 +285,456 @@ impl GpuVbd {
         // never enlarge the allowable movement beyond a conservative ball.
         let radius = solver.prepare_collision(settings)?;
         let rq = (radius + motion).clamp(radius * 2., radius * 4.);
+        let g = solver.garment.clone();
+        let rest_changed = {
+            let mut prepared = self.prepared.borrow_mut();
+            let changed = prepared
+                .as_ref()
+                .is_none_or(|p| !Arc::ptr_eq(&p.garment, &g));
+            if changed {
+                *prepared = Some(Prepared::new(g.clone()));
+            }
+            changed
+        };
+        let prepared = self.prepared.borrow();
+        let prepared = prepared.as_ref().unwrap();
+        let mut profile = GpuStepProfile::default();
+        let mut contact_profile = crate::ogc::DetectionProfile::default();
+        let (mut detection_ms, mut detection_updates, mut broad_phase_rebuilds) = (0., 0, 0);
+        let (mut precision_ms, mut precision_vertices) = (0., 0);
+        let mut gpu_compute_ms = None::<f64>;
+        let mut truncated_vertices = 0;
+        // The iterate, with the fixed geometry after the moving vertices.
+        let mut current = x.clone();
+        let mut remaining = settings.iterations;
+        let mut round = 0;
+        let contacts = loop {
+            let detect_start = Instant::now();
+            let contacts = self.detect(solver, &current, rq, settings)?;
+            // Friction is lagged to the start of the step, as on the CPU, also when contacts
+            // are found again. The solver keeps it too: its f64 refinement of precision
+            // vertices uses the same terms.
+            solver.friction = crate::vbd::friction::friction_terms(&contacts, &x, &x, settings);
+            let color_start = Instant::now();
+            let colors = solver.colors(&contacts, grab);
+            profile.coloring_ms += color_start.elapsed().as_secs_f64() * 1000.;
+            profile.colors = profile.colors.max(colors.len());
+            detection_ms += detect_start.elapsed().as_secs_f64() * 1000.;
+            detection_updates += 1;
+            broad_phase_rebuilds += usize::from(contacts.broad_phase_rebuilt);
+            contact_profile += contacts.profile;
+            let packing_start = Instant::now();
+            // Keep tiny isotropic balls and sparse separating-plane constraints
+            // exact in f64. Other vertices retain the original GPU path. A larger
+            // directional radius is valid only together with all its half-spaces.
+            let precision: Vec<_> = (0..n)
+                .filter(|&i| {
+                    g.mesh.pins[i].is_none()
+                        && (contacts.radii[i] < 4. * roundoff_margin(contacts.centers[i] - origin)
+                            || !contacts.directional.at(i).is_empty())
+                })
+                .collect();
+            precision_vertices = precision_vertices.max(precision.len());
+            let mut on_cpu = vec![false; n];
+            for &i in &precision {
+                on_cpu[i] = true;
+            }
+            let mut packing = self.packing.borrow_mut();
+            let Packing {
+                terms,
+                ranges,
+                incident,
+                positions,
+                targets,
+                balls,
+                order,
+                configs,
+                config_data,
+            } = &mut *packing;
+            terms.clear();
+            ranges.clear();
+            incident.clear();
+            positions.clear();
+            targets.clear();
+            balls.clear();
+            order.clear();
+            configs.clear();
+            terms.reserve(contacts.contacts.len() + usize::from(grab.is_some()));
+            for (i, c) in contacts.contacts.iter().enumerate() {
+                let kind = match c.kind {
+                    Kind::PointPoint => 10,
+                    Kind::PointEdge => 11,
+                    Kind::PointFace => 12,
+                    Kind::EdgeEdge => 13,
+                    Kind::EdgeEdgeInterior | Kind::PointTriangle | Kind::SegmentSegment => {
+                        return Err("Experimental contact laws are CPU-only".into());
+                    }
+                };
+                let mut t = Term::new(&c.vertices[..c.count], kind);
+                t.a = [
+                    contacts.radius(i, settings.contact.radius) as f32,
+                    settings.contact.stiffness as f32,
+                    c.mollifier_epsilon as f32,
+                    0.,
+                ];
+                terms.push(t);
+            }
+            if let Some(grab) = grab {
+                let mut t = Term::new(&grab.vertices, 2);
+                for i in 0..3 {
+                    t.a[i] = grab.weights[i] as f32;
+                }
+                t.b[0] = grab.point_stiffness() as f32;
+                let target = grab.target - origin;
+                t.c = [target.x as f32, target.y as f32, target.z as f32, 1.];
+                terms.push(t);
+            }
+            // Independent brush springs reuse the existing implicit grab kernel.
+            // Single-vertex terms add no coloring dependencies.
+            if let Some(grab) = grab {
+                for a in &grab.patch {
+                    let mut t = Term::new(&[a.vertex], 2);
+                    t.a[0] = 1.;
+                    t.b[0] = (grab.patch_stiffness() * a.weight) as f32;
+                    let target = grab.target + a.offset - origin;
+                    t.c = [target.x as f32, target.y as f32, target.z as f32, 1.];
+                    terms.push(t);
+                }
+            }
+            // Friction terms follow, one per pressing contact; they join the same vertices as
+            // their contact, so the coloring is unchanged.
+            let friction_base = terms.len();
+            let mut friction_index = vec![u32::MAX; contacts.contacts.len()];
+            for (i, f) in solver.friction.iter().enumerate() {
+                let Some(f) = f else {
+                    continue;
+                };
+                let mut t = Term::new(&f.vertices[..f.count], 3);
+                let weight_sum: f64 = f.weights[..f.count].iter().sum();
+                let anchor = f.anchor - origin * weight_sum;
+                for k in 0..f.count {
+                    t.a[k] = f.weights[k] as f32;
+                }
+                t.b = [
+                    f.normal.x as f32,
+                    f.normal.y as f32,
+                    f.normal.z as f32,
+                    f.mu_lambda as f32,
+                ];
+                t.c = [
+                    anchor.x as f32,
+                    anchor.y as f32,
+                    anchor.z as f32,
+                    f.eps as f32,
+                ];
+                friction_index[i] = (terms.len() - friction_base) as u32;
+                terms.push(t);
+            }
+            ranges.reserve(n);
+            incident.reserve(contacts.contacts.len() * 4 + 12);
+            // Detection already built this incidence in canonical contact order.
+            // Reuse it instead of allocating and filling another vector per vertex.
+            for (v, contacts_at_vertex) in contacts.incident.iter().enumerate() {
+                let start = (prepared.incident.len() + incident.len()) as u32;
+                // The lower-layer side of a layered contact keeps none of its terms.
+                let kept = |c: &usize| !solver.yields(&contacts.contacts[*c], v);
+                incident.extend(
+                    contacts_at_vertex
+                        .iter()
+                        .filter(|c| kept(c))
+                        .map(|i| (prepared.terms.len() + i) as u32),
+                );
+                if let Some(grab) = grab {
+                    for &vertex in &grab.vertices {
+                        if vertex == v {
+                            incident.push((prepared.terms.len() + contacts.contacts.len()) as u32);
+                        }
+                    }
+                    if let Ok(index) = grab.patch.binary_search_by_key(&v, |a| a.vertex) {
+                        incident.push(
+                            (prepared.terms.len() + contacts.contacts.len() + 1 + index) as u32,
+                        );
+                    }
+                }
+                for &c in contacts_at_vertex.iter().filter(|c| kept(c)) {
+                    if let Some(&k) = friction_index.get(c).filter(|k| **k != u32::MAX) {
+                        incident.push((prepared.terms.len() + friction_base) as u32 + k);
+                    }
+                }
+                ranges.push([
+                    prepared.ranges[v][0] as u32,
+                    prepared.ranges[v][1] as u32,
+                    start,
+                    (prepared.incident.len() + incident.len()) as u32,
+                ]);
+            }
+            positions.extend(current.iter().enumerate().map(|(i, p)| {
+                let p = *p - origin;
+                [
+                    p.x as f32,
+                    p.y as f32,
+                    p.z as f32,
+                    if i >= n || g.mesh.pins[i].is_some() || on_cpu[i] {
+                        1.
+                    } else {
+                        0.
+                    },
+                ]
+            }));
+            targets.extend((0..n).map(|i| {
+                let (t, inertia) = solver.inertia_target(settings, state, i);
+                let t = t - origin;
+                [t.x as f32, t.y as f32, t.z as f32, inertia as f32]
+            }));
+            balls.extend((0..n).map(|i| {
+                let p = contacts.centers[i] - origin;
+                let roundoff = roundoff_margin(p);
+                let guess = guess[i] - origin;
+                [
+                    p.x as f32,
+                    p.y as f32,
+                    p.z as f32,
+                    (contacts.radii[i] - roundoff).max(0.) as f32,
+                    guess.x as f32,
+                    guess.y as f32,
+                    guess.z as f32,
+                    0.,
+                ]
+            }));
+            let inverse_dt = ((1. / dt) as f32).to_bits();
+            for color in &colors {
+                let offset = order.len();
+                // A tiny contact may round to zero in f32. All its moving vertices
+                // have tiny original balls and are handled exactly on the CPU.
+                // Do not evaluate their singular rounded objective on the GPU.
+                order.extend(
+                    color
+                        .iter()
+                        .filter(|&&i| !on_cpu[i] && g.mesh.pins[i].is_none())
+                        .map(|i| *i as u32),
+                );
+                if order.len() > offset {
+                    configs.push([
+                        offset as u32,
+                        (order.len() - offset) as u32,
+                        n as u32,
+                        inverse_dt,
+                    ]);
+                }
+            }
+            if configs.is_empty() {
+                configs.push([0, 0, n as u32, inverse_dt]);
+            }
+            let alignment = self.device.limits().min_uniform_buffer_offset_alignment as usize;
+            config_data.resize(alignment * configs.len(), 0);
+            for (i, c) in configs.iter().enumerate() {
+                config_data[i * alignment..i * alignment + 16]
+                    .copy_from_slice(bytemuck::cast_slice(c));
+            }
+            profile.packing_ms += packing_start.elapsed().as_secs_f64() * 1000.;
+            let upload_start = Instant::now();
+            let mut resources = self.resources.borrow_mut();
+            resources.prepare(
+                &self.device,
+                &self.queue,
+                &self.layout,
+                [
+                    bytemuck::cast_slice(positions),
+                    bytemuck::cast_slice(targets),
+                    bytemuck::cast_slice(ranges),
+                    bytemuck::cast_slice(terms),
+                    bytemuck::cast_slice(incident),
+                    bytemuck::cast_slice(balls),
+                    bytemuck::cast_slice(order),
+                    config_data,
+                ],
+                (
+                    n,
+                    bytemuck::cast_slice(&prepared.terms),
+                    bytemuck::cast_slice(&prepared.incident),
+                    rest_changed && round == 0,
+                ),
+            );
+            profile.upload_ms += upload_start.elapsed().as_secs_f64() * 1000.;
+            if self.check_gradients {
+                self.check_local_gradients(
+                    &resources,
+                    solver,
+                    (positions, targets, origin),
+                    &contacts,
+                    settings,
+                    grab,
+                )?;
+            }
+            // Sweep until the iterations run out or, after the body moved, until enough
+            // vertices reach their bounds, read back after every sweep as the CPU checks.
+            let dispatch = Dispatch {
+                configs,
+                alignment,
+                n,
+            };
+            let mut predict = round == 0;
+            let values = loop {
+                let sweeps = if refresh { 1 } else { remaining };
+                let (values, gpu_ms) =
+                    self.sweep(&resources, &dispatch, predict, sweeps, &mut profile)?;
+                predict = false;
+                remaining -= sweeps;
+                if let Some(ms) = gpu_ms {
+                    *gpu_compute_ms.get_or_insert(0.) += ms;
+                }
+                let clipped = (0..n)
+                    .filter(|&i| {
+                        let ball = &balls[i];
+                        let p = values[i];
+                        let reach = DVec3::new(
+                            (p[0] - ball[0]) as f64,
+                            (p[1] - ball[1]) as f64,
+                            (p[2] - ball[2]) as f64,
+                        )
+                        .length();
+                        !on_cpu[i]
+                            && g.mesh.pins[i].is_none()
+                            && reach >= ball[3] as f64 * (1. - CLIPPED_SHARE)
+                    })
+                    .count();
+                truncated_vertices += clipped;
+                if remaining == 0
+                    || (clipped > 0
+                        && clipped as f64 >= settings.contact.refresh_fraction * n as f64)
+                {
+                    break values;
+                }
+            };
+            let post_start = Instant::now();
+            let mut new: Vec<_> = values
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    if on_cpu[i] || g.mesh.pins[i].is_some() {
+                        current[i]
+                    } else {
+                        DVec3::new(p[0] as f64, p[1] as f64, p[2] as f64) + origin
+                    }
+                })
+                .collect();
+            for (i, p) in new.iter().enumerate() {
+                if !contacts.contains(i, *p, 0.) {
+                    return Err("GPU OGC trust-region check failed; state unchanged".into());
+                }
+            }
+            let precision_start = Instant::now();
+            if !precision.is_empty() {
+                let mut world_x = solver.world.positions(&new);
+                // The same adaptive warm start as the GPU, restricted to the
+                // original convex region. Without it, a whole sparse patch can
+                // lose its common translational mode in finite local iterations.
+                if round == 0 {
+                    for &i in &precision {
+                        if !contacts.directional.at(i).is_empty() {
+                            world_x[i] = contacts.truncate(i, guess[i]).0;
+                        }
+                    }
+                }
+                solver.refine_precision_vertices(
+                    &mut world_x,
+                    state,
+                    &contacts,
+                    settings,
+                    grab,
+                    &precision,
+                );
+                for &i in &precision {
+                    let p = world_x[i];
+                    if !contacts.contains(i, p, 1e-12) {
+                        return Err("f64 OGC trust-region check failed; state unchanged".into());
+                    }
+                    new[i] = p;
+                }
+            }
+            precision_ms += precision_start.elapsed().as_secs_f64() * 1000.;
+            current[..n].copy_from_slice(&new);
+            profile.post_ms += post_start.elapsed().as_secs_f64() * 1000.;
+            round += 1;
+            if remaining == 0 {
+                break contacts;
+            }
+        };
+        let post_start = Instant::now();
+        let seam_blocks = if solver.seam_block_sweeps > 0 {
+            let metrics = solver.refine_seams(&mut current, state, &contacts, settings, grab);
+            if (0..n).any(|i| !contacts.contains(i, current[i], 0.)) {
+                return Err("Seam block OGC trust-region check failed; state unchanged".into());
+            }
+            metrics
+        } else {
+            Default::default()
+        };
+        for (i, position) in current[..n].iter().enumerate() {
+            if g.mesh.pins[i].is_none() {
+                state.v[i] = (*position - state.x[i]) / dt;
+                state.x[i] = *position;
+            } else {
+                state.v[i] = DVec3::ZERO;
+            }
+        }
+        state.time += dt;
+        solver.prediction.record(&old_velocity, state, settings);
+        let motion_metrics = solver.motion.record(&old_velocity, state, dt, &g);
+        let [extension_p95_percent, extension_max_percent] =
+            crate::garment::diagnostics::extension_percent(&g, state);
+        let max_seam_gap_m = g.max_seam_gap(&state.x);
+        profile.post_ms += post_start.elapsed().as_secs_f64() * 1000.;
+        let step_ms = start.elapsed().as_secs_f64() * 1000.;
+        Ok(VbdMetrics {
+            seam_blocks,
+            motion: Some(motion_metrics),
+            time_s: state.time,
+            dt_s: dt,
+            step_ms,
+            detection_ms,
+            contact_profile,
+            solve_ms: step_ms - detection_ms,
+            gpu_compute_ms,
+            gpu_profile: Some(profile),
+            gpu_subgroups: self.subgroups,
+            precision_vertices,
+            precision_ms,
+            directional_vertices: contacts.directional.vertex_count(),
+            iterations: settings.iterations,
+            truncated_vertices,
+            contacts: contacts.active_contacts,
+            contact_terms: contacts.contacts.len(),
+            detection_updates,
+            broad_phase_rebuilds,
+            minimum_distance_m: contacts.minimum_distance,
+            max_seam_gap_m,
+            extension_p95_percent,
+            extension_max_percent,
+            ..Default::default()
+        })
+    }
+
+    /// Contacts where the cloth is at `x`, with the GPU's candidate filter when it is on.
+    fn detect(
+        &self,
+        solver: &mut VbdSolver,
+        x: &[DVec3],
+        rq: f64,
+        settings: &VbdSettings,
+    ) -> Result<crate::ogc::ContactSet, String> {
         let contacts = if self.filter_contacts {
             solver.world.detect_with_filter(
-                &x,
+                x,
                 rq,
                 &settings.contact,
                 &mut *self.contact_filter.borrow_mut(),
             )?
         } else {
-            solver.world.detect(&x, rq, &settings.contact)?
+            solver.world.detect(x, rq, &settings.contact)?
         };
         if self.check_contacts {
-            let reference = solver.world.detect(&x, rq, &settings.contact)?;
+            let reference = solver.world.detect(x, rq, &settings.contact)?;
             let keys = |c: &crate::ogc::ContactSet| {
                 c.contacts
                     .iter()
@@ -311,339 +759,27 @@ impl GpuVbd {
         if contacts.minimum_distance <= 1e-10 {
             return Err("OGC separation is numerically unresolved; state unchanged. Inspect or rearrange the touching region".into());
         }
-        // Friction is lagged to this detection, at the start of the step, as on the CPU. The
-        // solver keeps it too: its f64 refinement of precision vertices uses the same terms.
-        solver.friction = crate::vbd::friction::friction_terms(&contacts, &x, &x, settings);
-        let color_start = Instant::now();
-        let colors = solver.colors(&contacts, grab);
-        let mut profile = GpuStepProfile {
-            coloring_ms: color_start.elapsed().as_secs_f64() * 1000.,
-            colors: colors.len(),
-            ..Default::default()
-        };
-        let detection_ms = start.elapsed().as_secs_f64() * 1000.;
-        let packing_start = Instant::now();
-        let g = &solver.garment;
-        // Keep tiny isotropic balls and sparse separating-plane constraints
-        // exact in f64. Other vertices retain the original GPU path. A larger
-        // directional radius is valid only together with all its half-spaces.
-        let precision: Vec<_> = (0..n)
-            .filter(|&i| {
-                g.mesh.pins[i].is_none()
-                    && (contacts.radii[i] < 4. * roundoff_margin(contacts.centers[i] - origin)
-                        || !contacts.directional.at(i).is_empty())
-            })
-            .collect();
-        let mut on_cpu = vec![false; n];
-        for &i in &precision {
-            on_cpu[i] = true;
-        }
-        let mut prepared = self.prepared.borrow_mut();
-        let rest_changed = prepared
-            .as_ref()
-            .is_none_or(|p| !Arc::ptr_eq(&p.garment, g));
-        if rest_changed {
-            *prepared = Some(Prepared::new(g.clone()));
-        }
-        let prepared = prepared.as_ref().unwrap();
-        let mut packing = self.packing.borrow_mut();
-        let Packing {
-            terms,
-            ranges,
-            incident,
-            positions,
-            targets,
-            balls,
-            order,
+        Ok(contacts)
+    }
+
+    /// Run `sweeps` VBD sweeps on the uploaded step, after the warm start when `predict`, and
+    /// read the moving vertices back (local coordinates), with the GPU's own time when the
+    /// device has timestamps.
+    fn sweep(
+        &self,
+        resources: &Resources,
+        dispatch: &Dispatch,
+        predict: bool,
+        sweeps: usize,
+        profile: &mut GpuStepProfile,
+    ) -> Result<(Vec<[f32; 4]>, Option<f64>), String> {
+        let &Dispatch {
             configs,
-            config_data,
-        } = &mut *packing;
-        terms.clear();
-        ranges.clear();
-        incident.clear();
-        positions.clear();
-        targets.clear();
-        balls.clear();
-        order.clear();
-        configs.clear();
-        terms.reserve(contacts.contacts.len() + usize::from(grab.is_some()));
-        for (i, c) in contacts.contacts.iter().enumerate() {
-            let kind = match c.kind {
-                Kind::PointPoint => 10,
-                Kind::PointEdge => 11,
-                Kind::PointFace => 12,
-                Kind::EdgeEdge => 13,
-                Kind::EdgeEdgeInterior | Kind::PointTriangle | Kind::SegmentSegment => {
-                    return Err("Experimental contact laws are CPU-only".into());
-                }
-            };
-            let mut t = Term::new(&c.vertices[..c.count], kind);
-            t.a = [
-                contacts.radius(i, settings.contact.radius) as f32,
-                settings.contact.stiffness as f32,
-                c.mollifier_epsilon as f32,
-                0.,
-            ];
-            terms.push(t);
-        }
-        if let Some(grab) = grab {
-            let mut t = Term::new(&grab.vertices, 2);
-            for i in 0..3 {
-                t.a[i] = grab.weights[i] as f32;
-            }
-            t.b[0] = grab.point_stiffness() as f32;
-            let target = grab.target - origin;
-            t.c = [target.x as f32, target.y as f32, target.z as f32, 1.];
-            terms.push(t);
-        }
-        // Independent brush springs reuse the existing implicit grab kernel.
-        // Single-vertex terms add no coloring dependencies.
-        if let Some(grab) = grab {
-            for a in &grab.patch {
-                let mut t = Term::new(&[a.vertex], 2);
-                t.a[0] = 1.;
-                t.b[0] = (grab.patch_stiffness() * a.weight) as f32;
-                let target = grab.target + a.offset - origin;
-                t.c = [target.x as f32, target.y as f32, target.z as f32, 1.];
-                terms.push(t);
-            }
-        }
-        // Friction terms follow, one per pressing contact; they join the same vertices as
-        // their contact, so the coloring is unchanged.
-        let friction_base = terms.len();
-        let mut friction_index = vec![u32::MAX; contacts.contacts.len()];
-        for (i, f) in solver.friction.iter().enumerate() {
-            let Some(f) = f else {
-                continue;
-            };
-            let mut t = Term::new(&f.vertices[..f.count], 3);
-            let weight_sum: f64 = f.weights[..f.count].iter().sum();
-            let anchor = f.anchor - origin * weight_sum;
-            for k in 0..f.count {
-                t.a[k] = f.weights[k] as f32;
-            }
-            t.b = [
-                f.normal.x as f32,
-                f.normal.y as f32,
-                f.normal.z as f32,
-                f.mu_lambda as f32,
-            ];
-            t.c = [
-                anchor.x as f32,
-                anchor.y as f32,
-                anchor.z as f32,
-                f.eps as f32,
-            ];
-            friction_index[i] = (terms.len() - friction_base) as u32;
-            terms.push(t);
-        }
-        ranges.reserve(n);
-        incident.reserve(contacts.contacts.len() * 4 + 12);
-        // Detection already built this incidence in canonical contact order.
-        // Reuse it instead of allocating and filling another vector per vertex.
-        for (v, contacts_at_vertex) in contacts.incident.iter().enumerate() {
-            let start = (prepared.incident.len() + incident.len()) as u32;
-            // The lower-layer side of a layered contact keeps none of its terms.
-            let kept = |c: &usize| !solver.yields(&contacts.contacts[*c], v);
-            incident.extend(
-                contacts_at_vertex
-                    .iter()
-                    .filter(|c| kept(c))
-                    .map(|i| (prepared.terms.len() + i) as u32),
-            );
-            if let Some(grab) = grab {
-                for &vertex in &grab.vertices {
-                    if vertex == v {
-                        incident.push((prepared.terms.len() + contacts.contacts.len()) as u32);
-                    }
-                }
-                if let Ok(index) = grab.patch.binary_search_by_key(&v, |a| a.vertex) {
-                    incident
-                        .push((prepared.terms.len() + contacts.contacts.len() + 1 + index) as u32);
-                }
-            }
-            for &c in contacts_at_vertex.iter().filter(|c| kept(c)) {
-                if let Some(&k) = friction_index.get(c).filter(|k| **k != u32::MAX) {
-                    incident.push((prepared.terms.len() + friction_base) as u32 + k);
-                }
-            }
-            ranges.push([
-                prepared.ranges[v][0] as u32,
-                prepared.ranges[v][1] as u32,
-                start,
-                (prepared.incident.len() + incident.len()) as u32,
-            ]);
-        }
-        positions.extend(x.iter().enumerate().map(|(i, p)| {
-            let p = *p - origin;
-            [
-                p.x as f32,
-                p.y as f32,
-                p.z as f32,
-                if i >= n || g.mesh.pins[i].is_some() || on_cpu[i] {
-                    1.
-                } else {
-                    0.
-                },
-            ]
-        }));
-        targets.extend((0..n).map(|i| {
-            let (t, inertia) = solver.inertia_target(settings, state, i);
-            let t = t - origin;
-            [t.x as f32, t.y as f32, t.z as f32, inertia as f32]
-        }));
-        balls.extend((0..n).map(|i| {
-            let p = contacts.centers[i] - origin;
-            let roundoff = roundoff_margin(p);
-            let guess = guess[i] - origin;
-            [
-                p.x as f32,
-                p.y as f32,
-                p.z as f32,
-                (contacts.radii[i] - roundoff).max(0.) as f32,
-                guess.x as f32,
-                guess.y as f32,
-                guess.z as f32,
-                0.,
-            ]
-        }));
-        let inverse_dt = ((1. / dt) as f32).to_bits();
-        for color in &colors {
-            let offset = order.len();
-            // A tiny contact may round to zero in f32. All its moving vertices
-            // have tiny original balls and are handled exactly on the CPU.
-            // Do not evaluate their singular rounded objective on the GPU.
-            order.extend(
-                color
-                    .iter()
-                    .filter(|&&i| !on_cpu[i] && g.mesh.pins[i].is_none())
-                    .map(|i| *i as u32),
-            );
-            if order.len() > offset {
-                configs.push([
-                    offset as u32,
-                    (order.len() - offset) as u32,
-                    n as u32,
-                    inverse_dt,
-                ]);
-            }
-        }
-        if configs.is_empty() {
-            configs.push([0, 0, n as u32, inverse_dt]);
-        }
-        let alignment = self.device.limits().min_uniform_buffer_offset_alignment as usize;
-        config_data.resize(alignment * configs.len(), 0);
-        for (i, c) in configs.iter().enumerate() {
-            config_data[i * alignment..i * alignment + 16].copy_from_slice(bytemuck::cast_slice(c));
-        }
-        profile.packing_ms = packing_start.elapsed().as_secs_f64() * 1000.;
-        let upload_start = Instant::now();
-        let mut resources = self.resources.borrow_mut();
-        resources.prepare(
-            &self.device,
-            &self.queue,
-            &self.layout,
-            [
-                bytemuck::cast_slice(positions),
-                bytemuck::cast_slice(targets),
-                bytemuck::cast_slice(ranges),
-                bytemuck::cast_slice(terms),
-                bytemuck::cast_slice(incident),
-                bytemuck::cast_slice(balls),
-                bytemuck::cast_slice(order),
-                config_data,
-            ],
-            (
-                n,
-                bytemuck::cast_slice(&prepared.terms),
-                bytemuck::cast_slice(&prepared.incident),
-                rest_changed,
-            ),
-        );
+            alignment,
+            n,
+        } = dispatch;
         let buffers = &resources.buffers;
         let bind = resources.bind.as_ref().unwrap();
-        profile.upload_ms = upload_start.elapsed().as_secs_f64() * 1000.;
-        if self.check_gradients {
-            use crate::math::Jet;
-            let read = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("force checks"),
-                size: (n * 16) as u64,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            let mut e = self.device.create_command_encoder(&Default::default());
-            {
-                let mut p = e.begin_compute_pass(&Default::default());
-                p.set_pipeline(&self.probe);
-                p.set_bind_group(0, bind, &[0]);
-                p.dispatch_workgroups(n as u32, 1, 1);
-            }
-            e.copy_buffer_to_buffer(&buffers[8], 0, &read, 0, (n * 16) as u64);
-            let submission = self.queue.submit([e.finish()]);
-            let (tx, rx) = std::sync::mpsc::channel();
-            read.map_async(wgpu::MapMode::Read, .., move |r| {
-                let _ = tx.send(r);
-            });
-            self.device
-                .poll(wgpu::PollType::Wait {
-                    submission_index: Some(submission),
-                    timeout: None,
-                })
-                .map_err(|e| e.to_string())?;
-            rx.recv()
-                .map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
-            let data = read.get_mapped_range(..).map_err(|e| e.to_string())?;
-            let probes: &[[f32; 4]] = bytemuck::cast_slice(&data);
-            // Compare at IDENTICAL rounded geometry/targets, so this checks the
-            // GPU formulas, not the f32 quantization of a stiff rest state.
-            let rounded: Vec<_> = positions
-                .iter()
-                .map(|p| DVec3::new(p[0] as f64, p[1] as f64, p[2] as f64) + origin)
-                .collect();
-            let mut max_error = 0.0_f64;
-            for i in 0..n {
-                let j = solver.local(
-                    i,
-                    std::array::from_fn(|k| Jet::<3>::variable(rounded[i][k], k)),
-                    &rounded,
-                    &contacts,
-                    settings,
-                    grab,
-                );
-                let target = DVec3::new(
-                    targets[i][0] as f64,
-                    targets[i][1] as f64,
-                    targets[i][2] as f64,
-                ) + origin;
-                let g = DVec3::from_array(j.g) + (rounded[i] - target) * targets[i][3] as f64;
-                let actual = DVec3::new(
-                    probes[i][0] as f64,
-                    probes[i][1] as f64,
-                    probes[i][2] as f64,
-                );
-                let error = (actual - g).length();
-                if !error.is_finite() || error > 0.003 + 0.003 * g.length() {
-                    return Err(format!(
-                        "GPU gradient mismatch at {i}: {actual:?} vs {g:?}, error {error}"
-                    ));
-                }
-                max_error = max_error.max(error);
-                let energy =
-                    j.v + 0.5 * targets[i][3] as f64 * (rounded[i] - target).length_squared();
-                if (energy - probes[i][3] as f64).abs() > 1e-5 + 0.001 * energy.abs() {
-                    return Err(format!(
-                        "GPU energy mismatch at {i}: {} vs {energy}",
-                        probes[i][3]
-                    ));
-                }
-            }
-            eprintln!(
-                "GPU/CPU local gradients verified: {n} vertices, maximum absolute error {max_error:.3e} N"
-            );
-            drop(data);
-            read.unmap();
-        }
         let query = &resources.query;
         let resolve = &resources.resolve;
         let read = &resources.read;
@@ -660,11 +796,13 @@ impl GpuVbd {
             });
             // Same warm start as CPU VBD, clipped to the original detection
             // balls (including the f32 safety margin). Never reset their centers.
-            pass.set_pipeline(&self.predict);
-            pass.set_bind_group(0, bind, &[0]);
-            pass.dispatch_workgroups((n as u32).div_ceil(64), 1, 1);
+            if predict {
+                pass.set_pipeline(&self.predict);
+                pass.set_bind_group(0, bind, &[0]);
+                pass.dispatch_workgroups((n as u32).div_ceil(64), 1, 1);
+            }
             pass.set_pipeline(&self.pipeline);
-            for _ in 0..settings.iterations {
+            for _ in 0..sweeps {
                 for (i, c) in configs.iter().enumerate() {
                     pass.set_bind_group(0, bind, &[(i * alignment) as u32]);
                     pass.dispatch_workgroups(c[1], 1, 1);
@@ -677,7 +815,7 @@ impl GpuVbd {
             encoder.copy_buffer_to_buffer(resolve, 0, read, (n * 16) as u64, 16);
         }
         let commands = encoder.finish();
-        profile.encode_ms = encode_start.elapsed().as_secs_f64() * 1000.;
+        profile.encode_ms += encode_start.elapsed().as_secs_f64() * 1000.;
         let wait_start = Instant::now();
         let submission = self.queue.submit([commands]);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -693,119 +831,124 @@ impl GpuVbd {
         rx.recv()
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
-        profile.submit_wait_ms = wait_start.elapsed().as_secs_f64() * 1000.;
-        let post_start = Instant::now();
+        profile.submit_wait_ms += wait_start.elapsed().as_secs_f64() * 1000.;
         let mapped = read.get_mapped_range(..).map_err(|e| e.to_string())?;
-        let gpu_compute_ms = query.as_ref().map(|_| {
+        let gpu_ms = query.as_ref().map(|_| {
             let a = u64::from_le_bytes(mapped[n * 16..n * 16 + 8].try_into().unwrap());
             let b = u64::from_le_bytes(mapped[n * 16 + 8..n * 16 + 16].try_into().unwrap());
             b.wrapping_sub(a) as f64 * self.queue.get_timestamp_period() as f64 / 1e6
         });
-        let values: &[[f32; 4]] = bytemuck::cast_slice(&mapped[..n * 16]);
-        let mut new: Vec<_> = values
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                if on_cpu[i] || g.mesh.pins[i].is_some() {
-                    state.x[i]
-                } else {
-                    DVec3::new(p[0] as f64, p[1] as f64, p[2] as f64) + origin
-                }
-            })
-            .collect();
+        let values = bytemuck::cast_slice::<u8, [f32; 4]>(&mapped[..n * 16]).to_vec();
         drop(mapped);
         read.unmap();
-        for (i, p) in new.iter().enumerate() {
-            if !contacts.contains(i, *p, 0.) {
-                return Err("GPU OGC trust-region check failed; state unchanged".into());
-            }
+        Ok((values, gpu_ms))
+    }
+
+    /// Compare the GPU's local forces and energies at the uploaded positions with the CPU's.
+    fn check_local_gradients(
+        &self,
+        resources: &Resources,
+        solver: &VbdSolver,
+        (positions, targets, origin): (&[[f32; 4]], &[[f32; 4]], DVec3),
+        contacts: &crate::ogc::ContactSet,
+        settings: &VbdSettings,
+        grab: Option<&Grab>,
+    ) -> Result<(), String> {
+        use crate::math::Jet;
+        let n = targets.len();
+        let buffers = &resources.buffers;
+        let bind = resources.bind.as_ref().unwrap();
+        let read = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("force checks"),
+            size: (n * 16) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut e = self.device.create_command_encoder(&Default::default());
+        {
+            let mut p = e.begin_compute_pass(&Default::default());
+            p.set_pipeline(&self.probe);
+            p.set_bind_group(0, bind, &[0]);
+            p.dispatch_workgroups(n as u32, 1, 1);
         }
-        let precision_start = Instant::now();
-        if !precision.is_empty() {
-            let mut world_x = solver.world.positions(&new);
-            // The same adaptive warm start as the GPU, restricted to the
-            // original convex region. Without it, a whole sparse patch can
-            // lose its common translational mode in finite local iterations.
-            for &i in &precision {
-                if !contacts.directional.at(i).is_empty() {
-                    world_x[i] = contacts.truncate(i, guess[i]).0;
-                }
-            }
-            solver.refine_precision_vertices(
-                &mut world_x,
-                state,
-                &contacts,
+        e.copy_buffer_to_buffer(&buffers[8], 0, &read, 0, (n * 16) as u64);
+        let submission = self.queue.submit([e.finish()]);
+        let (tx, rx) = std::sync::mpsc::channel();
+        read.map_async(wgpu::MapMode::Read, .., move |r| {
+            let _ = tx.send(r);
+        });
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv()
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        let data = read.get_mapped_range(..).map_err(|e| e.to_string())?;
+        let probes: &[[f32; 4]] = bytemuck::cast_slice(&data);
+        // Compare at IDENTICAL rounded geometry/targets, so this checks the
+        // GPU formulas, not the f32 quantization of a stiff rest state.
+        let rounded: Vec<_> = positions
+            .iter()
+            .map(|p| DVec3::new(p[0] as f64, p[1] as f64, p[2] as f64) + origin)
+            .collect();
+        let mut max_error = 0.0_f64;
+        for i in 0..n {
+            let j = solver.local(
+                i,
+                std::array::from_fn(|k| Jet::<3>::variable(rounded[i][k], k)),
+                &rounded,
+                contacts,
                 settings,
                 grab,
-                &precision,
             );
-            for &i in &precision {
-                let p = world_x[i];
-                if !contacts.contains(i, p, 1e-12) {
-                    return Err("f64 OGC trust-region check failed; state unchanged".into());
-                }
-                new[i] = p;
+            let target = DVec3::new(
+                targets[i][0] as f64,
+                targets[i][1] as f64,
+                targets[i][2] as f64,
+            ) + origin;
+            let g = DVec3::from_array(j.g) + (rounded[i] - target) * targets[i][3] as f64;
+            let actual = DVec3::new(
+                probes[i][0] as f64,
+                probes[i][1] as f64,
+                probes[i][2] as f64,
+            );
+            let error = (actual - g).length();
+            if !error.is_finite() || error > 0.003 + 0.003 * g.length() {
+                return Err(format!(
+                    "GPU gradient mismatch at {i}: {actual:?} vs {g:?}, error {error}"
+                ));
+            }
+            max_error = max_error.max(error);
+            let energy = j.v + 0.5 * targets[i][3] as f64 * (rounded[i] - target).length_squared();
+            if (energy - probes[i][3] as f64).abs() > 1e-5 + 0.001 * energy.abs() {
+                return Err(format!(
+                    "GPU energy mismatch at {i}: {} vs {energy}",
+                    probes[i][3]
+                ));
             }
         }
-        let precision_ms = precision_start.elapsed().as_secs_f64() * 1000.;
-        let seam_blocks = if solver.seam_block_sweeps > 0 {
-            let mut world_x = solver.world.positions(&new);
-            let metrics = solver.refine_seams(&mut world_x, state, &contacts, settings, grab);
-            new.copy_from_slice(&world_x[..n]);
-            if new
-                .iter()
-                .enumerate()
-                .any(|(i, p)| !contacts.contains(i, *p, 0.))
-            {
-                return Err("Seam block OGC trust-region check failed; state unchanged".into());
-            }
-            metrics
-        } else {
-            Default::default()
-        };
-        for (i, position) in new.iter().enumerate() {
-            if g.mesh.pins[i].is_none() {
-                state.v[i] = (*position - state.x[i]) / dt;
-                state.x[i] = *position;
-            } else {
-                state.v[i] = DVec3::ZERO;
-            }
-        }
-        state.time += dt;
-        solver.prediction.record(&old_velocity, state, settings);
-        let motion_metrics = solver.motion.record(&old_velocity, state, dt, g);
-        let [extension_p95_percent, extension_max_percent] =
-            crate::garment::diagnostics::extension_percent(g, state);
-        let max_seam_gap_m = g.max_seam_gap(&state.x);
-        profile.post_ms = post_start.elapsed().as_secs_f64() * 1000.;
-        let step_ms = start.elapsed().as_secs_f64() * 1000.;
-        Ok(VbdMetrics {
-            seam_blocks,
-            motion: Some(motion_metrics),
-            time_s: state.time,
-            dt_s: dt,
-            step_ms,
-            detection_ms,
-            contact_profile: contacts.profile,
-            solve_ms: step_ms - detection_ms,
-            gpu_compute_ms,
-            gpu_profile: Some(profile),
-            gpu_subgroups: self.subgroups,
-            precision_vertices: precision.len(),
-            precision_ms,
-            directional_vertices: contacts.directional.vertex_count(),
-            iterations: settings.iterations,
-            contacts: contacts.active_contacts,
-            contact_terms: contacts.contacts.len(),
-            detection_updates: 1,
-            broad_phase_rebuilds: usize::from(contacts.broad_phase_rebuilt),
-            minimum_distance_m: contacts.minimum_distance,
-            max_seam_gap_m,
-            extension_p95_percent,
-            extension_max_percent,
-            ..Default::default()
-        })
+        eprintln!(
+            "GPU/CPU local gradients verified: {n} vertices, maximum absolute error {max_error:.3e} N"
+        );
+        drop(data);
+        read.unmap();
+        Ok(())
     }
+}
+
+/// A vertex this close to the edge of its movement bound, as a share of its radius, reached
+/// it: its last local step was cut short there (the GPU clips a step to the ball exactly).
+const CLIPPED_SHARE: f64 = 1e-3;
+
+/// The shape of one step's GPU sweeps: its color dispatches, their uniform stride and the
+/// moving vertex count.
+struct Dispatch<'a> {
+    configs: &'a [[u32; 4]],
+    alignment: usize,
+    n: usize,
 }
 
 fn roundoff_margin(local_center: DVec3) -> f64 {

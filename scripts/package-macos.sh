@@ -24,22 +24,29 @@ targets=$(rustup target list --installed 2>/dev/null || true)
 if echo "$targets" | grep -q aarch64-apple-darwin && echo "$targets" | grep -q x86_64-apple-darwin; then
     arch=universal
     for target in aarch64-apple-darwin x86_64-apple-darwin; do
-        cargo build --locked --release --features desktop --bin fashioncraft --target "$target"
+        cargo build --locked --release --features desktop --bin fashioncraft \
+            --bin fashioncraft-cli --target "$target"
     done
     binaries="target/aarch64-apple-darwin/release/fashioncraft target/x86_64-apple-darwin/release/fashioncraft"
 else
     case $(uname -m) in arm64) arch=aarch64 ;; *) arch=x86_64 ;; esac
-    cargo build --locked --release --features desktop --bin fashioncraft
+    cargo build --locked --release --features desktop --bin fashioncraft --bin fashioncraft-cli
     binaries=target/release/fashioncraft
 fi
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/assets"
+# fashioncraft-cli sits beside it: AI agents start `fashioncraft-cli mcp` (Settings › AI agents
+# shows the entry).
 if [ "$arch" = universal ]; then
     # shellcheck disable=SC2086
     lipo -create -output "$app/Contents/MacOS/FashionCraft" $binaries
+    lipo -create -output "$app/Contents/MacOS/fashioncraft-cli" \
+        target/aarch64-apple-darwin/release/fashioncraft-cli \
+        target/x86_64-apple-darwin/release/fashioncraft-cli
 else
     cp "$binaries" "$app/Contents/MacOS/FashionCraft"
+    cp target/release/fashioncraft-cli "$app/Contents/MacOS/fashioncraft-cli"
 fi
 
 # The mannequin and the files that sit beside it, with their licence.
@@ -88,9 +95,13 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# The helper first: a bundle is signed from the inside out.
 if [ -n "${FASHIONCRAFT_SIGN_IDENTITY:-}" ]; then
+    codesign --force --options runtime --timestamp --sign "$FASHIONCRAFT_SIGN_IDENTITY" \
+        "$app/Contents/MacOS/fashioncraft-cli"
     codesign --force --options runtime --timestamp --sign "$FASHIONCRAFT_SIGN_IDENTITY" "$app"
 else
+    codesign --force --sign - "$app/Contents/MacOS/fashioncraft-cli"
     codesign --force --sign - "$app"
 fi
 codesign --verify --strict "$app"

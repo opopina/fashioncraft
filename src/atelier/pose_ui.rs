@@ -228,8 +228,7 @@ impl Atelier {
                 let Some(draft) = state.draft.as_mut() else {
                     return;
                 };
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Preset"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Preset"), |ui| {
                     for name in avatar_rig::PRESETS {
                         if ui.small_button(i18n::tr(ui_lang, name)).clicked()
                             && let Some(p) = avatar_rig::preset(name)
@@ -242,8 +241,7 @@ impl Atelier {
                 let user_poses = &mut self.prefs.user_poses;
                 if !user_poses.is_empty() {
                     let mut forget = None;
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(i18n::tr(ui_lang, "My poses"));
+                    super::workspace::prop_row(ui, i18n::tr(ui_lang, "My poses"), |ui| {
                         for (name, pose) in user_poses.iter() {
                             let button = ui.small_button(name).on_hover_text(i18n::tr(
                                 ui_lang,
@@ -452,13 +450,11 @@ impl Atelier {
                             i18n::tr(ui_lang, "Painting"),
                             names[state.bone]
                         ));
-                        ui.add(
-                            egui::Slider::new(&mut state.brush_cm, 1.0..=20.)
+                        super::workspace::slim(ui, egui::Slider::new(&mut state.brush_cm, 1.0..=20.)
                                 .suffix(" cm")
                                 .text(i18n::tr(ui_lang, "Radius")),
                         );
-                        ui.add(
-                            egui::Slider::new(&mut state.brush_strength, 0.05..=1.)
+                        super::workspace::slim(ui, egui::Slider::new(&mut state.brush_strength, 0.05..=1.)
                                 .text(i18n::tr(ui_lang, "Strength")),
                         );
                         ui.checkbox(&mut state.brush_remove, i18n::tr(ui_lang, "Remove"));

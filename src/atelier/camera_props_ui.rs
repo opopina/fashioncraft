@@ -39,9 +39,11 @@ impl Atelier {
                         ui.end_row();
                         ui.label(t("Field of view"));
                         let mut fov = self.camera.fov_radians().to_degrees();
-                        if ui
-                            .add(egui::Slider::new(&mut fov, FOV_RANGE_DEGREES).suffix("°"))
-                            .changed()
+                        if super::workspace::slim(
+                            ui,
+                            egui::Slider::new(&mut fov, FOV_RANGE_DEGREES).suffix("°"),
+                        )
+                        .changed()
                         {
                             self.camera.fov_degrees = fov;
                             self.prefs.camera_fov_degrees = fov;

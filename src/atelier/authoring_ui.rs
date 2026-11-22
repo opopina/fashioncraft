@@ -1460,8 +1460,7 @@ impl Atelier {
         }
         ui.separator();
         ui.strong(format!("Boundary {name}"));
-        ui.horizontal(|ui| {
-            ui.label(i18n::tr(ui_lang, "Target"));
+        super::workspace::prop_row(ui, i18n::tr(ui_lang, "Target"), |ui| {
             millimetre_field(ui, &mut self.authoring.target_mm);
         });
         let target_m = authoring::mm_to_m(self.authoring.target_mm);
@@ -1501,8 +1500,8 @@ impl Atelier {
     }
     pub(super) fn authoring_properties(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
-        self.existing_seams(ui);
-        self.sewing_audit_controls(ui);
+        // What the current action needs comes first (sewing, the chosen edge, a dart, an
+        // internal line); then the chosen piece, its simulation and its seams; the rest after.
         if self.authoring.tool == Tool::Sew || !self.authoring.ends.is_empty() {
             self.sewing_controls(ui);
         }
@@ -1512,7 +1511,7 @@ impl Atelier {
         self.edge_properties(ui);
         self.dart_properties(ui);
         self.internal_line_properties(ui);
-        ui.strong(i18n::tr(ui_lang, "Active panel"));
+        super::workspace::group_title(ui, i18n::tr(ui_lang, "Piece"));
         let Some(panel) = self
             .project
             .template
@@ -1521,24 +1520,18 @@ impl Atelier {
             .find(|p| Some(&p.id) == self.authoring.selected.as_ref())
             .cloned()
         else {
-            ui.small(i18n::tr(ui_lang, "Select a piece in the list or in a view. Pen / Rectangle to draw; Sew to assemble."));
+            ui.label(
+                egui::RichText::new(i18n::tr(ui_lang, "Select a piece in the list or in a view. Pen / Rectangle to draw; Sew to assemble."))
+                    .small()
+                    .weak(),
+            );
+            self.existing_seams(ui);
+            self.sewing_audit_controls(ui);
             return;
         };
-        ui.label(&panel.name);
-        let mut locked = self.board_locked(&panel.id);
-        if ui
-            .checkbox(&mut locked, i18n::tr(ui_lang, "Locked in 2D"))
-            .on_hover_text(i18n::tr(ui_lang, "A locked piece cannot be picked or box-selected on the 2D board; the 3D view still reaches it"))
-            .changed()
-        {
-            self.set_piece_locked(&panel.id, locked);
-        }
-        self.layer_properties(ui, &panel.id);
-        self.piece_trims(ui, &panel.id);
-        self.piece_graphics(ui, &panel.id);
-        self.arrangement_properties(ui, &panel);
-        self.pin_properties(ui, &panel);
-        self.activation_properties(ui, &panel);
+        super::workspace::prop_row(ui, i18n::tr(ui_lang, "Name"), |ui| {
+            ui.label(&panel.name);
+        });
         if let Some(fabric) = self
             .project
             .template
@@ -1551,17 +1544,52 @@ impl Atelier {
                 fabric.name,
                 fabric.properties.density * 1000.
             );
-            if ui
-                .button(label)
-                .on_hover_text(i18n::tr(
-                    ui_lang,
-                    "Open material, weight and stretch for this piece",
-                ))
-                .clicked()
-            {
+            let swatch =
+                super::object_browser_ui::fabric_swatch(&self.project.template, &fabric.id);
+            let open = super::workspace::prop_row(ui, i18n::tr(ui_lang, "Fabric"), |ui| {
+                // The fabric's colour beside its name, as a swatch card shows it.
+                let (chip, _) = ui.allocate_exact_size(Vec2::splat(14.), egui::Sense::hover());
+                ui.painter().rect_filled(chip, 3., swatch);
+                ui.painter().rect_stroke(
+                    chip,
+                    3.,
+                    egui::Stroke::new(1., ui.visuals().widgets.noninteractive.bg_stroke.color),
+                    egui::StrokeKind::Inside,
+                );
+                ui.add(egui::Button::new(label).truncate())
+                    .on_hover_text(i18n::tr(
+                        ui_lang,
+                        "Open material, weight and stretch for this piece",
+                    ))
+                    .clicked()
+            })
+            .inner;
+            if open {
                 self.inspector_tab = super::chrome::InspectorTab::Fabric;
             }
         }
+        let mut locked = self.board_locked(&panel.id);
+        let changed = super::workspace::prop_row_help(
+            ui,
+            i18n::tr(ui_lang, "Locked in 2D"),
+            i18n::tr(
+                ui_lang,
+                "A locked piece cannot be picked or box-selected on the 2D board; the 3D view still reaches it",
+            ),
+            |ui| ui.checkbox(&mut locked, "").changed(),
+        )
+        .inner;
+        if changed {
+            self.set_piece_locked(&panel.id, locked);
+        }
+        self.layer_properties(ui, &panel.id);
+        self.activation_properties(ui, &panel);
+        self.existing_seams(ui);
+        self.sewing_audit_controls(ui);
+        self.piece_trims(ui, &panel.id);
+        self.piece_graphics(ui, &panel.id);
+        self.arrangement_properties(ui, &panel);
+        self.pin_properties(ui, &panel);
         if let Some(range) = self.scene.garment.panels.iter().find(|p| p.id == panel.id) {
             let area: f64 = self.scene.garment.mesh.triangles[range.triangles.clone()]
                 .iter()
@@ -1593,8 +1621,7 @@ impl Atelier {
             super::workspace::section(i18n::tr(ui_lang, "Dimensions and points")),
             |ui| {
                 ui.strong(i18n::tr(ui_lang, "Dimensions (mm)"));
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Width"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Width"), |ui| {
                     millimetre_field(ui, &mut self.authoring.width_mm);
                     ui.label(i18n::tr(ui_lang, "Height"));
                     millimetre_field(ui, &mut self.authoring.height_mm);

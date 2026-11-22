@@ -68,6 +68,35 @@ pub(super) struct Preferences {
     pub(super) user_poses: std::collections::BTreeMap<String, fashioncraft::avatar_rig::Pose>,
     /// Which axes the placement gizmo follows (Settings › Gizmo).
     pub(super) gizmo_axes: super::gizmo::GizmoAxes,
+    /// AI agents and the Assistant panel (Settings › AI agents).
+    pub(super) ai: AiPrefs,
+}
+
+/// AI agents and the Assistant panel. API keys are not kept here: they go to the system's
+/// keychain (see `assistant`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(super) struct AiPrefs {
+    /// Whether MCP clients may work in this window through `fashioncraft-cli mcp`. Off until
+    /// the person turns it on.
+    pub(super) agents_allowed: bool,
+    /// The Assistant panel's provider: anthropic, openai, gemini or local.
+    pub(super) provider: String,
+    /// The model it asks; empty uses the provider's default where there is one.
+    pub(super) model: String,
+    /// The provider's address; empty uses the provider's default.
+    pub(super) base_url: String,
+}
+
+impl Default for AiPrefs {
+    fn default() -> Self {
+        Self {
+            agents_allowed: false,
+            provider: "anthropic".into(),
+            model: String::new(),
+            base_url: String::new(),
+        }
+    }
 }
 
 /// Most poses the user can keep, and the longest name one may have.
@@ -93,6 +122,7 @@ impl Default for Preferences {
             language: Default::default(),
             user_poses: Default::default(),
             gizmo_axes: Default::default(),
+            ai: Default::default(),
         }
     }
 }
@@ -134,14 +164,38 @@ fn finite_or(value: f64, fallback: f64) -> f64 {
 }
 
 /// Read preferences from `path`. A missing, unreadable, truncated or corrupt
-/// file yields the defaults; no error is propagated and nothing panics.
+/// file yields the defaults; no error is propagated and nothing panics. A file
+/// with one bad value keeps every other section: only the section that does not
+/// read (for example an unknown language) falls back to its default.
 pub(super) fn load(path: &Path) -> Preferences {
     let Ok(text) = std::fs::read_to_string(path) else {
         return Preferences::default();
     };
-    let mut prefs: Preferences = serde_json::from_str(&text).unwrap_or_default();
+    let mut prefs = parse(&text);
     prefs.sanitize();
     prefs
+}
+
+fn parse(text: &str) -> Preferences {
+    if let Ok(prefs) = serde_json::from_str(text) {
+        return prefs;
+    }
+    let Ok(serde_json::Value::Object(read)) = serde_json::from_str::<serde_json::Value>(text)
+    else {
+        return Preferences::default();
+    };
+    let Ok(serde_json::Value::Object(mut kept)) = serde_json::to_value(Preferences::default())
+    else {
+        return Preferences::default();
+    };
+    for (key, value) in read {
+        let mut trial = kept.clone();
+        trial.insert(key.clone(), value.clone());
+        if serde_json::from_value::<Preferences>(serde_json::Value::Object(trial)).is_ok() {
+            kept.insert(key, value);
+        }
+    }
+    serde_json::from_value(serde_json::Value::Object(kept)).unwrap_or_default()
 }
 
 /// Write preferences to `path`, creating the parent directory when needed.
@@ -175,7 +229,7 @@ pub(super) fn window(
         .resizable(true)
         .default_width(340.)
         .show(ctx, |ui| {
-            ui.heading("Appearance");
+            super::workspace::group_title(ui, "Appearance");
             ui.horizontal(|ui| {
                 ui.label("Theme");
                 edited |= ui
@@ -211,7 +265,7 @@ pub(super) fn window(
             );
 
             ui.separator();
-            ui.heading("Board");
+            super::workspace::group_title(ui, "Board");
             ui.horizontal(|ui| {
                 ui.label("Snap step (mm)");
                 edited |= ui
@@ -224,7 +278,7 @@ pub(super) fn window(
             });
 
             ui.separator();
-            ui.heading("Overlays");
+            super::workspace::group_title(ui, "Overlays");
             edited |= ui
                 .checkbox(&mut prefs.seam_links, "Seam links enabled at startup")
                 .changed();
@@ -233,7 +287,7 @@ pub(super) fn window(
                 .changed();
 
             ui.separator();
-            ui.heading("Simulation defaults for next launch");
+            super::workspace::group_title(ui, "Simulation defaults for next launch");
             ui.horizontal(|ui| {
                 ui.label("Time step (s)");
                 edited |= ui
@@ -255,6 +309,65 @@ pub(super) fn window(
                     .changed();
             });
             ui.separator();
+            let tr = |text| super::i18n::tr(prefs.language, text);
+            super::workspace::group_title(ui, tr("AI agents"));
+            let allow = ui.horizontal(|ui| {
+                let allow = ui.checkbox(
+                    &mut prefs.ai.agents_allowed,
+                    tr("Let AI agents use FashionCraft"),
+                );
+                super::workspace::info_tip(
+                    ui,
+                    tr("MCP clients such as Claude Desktop, Claude Code, Cursor or ArtCraft's \
+                        gateway work in this window through fashioncraft-cli mcp. Off, nothing \
+                        listens."),
+                );
+                allow
+            });
+            edited |= allow.inner.changed();
+            ui.label(
+                egui::RichText::new(tr(
+                    "They work in the open window, with undo, and save and export only into \
+                     Documents/FashionCraft.",
+                ))
+                .small()
+                .weak(),
+            );
+            let entry = mcp_entry();
+            // The client entry as a code card with its copy button, as developer docs show it.
+            egui::Frame::new()
+                .fill(ui.visuals().extreme_bg_color)
+                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                .corner_radius(8.)
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(tr("MCP client entry"))
+                                .small()
+                                .strong()
+                                .color(super::workspace::accent(ui.visuals())),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button(tr("Copy")).clicked() {
+                                ui.ctx().copy_text(entry.clone());
+                            }
+                        });
+                    });
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&entry).monospace().small()).wrap(),
+                    );
+                });
+            ui.label(
+                egui::RichText::new(tr(
+                    "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, \
+                     Gemini or a local model; set its connection in its own window.",
+                ))
+                .small()
+                .weak(),
+            );
+            ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Restore defaults").clicked() {
                     *prefs = Preferences::default();
@@ -264,6 +377,34 @@ pub(super) fn window(
             });
         });
     *changed |= edited;
+}
+
+/// The `mcpServers` entry that starts this installation's `fashioncraft-cli mcp`, for Claude
+/// Desktop, Cursor, LM Studio and most other MCP clients.
+fn mcp_entry() -> String {
+    // An AppImage runs its fashioncraft-cli as `<AppImage> cli` (see scripts/package-linux.sh).
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        return serde_json::to_string_pretty(&serde_json::json!({
+            "mcpServers": {"FashionCraft": {
+                "command": appimage.to_string_lossy(), "args": ["cli", "mcp"]
+            }}
+        }))
+        .unwrap_or_default();
+    }
+    let name = if cfg!(windows) {
+        "fashioncraft-cli.exe"
+    } else {
+        "fashioncraft-cli"
+    };
+    let cli = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join(name)))
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| name.into());
+    serde_json::to_string_pretty(&serde_json::json!({
+        "mcpServers": {"FashionCraft": {"command": cli, "args": ["mcp"]}}
+    }))
+    .unwrap_or_default()
 }
 
 /// Install the workspace chrome for the selected theme, and select that theme so
@@ -281,6 +422,20 @@ pub(super) fn apply(ctx: &egui::Context, prefs: &Preferences) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_bad_value_keeps_the_other_preferences() {
+        let prefs = super::parse(
+            r#"{"language": "Klingon", "ai": {"agents_allowed": true,
+                "base_url": "http://127.0.0.1:18765/v1"}}"#,
+        );
+        assert_eq!(prefs.language, super::super::i18n::Language::English);
+        assert!(prefs.ai.agents_allowed);
+        assert_eq!(prefs.ai.base_url, "http://127.0.0.1:18765/v1");
+        let spanish = super::parse(r#"{"language": "Spanish"}"#);
+        assert_eq!(spanish.language, super::super::i18n::Language::Spanish);
+        assert_eq!(super::parse("not json"), super::Preferences::default());
+    }
+
     use super::*;
 
     fn sample() -> Preferences {

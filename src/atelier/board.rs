@@ -910,6 +910,42 @@ fn paint_panel_dimensions(
     );
 }
 impl Atelier {
+    /// 2D Pattern › New sheet: the pen draws the first piece of a new garment, which replaces
+    /// the current one when its outline closes.
+    pub(super) fn start_new_sheet(&mut self) {
+        self.playing = false;
+        self.pending = false;
+        self.generation += 1;
+        self.grab = None;
+        self.authoring.replace = true;
+        self.authoring.tool = Tool::Draw;
+        self.authoring.draft.clear();
+        self.authoring.tangents.clear();
+        self.authoring.board.clear_preview();
+        self.authoring.board.center = DVec2::splat(0.5);
+        self.authoring.board.scale = 400.;
+        self.authoring.board.fitted = true;
+    }
+
+    /// What the board's current tool does, in English (the caller translates it).
+    pub(super) fn board_hint(&self) -> &'static str {
+        match self.authoring.tool {
+            Tool::Draw => "Pen: click = corner · drag = curve · click the first corner to close",
+            Tool::Rectangle => "Rectangle: drag between two opposite corners",
+            Tool::InternalLine => {
+                "Click a boundary to choose its panel, then draw inside · Enter: finish"
+            }
+            Tool::Sew => "Choose two boundaries in 2D or 3D, then create the seam in Properties",
+            Tool::Edit => {
+                "Drag points to edit · Shift+click to add · drag empty space to box select · Ctrl+C / Ctrl+V"
+            }
+            Tool::Graphic => {
+                "Drag a graphic to move it · its corners scale it · its top handle turns it (Shift: 15°) · Delete removes it"
+            }
+            _ => "Right-click for tools · middle-drag to pan · wheel to zoom",
+        }
+    }
+
     pub(super) fn activate_freehand(&mut self) {
         self.set_authoring_tool(Tool::Draw, false);
         enter_freehand_draft(&mut self.authoring);
@@ -1508,9 +1544,24 @@ impl Atelier {
     }
     pub(super) fn patterns(&mut self, ui: &mut egui::Ui) {
         let ui_lang = self.prefs.language;
+        // The grid's fine step, as the board draws it at this zoom.
+        let detail = if self.prefs.pattern_display.grid {
+            format!(
+                "{} {:.0} mm",
+                super::i18n::tr(ui_lang, "Grid"),
+                if self.authoring.board.scale < 140. {
+                    250.
+                } else {
+                    50.
+                }
+            )
+        } else {
+            String::new()
+        };
         let header = super::chrome::view_header(
             ui,
             super::i18n::tr(self.prefs.language, "2D patterns"),
+            &detail,
             self.prefs.workspace.mode == super::layout::ViewMode::Patterns,
             false,
             super::i18n::tr(ui_lang, super::view_controls::HINT_2D_VIEW),
@@ -1564,92 +1615,61 @@ impl Atelier {
                 });
         });
         self.window_tools(ui, false);
-        ui.horizontal(|ui| {
-            self.primitive_menu(ui);
-            if ui.selectable_label(self.authoring.board.freehand.enabled, i18n::tr(ui_lang, "Freehand")).on_hover_text(i18n::tr(ui_lang, "Drag a new panel outline, release to preview, then Create panel")).clicked() {
-                self.activate_freehand();
+        // What the tool needs right now floats at the bottom of the board instead of pushing
+        // it down.
+        let pane = ui.max_rect();
+        let ctx = ui.ctx().clone();
+        super::workspace::floating_capsule(&ctx, "board-capsule", pane, |ui| {
+            if self.authoring.tool == Tool::Draw && self.authoring.board.freehand.enabled {
+                self.freehand_controls(ui);
             }
-            let quick = ui.small_button(i18n::tr(ui_lang, "Quick · Q")).on_hover_text(i18n::tr(ui_lang, "Shapes, mirrors and booleans near the cursor"));
-            self.smoke_target("quick_open", quick.rect.center());
-            if quick.clicked() { self.quick.open(ui.ctx(), quick.rect.left_bottom()); }
-            let new=ui.small_button(i18n::tr(ui_lang, "New sheet")).on_hover_text(i18n::tr(ui_lang, "Draw the first panel of a new garment; replaces the current garment when the contour is closed"));
-            self.smoke_target("replace",new.rect.center());
-            if new.clicked() {
-                self.playing = false;
-                self.pending = false;
-                self.generation += 1;
-                self.grab = None;
-                self.authoring.replace = true;
-                self.authoring.tool = Tool::Draw;
-                self.authoring.draft.clear();
-                self.authoring.tangents.clear();
-                self.authoring.board.clear_preview();
-                self.authoring.board.center = DVec2::splat(0.5);
-                self.authoring.board.scale = 400.;
-                self.authoring.board.fitted = true;
+            if self.authoring.tool == Tool::InternalLine {
+                let target = self
+                    .authoring
+                    .drafting
+                    .line_panel
+                    .as_deref()
+                    .unwrap_or("Click a panel or boundary");
+                ui.small(format!(
+                    "Internal line → {target} · Enter: finish · Esc: cancel"
+                ));
             }
-
-            ui.label("?").on_hover_text(match self.authoring.tool {
-                Tool::Draw => i18n::tr(ui_lang, "Pen: click = corner · drag = curve · click the first corner to close"),
-                Tool::Rectangle => i18n::tr(ui_lang, "Rectangle: drag between two opposite corners"),
-                Tool::InternalLine => i18n::tr(ui_lang, "Click a boundary to choose its panel, then draw inside · Enter: finish"),
-                Tool::Sew => i18n::tr(ui_lang, "Choose two boundaries in 2D or 3D, then create the seam in Properties"),
-                Tool::Edit => i18n::tr(ui_lang, "Drag points to edit · Shift+click to add · drag empty space to box select · Ctrl+C / Ctrl+V"),
-                Tool::Graphic => i18n::tr(ui_lang, "Drag a graphic to move it · its corners scale it · its top handle turns it (Shift: 15°) · Delete removes it"),
-                _ => i18n::tr(ui_lang, "Right-click for tools · middle-drag to pan · wheel to zoom"),
-            });
-        });
-        if self.authoring.tool == Tool::Draw && self.authoring.board.freehand.enabled {
-            self.freehand_controls(ui);
-        }
-        if self.authoring.tool == Tool::InternalLine {
-            let target = self
-                .authoring
-                .drafting
-                .line_panel
-                .as_deref()
-                .unwrap_or("Click a panel or boundary");
-            ui.small(format!(
-                "Internal line → {target} · Enter: finish · Esc: cancel"
-            ));
-        }
-        if self.authoring.tool == Tool::Measure {
-            ui.small(i18n::tr(ui_lang, "2D ruler · two clicks · third click: new measurement · Esc: clear · Ctrl: no snap. Board distance, not a 3D surface tape."));
-        }
-        if !self.authoring.draft.is_empty()
-            && matches!(self.authoring.tool, Tool::Draw | Tool::InternalLine)
-        {
-            ui.horizontal(|ui| {
-                let internal = self.authoring.tool == Tool::InternalLine;
-                let create = ui.add_enabled(
-                    self.authoring.draft.len() >= if internal { 2 } else { 3 },
-                    egui::Button::new(if internal {
-                        i18n::tr(ui_lang, "Finish line")
-                    } else {
-                        i18n::tr(ui_lang, "Close contour")
-                    }),
-                );
-                self.smoke_target("create", create.rect.center());
-                if create.clicked() {
-                    if internal {
-                        self.finish_internal_line();
-                    } else {
-                        self.create_polygon();
+            if self.authoring.tool == Tool::Measure {
+                ui.small(i18n::tr(ui_lang, "2D ruler · two clicks · third click: new measurement · Esc: clear · Ctrl: no snap. Board distance, not a 3D surface tape."));
+            }
+            if !self.authoring.draft.is_empty()
+                && matches!(self.authoring.tool, Tool::Draw | Tool::InternalLine)
+            {
+                ui.horizontal(|ui| {
+                    let internal = self.authoring.tool == Tool::InternalLine;
+                    let create = ui.add_enabled(
+                        self.authoring.draft.len() >= if internal { 2 } else { 3 },
+                        egui::Button::new(if internal {
+                            i18n::tr(ui_lang, "Finish line")
+                        } else {
+                            i18n::tr(ui_lang, "Close contour")
+                        }),
+                    );
+                    self.smoke_target("create", create.rect.center());
+                    if create.clicked() {
+                        if internal {
+                            self.finish_internal_line();
+                        } else {
+                            self.create_polygon();
+                        }
                     }
-                }
-                if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
-                    self.authoring.draft.clear();
-                    self.authoring.tangents.clear();
-                    self.authoring.replace = false;
-                    self.authoring.board.clear_preview();
-                }
-            });
-        }
-        self.selection_controls(ui);
-        self.arrange_toolbar(ui);
-        self.sewing_strip(ui);
-        self.guide_toolbar(ui);
-        ui.separator();
+                    if ui.small_button(i18n::tr(ui_lang, "Cancel")).clicked() {
+                        self.authoring.draft.clear();
+                        self.authoring.tangents.clear();
+                        self.authoring.replace = false;
+                        self.authoring.board.clear_preview();
+                    }
+                });
+            }
+            self.arrange_toolbar(ui);
+            self.sewing_strip(ui, false);
+            self.guide_toolbar(ui);
+        });
         let (rect, _) = ui.allocate_exact_size(
             ui.available_size().max(Vec2::splat(1.)),
             egui::Sense::hover(),
@@ -1662,12 +1682,14 @@ impl Atelier {
             egui::Sense::click_and_drag(),
         );
         self.authoring.board.media.last_rect = Some(rect);
+        self.board_display_overlay(&ctx, rect);
         self.drive_board_capture(ui.ctx());
         if !self.authoring.board.fitted {
             self.fit_board(rect);
         }
         self.authoring.selection.board_rect = Some(rect);
-        self.smoke_target("canvas_confirm", rect.left_bottom() + Vec2::new(30., -30.));
+        // Bare board, clear of the scale bar and of the floating capsule at the bottom.
+        self.smoke_target("canvas_confirm", rect.left_bottom() + Vec2::new(30., -120.));
         if let Some((i, poly)) = self
             .project
             .template
@@ -3009,13 +3031,21 @@ impl Atelier {
         let lo = board.world(rect, rect.min);
         let hi = board.world(rect, rect.max);
         if display.grid {
+            // Two levels, as pattern paper: fine lines, and every fifth one firmer.
+            let line = |k: i32| {
+                if k.rem_euclid(5) == 0 {
+                    Stroke::new(0.7, colors.grid)
+                } else {
+                    Stroke::new(0.5, colors.grid.gamma_multiply(0.55))
+                }
+            };
             for k in (lo.x / spacing).floor() as i32..=(hi.x / spacing).ceil() as i32 {
                 painter.line_segment(
                     [
                         board.screen(rect, DVec2::new(k as f64 * spacing, lo.y)),
                         board.screen(rect, DVec2::new(k as f64 * spacing, hi.y)),
                     ],
-                    Stroke::new(0.5, colors.grid),
+                    line(k),
                 );
             }
             for k in (lo.y / spacing).floor() as i32..=(hi.y / spacing).ceil() as i32 {
@@ -3024,7 +3054,7 @@ impl Atelier {
                         board.screen(rect, DVec2::new(lo.x, k as f64 * spacing)),
                         board.screen(rect, DVec2::new(hi.x, k as f64 * spacing)),
                     ],
-                    Stroke::new(0.5, colors.grid),
+                    line(k),
                 );
             }
         }
@@ -3348,13 +3378,13 @@ impl Atelier {
                         } else {
                             panel.name.clone()
                         },
-                        egui::FontId::proportional(13.),
-                        // Dark labels: the board is a white sheet now, so the old
-                        // white-on-dark piece name would disappear.
+                        egui::FontId::proportional(11.),
+                        // Small and quiet, dark enough for the light board: the pieces are
+                        // what matters. The chosen one's name takes FashionCraft's colour.
                         if selected {
-                            Color32::from_rgb(21, 101, 192)
+                            Color32::from_rgb(0xa0, 0x12, 0x8f)
                         } else {
-                            Color32::from_rgb(0x33, 0x33, 0x33)
+                            Color32::from_rgb(0x55, 0x57, 0x5d)
                         },
                     );
                 }
@@ -3484,29 +3514,80 @@ impl Atelier {
         if let (Some(last), Some(pos)) = (self.authoring.draft.last(), response.hover_pos()) {
             painter.line_segment([point(*last), pos], Stroke::new(1., Color32::GRAY));
         }
-        if display.grid {
-            painter.text(
-                // Clear of the left ruler when it is shown.
-                rect.left_bottom()
-                    + Vec2::new(
-                        if self.prefs.pattern_display.rulers {
-                            30.
-                        } else {
-                            12.
-                        },
-                        -12.,
-                    ),
-                egui::Align2::LEFT_BOTTOM,
-                format!(
-                    "{} {:.0} mm · {:.0} px/m",
-                    super::i18n::tr(self.prefs.language, "Grid"),
-                    spacing * 1000.,
-                    board.scale
+        {
+            // A scale bar of a round length about 80 points long, as on a drawing, instead of
+            // the grid's numbers.
+            let ink = Color32::from_rgb(0x55, 0x57, 0x5d);
+            let mm = [10., 20., 50., 100., 200., 500., 1000., 2000.]
+                .into_iter()
+                .min_by(|a: &f64, b: &f64| {
+                    let px = |mm: f64| mm / 1000. * f64::from(board.scale);
+                    (px(*a) - 80.).abs().total_cmp(&(px(*b) - 80.).abs())
+                })
+                .unwrap_or(100.);
+            let length = (mm / 1000. * f64::from(board.scale)) as f32;
+            // At the bottom left: the top left holds the display capsules and the bottom
+            // centre the floating tool capsule.
+            let left = rect.left()
+                + if self.prefs.pattern_display.rulers {
+                    30.
+                } else {
+                    14.
+                };
+            let y = super::workspace::clear_of_capsule(
+                ui.ctx(),
+                "board-capsule",
+                egui::Rect::from_min_max(
+                    egui::pos2(left, rect.bottom() - 30.),
+                    egui::pos2(left + length.max(48.), rect.bottom() - 8.),
                 ),
-                egui::FontId::proportional(12.),
-                // Dark enough to read on the white board.
-                Color32::from_gray(0x55),
+            )
+            .top()
+                + 4.;
+            let stroke = Stroke::new(1., ink);
+            painter.line_segment([egui::pos2(left, y), egui::pos2(left + length, y)], stroke);
+            for x in [left, left + length] {
+                painter.line_segment([egui::pos2(x, y - 4.), egui::pos2(x, y + 1.)], stroke);
+            }
+            painter.text(
+                egui::pos2(left, y + 4.),
+                egui::Align2::LEFT_TOP,
+                if mm >= 1000. {
+                    format!("{:.0} m", mm / 1000.)
+                } else {
+                    format!("{mm:.0} mm")
+                },
+                egui::FontId::proportional(10.5),
+                ink,
             );
+            // The chosen piece's name and drawn size at the bottom right, as on a drawing.
+            if let Some(panel) = self
+                .authoring
+                .selected
+                .as_ref()
+                .and_then(|id| self.project.template.panels.iter().find(|p| &p.id == id))
+            {
+                let (lo, hi) = outline_bounds(panel);
+                let galley = painter.layout_no_wrap(
+                    format!(
+                        "{} · {:.0} × {:.0} mm",
+                        panel.name,
+                        (hi.x - lo.x) * 1000.,
+                        (hi.y - lo.y) * 1000.
+                    ),
+                    egui::FontId::proportional(10.5),
+                    ink,
+                );
+                let place = super::workspace::clear_of_capsule(
+                    ui.ctx(),
+                    "board-capsule",
+                    egui::Rect::from_min_size(
+                        rect.right_bottom() - galley.size() - Vec2::new(12., 12.),
+                        galley.size(),
+                    ),
+                );
+                painter.galley(place.min, galley, ink);
+            }
         }
         let targets = [
             ("point0", DVec2::new(0.15, 0.15)),
@@ -3553,13 +3634,20 @@ impl Atelier {
         let board = &self.authoring.board;
         let font = egui::FontId::proportional(12.);
         let label = Color32::from_rgb(0x15, 0x65, 0xC0);
+        // What the pointer snaps to, in a small fuchsia pill beside it.
         let chip = |painter: &egui::Painter, at: egui::Pos2, text: &str| {
-            painter.text(
-                at + Vec2::new(10., -10.),
-                egui::Align2::LEFT_BOTTOM,
-                text,
-                egui::FontId::proportional(12.),
-                Color32::from_rgb(0x15, 0x65, 0xC0),
+            let galley = painter.layout_no_wrap(
+                text.to_owned(),
+                egui::FontId::proportional(11.),
+                Color32::from_rgb(0x1b, 0x1b, 0x1f),
+            );
+            let min = at + Vec2::new(10., -10. - galley.size().y - 4.);
+            let pill = egui::Rect::from_min_size(min, galley.size() + Vec2::new(14., 4.));
+            painter.rect_filled(pill, 9., Color32::from_rgb(0xdd, 0x2c, 0xce));
+            painter.galley(
+                min + Vec2::new(7., 2.),
+                galley,
+                Color32::from_rgb(0x1b, 0x1b, 0x1f),
             );
         };
         let point = |uv: DVec2| board.screen(rect, uv);

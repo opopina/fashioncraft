@@ -238,8 +238,7 @@ impl Atelier {
                 _ => middle,
             };
             let mut moved = false;
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Centre"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Centre"), |ui| {
                 for value in centre.iter_mut() {
                     moved |= ui
                         .add(egui::DragValue::new(value).fixed_decimals(1).suffix(" mm"))
@@ -265,16 +264,14 @@ impl Atelier {
                 state.center_mm = Some((panel.id.clone(), centre));
             }
             ui.label(i18n::tr(ui_lang, "Replicate"));
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Copies"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Copies"), |ui| {
                 ui.add(egui::DragValue::new(&mut state.count).range(1..=50))
                     .on_hover_text(i18n::tr(
                         ui_lang,
                         "Shapes created in one go, the first one included",
                     ));
             });
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Interval"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Interval"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut state.interval_mm)
                         .range(-10_000.0..=10_000.0)
@@ -286,8 +283,7 @@ impl Atelier {
                     "Distance between the centres of neighbouring copies",
                 ));
             });
-            ui.horizontal(|ui| {
-                ui.label(i18n::tr(ui_lang, "Angle"));
+            super::workspace::prop_row(ui, i18n::tr(ui_lang, "Angle"), |ui| {
                 ui.add(
                     egui::DragValue::new(&mut state.angle_degrees)
                         .range(-360.0..=360.0)
@@ -345,8 +341,7 @@ impl Atelier {
                     .iter()
                     .find(|(id, _)| Some(id) == chosen.as_ref())
                     .map_or("", |(_, name)| name.as_str());
-                ui.horizontal(|ui| {
-                    ui.label(i18n::tr(ui_lang, "Outline of"));
+                super::workspace::prop_row(ui, i18n::tr(ui_lang, "Outline of"), |ui| {
                     egui::ComboBox::from_id_salt("clone-outline-source")
                         .selected_text(label)
                         .show_ui(ui, |ui| {

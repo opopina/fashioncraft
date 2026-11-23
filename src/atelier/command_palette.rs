@@ -207,6 +207,9 @@ fn aliases(id: CommandId) -> &'static str {
         PleatSewing => "pleat sewing tack close pleats",
         Puckering => "puckering pucker seam ripple wrinkle tight",
         Steam => "steam brush shrink stretch iron",
+        MeasureFabric => {
+            "measure fabric kit test real tensile stretch bending cantilever weight gsm calibrate library"
+        }
         Piping => "piping cord binding edge seam trim",
         FrayEdge => "fray frayed edge threads loose raw cut distressed fringe",
         TearSeam => "tear rip seam open ripped distressed",

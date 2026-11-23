@@ -140,6 +140,7 @@ impl Atelier {
         ));
         let mut apply = false;
         let mut discard = false;
+        let mut measure = false;
         let mut targets = vec![];
         let scene_gap = self.settings.contact.radius;
         let scene_friction = self.settings.friction;
@@ -165,7 +166,13 @@ impl Atelier {
                     d.properties = preset.properties();
                     d.extension = preset.extension;
                 }
-                ui.small(i18n::tr(ui_lang, "Indicative presets. Elasticity and bending must be calibrated on your fabric."));
+                ui.horizontal_wrapped(|ui| {
+                    ui.small(i18n::tr(ui_lang, "Indicative presets. Elasticity and bending must be calibrated on your fabric."));
+                    measure = ui
+                        .small_button(i18n::tr(ui_lang, "Measure fabric…"))
+                        .on_hover_text(i18n::tr(ui_lang, "Fit a fabric to a workshop's tests of your own"))
+                        .clicked();
+                });
                 if let Some(i) = d.preset {
                     ui.small(PRESETS[i].evidence);
                     ui.hyperlink_to(i18n::tr(ui_lang, "Measurement source"), PRESETS[i].source);
@@ -263,6 +270,9 @@ impl Atelier {
             });
         } else if discard {
             self.authoring.fabric_draft = None;
+        }
+        if measure {
+            self.open_fabric_kit();
         }
     }
 }

@@ -18,6 +18,7 @@ pub mod bvh_import;
 pub mod contact;
 pub mod document;
 pub mod energy;
+pub mod fabric_kit;
 pub mod fabrics;
 pub mod fbx_export;
 pub mod fbx_import;

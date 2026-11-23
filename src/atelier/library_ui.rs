@@ -1,6 +1,7 @@
 //! The library: a floating window over a folder of the user's assets, as desktop cloth tools
-//! keep one. Garments (project files) open, avatars go through the avatar importer and
-//! images become graphics on the selected piece. Nothing is copied or deleted here.
+//! keep one. Garments (project files) open, avatars go through the avatar importer, images
+//! become graphics on the selected piece and measured fabrics open in Measure fabric or cut
+//! the selected piece. Nothing is copied or deleted here.
 use super::*;
 use std::path::{Path, PathBuf};
 
@@ -15,15 +16,18 @@ pub(super) enum Shelf {
     Garments,
     Avatars,
     Images,
+    /// Fabrics measured with Materials › Measure fabric.
+    Fabrics,
 }
 
 impl Shelf {
-    const ALL: [Self; 3] = [Self::Garments, Self::Avatars, Self::Images];
+    const ALL: [Self; 4] = [Self::Garments, Self::Avatars, Self::Images, Self::Fabrics];
     fn label(self) -> &'static str {
         match self {
             Self::Garments => "Garments",
             Self::Avatars => "Avatars",
             Self::Images => "Images",
+            Self::Fabrics => "Fabrics",
         }
     }
     fn extensions(self) -> &'static [&'static str] {
@@ -34,6 +38,7 @@ impl Shelf {
                 "usdz",
             ],
             Self::Images => &["png"],
+            Self::Fabrics => &[fashioncraft::fabric_kit::FILE_EXTENSION],
         }
     }
 }
@@ -44,6 +49,13 @@ pub(super) struct LibraryUi {
     shelf: Shelf,
     /// Files of the current shelf, relative to the folder, and the folder they were read from.
     listing: Option<(PathBuf, Shelf, Vec<PathBuf>)>,
+}
+
+impl LibraryUi {
+    /// Lists the folder again on the next frame, after a file was added to it.
+    pub(super) fn invalidate(&mut self) {
+        self.listing = None;
+    }
 }
 
 /// Files under `root` with one of `extensions`, depth-first up to [`MAX_DEPTH`], sorted.
@@ -85,7 +97,7 @@ pub(super) fn scan(root: &Path, extensions: &[&str]) -> Vec<PathBuf> {
 
 impl Atelier {
     /// The library folder: the one chosen in preferences, else `library` in the session folder.
-    fn library_dir(&self) -> PathBuf {
+    pub(super) fn library_dir(&self) -> PathBuf {
         self.prefs
             .library_dir
             .clone()
@@ -100,6 +112,7 @@ impl Atelier {
         let root = self.library_dir();
         let mut open = true;
         let mut action: Option<(Shelf, PathBuf)> = None;
+        let mut apply_fabric: Option<PathBuf> = None;
         let mut rescan = false;
         egui::Window::new(i18n::tr(ui_lang, "Library"))
             .open(&mut open)
@@ -142,7 +155,10 @@ impl Atelier {
                 ui.horizontal(|ui| {
                     for shelf in Shelf::ALL {
                         if ui
-                            .selectable_label(self.authoring.library.shelf == shelf, shelf.label())
+                            .selectable_label(
+                                self.authoring.library.shelf == shelf,
+                                i18n::tr(ui_lang, shelf.label()),
+                            )
                             .clicked()
                         {
                             self.authoring.library.shelf = shelf;
@@ -178,12 +194,17 @@ impl Atelier {
                             "No avatars (.obj, .gltf, .glb) in this folder yet.",
                         ),
                         Shelf::Images => i18n::tr(ui_lang, "No PNG images in this folder yet."),
+                        Shelf::Fabrics => i18n::tr(
+                            ui_lang,
+                            "No measured fabrics in this folder yet: make one with Materials › Measure fabric…",
+                        ),
                     });
                 }
                 let verb = match shelf {
                     Shelf::Garments => "Open",
                     Shelf::Avatars => "Import",
                     Shelf::Images => "Add to piece",
+                    Shelf::Fabrics => "Open",
                 };
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for file in &files {
@@ -192,8 +213,21 @@ impl Atelier {
                             let row = ui
                                 .selectable_label(false, &name)
                                 .on_hover_text(format!("Double-click: {}", verb.to_lowercase()));
-                            if ui.small_button(verb).clicked() || row.double_clicked() {
+                            if ui.small_button(i18n::tr(ui_lang, verb)).clicked()
+                                || row.double_clicked()
+                            {
                                 action = Some((shelf, root.join(file)));
+                            }
+                            if shelf == Shelf::Fabrics
+                                && ui
+                                    .small_button(i18n::tr(ui_lang, "Apply to piece"))
+                                    .on_hover_text(i18n::tr(
+                                        ui_lang,
+                                        "Cut the selected piece from this fabric",
+                                    ))
+                                    .clicked()
+                            {
+                                apply_fabric = Some(root.join(file));
                             }
                         });
                     }
@@ -216,7 +250,11 @@ impl Atelier {
                     self.status = i18n::tr(ui_lang, "Select a piece to put the image on").into()
                 }
             },
+            Some((Shelf::Fabrics, path)) => self.open_fabric_file(&path),
             None => {}
+        }
+        if let Some(path) = apply_fabric {
+            self.apply_fabric_file(&path);
         }
     }
 }
@@ -231,7 +269,9 @@ mod tests {
         let root = dir.path();
         std::fs::create_dir_all(root.join("shirts/garment.json.assets")).unwrap();
         std::fs::create_dir_all(root.join(".hidden")).unwrap();
+        std::fs::create_dir_all(root.join("Fabrics")).unwrap();
         for file in [
+            "Fabrics/poplin.fcfabric",
             "shirts/garment.json",
             "shirts/garment.json.assets/image-1.png",
             "dress.JSON",
@@ -251,6 +291,11 @@ mod tests {
         assert_eq!(
             scan(root, Shelf::Images.extensions()),
             vec![PathBuf::from("logo.png")]
+        );
+        // Measured fabrics have their own shelf and stay off the garments'.
+        assert_eq!(
+            scan(root, Shelf::Fabrics.extensions()),
+            vec![PathBuf::from("Fabrics/poplin.fcfabric")]
         );
         assert!(scan(&root.join("missing"), &["json"]).is_empty());
     }

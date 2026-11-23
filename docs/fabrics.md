@@ -6,7 +6,7 @@ The displayed panel/garment mass is the sum of lumped vertex masses from rest ar
 
 ## Presets and evidence
 
-**All elastic, shear and bending settings in this first library are authored approximations. None is a calibrated material model.** Mass and some thickness values come from specific measured specimens or a supplier specification. They are not universal values for a fibre family. In particular, woven cotton, jersey and elastane blends must be distinguished.
+**All elastic, shear and bending settings in this first library are authored approximations. None is a calibrated material model.** To calibrate your own fabric, measure it with the [fabric kit](fabric-kit.md) (Materials › Measure fabric…): weights, a ruler and a 41.5° card give a fabric fitted through the solver and kept in the library with its measurements. Mass and some thickness values come from specific measured specimens or a supplier specification. They are not universal values for a fibre family. In particular, woven cotton, jersey and elastane blends must be distinguished.
 
 The MIT workbook was downloaded and read, including its README. Values below average its available specimens, then convert `oz/yd² × 33.905747` to g/m² and `in × 25.4` to mm. [Bouman et al., MIT Fabric Properties Dataset, ICCV 2013](https://people.csail.mit.edu/klbouman/pw/projects/materialproperties/dataset.html). Jersey mass comes from Gray Interlock in Table 1 of [Wang, O'Brien & Ramamoorthi, SIGGRAPH 2011](https://wanghmin.github.io/publication/wang-2011-dde/Wang-2011-DDE.pdf). Leather uses [PURLEDER Auto Nappa](https://purleder.com/en/our-leathers/autonappa); its 0.9–1.1 mm range is represented by 1 mm.
 

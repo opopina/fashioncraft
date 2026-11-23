@@ -164,9 +164,11 @@ fn gpu_dense_free_panel_falls_and_rebuilds_after_topology_growth() {
         let mut state = g.initial_state.clone();
         let old = state.clone();
         let mut solver = VbdSolver::new(g.clone(), None, &state).unwrap();
+        // One whole step, never split: its motion is what one detection's regions allow.
         let settings = VbdSettings {
             dt: 1. / 60.,
             iterations: 8,
+            max_substeps: 1,
             ..Default::default()
         };
         gpu.step(&mut solver, &mut state, &settings, None).unwrap();

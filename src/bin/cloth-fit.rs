@@ -61,6 +61,13 @@ struct Args {
     /// Physical time step in seconds; independent of rendering rate.
     #[arg(long)]
     dt: Option<f64>,
+    /// Coulomb friction coefficient of every contact (the editor's default is 0.3).
+    #[arg(long)]
+    friction: Option<f64>,
+    /// Most parts a step may be split into when the cloth moves faster than one step allows
+    /// (the project's value, or 16; 1 never splits).
+    #[arg(long)]
+    max_substeps: Option<usize>,
     /// Hardware compute opt-in: GPU candidate filtering + VBD, f64 contact geometry.
     #[arg(long, conflicts_with = "reference")]
     gpu_sim: bool,
@@ -99,6 +106,12 @@ fn run_ogc(
     }
     if let Some(dt) = args.dt {
         settings.dt = dt;
+    }
+    if let Some(friction) = args.friction {
+        settings.friction = friction;
+    }
+    if let Some(parts) = args.max_substeps {
+        settings.max_substeps = parts;
     }
     settings.validate()?;
     project.simulation = Some(settings.clone());

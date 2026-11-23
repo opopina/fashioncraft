@@ -281,15 +281,14 @@ impl GpuVbd {
         let start = Instant::now();
         // A step whose motion its contacts cannot allow at once is split, as on the CPU.
         let parts = solver.parts(state, settings);
-        let mut part = settings.clone();
-        part.dt = settings.dt / parts as f64;
-        part.max_substeps = 1;
+        let part = settings.part(parts);
         // The body (the avatar) moved since the last GPU step, as it does while a take is
-        // recorded or a pose changes.
+        // recorded or a pose changes. Only the first part follows it there: the later parts
+        // start from contacts found after it moved.
         let moved = solver.world.take_fixed_moved();
         let mut metrics = self.step_inner(solver, state, &part, grab, moved)?;
         for _ in 1..parts {
-            let next = self.step_inner(solver, state, &part, grab, moved)?;
+            let next = self.step_inner(solver, state, &part, grab, false)?;
             metrics.detection_ms += next.detection_ms;
             metrics.detection_updates += next.detection_updates;
             metrics.broad_phase_rebuilds += next.broad_phase_rebuilds;

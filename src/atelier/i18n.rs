@@ -2245,8 +2245,8 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Una hoja blanca con piezas tintadas en vez del tablero gris con piezas blancas"
         }
         "Full-speed falls" => "Caídas a toda velocidad",
-        "Split a step into up to 16 shorter ones when the cloth moves faster than one step's contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while cloth moves fast; settled cloth is unaffected" => {
-            "Divide un paso en hasta 16 más cortos cuando la tela se mueve más deprisa de lo que permiten los contactos de un paso (unos 0,3 m/s), para que la tela que cae siga a la gravedad. Más lento mientras la tela se mueve deprisa; la tela asentada no cambia"
+        "Let cloth fall as fast as gravity takes it: a step is split into up to 16 shorter ones while cloth moves fast. Off, it splits into up to 4, enough for sewing and draping, and falling cloth is held to about 0.8 m/s. Settled cloth is unaffected" => {
+            "Deja que la tela caiga tan deprisa como la lleva la gravedad: un paso se divide en hasta 16 más cortos mientras la tela se mueve deprisa. Desactivado, se divide en hasta 4, suficiente para coser y drapear, y la tela que cae se frena a unos 0,8 m/s. La tela asentada no cambia"
         }
         "Bones and skin weights" => "Huesos y pesos de la piel",
         "Remove this bone and the bones hanging from it" => {

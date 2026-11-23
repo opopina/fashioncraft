@@ -40,21 +40,37 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
     /// Most parts a step may be split into when the cloth would move further in it than
-    /// its contacts let one step go (about 0.3 m/s at 1/60 s): each part is a whole step,
-    /// contacts and all, of a share of the time. One never splits, as before.
-    #[serde(default = "one_part", skip_serializing_if = "is_one_part")]
+    /// its contacts let one step go (about 0.13 m/s at 1/60 s): each part is a whole step,
+    /// contacts and all, of a share of the time and of the iterations (see
+    /// [`VbdSettings::part`]). [`DEFAULT_MAX_SUBSTEPS`] lets free cloth fall as fast as
+    /// gravity takes it; one never splits. Settings saved before this field existed split by
+    /// default too.
+    #[serde(
+        default = "default_max_substeps",
+        skip_serializing_if = "is_default_max_substeps"
+    )]
     pub max_substeps: usize,
 }
-fn one_part() -> usize {
-    1
+/// Most parts a step is split into by default: at 1/60 s with the 3 mm contact distance,
+/// enough for cloth moving at about 3.4 m/s, as fast as it falls in a 60 cm drop.
+pub const DEFAULT_MAX_SUBSTEPS: usize = 16;
+/// The split a step gets with "Full-speed falls" off: enough for sewing and draping (cloth
+/// moving up to about 0.8 m/s at 1/60 s and 3 mm), and no more work while cloth falls.
+pub const CAPPED_MAX_SUBSTEPS: usize = 4;
+fn default_max_substeps() -> usize {
+    DEFAULT_MAX_SUBSTEPS
 }
-fn is_one_part(v: &usize) -> bool {
-    *v == 1
+fn is_default_max_substeps(v: &usize) -> bool {
+    *v == DEFAULT_MAX_SUBSTEPS
 }
 /// Share of the contact query radius one step's motion may use before a split step is
 /// split: the warm start keeps each vertex within 0.45 of its distance to the nearest
-/// geometry, at most the query radius of four contact radii.
-const SPLIT_SHARE: f64 = 0.4;
+/// geometry, at most the query radius of four contact radii. The query of a part reaches its
+/// contact radius plus its motion, so a part moving 0.3 of four radii (3.6 mm at 3 mm) has a
+/// ball of about 3 mm: its warm start is barely clipped, and the cloth moves together in few
+/// iterations. At 0.4 the ball fell well short of the motion; a vertex sent ahead alone was
+/// pulled back by its neighbours, and a falling sheet needed many iterations per part.
+const SPLIT_SHARE: f64 = 0.3;
 /// Energy of one elastic or tape spring, tension only: ½·k·max(0, |x_a − x_b| − rest)².
 pub(crate) fn line_energy<S: Scalar>(
     line: &crate::garment::template::CompiledLine,
@@ -225,7 +241,7 @@ impl Default for VbdSettings {
             friction: 0.0,
             wind: None,
             floor: None,
-            max_substeps: 1,
+            max_substeps: DEFAULT_MAX_SUBSTEPS,
         }
     }
 }
@@ -249,7 +265,28 @@ impl VbdSettings {
         }
         Ok(())
     }
+
+    /// The settings of one of `parts` equal parts of a split step: a share of the time and a
+    /// share of the iterations, at least [`MIN_PART_ITERATIONS`]. Many short steps with few
+    /// iterations each converge better than one long step with many (Macklin et al. 2019,
+    /// "Small steps in physics simulation"), and each part finds its contacts again, so
+    /// cloth that is moving fast can go further for the same work.
+    pub fn part(&self, parts: usize) -> VbdSettings {
+        let parts = parts.max(1);
+        let mut part = self.clone();
+        part.dt = self.dt / parts as f64;
+        part.iterations = self
+            .iterations
+            .div_ceil(parts)
+            .max(MIN_PART_ITERATIONS)
+            .min(self.iterations);
+        part.max_substeps = 1;
+        part
+    }
 }
+
+/// Fewest local iterations a part of a split step gets.
+pub const MIN_PART_ITERATIONS: usize = 4;
 
 #[derive(Clone, Debug)]
 pub struct Grab {
@@ -805,9 +842,7 @@ impl VbdSolver {
         if parts <= 1 {
             return self.step_once(state, settings, grab);
         }
-        let mut part = settings.clone();
-        part.dt = settings.dt / parts as f64;
-        part.max_substeps = 1;
+        let part = settings.part(parts);
         let mut total: Option<VbdMetrics> = None;
         for _ in 0..parts {
             let m = self.step_once(state, &part, grab)?;

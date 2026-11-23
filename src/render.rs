@@ -11,9 +11,11 @@ use eframe::{egui, egui_wgpu::RenderState, wgpu};
 use glam::{Mat4, Vec3};
 
 pub mod appearance;
+pub mod bvh;
 mod environment;
 mod fabric_maps;
 mod graphics;
+pub mod path_trace;
 use crate::garment::appearance::MapSlot;
 use fabric_maps::LayerKind;
 pub use graphics::{GraphicDraw, GraphicImage};
@@ -333,7 +335,7 @@ pub fn strain_band(strain: f64, max: f64) -> usize {
 /// metres (4), normal-map and roughness-map layers (-1 for none) (2), metalness-, opacity-,
 /// displacement- and occlusion-map layers (4), metalness and displacement height in metres
 /// and two spare floats (4).
-const VERTEX_FLOATS: usize = 37;
+pub(crate) const VERTEX_FLOATS: usize = 37;
 
 /// What a cloth triangle shows besides its colour: the back colour, the material coordinates
 /// of its corners (warp, weft) and the weave parameters.
@@ -978,6 +980,9 @@ pub struct Viewport {
     avatar_count: u32,
     graphics: graphics::GraphicLayer,
     fabric_maps: fabric_maps::FabricMaps,
+    /// Keep the next drawn frame's scene for the photoreal render.
+    trace_request: bool,
+    trace_scene: Option<path_trace::TraceScene>,
 }
 impl Viewport {
     fn target(device: &wgpu::Device, size: [u32; 2], depth: bool, samples: u32) -> wgpu::Texture {
@@ -1150,7 +1155,25 @@ impl Viewport {
             avatar_count: 0,
             graphics,
             fabric_maps,
+            trace_request: false,
+            trace_scene: None,
         }
+    }
+    /// Keep the scene of the next frame drawn, for [`Viewport::take_trace_scene`].
+    pub fn request_trace_scene(&mut self) {
+        self.trace_request = true;
+    }
+    /// The scene kept from the last frame drawn after [`Viewport::request_trace_scene`].
+    pub fn take_trace_scene(&mut self) -> Option<path_trace::TraceScene> {
+        self.trace_scene.take()
+    }
+    /// Pixels of the last frame drawn.
+    pub fn size(&self) -> [u32; 2] {
+        self.size
+    }
+    /// The GPU the viewport draws with, to open other devices on it.
+    pub fn adapter(&self) -> wgpu::Adapter {
+        self.render_state.adapter.clone()
     }
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
@@ -1618,6 +1641,7 @@ impl Viewport {
                 );
             }
         }
+        let trims_start = emitted.get();
         for t in trims {
             triangle(
                 t.points.map(|p| p.as_vec3()),
@@ -1628,6 +1652,7 @@ impl Viewport {
                 None,
             );
         }
+        let trims_end = emitted.get();
         for seam in seams {
             for side in [1.0, -1.0] {
                 let points: Vec<_> = seam
@@ -1711,6 +1736,30 @@ impl Viewport {
             self.avatar_count = 0;
             self.avatar_key = (0, 0, [0; 3], 0, vec![]);
             self.avatar_buffer = None;
+        }
+        if std::mem::take(&mut self.trace_request) {
+            // The garment and its trims, the avatar and the prints: no diagnostic lines.
+            let at = |v: u32| v as usize * VERTEX_FLOATS;
+            let mut vertices = data[..at(garment_vertices)].to_vec();
+            vertices.extend_from_slice(&data[at(trims_start)..at(trims_end)]);
+            if let Some(avatar) = avatar {
+                vertices.extend(avatar_vertices(
+                    avatar,
+                    avatar_look,
+                    &look_layers,
+                    display.avatar_color,
+                ));
+            }
+            let mut scene = path_trace::TraceScene {
+                vertices,
+                layers: self.fabric_maps.layers().to_vec(),
+                camera: path_trace::TraceCamera::from_camera(camera),
+                lighting: self.appearance.lighting.uniform(),
+                look: self.appearance.clone(),
+                ground_y: if avatar.is_some() { -0.005 } else { -0.4 },
+            };
+            scene.add_prints(graphics);
+            self.trace_scene = Some(scene);
         }
         let bytes = bytemuck::cast_slice(&data);
         if bytes.len() as u64 > self.capacity {

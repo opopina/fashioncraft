@@ -89,3 +89,34 @@ fn viewport_shader_has_a_translucent_entry() {
         assert!(names.contains(&entry), "missing {entry}: {names:?}");
     }
 }
+
+#[test]
+fn path_tracer_shader_and_its_layouts_validate_without_gpu() {
+    let module =
+        naga::front::wgsl::parse_str(include_str!("../src/render/path_trace.wgsl")).unwrap();
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+    .unwrap();
+    // The host writes these sizes: a 240-byte frame, 32-byte tree nodes, 96-byte materials.
+    for (name, bytes) in [("Frame", 240), ("Node", 32), ("Material", 96)] {
+        let ty = module
+            .types
+            .iter()
+            .find(|(_, ty)| ty.name.as_deref() == Some(name))
+            .unwrap()
+            .1;
+        let naga::TypeInner::Struct { span, .. } = ty.inner else {
+            panic!("{name} must be a struct")
+        };
+        assert_eq!(span, bytes, "{name}");
+    }
+    for entry in ["trace", "resolve"] {
+        assert!(
+            module.entry_points.iter().any(|e| e.name == entry),
+            "{entry}"
+        );
+    }
+}

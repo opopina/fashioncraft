@@ -206,6 +206,7 @@ pub enum CommandId {
     ConvertToQuads,
     ConvertToTriangles,
     HighQualityView,
+    PhotorealRender,
     SuperimposeSide,
     DeleteAvatar,
     EditTexture2d,
@@ -2056,6 +2057,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         HighQualityView,
         "view.high_quality",
         "High-quality 3D view: draw at twice the resolution",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        PhotorealRender,
+        "render.photoreal",
+        "Photoreal render: a path-traced image of the 3D view",
         Workspace,
         None,
         Preference,

@@ -27,6 +27,8 @@ pub enum LayerKind {
 pub(super) struct FabricMaps {
     /// Keys of the images in layer order, and how each is stored.
     keys: Vec<(u64, LayerKind)>,
+    /// The pixels of the layers, kept for the photoreal render.
+    layers: Vec<std::sync::Arc<GraphicImage>>,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
     pub bind: wgpu::BindGroup,
@@ -43,7 +45,7 @@ fn srgb_encoded(value: u8) -> u8 {
     (e * 255.).round().clamp(0., 255.) as u8
 }
 
-fn layer_pixels(image: &GraphicImage, kind: LayerKind) -> Option<GraphicImage> {
+pub(super) fn layer_pixels(image: &GraphicImage, kind: LayerKind) -> Option<GraphicImage> {
     let [w, h] = image.size;
     let buffer = image::RgbaImage::from_raw(w, h, image.rgba.clone())?;
     let resized = if [w, h] == [LAYER_SIDE; 2] {
@@ -173,6 +175,7 @@ impl FabricMaps {
         let bind = bind_group(device, layout, &view, &sampler);
         Self {
             keys: vec![],
+            layers: vec![],
             view,
             sampler,
             bind,
@@ -232,10 +235,16 @@ impl FabricMaps {
                 self.view = array(device, queue, &pixels);
                 self.bind = bind_group(device, layout, &self.view, &self.sampler);
                 self.keys = keys;
+                self.layers = pixels.into_iter().map(std::sync::Arc::new).collect();
             } else {
                 return vec![[None; N]; images.len()];
             }
         }
         layers
+    }
+
+    /// The pixels of every layer, in order, as the shader reads them.
+    pub fn layers(&self) -> &[std::sync::Arc<GraphicImage>] {
+        &self.layers
     }
 }

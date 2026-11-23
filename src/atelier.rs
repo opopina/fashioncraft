@@ -62,6 +62,8 @@ mod commands;
 mod demo;
 #[path = "atelier/demo_cargo.rs"]
 mod demo_cargo;
+#[path = "atelier/demo_looks.rs"]
+mod demo_looks;
 #[path = "atelier/demo_outfit.rs"]
 mod demo_outfit;
 #[path = "atelier/demo_vest.rs"]
@@ -132,6 +134,8 @@ mod quick_actions;
 mod radial;
 #[path = "atelier/redrape_ui.rs"]
 mod redrape_ui;
+#[path = "atelier/render_ui.rs"]
+mod render_ui;
 #[path = "atelier/scene_ui.rs"]
 mod scene_ui;
 #[path = "atelier/script_ui.rs"]
@@ -859,6 +863,7 @@ impl Atelier {
             Id::ReDrape => self.redrape()?,
             Id::AutoFit => self.auto_fit()?,
             Id::RunPythonScript => self.open_python_script(),
+            Id::PhotorealRender => self.open_photoreal_render(),
             Id::HighQualityView => {
                 let display = &mut self.prefs.garment_display;
                 display.high_quality = !display.high_quality;
@@ -1832,6 +1837,7 @@ impl eframe::App for Atelier {
             self.texture_edit_window(&ctx);
             self.script_window(&ctx);
             self.steam_window(&ctx);
+            self.render_window(&ctx);
             self.object_browser_window(&ctx);
             self.native_menu_windows(&ctx, palette_idle);
         }

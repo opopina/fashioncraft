@@ -580,6 +580,8 @@ impl Atelier {
             self.camera.garment_interact(&response);
         }
         let size = rect.size() * ctx.pixels_per_point();
+        // The photoreal render takes its scene from this frame when it needs one.
+        self.render_before_draw();
         // The animation timeline shows its take and posed avatar in place of the live drape,
         // for drawing only.
         let animated_avatar = self.animation_avatar();

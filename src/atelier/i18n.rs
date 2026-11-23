@@ -2838,6 +2838,76 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Meshed as quads along the grain" => "Mallado en cuadrados a lo largo del hilo",
         "Meshed as triangles" => "Mallado en triángulos",
+        "A fabric's look from a texture set" => {
+            "La apariencia de una tela desde un set de texturas"
+        }
+        "Texture set › Import › From a folder: Substance's exported maps" => {
+            "Set de texturas › Importar › Desde una carpeta: los mapas exportados de Substance"
+        }
+        "Render › Photoreal render: it refines while you keep working" => {
+            "Render › Render fotorrealista: se afina mientras sigues trabajando"
+        }
+        "A closer look" => "Más de cerca",
+        "Depth of field: pick the point in focus on the image" => {
+            "Profundidad de campo: elige en la imagen el punto enfocado"
+        }
+        "Light from an HDR environment" => "Luz de un entorno HDR",
+        "Photoreal render…" => "Render fotorrealista…",
+        "Photoreal render" => "Render fotorrealista",
+        "Photoreal render: a path-traced image of the 3D view" => {
+            "Render fotorrealista: una imagen trazada por rayos de la vista 3D"
+        }
+        "Photoreal render: the image refines while you keep working" => {
+            "Render fotorrealista: la imagen se afina mientras sigues trabajando"
+        }
+        "Image saved:" => "Imagen guardada:",
+        "Preparing the scene…" => "Preparando la escena…",
+        "samples" => "muestras",
+        "Save image…" => "Guardar imagen…",
+        "Write the image as a PNG at the size chosen below" => {
+            "Escribe la imagen como PNG al tamaño elegido abajo"
+        }
+        "Update scene" => "Actualizar escena",
+        "Take the 3D view again: camera, cloth and look" => {
+            "Vuelve a tomar la vista 3D: cámara, tela y apariencia"
+        }
+        "Follow the 3D view" => "Seguir la vista 3D",
+        "Start over whenever the camera, the cloth or the look change" => {
+            "Empieza de nuevo cuando cambian la cámara, la tela o la apariencia"
+        }
+        "Presets" => "Predefinidos",
+        "As the 3D view" => "Como la vista 3D",
+        "Samples" => "Muestras",
+        "Rays per pixel to stop at: more is smoother and slower" => {
+            "Rayos por píxel en los que parar: más es más suave y más lento"
+        }
+        "Bounces" => "Rebotes",
+        "How many times light may bounce between surfaces" => {
+            "Cuántas veces puede rebotar la luz entre superficies"
+        }
+        "Exposure" => "Exposición",
+        "Depth of field" => "Profundidad de campo",
+        "Radius of the lens's opening: wider blurs more" => {
+            "Radio de la apertura de la lente: más abierta desenfoca más"
+        }
+        "Focus distance" => "Distancia de enfoque",
+        "Pick on the image" => "Elegir en la imagen",
+        "Click the image where it should be sharp" => {
+            "Haz clic en la imagen donde debe verse nítida"
+        }
+        "Studio" => "Estudio",
+        "HDR image…" => "Imagen HDR…",
+        "Light the scene with an equirectangular HDR image (.hdr)" => {
+            "Ilumina la escena con una imagen HDR equirectangular (.hdr)"
+        }
+        "Environment strength" => "Intensidad del entorno",
+        "Environment turn" => "Giro del entorno",
+        "Show it behind the scene" => "Mostrarlo detrás de la escena",
+        "Lights" => "Luces",
+        "Key light" => "Luz principal",
+        "The 3D view's own key light, with its direction and strength" => {
+            "La luz principal de la propia vista 3D, con su dirección e intensidad"
+        }
         "High-quality 3D view: draw at twice the resolution" => {
             "Vista 3D de alta calidad: dibujar al doble de resolución"
         }

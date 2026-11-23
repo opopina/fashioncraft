@@ -218,6 +218,7 @@ fn aliases(id: CommandId) -> &'static str {
         ConvertToQuads => "convert quads quad mesh grid squares",
         ConvertToTriangles => "convert triangles triangle mesh",
         HighQualityView => "high quality view render supersample smooth antialias",
+        PhotorealRender => "photoreal render path trace image hdr environment depth of field png",
         SuperimposeSide => "superimpose side beside lay flat seam",
         DeleteAvatar => "delete remove avatar body mannequin",
         EditTexture2d => "edit texture shift offset position grain repeat 2d board",

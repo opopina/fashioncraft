@@ -84,6 +84,7 @@ pub(super) struct AuthoringUi {
     pub fabric_kit: super::fabric_kit_ui::FabricKitUi,
     /// Render › Photoreal render.
     pub render: super::render_ui::RenderUi,
+    pub grading: super::grading_ui::GradingUi,
     /// The drape on the avatar before the last one opened, for Re-drape and Auto fit.
     pub redrape_from: Option<super::redrape_ui::RedrapeSource>,
     /// File › Open › Trim: the object opened, waiting for a click on a piece.

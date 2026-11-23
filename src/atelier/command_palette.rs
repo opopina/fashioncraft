@@ -240,6 +240,14 @@ fn aliases(id: CommandId) -> &'static str {
         UvEditor => "uv editor layout islands unwrap texture coordinates atlas export",
         PackUvIslands => "pack uv islands layout arrange atlas unified texture square",
         AutomaticUvLayout => "automatic uv layout reset islands default",
+        GradingTable => {
+            "grading grade sizes size range rules nest base size escalado tallas reglas"
+        }
+        PointsOfMeasure => "pom points of measure measurement spec size chart tolerance medidas",
+        ToggleGradePoint => "grade point proportional rule point escalado punto",
+        GradingReview => "grading review nest all sizes overlay stack revision tallas",
+        NextSize => "next size larger grading talla siguiente",
+        PreviousSize => "previous size smaller grading talla anterior",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

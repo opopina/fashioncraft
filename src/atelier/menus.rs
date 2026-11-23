@@ -265,6 +265,17 @@ const PATTERN_2D: &[Item] = &[
         ],
     ),
     Run("Auto fit", C::AutoFit),
+    Sub(
+        "Grading",
+        &[
+            Run("Sizes and grade rules…", C::GradingTable),
+            Run("Points of measure (POM)…", C::PointsOfMeasure),
+            Run("Grade point on / off", C::ToggleGradePoint),
+            Run("Review all sizes on the board", C::GradingReview),
+            Run("Next size", C::NextSize),
+            Run("Previous size", C::PreviousSize),
+        ],
+    ),
 ];
 
 const SEWING: &[Item] = &[
@@ -552,6 +563,9 @@ impl Atelier {
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::RunPythonScript => self.authoring.script.open,
             C::UvEditor => self.authoring.uv_editor.open,
+            C::GradingTable => self.authoring.grading.open,
+            C::PointsOfMeasure => self.authoring.grading.pom_open,
+            C::GradingReview => self.authoring.grading.review,
             C::StyleLineEdit => {
                 self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Edit)
             }

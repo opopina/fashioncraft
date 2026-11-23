@@ -1669,6 +1669,7 @@ impl Atelier {
             self.arrange_toolbar(ui);
             self.sewing_strip(ui, false);
             self.guide_toolbar(ui);
+            self.grading_size_bar(ui);
         });
         let (rect, _) = ui.allocate_exact_size(
             ui.available_size().max(Vec2::splat(1.)),
@@ -3606,6 +3607,7 @@ impl Atelier {
         // marker sit above the geometry.
         if display.measurements {
             self.paint_measurements_2d(&painter, rect, response.hover_pos());
+            self.paint_grading_2d(&painter, rect);
         }
         self.paint_steam(&painter, rect, response.hover_pos());
         for [a, b] in &self.authoring.board.smart_lines {

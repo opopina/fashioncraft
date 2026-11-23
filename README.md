@@ -126,7 +126,9 @@ Marvelous Designer and CLO project files are not supported; exchange formats are
 - name, size and quantity;
 - units.
 
-Grading, fold lines and drill holes are not carried yet. See [what goes in and out](docs/dxf-aama-astm.md).
+A graded garment goes out in its base size with its grade rules in a `.rul` file beside the
+DXF, and a DXF with its `.rul` comes in graded ([grading](docs/grading.md)). Fold lines and
+drill holes are not carried yet. See [what goes in and out](docs/dxf-aama-astm.md).
 
 ## Status
 

@@ -12,6 +12,7 @@ pub mod dxf_import;
 pub mod embedding;
 pub mod export;
 pub mod freehand;
+pub mod grading;
 pub mod graphics;
 pub mod lines2d;
 pub mod markings;

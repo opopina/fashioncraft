@@ -478,6 +478,9 @@ struct Raw {
     grain: Vec<Vec<DVec2>>,
     turns: Vec<DVec2>,
     drill: Vec<DVec2>,
+    /// Grade rule numbers with the point they sit on.
+    grades: Vec<super::GradePoint>,
+    grade_reference: Option<[DVec2; 2]>,
     /// Texts with their layer number, if numbered.
     texts: Vec<(Option<u32>, String)>,
     points: usize,
@@ -500,6 +503,14 @@ impl Raw {
         }
         for p in self.turns.iter_mut().chain(self.drill.iter_mut()) {
             *p = f(*p);
+        }
+        for g in &mut self.grades {
+            g.at = f(g.at);
+        }
+        if let Some(line) = &mut self.grade_reference {
+            for p in line {
+                *p = f(*p);
+            }
         }
         for notch in &mut self.notches {
             notch.base = f(notch.base);
@@ -554,6 +565,28 @@ fn collect(
             };
             match read() {
                 Ok(notch) => raw.notches.push(notch),
+                Err(reason) => issues.add(&piece, &layer_name, entity.kind, reason),
+            }
+            continue;
+        }
+        // A grade rule number: `# n` on the point it grades (layer 5, or 4 for a notch; some
+        // systems put it on the point's own layer).
+        if matches!(entity.kind, "TEXT" | "MTEXT")
+            && let Some(n @ (1..=5 | 13 | 80..=83)) = layer_no
+            && let Some(rule) = text_of(entity)
+                .as_deref()
+                .and_then(super::GradePoint::parse)
+        {
+            let at = mirror_x(entity.fields).and_then(|flip| {
+                let p = point(entity.fields, 10)?;
+                Ok(if flip { DVec2::new(-p.x, p.y) } else { p })
+            });
+            match at {
+                Ok(at) => raw.grades.push(super::GradePoint {
+                    at,
+                    rule,
+                    notch: matches!(n, layer::NOTCHES | 80..=83),
+                }),
                 Err(reason) => issues.add(&piece, &layer_name, entity.kind, reason),
             }
             continue;
@@ -622,7 +655,20 @@ fn collect(
             (Some(layer::MIRROR), _) => {
                 skip("Mirror (fold) lines are not imported; the piece comes in as drawn")
             }
-            (Some(layer::GRADE_REFERENCE), _) => skip("Grade reference lines are not imported"),
+            (
+                Some(layer::GRADE_REFERENCE),
+                Shape::Path {
+                    points,
+                    closed: false,
+                },
+            ) if raw.grade_reference.is_none()
+                && points[0].distance(*points.last().unwrap()) > 0. =>
+            {
+                raw.grade_reference = Some([points[0], *points.last().unwrap()]);
+            }
+            (Some(layer::GRADE_REFERENCE), _) => {
+                skip("Alternate grade reference lines and other layer-5 entities are not imported")
+            }
             (Some(layer::STRIPE | layer::PLAID), _) => {
                 skip("Stripe and plaid matching lines are not imported")
             }
@@ -926,6 +972,8 @@ fn piece(mut raw: Raw, scale: f64, tolerance: f64, issues: &mut Issues) -> Optio
         notches,
         grain,
         drill_holes: raw.drill,
+        grade_points: raw.grades,
+        grade_reference: raw.grade_reference,
         ..Default::default()
     };
     for (layer, text) in raw.texts {

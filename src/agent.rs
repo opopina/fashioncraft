@@ -275,6 +275,16 @@ pub fn tools() -> Vec<Tool> {
             changes_document: false,
         },
         Tool {
+            name: "size_chart",
+            description: "The garment's sizes and points of measure: each size group (its sizes \
+                smallest first, the base size the pattern is drawn in, the size shown in 3D) and \
+                every point of measure in every size, in mm, with its difference from the base \
+                and its tolerance. Show another size in 3D with command_run \
+                'grading.next_size' or 'grading.previous_size'.",
+            input_schema: json!({"type": "object", "properties": {}, "additionalProperties": false}),
+            changes_document: false,
+        },
+        Tool {
             name: "save_project",
             description: "Save the project as <name>.json in Documents/FashionCraft (the folder \
                 is made if needed). Reports the path.",

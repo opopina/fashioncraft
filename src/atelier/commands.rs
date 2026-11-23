@@ -226,6 +226,12 @@ pub enum CommandId {
     UvEditor,
     PackUvIslands,
     AutomaticUvLayout,
+    GradingTable,
+    PointsOfMeasure,
+    ToggleGradePoint,
+    GradingReview,
+    NextSize,
+    PreviousSize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2255,6 +2261,60 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        GradingTable,
+        "grading.table",
+        "Grading: sizes and grade rules…",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        PointsOfMeasure,
+        "grading.points_of_measure",
+        "Points of measure (POM): measurements in every size…",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleGradePoint,
+        "grading.toggle_grade_point",
+        "Grade point: make the selected point a grade point or a proportional one",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        GradingReview,
+        "grading.review",
+        "Grading review: every size laid over the base on the board",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        NextSize,
+        "grading.next_size",
+        "Show the next size in 3D",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PreviousSize,
+        "grading.previous_size",
+        "Show the previous size in 3D",
+        Pattern,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
 ];

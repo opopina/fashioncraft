@@ -288,6 +288,9 @@ fn counted_nouns(value: &str) -> String {
 }
 
 fn spanish(text: &str) -> Option<&'static str> {
+    if let Some(es) = super::grading_ui::spanish(text) {
+        return Some(es);
+    }
     Some(match text {
         "File" => "Archivo",
         "Edit" => "Editar",

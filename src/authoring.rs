@@ -1779,7 +1779,8 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
     let without_layout = |t: &GarmentTemplate| {
-        let mut t = t.clone();
+        // What is simulated is the garment in the sizes on show, not its grading.
+        let mut t = crate::garment::grading::apply::effective(t);
         t.mirror_links.clear();
         t.fabric_appearance.clear();
         t.graphics.clear();
@@ -1837,6 +1838,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
     if a.fabric_appearance == b.fabric_appearance
         && a.graphics == b.graphics
         && a.trims == b.trims
+        && a.grading == b.grading
         && markings(a) == markings(b)
         && a.locked_panels == b.locked_panels
         && a.internal_lines_locked == b.internal_lines_locked
@@ -1848,7 +1850,8 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         return false;
     }
     let strip = |source: &GarmentTemplate| {
-        let mut t = source.clone();
+        // A grading change that leaves the sizes on show as they were is draft data.
+        let mut t = crate::garment::grading::apply::effective(source);
         t.fabric_appearance.clear();
         t.graphics.clear();
         t.trims.clear();
@@ -5607,11 +5610,13 @@ impl History {
         if steps == 0 || steps > from.len() {
             return Err("History has no such step".into());
         }
-        let template = &from[from.len() - steps].0;
+        // The size on show is a view, not an edit: undo keeps it.
+        let mut template = from[from.len() - steps].0.clone();
+        crate::garment::grading::apply::keep_shown_sizes(current, &mut template);
         let garment = template.compile()?;
         let edit = Edit {
-            reset_simulation: !same_physics(current, template),
-            template: template.clone(),
+            reset_simulation: !same_physics(current, &template),
+            template,
             garment,
             selected: None,
             new_point: None,

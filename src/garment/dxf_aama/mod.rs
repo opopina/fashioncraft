@@ -22,7 +22,7 @@ pub mod template;
 mod write;
 
 pub use read::{ReadOptions, detect, is_apparel, load, read};
-pub use write::{WriteOptions, write};
+pub use write::{WriteOptions, ascii, write};
 
 /// Which of the two apparel DXF dialects a file follows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -210,6 +210,29 @@ pub struct Piece {
     pub drill_holes: Vec<DVec2>,
     /// Texts of the piece that are not one of its known keys, kept to show.
     pub annotations: Vec<String>,
+    /// Grade rule numbers (`# n` texts) and the points they grade.
+    pub grade_points: Vec<GradePoint>,
+    /// The grade reference line (layer 5): the X axis of the piece's grade rules, from its
+    /// first point to its second. Without one, rules follow the drawing's X axis.
+    pub grade_reference: Option<[DVec2; 2]>,
+}
+
+/// A grade rule number on a point: `# rule` written at `at` on layer 5, or on layer 4 for a
+/// notch. The rule's growths are in the rule table (`.RUL`) beside the file.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GradePoint {
+    pub at: DVec2,
+    pub rule: i64,
+    pub notch: bool,
+}
+
+impl GradePoint {
+    /// The rule number of a `# n` text (spaces optional, an alternate `n,m` keeps `n`).
+    pub fn parse(text: &str) -> Option<i64> {
+        let rest = text.trim().strip_prefix('#')?.trim();
+        let first = rest.split(',').next()?.trim();
+        first.parse().ok()
+    }
 }
 
 impl Piece {

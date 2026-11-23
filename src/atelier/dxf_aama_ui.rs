@@ -11,6 +11,7 @@ use fashioncraft::{
             self, Dialect, PatternFile, Quantity, ReadOptions, Units, WriteOptions,
             template::{self as convert, Converted, PieceOptions},
         },
+        grading::{self, rul::RuleTable},
         meshing::MeshingSettings,
     },
 };
@@ -126,7 +127,7 @@ impl ExportUi {
                             }
                         });
                     });
-                ui.small(tr("Each piece is a block with its cut and sew lines, notches, grain line, name, size and quantity. Curves are written as points within 0.25 mm. No grading yet."));
+                ui.small(tr("Each piece is a block with its cut and sew lines, notches, grain line, name, size and quantity. Curves are written as points within 0.25 mm. A graded garment goes out in its base size, with its grade rules in a .rul file beside the DXF."));
                 save = button(ui, "dxf-aama.save", tr("Save DXF…"), true);
             });
         self.open &= open;
@@ -144,16 +145,32 @@ impl ExportUi {
     }
 
     /// The file's bytes: the garment's pieces (or the selected ones) in the chosen dialect.
+    #[cfg(test)]
     pub fn write(
         &self,
         template: &GarmentTemplate,
         selected: &[String],
     ) -> Result<(Vec<u8>, usize), String> {
+        self.write_graded(template, selected, "")
+            .map(|(bytes, count, _)| (bytes, count))
+    }
+
+    /// The DXF's bytes and, for a graded garment, its rule table (`.rul`) text, named
+    /// `table` (the file's stem).
+    pub fn write_graded(
+        &self,
+        template: &GarmentTemplate,
+        selected: &[String],
+        table: &str,
+    ) -> Result<(Vec<u8>, usize, Option<String>), String> {
         let panels = self
             .selected_only
             .then(|| selected.iter().cloned().collect::<BTreeSet<_>>())
             .filter(|s| !s.is_empty());
-        let pieces = convert::pieces(
+        let grading::dxf::Export {
+            pieces,
+            table: rules,
+        } = grading::dxf::export(
             template,
             &PieceOptions {
                 size: self.size.trim().into(),
@@ -165,19 +182,31 @@ impl ExportUi {
                     .collect(),
                 panels,
             },
+            self.units,
+            self.dialect,
         )?;
+        let rules = rules.map(|mut r| {
+            if !table.trim().is_empty() {
+                r.name = grading::rul::size_word(&table.to_uppercase());
+            }
+            r
+        });
         let bytes = dxf_aama::write(
             &pieces,
             &WriteOptions {
                 dialect: self.dialect,
                 units: self.units,
                 style: template.name.clone(),
-                sample_size: self.size.trim().into(),
+                sample_size: rules
+                    .as_ref()
+                    .map_or_else(|| self.size.trim().into(), |r| r.sample.clone()),
                 author: convert::author(),
                 created: Some(convert::now_utc()),
+                grade_rule_table: rules.as_ref().map(|r| r.name.clone()).unwrap_or_default(),
             },
         )?;
-        Ok((bytes, pieces.len()))
+        let text = rules.as_ref().map(grading::rul::write).transpose()?;
+        Ok((bytes, pieces.len(), text))
     }
 }
 
@@ -195,6 +224,10 @@ pub(super) struct ImportUi {
     fabric: String,
     acknowledged: bool,
     pub error: Option<String>,
+    /// The rule table found beside the file, read or failing.
+    rules: Option<(PathBuf, Result<RuleTable, String>)>,
+    /// Bring the grade rules in with the pieces.
+    use_rules: bool,
 }
 
 impl Default for ImportUi {
@@ -212,6 +245,8 @@ impl Default for ImportUi {
             fabric: String::new(),
             acknowledged: false,
             error: None,
+            rules: None,
+            use_rules: true,
         }
     }
 }
@@ -239,6 +274,13 @@ impl ImportUi {
     pub fn choose(&mut self, path: &std::path::Path) {
         self.scale_mm.clear();
         self.path = Some(path.to_owned());
+        self.rules = grading::rul::beside(path).map(|rul| {
+            let table = std::fs::read_to_string(&rul)
+                .map_err(|e| format!("{}: {e}", rul.display()))
+                .and_then(|text| grading::rul::read(&text));
+            (rul, table)
+        });
+        self.use_rules = true;
         match dxf_aama::load(path) {
             Ok(text) => {
                 self.text = Some(text);
@@ -294,17 +336,31 @@ impl ImportUi {
         if !self.current() || !self.acknowledged {
             return Err("Review the pieces and what is not imported first".into());
         }
-        convert::prepare(
+        let file = self.file.as_ref().ok_or("No reviewed file")?;
+        let selected: Vec<usize> = self.selected.iter().copied().collect();
+        let mut edit = convert::prepare(
             template,
-            self.file.as_ref().ok_or("No reviewed file")?,
-            &self.selected.iter().copied().collect::<Vec<_>>(),
+            file,
+            &selected,
             &self.fabric,
             MeshingSettings {
                 target_edge_m: millimetres(&self.mesh_mm)?,
                 ..Default::default()
             },
             origin,
-        )
+        )?;
+        // The grade rules beside the file grade the new pieces.
+        if self.use_rules
+            && let Some((_, Ok(table))) = &self.rules
+        {
+            let ids: Vec<String> = edit.template.panels[template.panels.len()..]
+                .iter()
+                .map(|p| p.id.clone())
+                .collect();
+            grading::dxf::attach(&mut edit.template, file, &selected, &ids, table)?;
+            edit.garment = edit.template.compile()?;
+        }
+        Ok(edit)
     }
 
     pub fn show(
@@ -388,6 +444,44 @@ impl ImportUi {
                             tr("sample size"),
                             file.sample_size
                         ));
+                    }
+                    match &self.rules {
+                        Some((path, Ok(table))) => {
+                            let name = path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            let r = ui.checkbox(
+                                &mut self.use_rules,
+                                format!(
+                                    "{}{name} · {} · {} {} · {} {}",
+                                    tr("Grade rules: "),
+                                    table.sizes.join(" "),
+                                    table.rules.len(),
+                                    tr("rules"),
+                                    tr("sample size"),
+                                    table.sample
+                                ),
+                            );
+                            named(ui, &r, "aama.rules");
+                            for note in &table.notes {
+                                ui.colored_label(egui::Color32::YELLOW, note);
+                            }
+                        }
+                        Some((path, Err(e))) => {
+                            ui.colored_label(
+                                egui::Color32::LIGHT_RED,
+                                format!("{}: {e}", path.display()),
+                            );
+                        }
+                        None => {
+                            if file.pieces.iter().any(|p| !p.grade_points.is_empty()) {
+                                ui.colored_label(
+                                    egui::Color32::YELLOW,
+                                    tr("The pieces carry grade rule numbers, but no .rul file is beside the DXF: they come in ungraded."),
+                                );
+                            }
+                        }
                     }
                     ui.label(super::workspace::section(tr("Pieces")));
                     for (i, piece) in file.pieces.iter().enumerate() {
@@ -554,20 +648,38 @@ impl super::Atelier {
                 .set_file_name(name)
                 .save_file()
             {
+                let stem = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let rul = path.with_extension("rul");
                 let written = self
                     .document
                     .dxf_aama
                     .export
-                    .write(&self.project.template, &selection)
-                    .and_then(|(bytes, count)| {
+                    .write_graded(&self.project.template, &selection, &stem)
+                    .and_then(|(bytes, count, rules)| {
                         std::fs::write(&path, bytes)
-                            .map(|_| count)
-                            .map_err(|e| format!("{}: {e}", path.display()))
+                            .map_err(|e| format!("{}: {e}", path.display()))?;
+                        if let Some(text) = rules {
+                            std::fs::write(&rul, text)
+                                .map_err(|e| format!("{}: {e}", rul.display()))?;
+                            return Ok((count, true));
+                        }
+                        Ok((count, false))
                     });
                 self.status = match written {
-                    Ok(count) => {
+                    Ok((count, graded)) => {
                         self.document.dxf_aama.export.open = false;
-                        format!("{count} pieces saved in {}", path.display())
+                        if graded {
+                            format!(
+                                "{count} pieces saved in {}, grade rules in {}",
+                                path.display(),
+                                rul.display()
+                            )
+                        } else {
+                            format!("{count} pieces saved in {}", path.display())
+                        }
                     }
                     Err(error) => error,
                 };
@@ -675,6 +787,90 @@ mod tests {
             project.template.panels.len() + 1
         );
         assert_eq!(edit.template.panels.last().unwrap().name, "Back Yoke");
+    }
+
+    #[test]
+    fn a_graded_export_writes_its_rule_table_and_the_import_reads_it_back() {
+        use fashioncraft::garment::grading::{Grading, Target};
+        let dir = tempfile::tempdir().unwrap();
+        let project = FittingProject::basic(GarmentKind::Tshirt, 0, dir.path().join("a.obj"));
+        let mut graded = project.template.clone();
+        let mut g = Grading::new("Sizes", &["S", "M", "L"], 1).unwrap();
+        for panel in ["front", "back"] {
+            for (edge, x) in [("side-right", 0.01), ("hem", 0.01), ("side-left", -0.01)] {
+                let target = Target::Point {
+                    panel: panel.into(),
+                    edge: edge.into(),
+                };
+                g.set_step(&target, glam::DVec2::new(x, 0.)).unwrap();
+            }
+        }
+        graded.grading = Some(g);
+        let export = ExportUi {
+            dialect: Dialect::Astm,
+            ..Default::default()
+        };
+        let (bytes, count, rules) = export.write_graded(&graded, &[], "shirt").unwrap();
+        assert_eq!(count, 2);
+        let rules = rules.expect("a graded garment writes a rule table");
+        assert!(rules.contains("GRADE RULE TABLE: SHIRT"), "{rules}");
+        assert!(rules.contains("SIZE LIST: S M L"), "{rules}");
+        let path = dir.path().join("shirt.dxf");
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::write(dir.path().join("SHIRT.RUL"), rules).unwrap();
+        // The review finds the table beside the file and the pieces come in graded.
+        let mut c = Case {
+            import: ImportUi::default(),
+            template: project.template.clone(),
+            path,
+            prepared: None,
+        };
+        c.import.begin(&c.template);
+        let mut h = Harness::new(egui::vec2(1000., 1000.));
+        for _ in 0..8 {
+            h.frame(&mut c, &mut draw);
+        }
+        h.click("aama.choose", &mut c, &mut draw).unwrap();
+        for _ in 0..8 {
+            h.frame(&mut c, &mut draw);
+        }
+        assert!(matches!(c.import.rules, Some((_, Ok(_)))));
+        h.click("aama.acknowledge", &mut c, &mut draw).unwrap();
+        h.click("aama.confirm", &mut c, &mut draw).unwrap();
+        let edit = c.prepared.expect("prepared");
+        let grading = edit.template.grading.as_ref().expect("graded");
+        let names: Vec<&str> = grading.groups[0]
+            .sizes
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, ["S", "M", "L"]);
+        assert_eq!(grading.groups[0].base_name(), "M");
+        let new = &edit.template.panels[project.template.panels.len()].id;
+        assert!(
+            grading.panels.contains_key(new),
+            "{:?}",
+            grading.panels.keys()
+        );
+        // Unticking the rules brings the pieces in ungraded.
+        let mut c = Case {
+            import: ImportUi::default(),
+            template: project.template.clone(),
+            path: c.path,
+            prepared: None,
+        };
+        c.import.begin(&c.template);
+        for _ in 0..8 {
+            h.frame(&mut c, &mut draw);
+        }
+        h.click("aama.choose", &mut c, &mut draw).unwrap();
+        for _ in 0..8 {
+            h.frame(&mut c, &mut draw);
+        }
+        h.click("aama.rules", &mut c, &mut draw).unwrap();
+        h.click("aama.acknowledge", &mut c, &mut draw).unwrap();
+        h.click("aama.confirm", &mut c, &mut draw).unwrap();
+        assert!(c.prepared.expect("prepared").template.grading.is_none());
     }
 
     #[test]

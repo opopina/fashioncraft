@@ -416,6 +416,10 @@ pub struct GarmentTemplate {
     /// moves with the spot of the skin it was nearest. Still, nothing changes.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pins_attached: bool,
+    /// Sizes, grade rules and points of measure. The panels are the base size; other sizes
+    /// are derived, and the size on show is what compiles. Absent in ungraded documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grading: Option<super::grading::Grading>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -789,6 +793,14 @@ impl GarmentTemplate {
         .map_err(|e| e.to_string())
     }
     pub fn compile(&self) -> Result<CompiledGarment, String> {
+        // A graded garment compiles in the sizes on show; the derived template carries no
+        // grading, so this does not recurse.
+        if let Some(grading) = &self.grading {
+            grading.validate()?;
+            if let Some(sized) = super::grading::apply::view(self)? {
+                return sized.compile();
+            }
+        }
         if let Some(id) = self
             .locked_panels
             .iter()
@@ -1564,6 +1576,7 @@ impl GarmentTemplate {
             locked_panels: Default::default(),
             internal_lines_locked: false,
             pins_attached: false,
+            grading: None,
             fabric_appearance: Default::default(),
             graphics: vec![],
             trims: vec![],

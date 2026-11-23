@@ -22,6 +22,8 @@ pub struct WriteOptions {
     pub author: String,
     /// Creation date (`dd-mm-yyyy`) and time (`hh:mm`); `None` leaves them empty.
     pub created: Option<(String, String)>,
+    /// Name of the rule table (`.RUL`) that grades the pieces; empty when they are not graded.
+    pub grade_rule_table: String,
 }
 
 /// The version line of the ASTM Style System Text. AAMA's own version line has no public
@@ -251,7 +253,9 @@ pub fn write(pieces: &[Piece], options: &WriteOptions) -> Result<Vec<u8>, String
         ),
         format!("Author: {}", options.author),
         format!("Sample Size: {}", options.sample_size),
-        "Grade Rule Table:".to_string(),
+        format!("Grade Rule Table: {}", options.grade_rule_table)
+            .trim_end()
+            .to_string(),
         format!("Units: {}", options.units.word()),
     ];
     if options.dialect == Dialect::Astm {
@@ -308,6 +312,13 @@ pub fn write(pieces: &[Piece], options: &WriteOptions) -> Result<Vec<u8>, String
         layer::SEW,
         layer::ANNOTATION,
     ];
+    if pieces
+        .iter()
+        .any(|p| !p.grade_points.is_empty() || p.grade_reference.is_some())
+    {
+        layers.push(layer::GRADE_REFERENCE);
+        layers.sort_unstable();
+    }
     if options.dialect == Dialect::Astm {
         layers.extend([
             layer::T_NOTCH,
@@ -405,6 +416,19 @@ pub fn write(pieces: &[Piece], options: &WriteOptions) -> Result<Vec<u8>, String
         }
         for p in &piece.drill_holes {
             out.point(layer::DRILL_HOLES, shift(*p));
+        }
+        // Grading: the reference line gives the rules' X axis; each `# n` sits on the point
+        // it grades, on layer 5, or on layer 4 for a notch.
+        if let Some([a, b]) = piece.grade_reference {
+            out.line(layer::GRADE_REFERENCE, shift(a), shift(b));
+        }
+        for g in &piece.grade_points {
+            let layer = if g.notch {
+                layer::NOTCHES
+            } else {
+                layer::GRADE_REFERENCE
+            };
+            out.label(layer, shift(g.at), &format!("# {}", g.rule));
         }
         // The Piece System Text stacks downward from the middle of the piece; other texts
         // go on the annotation layer.

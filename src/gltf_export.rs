@@ -6,7 +6,10 @@
 //! The garment is one mesh with a primitive per fabric. Each fabric becomes a metallic-
 //! roughness material with its colour and roughness, double-sided like cloth, and its image
 //! texture (embedded) when it has one; texture coordinates then count image repeats along the
-//! grain, otherwise they are the pattern's warp and weft in metres. Triangles are wound so
+//! grain, otherwise they are the pattern's warp and weft in metres. A second set of texture
+//! coordinates (`TEXCOORD_1`) holds the garment's UV layout, every piece's island in the unit
+//! square (see [`crate::garment::uv_layout`]), for baking and texture painting elsewhere.
+//! Triangles are wound so
 //! the fabric's front face (opposite the solver's winding normal, or along it on a flipped
 //! piece) is glTF's front face, as the editor draws it. Vertices stay split along seams, each
 //! piece keeping its own texture coordinates. Units are metres, Y up.
@@ -275,6 +278,11 @@ fn build(scene: &GltfScene) -> Result<Builder, String> {
     let position = b.floats(&positions, 3, true);
     let normal = b.floats(&normals(&base, &triangles), 3, false);
     let texcoord = b.floats(&uv.concat(), 2, false);
+    let layout_uv: Vec<f32> = crate::garment::uv_layout::coordinates(scene.template, garment)
+        .iter()
+        .flat_map(|p| p.as_vec2().to_array())
+        .collect();
+    let layout = b.floats(&layout_uv, 2, false);
     let targets = cloth_frames
         .as_ref()
         .map(|frames| b.targets(&base, frames))
@@ -339,7 +347,10 @@ fn build(scene: &GltfScene) -> Result<Builder, String> {
         );
         let indices = b.indices(&indices);
         let mut primitive = json!({
-            "attributes": {"POSITION": position, "NORMAL": normal, "TEXCOORD_0": texcoord},
+            "attributes": {
+                "POSITION": position, "NORMAL": normal, "TEXCOORD_0": texcoord,
+                "TEXCOORD_1": layout,
+            },
             "indices": indices,
             "material": material,
             "mode": 4,

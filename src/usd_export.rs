@@ -8,7 +8,9 @@
 //!
 //! Each garment piece is a mesh with its fabric's preview-surface material; triangles are
 //! counter-clockwise seen from the fabric's front face, USD's default orientation, and
-//! marked double-sided. The avatar is one more mesh. A take animates the points with one
+//! marked double-sided. Besides the fabric's texture coordinates (`st`), each piece carries
+//! the garment's UV layout as `uvLayout`, its island in the unit square (see
+//! [`crate::garment::uv_layout`]). The avatar is one more mesh. A take animates the points with one
 //! time sample per frame, at the take's frame rate. Units are metres, Y up.
 use crate::{
     avatar::SurfaceMesh,
@@ -81,6 +83,7 @@ fn mesh(
     rest: &[DVec3],
     frames: Option<&[Vec<DVec3>]>,
     st: Option<&[[f64; 2]]>,
+    layout: Option<&[[f64; 2]]>,
     material: &str,
     double_sided: bool,
 ) {
@@ -115,9 +118,12 @@ fn mesh(
     out.push_str("        normal3f[] normals = ");
     points(out, normals(rest, triangles).into_iter());
     out.push_str(" (\n            interpolation = \"vertex\"\n        )\n");
-    if let Some(st) = st {
-        out.push_str("        texCoord2f[] primvars:st = [");
-        for (k, [u, v]) in st.iter().enumerate() {
+    for (name, coordinates) in [("st", st), ("uvLayout", layout)] {
+        let Some(coordinates) = coordinates else {
+            continue;
+        };
+        write!(out, "        texCoord2f[] primvars:{name} = [").unwrap();
+        for (k, [u, v]) in coordinates.iter().enumerate() {
             if k > 0 {
                 out.push_str(", ");
             }
@@ -211,6 +217,8 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
     let appearances = crate::garment::appearance::bind(scene.template, garment);
     let triangles = front_triangles(scene.template, garment);
     let uv = texture_coordinates(scene.template, garment);
+    // The UV layout, counted from the image's bottom as USD texture coordinates are.
+    let layout = crate::garment::uv_layout::coordinates(scene.template, garment);
     let mut out = String::from(
         "#usda 1.0\n(\n    defaultPrim = \"Root\"\n    metersPerUnit = 1\n    upAxis = \"Y\"\n",
     );
@@ -283,6 +291,10 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
                 .collect()
         });
         let st: Vec<[f64; 2]> = local.iter().map(|i| [uv[*i].x, uv[*i].y]).collect();
+        let island: Vec<[f64; 2]> = local
+            .iter()
+            .map(|i| [layout[*i].x, 1. - layout[*i].y])
+            .collect();
         mesh(
             &mut out,
             &name,
@@ -290,6 +302,7 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
             &rest,
             frames.as_deref(),
             Some(&st),
+            Some(&island),
             &material_name,
             true,
         );
@@ -303,6 +316,7 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
             &avatar.triangles,
             &rest,
             frames.map(|f| f.as_slice()),
+            None,
             None,
             "avatar",
             false,

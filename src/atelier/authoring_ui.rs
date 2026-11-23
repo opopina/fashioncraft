@@ -74,6 +74,8 @@ pub(super) struct AuthoringUi {
     pub pleats: super::pleats_ui::PleatsUi,
     pub mesh_select: super::mesh_select::MeshSelect,
     pub texture_edit: super::texture_ui::TextureEdit,
+    /// The UV layout of exports and the baked atlas.
+    pub uv_editor: super::uv_editor_ui::UvEditor,
     pub style_lines: super::style_lines::StyleLines,
     pub script: super::script_ui::ScriptUi,
     pub steam: super::steam_ui::SteamUi,

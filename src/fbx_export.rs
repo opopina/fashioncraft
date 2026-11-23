@@ -6,7 +6,9 @@
 //! piece is a mesh model with its fabric's material (diffuse colour, and its texture image
 //! copied next to the file); the avatar is one more model. Positions are in centimetres, the
 //! file's declared unit, Y up. Polygons are wound counter-clockwise seen from the fabric's
-//! front face; normals and texture coordinates are given per polygon corner.
+//! front face; normals and texture coordinates are given per polygon corner. Each piece has
+//! two sets of texture coordinates: the fabric's own (`UVMap`) and the garment's UV layout,
+//! its island in the unit square (`UVLayout`, see [`crate::garment::uv_layout`]).
 //!
 //! A recorded take animates the cloth (and the avatar, given its frames) with blend shapes,
 //! as the glTF export does with morph targets: each mesh gets a `BlendShape` deformer with one
@@ -363,7 +365,7 @@ fn geometry(
     name: &str,
     points: &[DVec3],
     triangles: &[[usize; 3]],
-    uv: Option<&[[f64; 2]]>,
+    uv: &[(&str, &[[f64; 2]])],
 ) -> Node {
     let mut normal = vec![DVec3::ZERO; points.len()];
     for t in triangles {
@@ -407,29 +409,41 @@ fn geometry(
             node("TypedIndex", vec![Prop::I32(0)]),
         ],
     )];
-    if let Some(uv) = uv {
+    // Each set of texture coordinates is a UV element; the first goes in layer 0 with the
+    // normals and the material, each other one in a layer of its own.
+    let mut extra_layers = vec![];
+    for (k, (name, uv)) in uv.iter().enumerate() {
         let values: Vec<f64> = uv.iter().flatten().copied().collect();
         let index: Vec<i32> = triangles.iter().flatten().map(|i| *i as i32).collect();
         children.push(with(
             "LayerElementUV",
-            vec![Prop::I32(0)],
+            vec![Prop::I32(k as i32)],
             vec![
                 node("Version", vec![Prop::I32(101)]),
-                node("Name", vec![s("UVMap")]),
+                node("Name", vec![s(name)]),
                 node("MappingInformationType", vec![s("ByPolygonVertex")]),
                 node("ReferenceInformationType", vec![s("IndexToDirect")]),
                 node("UV", vec![Prop::F64s(values)]),
                 node("UVIndex", vec![Prop::I32s(index)]),
             ],
         ));
-        layers.push(with(
+        let element = with(
             "LayerElement",
             vec![],
             vec![
                 node("Type", vec![s("LayerElementUV")]),
-                node("TypedIndex", vec![Prop::I32(0)]),
+                node("TypedIndex", vec![Prop::I32(k as i32)]),
             ],
-        ));
+        );
+        if k == 0 {
+            layers.push(element);
+        } else {
+            extra_layers.push(with(
+                "Layer",
+                vec![Prop::I32(k as i32)],
+                vec![node("Version", vec![Prop::I32(100)]), element],
+            ));
+        }
     }
     children.push(with(
         "LayerElementMaterial",
@@ -453,6 +467,7 @@ fn geometry(
     let mut layer = vec![node("Version", vec![Prop::I32(100)])];
     layer.extend(layers);
     children.push(with("Layer", vec![Prop::I32(0)], layer));
+    children.extend(extra_layers);
     with(
         "Geometry",
         vec![Prop::I64(id), object_name(name, "Geometry"), s("Mesh")],
@@ -534,6 +549,8 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
     let appearances = crate::garment::appearance::bind(scene.template, garment);
     let triangles = front_triangles(scene.template, garment);
     let uv = texture_coordinates(scene.template, garment);
+    // The UV layout, counted from the image's bottom as FBX texture coordinates are.
+    let layout = crate::garment::uv_layout::coordinates(scene.template, garment);
     let take = scene
         .take
         .as_ref()
@@ -645,8 +662,18 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             .collect();
         let points: Vec<DVec3> = local.iter().map(|i| x[*i]).collect();
         let st: Vec<[f64; 2]> = local.iter().map(|i| [uv[*i].x, uv[*i].y]).collect();
+        let island: Vec<[f64; 2]> = local
+            .iter()
+            .map(|i| [layout[*i].x, 1. - layout[*i].y])
+            .collect();
         let (m, g) = (id(), id());
-        objects.push(geometry(g, &panel.id, &points, &piece, Some(&st)));
+        objects.push(geometry(
+            g,
+            &panel.id,
+            &points,
+            &piece,
+            &[("UVMap", &st), ("UVLayout", &island)],
+        ));
         objects.push(model(m, &panel.id));
         connections.push(connection(m, 0));
         connections.push(connection(g, m));
@@ -680,7 +707,7 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             "avatar",
             bodies.map_or(&avatar.vertices, |b| &b[0]),
             &avatar.triangles,
-            None,
+            &[],
         ));
         if animated && let Some(bodies) = bodies {
             let added = blend_shapes(&mut objects, &mut connections, &mut id, g, "avatar", bodies);

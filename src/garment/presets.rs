@@ -169,6 +169,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         inactive_seams: Default::default(),
         seam_tears: Default::default(),
         texture_offsets: Default::default(),
+        uv_layout: Default::default(),
         steam: vec![],
         tacks: vec![],
         line_folds: vec![],

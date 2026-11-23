@@ -286,6 +286,14 @@ const MATERIALS: &[Item] = &[
         ],
     ),
     Sub(
+        "UV",
+        &[
+            Run("UV editor", C::UvEditor),
+            Run("Pack UV islands", C::PackUvIslands),
+            Run("Automatic UV layout", C::AutomaticUvLayout),
+        ],
+    ),
+    Sub(
         "Graphics",
         &[
             Run("Transform graphic", C::ToolGraphic),
@@ -439,6 +447,7 @@ const WINDOW: &[Item] = &[
     Run("Library", C::ToggleLibrary),
     Run("Object browser", C::ToggleObjectBrowser),
     Run("History", C::ToggleHistory),
+    Run("UV editor", C::UvEditor),
     Run("Assistant", C::ToggleAssistant),
     S,
     Run("Reset layout", C::ResetLayout),
@@ -534,6 +543,7 @@ impl Atelier {
             C::HighQualityView => display.high_quality,
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::RunPythonScript => self.authoring.script.open,
+            C::UvEditor => self.authoring.uv_editor.open,
             C::StyleLineEdit => {
                 self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Edit)
             }

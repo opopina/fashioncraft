@@ -165,6 +165,8 @@ mod trims_ui;
 #[cfg(test)]
 #[path = "atelier/ui_preview.rs"]
 mod ui_preview;
+#[path = "atelier/uv_editor_ui.rs"]
+mod uv_editor_ui;
 #[path = "atelier/view_controls.rs"]
 mod view_controls;
 #[path = "atelier/window_tools.rs"]
@@ -850,6 +852,9 @@ impl Atelier {
             Id::Piping => self.pipe_selected()?,
             Id::SuperimposeSide => self.superimpose_side()?,
             Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
+            Id::UvEditor => self.open_uv_editor(),
+            Id::PackUvIslands => self.pack_uv_islands()?,
+            Id::AutomaticUvLayout => self.automatic_uv_layout(),
             Id::OpenTrim => self.open_trim(),
             Id::AddAvatarObject => self.add_avatar_object(),
             Id::StyleLineEdit => self.start_style_lines(style_lines::StyleMode::Edit),
@@ -1830,6 +1835,7 @@ impl eframe::App for Atelier {
             self.pleats_window(&ctx);
             self.mesh_select_window(&ctx);
             self.texture_edit_window(&ctx);
+            self.uv_editor_window(&ctx);
             self.script_window(&ctx);
             self.steam_window(&ctx);
             self.object_browser_window(&ctx);

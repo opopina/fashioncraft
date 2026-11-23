@@ -152,7 +152,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
             },
             reverse_b: false,
             notches: vec![],
-            stiffness: 50_000.0,
+            stiffness: super::seam::DEFAULT_SEAM_STIFFNESS,
             allow_ease: false,
         })
         .collect();

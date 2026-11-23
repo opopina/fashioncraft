@@ -173,8 +173,8 @@ fn a_recording_on_the_gpu_carries_the_cloth_like_the_cpu_one() {
     assert!(gpu_rise > 0.02, "the cloth rose {gpu_rise} m on the GPU");
     // The arm rises 11 cm under the cloth, which slides off it on both backends. Their local
     // solves differ (f32 and its own line search on the GPU), and so does how long the cloth
-    // stays on: 3.1 cm on the CPU, 5.1 cm on the GPU (4.0 cm before the GPU refreshed contacts
-    // after the body moves). The same motion, not the same numbers, and never into the arm.
+    // stays on: 3.4 cm on the CPU, 3.0 cm on the GPU now that steps split (3.1 and 5.1 cm
+    // when they did not). The same motion, not the same numbers, and never into the arm.
     assert!(
         (0.5..2.).contains(&(gpu_rise / cpu_rise)),
         "GPU {gpu_rise} vs CPU {cpu_rise}"

@@ -1,6 +1,7 @@
-//! Split steps: a step whose motion its contacts cannot allow at once (about 0.3 m/s at
+//! Split steps: a step whose motion its contacts cannot allow at once (about 0.13 m/s at
 //! 1/60 s) is split into shorter whole steps, so free cloth falls as fast as gravity takes
-//! it while contacts and sewing stay as safe as ever. Off unless asked for.
+//! it while contacts and sewing stay as safe as ever. The parts share the step's iterations.
+//! On by default, up to 16 parts.
 use fashioncraft::{
     authoring::{self, Command},
     fitting::FittingProject,
@@ -9,7 +10,7 @@ use fashioncraft::{
         presets::{self, GarmentKind},
         shapes::Primitive,
     },
-    vbd::{VbdSettings, VbdSolver},
+    vbd::{CAPPED_MAX_SUBSTEPS, DEFAULT_MAX_SUBSTEPS, MIN_PART_ITERATIONS, VbdSettings, VbdSolver},
 };
 use glam::{DVec2, DVec3};
 use std::{path::PathBuf, sync::Arc};
@@ -142,13 +143,29 @@ fn a_shirt_sews_and_settles_with_split_steps() {
     assert!(state.x.iter().all(|p| p.is_finite()));
     // Sewing closes the seams as it does without splitting.
     assert!(gap(&state.x) < 0.25 * first, "{} of {first}", gap(&state.x));
-    // Older settings files, which have no such field, never split.
-    let old: VbdSettings = serde_json::from_value(serde_json::json!({
-        "dt": 0.01, "iterations": 4, "damping": 1.5, "gravity": [0., -9.81, 0.],
-        "contact": serde_json::to_value(VbdSettings::default().contact).unwrap()
-    }))
-    .unwrap();
-    assert_eq!(old.max_substeps, 1);
+    // Older settings files, which have no such field, split by default too; one that asked
+    // never to split keeps that.
+    let old = |extra: serde_json::Value| -> VbdSettings {
+        let mut json = serde_json::json!({
+            "dt": 0.01, "iterations": 4, "damping": 1.5, "gravity": [0., -9.81, 0.],
+            "contact": serde_json::to_value(VbdSettings::default().contact).unwrap()
+        });
+        json.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(json).unwrap()
+    };
+    assert_eq!(
+        old(serde_json::json!({})).max_substeps,
+        DEFAULT_MAX_SUBSTEPS
+    );
+    let never = old(serde_json::json!({"max_substeps": 1}));
+    assert_eq!(never.max_substeps, 1);
+    assert!(
+        serde_json::to_string(&never)
+            .unwrap()
+            .contains("\"max_substeps\":1")
+    );
     assert!(
         !serde_json::to_string(&VbdSettings::default())
             .unwrap()
@@ -163,4 +180,77 @@ fn a_shirt_sews_and_settles_with_split_steps() {
         .is_err()
     );
     let _ = split;
+}
+
+#[test]
+fn the_parts_of_a_split_step_share_its_time_and_iterations() {
+    let settings = VbdSettings {
+        dt: 1. / 60.,
+        iterations: 16,
+        ..Default::default()
+    };
+    assert_eq!(settings.max_substeps, DEFAULT_MAX_SUBSTEPS);
+    // One part is the step itself, but a part never splits again.
+    let whole = settings.part(1);
+    assert_eq!(whole.dt, settings.dt);
+    assert_eq!(whole.iterations, 16);
+    assert_eq!(whole.max_substeps, 1);
+    assert_eq!(settings.part(0), whole);
+    for (parts, iterations) in [(2, 8), (3, 6), (4, 4), (5, 4), (16, 4)] {
+        let part = settings.part(parts);
+        assert!(
+            (part.dt * parts as f64 - settings.dt).abs() < 1e-15,
+            "{parts}"
+        );
+        assert_eq!(part.iterations, iterations, "{parts}");
+        assert!(part.iterations >= MIN_PART_ITERATIONS);
+        assert_eq!(part.max_substeps, 1);
+        assert!(part.validate().is_ok());
+        // Everything else is the step's own.
+        assert_eq!(
+            VbdSettings {
+                dt: settings.dt,
+                iterations: settings.iterations,
+                max_substeps: settings.max_substeps,
+                ..part
+            },
+            settings
+        );
+    }
+    // A step with fewer iterations than the least a part gets keeps its own.
+    let few = VbdSettings {
+        iterations: 2,
+        ..settings.clone()
+    };
+    assert_eq!(few.part(4).iterations, 2);
+}
+
+#[test]
+fn free_cloth_falls_at_gravitys_pace_by_default() {
+    let fall = |settings: &VbdSettings| {
+        let (g, mut state) = square(2.);
+        let mut solver = VbdSolver::new(g, None, &state).unwrap();
+        let start = mean_height(&state.x);
+        let mut split = 0;
+        for _ in 0..30 {
+            split = split.max(solver.parts(&state, settings));
+            solver.step(&mut state, settings, None).unwrap();
+        }
+        (start - mean_height(&state.x), split)
+    };
+    let default = VbdSettings {
+        dt: 1. / 60.,
+        ..Default::default()
+    };
+    let (drop, split) = fall(&default);
+    // Nearly as far as a damped free fall in half a second (0.97 m).
+    assert!(drop > 0.8 && drop < 0.98, "{drop}");
+    assert!(split > CAPPED_MAX_SUBSTEPS && split <= DEFAULT_MAX_SUBSTEPS);
+    // "Full-speed falls" off: fewer parts, a slower fall.
+    let (capped, split) = fall(&VbdSettings {
+        max_substeps: CAPPED_MAX_SUBSTEPS,
+        ..default
+    });
+    assert_eq!(split, CAPPED_MAX_SUBSTEPS);
+    assert!(capped < 0.75 * drop, "{capped} vs {drop}");
 }

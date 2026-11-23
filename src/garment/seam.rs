@@ -46,12 +46,20 @@ pub struct SeamSpec {
     /// Endpoints (0,0) and (1,1) are implicit; these are not mesh vertex IDs.
     #[serde(default)]
     pub notches: Vec<[f64; 2]>,
-    /// Line-integrated gap penalty coefficient (N/m²).
+    /// Line-integrated gap penalty coefficient (N/m²); new seams take
+    /// [`DEFAULT_SEAM_STIFFNESS`].
     pub stiffness: f64,
     /// Permit unequal lengths (gathering/easing). This does not change rest geometry.
     #[serde(default)]
     pub allow_ease: bool,
 }
+
+/// Gap penalty of a new seam (N/m²). A seam is a spring: where the cloth pulls hardest on it
+/// (a T-shirt's underarm corner) it stays open by tension / stiffness, about 3 mm with this
+/// value. Stiffer seams close further and sew sooner, but two sewn vertices pull each other
+/// back and forth between their local solves, so the garment takes longer to come to rest:
+/// four times stiffer leaves under 1 mm but settles more than a second later.
+pub const DEFAULT_SEAM_STIFFNESS: f64 = 50_000.;
 
 impl SeamSpec {
     pub fn side(&self, b: bool) -> impl Iterator<Item = &BoundaryRef> {

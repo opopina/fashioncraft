@@ -142,6 +142,7 @@ impl Atelier {
         let mut discard = false;
         let mut targets = vec![];
         let scene_gap = self.settings.contact.radius;
+        let scene_friction = self.settings.friction;
         let header = egui::CollapsingHeader::new(super::workspace::section(i18n::tr(ui_lang, "Fabric · weight and stretch")))
             .id_salt("fabric_controls").default_open(true).show(ui, |ui| {
                 let d = self.authoring.fabric_draft.as_mut().unwrap();
@@ -200,6 +201,23 @@ impl Atelier {
                     let mut mm = *gap * 1000.;
                     if value(ui, i18n::tr(ui_lang, "Collision distance"), &mut mm, 0.05, 0.5, 20., " mm") { *gap = mm / 1000.; }
                 }
+                let mut own = p.friction.is_some();
+                let own_changed = super::workspace::prop_row(ui, i18n::tr(ui_lang, "Own friction"), |ui| {
+                    ui.checkbox(&mut own, "")
+                        .on_hover_text(
+                            i18n::tr(ui_lang, "Coulomb friction coefficient of this fabric on the avatar, the floor and \
+                             other cloth; two fabrics rub with the mean of theirs. Off: the scene's \
+                             Friction in Simulation"),
+                        )
+                        .changed()
+                })
+                .inner;
+                if own_changed {
+                    p.friction = own.then_some(scene_friction);
+                }
+                if let Some(mu) = p.friction.as_mut() {
+                    value(ui, i18n::tr(ui_lang, "Friction"), mu, 0.01, 0., 1.5, "");
+                }
                 let mut damping_ms = p.internal_damping * 1000.;
                 if value(ui, i18n::tr(ui_lang, "Internal damping"), &mut damping_ms, 0.1, 0., 100., " ms") {
                     p.internal_damping = damping_ms / 1000.;
@@ -221,6 +239,7 @@ impl Atelier {
                     }
                     ui.small(format!("{}: {:.0} / {:.0} N/m", i18n::tr(ui_lang, "Warp/weft membrane"), p.warp, p.weft));
                     ui.small(i18n::tr(ui_lang, "Without its own collision distance a fabric uses the scene's, in Simulation."));
+                    ui.small(i18n::tr(ui_lang, "Without its own friction a fabric uses the scene's, in Simulation."));
                 });
                 if d.properties != before_properties { d.preset = None; }
                 let all = ui.checkbox(&mut d.all_panels, i18n::tr(ui_lang, "Apply to all panels"));

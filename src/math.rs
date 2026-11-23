@@ -47,11 +47,25 @@ impl<const N: usize> Jet<N> {
         Self {
             v: value,
             g: std::array::from_fn(|i| first * self.g[i]),
-            h: std::array::from_fn(|i| {
-                std::array::from_fn(|j| first * self.h[i][j] + second * self.g[i] * self.g[j])
-            }),
+            h: symmetric(|i, j| first * self.h[i][j] + second * self.g[i] * self.g[j]),
         }
     }
+}
+
+/// The symmetric matrix whose upper triangle is `f(i, j)`, i ≤ j: every Hessian here is
+/// symmetric, so the lower triangle is copied instead of computed again.
+#[inline(always)]
+// Both indices address the matrix and its transpose; iterators would hide the triangle.
+#[allow(clippy::needless_range_loop)]
+fn symmetric<const N: usize>(f: impl Fn(usize, usize) -> f64) -> [[f64; N]; N] {
+    let mut h = [[0.0; N]; N];
+    for i in 0..N {
+        for j in i..N {
+            h[i][j] = f(i, j);
+            h[j][i] = h[i][j];
+        }
+    }
+    h
 }
 
 impl<const N: usize> Scalar for Jet<N> {
@@ -86,13 +100,21 @@ impl<const N: usize> Add for Jet<N> {
 impl<const N: usize> Neg for Jet<N> {
     type Output = Self;
     fn neg(self) -> Self {
-        self * Self::c(-1.0)
+        Self {
+            v: -self.v,
+            g: self.g.map(|g| -g),
+            h: self.h.map(|row| row.map(|h| -h)),
+        }
     }
 }
 impl<const N: usize> Sub for Jet<N> {
     type Output = Self;
     fn sub(self, b: Self) -> Self {
-        self + -b
+        Self {
+            v: self.v - b.v,
+            g: std::array::from_fn(|i| self.g[i] - b.g[i]),
+            h: std::array::from_fn(|i| std::array::from_fn(|j| self.h[i][j] - b.h[i][j])),
+        }
     }
 }
 // The product rule necessarily adds derivative terms when multiplying AD values.
@@ -103,13 +125,8 @@ impl<const N: usize> Mul for Jet<N> {
         Self {
             v: self.v * b.v,
             g: std::array::from_fn(|i| self.g[i] * b.v + self.v * b.g[i]),
-            h: std::array::from_fn(|i| {
-                std::array::from_fn(|j| {
-                    self.h[i][j] * b.v
-                        + self.v * b.h[i][j]
-                        + self.g[i] * b.g[j]
-                        + b.g[i] * self.g[j]
-                })
+            h: symmetric(|i, j| {
+                self.h[i][j] * b.v + self.v * b.h[i][j] + self.g[i] * b.g[j] + b.g[i] * self.g[j]
             }),
         }
     }

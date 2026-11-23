@@ -27,6 +27,10 @@ pub struct Material {
     /// without slowing the piece as a whole. 0 = none.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub internal_damping: f64,
+    /// Coulomb friction coefficient μ of this fabric on the avatar, the floor and other cloth;
+    /// none uses the scene's friction. Two pieces of cloth rub with the mean of theirs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub friction: Option<f64>,
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -47,6 +51,7 @@ impl Default for Material {
             grain_degrees: 0.0,
             collision_distance: None,
             internal_damping: 0.0,
+            friction: None,
         }
     }
 }
@@ -55,6 +60,8 @@ pub const MIN_COLLISION_DISTANCE: f64 = 0.0005;
 pub const MAX_COLLISION_DISTANCE: f64 = 0.02;
 /// Largest internal damping time, s.
 pub const MAX_INTERNAL_DAMPING: f64 = 0.1;
+/// Largest friction coefficient a fabric or a scene may have.
+pub const MAX_FRICTION: f64 = 5.;
 
 impl Material {
     pub fn validate(&self) -> Result<(), String> {
@@ -78,6 +85,12 @@ impl Material {
         }
         if !(0.0..=MAX_INTERNAL_DAMPING).contains(&self.internal_damping) {
             return Err("Internal damping must be between 0 and 100 ms".into());
+        }
+        if self
+            .friction
+            .is_some_and(|mu| !(0.0..=MAX_FRICTION).contains(&mu))
+        {
+            return Err(format!("Friction must be between 0 and {MAX_FRICTION}"));
         }
         if !self.grain_degrees.is_finite()
             || !self.compression_ratio.is_finite()

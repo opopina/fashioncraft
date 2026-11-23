@@ -10,9 +10,10 @@
 //! two sides over the step. f0(y) = y²/ε − y³/(3ε²) + ε/3 for y < ε and y beyond, with
 //! ε = ε_v·dt: a slip slower than ε_v counts as sticking. Its gradient is the Coulomb force
 //! μ λ (opposing the slip) once sliding, and its Hessian is positive semidefinite. Units: m,
-//! N, J. μ is dimensionless and shared by every contact (cloth–avatar, cloth–cloth, floor).
+//! N, J. μ is dimensionless: the scene's coefficient, or a fabric's own where it sets one
+//! (see [`contact_friction`]).
 use super::*;
-use crate::ogc::potential::Kind;
+use crate::ogc::potential::{Contact, Kind};
 
 /// Slip speed (m/s) below which contacts stick; IPC's usual value.
 pub const STICK_SPEED_M_S: f64 = 1e-3;
@@ -63,23 +64,80 @@ impl FrictionTerm {
 /// Friction data for every contact of `contacts`, from the positions `x` at detection and the
 /// positions `start` at the start of the step (fixed obstacles included). `None` for contacts
 /// that push with no force, or when μ is zero. Contacts are independent, so they are computed
-/// in parallel, in their order.
+/// in parallel, in their order. Every contact takes the scene's μ.
 pub fn friction_terms(
     contacts: &ContactSet,
     x: &[DVec3],
     start: &[DVec3],
     settings: &VbdSettings,
 ) -> Vec<Option<FrictionTerm>> {
-    if settings.friction <= 0. {
+    fabric_friction_terms(contacts, x, start, settings, &[])
+}
+
+/// The friction coefficient of contact `c`. `fabric` holds each cloth vertex's own
+/// coefficient, none where its fabric takes the scene's (`scene`); vertices beyond it are
+/// the avatar and the floor. A side of the contact takes the largest coefficient of its cloth
+/// vertices: two pieces of cloth rub with the mean of their two sides, and cloth on the
+/// avatar or the floor with its own.
+pub fn contact_friction(c: &Contact, fabric: &[Option<f64>], scene: f64, moving: usize) -> f64 {
+    let first = match c.kind {
+        Kind::EdgeEdge | Kind::EdgeEdgeInterior | Kind::SegmentSegment => 2,
+        _ => 1,
+    };
+    let side = |vertices: &[usize]| {
+        vertices
+            .iter()
+            .filter(|v| **v < moving)
+            .map(|v| fabric.get(*v).copied().flatten().unwrap_or(scene))
+            .reduce(f64::max)
+    };
+    match (
+        side(&c.vertices[..first]),
+        side(&c.vertices[first..c.count]),
+    ) {
+        (Some(a), Some(b)) => 0.5 * (a + b),
+        (Some(a), None) | (None, Some(a)) => a,
+        (None, None) => scene,
+    }
+}
+
+/// [`friction_terms`] with each fabric's own coefficient (see [`contact_friction`]); an empty
+/// `fabric` gives every contact the scene's.
+pub fn fabric_friction_terms(
+    contacts: &ContactSet,
+    x: &[DVec3],
+    start: &[DVec3],
+    settings: &VbdSettings,
+    fabric: &[Option<f64>],
+) -> Vec<Option<FrictionTerm>> {
+    if settings.friction <= 0. && !fabric.iter().flatten().any(|mu| *mu > 0.) {
         return vec![];
     }
     let k = settings.contact.stiffness;
     let eps = STICK_SPEED_M_S * settings.dt;
-    contacts
+    let moving = contacts.radii.len();
+    // Most found pairs lie beyond the contact radius, where the energy and all its derivatives
+    // are exactly zero: no push, no friction. One plain evaluation each tells, in one pass on
+    // this thread; only the few that press (a few percent) are differentiated, in parallel.
+    let pressing: Vec<(usize, f64)> = contacts
         .contacts
-        .par_iter()
+        .iter()
         .enumerate()
-        .map(|(i, c)| {
+        .filter_map(|(i, c)| {
+            let mu = if fabric.is_empty() {
+                settings.friction
+            } else {
+                contact_friction(c, fabric, settings.friction, moving)
+            };
+            (mu > 0. && c.value(x, contacts.radius(i, settings.contact.radius), k) > 0.)
+                .then_some((i, mu))
+        })
+        .collect();
+    let mut terms = vec![None; contacts.contacts.len()];
+    let found: Vec<_> = pressing
+        .par_iter()
+        .map(|&(i, mu)| {
+            let c = &contacts.contacts[i];
             let r = contacts.radius(i, settings.contact.radius);
             let mut gradients = [DVec3::ZERO; 4];
             for (g, &v) in gradients.iter_mut().zip(&c.vertices[..c.count]) {
@@ -103,20 +161,27 @@ pub fn friction_terms(
             let normal = push / lambda;
             let mut weights = [0.; 4];
             let mut anchor = DVec3::ZERO;
-            for i in 0..c.count {
-                weights[i] = -gradients[i].dot(normal) / lambda;
-                anchor += start[c.vertices[i]] * weights[i];
+            for j in 0..c.count {
+                weights[j] = -gradients[j].dot(normal) / lambda;
+                anchor += start[c.vertices[j]] * weights[j];
             }
-            Some(FrictionTerm {
-                kind: c.kind,
-                vertices: c.vertices,
-                count: c.count,
-                weights,
-                normal,
-                mu_lambda: settings.friction * lambda,
-                anchor,
-                eps,
-            })
+            Some((
+                i,
+                FrictionTerm {
+                    kind: c.kind,
+                    vertices: c.vertices,
+                    count: c.count,
+                    weights,
+                    normal,
+                    mu_lambda: mu * lambda,
+                    anchor,
+                    eps,
+                },
+            ))
         })
-        .collect()
+        .collect();
+    for (i, term) in found.into_iter().flatten() {
+        terms[i] = Some(term);
+    }
+    terms
 }

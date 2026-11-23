@@ -18,6 +18,8 @@ pub struct GpuContactFilter {
     bind: Option<wgpu::BindGroup>,
     read: Option<wgpu::Buffer>,
     read_capacity: usize,
+    /// Edges queried, a prefix of the edges: the moving ones, or all (see `spatial_filter`).
+    edge_queries: usize,
 }
 impl GpuContactFilter {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
@@ -89,6 +91,7 @@ impl GpuContactFilter {
             bind: None,
             read: None,
             read_capacity: 0,
+            edge_queries: 0,
         }
     }
     fn prepare(&mut self, data: [&[u8]; 6], output_size: usize) {

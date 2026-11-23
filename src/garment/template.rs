@@ -349,6 +349,10 @@ pub struct GarmentTemplate {
     /// piece, in its material coordinates (metres). Looks only.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub texture_offsets: BTreeMap<String, glam::DVec2>,
+    /// Where each piece's island sits in the UV layout used by exports and the baked atlas, by
+    /// piece id; pieces without one are placed automatically. Never the look in the editor.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub uv_layout: BTreeMap<String, super::uv_layout::UvPlacement>,
     /// Steam brushed onto the pieces: each stamp shrinks or stretches the cloth under it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steam: Vec<super::steam::SteamStamp>,
@@ -802,6 +806,12 @@ impl GarmentTemplate {
             if !self.panels.iter().any(|p| &p.id == id) || !offset.is_finite() {
                 return Err(format!("Texture position on unknown piece {id}"));
             }
+        }
+        for (id, placement) in &self.uv_layout {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("UV island of unknown piece {id}"));
+            }
+            placement.validate()?;
         }
         for (id, tears) in &self.seam_tears {
             if !self.seams.iter().any(|s| &s.id == id) {
@@ -1520,6 +1530,7 @@ impl GarmentTemplate {
             inactive_seams: Default::default(),
             seam_tears: Default::default(),
             texture_offsets: Default::default(),
+            uv_layout: Default::default(),
             steam: vec![],
             tacks: vec![],
             line_folds: vec![],

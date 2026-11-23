@@ -1,6 +1,7 @@
 //! OBJ export with a material library: the garment's pieces with their fabrics, optionally
-//! thick, in one object or one per piece, with the pattern packed into the unit square or
-//! kept at its real size, in the chosen units and up axis, and the avatar beside it.
+//! thick, in one object or one per piece, with the pieces laid out in the unit square by the
+//! garment's UV layout or kept at their real size, in the chosen units and up axis, and the
+//! avatar beside it.
 //!
 //! Vertices stay split along seams unless welding is asked for: ClothCraft's seams join
 //! pieces along their edges rather than vertex to vertex, so welding first adds each side's
@@ -60,7 +61,8 @@ pub struct ObjOptions {
     /// Both faces of the cloth apart by the fabric's look thickness (1 mm when it has
     /// none), joined by a rim along each piece's outline.
     pub thick: bool,
-    /// Every piece packed into the unit square of texture space, at one scale.
+    /// Every piece laid out in the unit square of texture space by the garment's UV layout
+    /// (see [`crate::garment::uv_layout`]), as the baked atlas lays it out.
     pub unified_uv: bool,
     pub units: Units,
     /// Z up instead of Y up.
@@ -266,24 +268,16 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
             p
         }
     };
-    // Texture coordinates, packed per piece when asked.
-    let mut uv = texture_coordinates(scene.template, garment);
-    if options.unified_uv {
-        let boxes: Vec<(DVec2, DVec2)> = pieces
-            .iter()
-            .map(|(_, p)| {
-                uv[p.vertices.clone()].iter().fold(
-                    (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
-                    |(lo, hi), q| (lo.min(*q), hi.max(*q)),
-                )
-            })
-            .collect();
-        for ((_, piece), (offset, s)) in pieces.iter().zip(crate::bake::pack(&boxes)) {
-            for q in &mut uv[piece.vertices.clone()] {
-                *q = (*q + offset) * s;
-            }
-        }
-    }
+    // Texture coordinates: the UV layout when asked (OBJ counts v from the image's bottom),
+    // otherwise the fabric's own.
+    let mut uv = if options.unified_uv {
+        crate::garment::uv_layout::coordinates(scene.template, garment)
+            .into_iter()
+            .map(|q| DVec2::new(q.x, 1. - q.y))
+            .collect()
+    } else {
+        texture_coordinates(scene.template, garment)
+    };
     // A baked look brings its own coordinates (OBJ counts v from the image's bottom).
     if let Some(atlas) = scene.atlas {
         if atlas.uv.len() != uv.len() {

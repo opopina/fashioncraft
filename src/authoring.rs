@@ -368,6 +368,13 @@ pub enum Command {
         panel: String,
         offset: DVec2,
     },
+    /// Replace the UV layout used by exports and the baked atlas (island placements by piece
+    /// id; empty puts every piece back to the automatic layout). Looks only, never the editor's
+    /// view. One undo step, named `name`.
+    SetUvLayout {
+        layout: std::collections::BTreeMap<String, crate::garment::uv_layout::UvPlacement>,
+        name: &'static str,
+    },
     /// Mesh `panels` as quads (an even grid of squares along each piece's grain inside) or as
     /// free triangles. One undo step.
     SetMeshQuads {
@@ -741,6 +748,7 @@ impl Command {
             Self::AddSteam { .. } => "Steam",
             Self::SetSeamTears { .. } => "Tear seam",
             Self::SetTextureOffset { .. } => "Edit texture",
+            Self::SetUvLayout { name, .. } => name,
             Self::SetPanelGrain { .. } => "Grain",
             Self::SetMeshQuads { quads: true, .. } => "Convert to quads",
             Self::SetMeshQuads { quads: false, .. } => "Convert to triangles",
@@ -1643,6 +1651,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.seam_tears.retain(|id, _| seams.contains(id));
     template.steam.retain(|s| panels.contains(&s.panel));
     template.texture_offsets.retain(|id, _| panels.contains(id));
+    template.uv_layout.retain(|id, _| panels.contains(id));
 }
 
 pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
@@ -1658,6 +1667,7 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.locked_panels.clear();
         t.flipped_panels.clear();
         t.texture_offsets.clear();
+        t.uv_layout.clear();
         t.internal_lines_locked = false;
         // Pins held on to the avatar only move while an animation records.
         t.pins_attached = false;
@@ -1705,6 +1715,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         && a.internal_lines_locked == b.internal_lines_locked
         && a.flipped_panels == b.flipped_panels
         && a.texture_offsets == b.texture_offsets
+        && a.uv_layout == b.uv_layout
     {
         return false;
     }
@@ -1717,6 +1728,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         t.internal_lines_locked = false;
         t.flipped_panels.clear();
         t.texture_offsets.clear();
+        t.uv_layout.clear();
         for p in &mut t.panels {
             if let Some(polygon) = p.polygon.as_mut() {
                 polygon.seam_allowances.clear();
@@ -4961,6 +4973,16 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 template.texture_offsets.insert(panel.clone(), offset);
             }
             selected = Some(panel);
+        }
+        Command::SetUvLayout { layout, .. } => {
+            for (id, placement) in &layout {
+                panel_index(&template, id)?;
+                placement.validate()?;
+            }
+            if layout == template.uv_layout {
+                return Err("The UV layout is like that already".into());
+            }
+            template.uv_layout = layout;
         }
         Command::SetMeshQuads { panels, quads } => {
             if panels.is_empty() {

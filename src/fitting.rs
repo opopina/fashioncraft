@@ -879,6 +879,8 @@ fn mesh_signature(template: &GarmentTemplate, g: &CompiledGarment) -> Result<Str
     physical_template.locked_panels.clear();
     physical_template.internal_lines_locked = false;
     physical_template.pins_attached = false;
+    // The UV layout is export metadata: editing it keeps the saved drape.
+    physical_template.uv_layout.clear();
     for panel in &mut physical_template.panels {
         panel.layout_2d = None;
         panel.layout_rotation_degrees = 0.;

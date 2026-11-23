@@ -219,6 +219,9 @@ pub enum CommandId {
     ReDrape,
     AutoFit,
     RunPythonScript,
+    UvEditor,
+    PackUvIslands,
+    AutomaticUvLayout,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2185,6 +2188,33 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        UvEditor,
+        "materials.uv_editor",
+        "UV editor: lay out each piece's island in the texture square for exports and baking",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PackUvIslands,
+        "materials.pack_uv",
+        "Pack UV islands: fit every piece into the texture square without overlap",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AutomaticUvLayout,
+        "materials.automatic_uv_layout",
+        "Automatic UV layout: forget the edited island placements",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
 ];

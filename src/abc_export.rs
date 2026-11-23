@@ -1,5 +1,6 @@
 //! Alembic export (Ogawa container): the garment as one polygon mesh with its texture
-//! coordinates, its points sampled at every frame of a recorded take (or once, as it is now),
+//! coordinates (and the garment's UV layout as a second set, `UVLayout`, an arbitrary geometry
+//! parameter; see [`crate::garment::uv_layout`]), its points sampled at every frame of a recorded take (or once, as it is now),
 //! and the avatar beside it, moving with the take when its frames are given. Y up, metres.
 //!
 //! An Ogawa file is a 16-byte header and a tree of groups (child offsets) and data blocks
@@ -356,7 +357,7 @@ const MESH_SCHEMA: &str = "schema=AbcGeom_PolyMesh_v1;schemaBaseType=AbcGeom_Geo
 fn poly_mesh(
     frames: &[Vec<DVec3>],
     faces: &[[usize; 3]],
-    uv: Option<&[glam::DVec2]>,
+    uvs: &[(&str, &[glam::DVec2])],
 ) -> Vec<Property> {
     let animated = frames.len() > 1;
     let n = frames.len();
@@ -413,10 +414,12 @@ fn poly_mesh(
             time_sampling: 1,
         },
     ];
-    if let Some(uv) = uv {
+    // Texture coordinates: the first set is the mesh's own `uv`, any other an arbitrary
+    // geometry parameter of the same kind.
+    let set = |name: &str, uv: &[glam::DVec2]| {
         let meta = "arrayExtent=1;geoScope=fvr;interpretation=vector;isGeomParam=true;podExtent=2;podName=float32_t";
-        geom.push(Property::Compound {
-            name: "uv".into(),
+        Property::Compound {
+            name: name.into(),
             meta: meta.into(),
             children: vec![
                 Property::Values {
@@ -448,6 +451,16 @@ fn poly_mesh(
                     time_sampling: 1,
                 },
             ],
+        }
+    };
+    if let Some((_, uv)) = uvs.first() {
+        geom.push(set("uv", uv));
+    }
+    if uvs.len() > 1 {
+        geom.push(Property::Compound {
+            name: ".arbGeomParams".into(),
+            meta: String::new(),
+            children: uvs[1..].iter().map(|(name, uv)| set(name, uv)).collect(),
         });
     }
     vec![Property::Compound {
@@ -482,9 +495,14 @@ pub fn write(scene: &AbcScene, path: &Path) -> Result<AbcSummary, String> {
     }
     let triangles = front_triangles(scene.template, garment);
     let uv = texture_coordinates(scene.template, garment);
+    // The UV layout, counted from the image's bottom as Alembic texture coordinates are.
+    let layout: Vec<glam::DVec2> = crate::garment::uv_layout::coordinates(scene.template, garment)
+        .into_iter()
+        .map(|q| glam::DVec2::new(q.x, 1. - q.y))
+        .collect();
     let mut w = Writer::new();
     let mut children = vec![];
-    let cloth = poly_mesh(&frames, &triangles, Some(&uv));
+    let cloth = poly_mesh(&frames, &triangles, &[("uv", &uv), ("UVLayout", &layout)]);
     let entry = w.object(&cloth, &[])?;
     let object_meta = format!("{MESH_SCHEMA};schemaObjTitle=AbcGeom_PolyMesh_v1:.geom");
     children.push(("garment".to_string(), object_meta.clone(), entry));
@@ -498,7 +516,7 @@ pub fn write(scene: &AbcScene, path: &Path) -> Result<AbcSummary, String> {
             }
             _ => vec![avatar.vertices.clone(); frames.len().min(1)],
         };
-        let props = poly_mesh(&body, &avatar.triangles, None);
+        let props = poly_mesh(&body, &avatar.triangles, &[]);
         let entry = w.object(&props, &[])?;
         children.push(("avatar".to_string(), object_meta, entry));
     }

@@ -3074,6 +3074,49 @@ fn spanish(text: &str) -> Option<&'static str> {
         "joint moved · Apply and restart to use the new skeleton" => {
             "articulación movida · Aplicar y reiniciar para usar el esqueleto nuevo"
         }
+        "UV" => "UV",
+        "UV editor" => "Editor UV",
+        "Pack UV islands" => "Empaquetar islas UV",
+        "Automatic UV layout" => "Distribución UV automática",
+        "UV editor: lay out each piece's island in the texture square for exports and baking" => {
+            "Editor UV: coloca la isla de cada pieza en el cuadrado de textura para exportar y hornear"
+        }
+        "Pack UV islands: fit every piece into the texture square without overlap" => {
+            "Empaquetar islas UV: encaja todas las piezas en el cuadrado de textura sin solaparse"
+        }
+        "Automatic UV layout: forget the edited island placements" => {
+            "Distribución UV automática: olvida las posiciones editadas de las islas"
+        }
+        "UV editor: drag islands to move, corners to scale, the round handle to turn" => {
+            "Editor UV: arrastra las islas para moverlas, las esquinas para escalar y el tirador redondo para girar"
+        }
+        "UV islands packed" => "Islas UV empaquetadas",
+        "The UV layout is automatic already" => "La distribución UV ya es automática",
+        "UV layout back to automatic" => "Distribución UV de nuevo automática",
+        "Pack" => "Empaquetar",
+        "Fit every island into the square without overlap, a margin apart" => {
+            "Encaja todas las islas en el cuadrado sin solaparse, separadas por el margen"
+        }
+        "Margin" => "Margen",
+        "Allow quarter turns" => "Permitir giros de 90°",
+        "Keep relative sizes" => "Mantener tamaños relativos",
+        "Automatic layout" => "Distribución automática",
+        "Forget the edited placements and lay the islands out automatically" => {
+            "Olvida las posiciones editadas y distribuye las islas automáticamente"
+        }
+        "Fit view" => "Encuadrar",
+        "Texture units per metre of material" => "Unidades de textura por metro de tela",
+        "Click an island to select it; Shift adds to the selection" => {
+            "Haz clic en una isla para seleccionarla; Mayús añade a la selección"
+        }
+        "automatic layout" => "distribución automática",
+        "overlapping" => "solapadas",
+        "outside the square" => "fuera del cuadrado",
+        "px/cm at 2048 px" => "px/cm a 2048 px",
+        "Move UV islands" => "Mover islas UV",
+        "Scale UV islands" => "Escalar islas UV",
+        "Turn UV islands" => "Girar islas UV",
+        "Edit UV island" => "Editar isla UV",
         _ => return None,
     })
 }

@@ -30,5 +30,6 @@ pub mod svg_import;
 pub mod template;
 pub mod transfer;
 pub mod trims;
+pub mod uv_layout;
 
 pub use template::{CompiledGarment, FabricValues, GarmentTemplate};

@@ -181,9 +181,9 @@ fn a_bvh_motion_lands_on_the_avatar() {
     assert_eq!(animation.keys.len(), 31);
     assert!((animation.keys.last().unwrap().time_s - 1.).abs() < 1e-9);
     let bone = |pose: &fashioncraft::avatar_rig::Pose, name: &str| {
-        let k = rig.bone(name).unwrap();
-        let (head, tail) = rig.posed_bones(pose)[k];
-        (tail - head).normalize()
+        let (first, last) = rig.bone_span(name).unwrap();
+        let posed = rig.posed_bones(pose);
+        (posed[last].1 - posed[first].0).normalize()
     };
     // At the start the left arm reaches out sideways as in the file's T pose…
     let start = &animation.keys[0].pose;

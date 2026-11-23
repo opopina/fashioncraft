@@ -182,8 +182,9 @@ fn recording_raises_the_arm_into_a_cloth_and_carries_it_up() {
         .unwrap();
     // A point on the right forearm towards the wrist, and the highest point of the body
     // under a 10 cm square centred over it.
-    let forearm = &rig.bones[rig.bone("forearm.R").unwrap()];
-    let near = forearm.head + (forearm.tail - forearm.head) * 0.65;
+    let (fore_start, fore_end) = rig.bone_span("forearm.R").unwrap();
+    let (head, tail) = (rig.bones[fore_start].head, rig.bones[fore_end].tail);
+    let near = head + (tail - head) * 0.65;
     let top = rest
         .vertices
         .iter()

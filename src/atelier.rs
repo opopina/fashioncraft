@@ -337,6 +337,7 @@ pub fn run(
                 prefs,
                 settings_open: false,
                 prefs_dirty: false,
+                prefs_kept: demo::window_size().is_some(),
                 inspector_tab: chrome::InspectorTab::Piece,
                 authoring_smoke: authoring_test.then(authoring_smoke::Smoke::new),
                 demo: demo::Demo::from_env(&output),
@@ -460,6 +461,10 @@ struct Atelier {
     /// Whether the preferences window is currently open.
     settings_open: bool,
     prefs_dirty: bool,
+    /// A demo window (`FASHIONCRAFT_DEMO`) changes the language, the layout and the display
+    /// for its script, and never saves them: the person's own preferences stay as they left
+    /// them, also after the demo ends in this window.
+    prefs_kept: bool,
     inspector_tab: chrome::InspectorTab,
     authoring_smoke: Option<authoring_smoke::Smoke>,
     /// A scripted demo driving the interface (`FASHIONCRAFT_DEMO`).
@@ -1969,7 +1974,9 @@ impl eframe::App for Atelier {
         self.drive_media3d(&ctx);
         self.prefs_dirty |= self.prefs != previous_preferences;
         if self.prefs_dirty && !ctx.input(|i| i.pointer.any_down()) {
-            if let Err(error) = settings::save(&self.output.join(settings::FILE_NAME), &self.prefs)
+            if !self.prefs_kept
+                && let Err(error) =
+                    settings::save(&self.output.join(settings::FILE_NAME), &self.prefs)
             {
                 self.status = format!("Preferences could not be saved: {error}");
             }

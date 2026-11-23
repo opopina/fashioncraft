@@ -27,7 +27,8 @@ drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey,
 fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).
 Two more demos drive the same interface: `FASHIONCRAFT_DEMO=outfit` (trousers drafted from the
 avatar's measurements and an overshirt drawn by hand) and `FASHIONCRAFT_DEMO=cargo` (cargo trousers
-drawn piece by piece, with pockets, topstitching and denim).
+drawn piece by piece, with pockets, topstitching and denim). A demo sets the language and layout
+it needs in its own window and leaves your preferences as they were.
 
 [![Watch the vest demo](docs/media/vest-demo-poster.jpg)](docs/media/vest-demo.mp4)
 

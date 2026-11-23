@@ -969,8 +969,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Group with…" => "Agrupar con…",
         "Guides" => "Guías",
         "Height" => "Alto",
-        "Hide inspector · restore from Workspace menu" => {
-            "Ocultar inspector · se recupera desde el menú Ventana"
+        "Hide the inspector · Window › Properties inspector shows it again" => {
+            "Ocultar el inspector · Ventana › Inspector de propiedades lo vuelve a mostrar"
         }
         "Hold the selected pieces where they are and let other cloth pass through them; seams stay" => {
             "Mantener las piezas seleccionadas donde están y dejar que otra tela las atraviese; las costuras se quedan"

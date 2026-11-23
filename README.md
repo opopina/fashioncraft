@@ -4,7 +4,7 @@ Open-source 3D garment design, written in Rust. Draw patterns in 2D, sew them, d
 watch the garment drape in 3D, then take it to other 3D tools. The workflow follows desktop tools
 like Marvelous Designer and CLO.
 
-![FashionCraft: a vest drawn from scratch, sewn and draped on an avatar from the library](docs/screenshots/fashioncraft-workspace.png)
+![FashionCraft on macOS: cargo trousers draped on an avatar in the 3D view, their four pieces on the 2D board, and the object browser and property editor at the right](docs/screenshots/fashioncraft-workspace.png)
 
 **FashionCraft is an early alpha.** It already covers the whole path from pattern to draped garment,
 but expect rough edges, slow or restless simulation on dense garments and cases that still fail.
@@ -18,18 +18,20 @@ denim, the simulation and a request to the new AI Assistant) shown in 24 seconds
 trousers walking, a Mixamo walk on FashionCraft's cloth solver, rendered in Blender Cycles.
 Titles in EffectCraft, edit in FilmCraft.
 
-[![Watch the cargo trousers video](docs/media/cargo-promo-poster.jpg)](docs/media/cargo-promo.mp4)
+[![Watch the cargo trousers video on YouTube](docs/media/cargo-promo-poster.jpg)](https://www.youtube.com/watch?v=ugbX1SzTV9I)
 
-Also on TikTok: [@ricoptech](https://www.tiktok.com/@ricoptech/video/7711128682286353682).
+On [YouTube](https://www.youtube.com/watch?v=ugbX1SzTV9I) and on TikTok: [@ricoptech](https://www.tiktok.com/@ricoptech/video/7711128682286353682).
 
-A vest made from scratch in 2 minutes 37 seconds: an avatar from the library, the back and front
-drawn with the pen, a mirrored front, sewing, simulation, wool in charcoal grey, and buttons
-fastened through their buttonholes. Recorded with the app's own demo mode (`FASHIONCRAFT_DEMO=vest`).
+A vest made from scratch in 2 minutes 33 seconds, in one take: an avatar from the library, the back
+and front drawn with the polygon tool, a mirrored front, sewing, simulation, wool in charcoal grey,
+and buttons fastened through their buttonholes. Recorded with the app's own demo mode
+(`FASHIONCRAFT_DEMO=vest`), which also shows the tool rail at the left.
 Two more demos drive the same interface: `FASHIONCRAFT_DEMO=outfit` (trousers drafted from the
 avatar's measurements and an overshirt drawn by hand) and `FASHIONCRAFT_DEMO=cargo` (cargo trousers
-drawn piece by piece, with pockets, topstitching and denim).
+drawn piece by piece, with pockets, topstitching and denim). A demo sets the language and layout
+it needs in its own window and leaves your preferences as they were.
 
-[![Watch the vest demo](docs/media/vest-demo-poster.jpg)](docs/media/vest-demo.mp4)
+[![Watch the vest demo on YouTube](docs/media/vest-demo-poster.jpg)](https://www.youtube.com/watch?v=V25IB4gy7MY)
 
 ## Download
 

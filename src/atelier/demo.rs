@@ -13,6 +13,9 @@
 //! and Shift+Escape, stop, are read), so a stray mouse cannot change what it does. Every step is
 //! written to `demo-<name>/review.md` in the session folder, with what failed and why, and as
 //! it happens to `progress.log` beside it (which survives a crash); the recording goes there too.
+//!
+//! A demo sets the language, the layout and the display its script needs, but a demo window
+//! never saves its preferences, so the person's own are as they left them afterwards.
 use super::*;
 use std::{collections::HashMap, io::Write, path::PathBuf, sync::mpsc, thread::JoinHandle};
 

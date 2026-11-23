@@ -280,7 +280,7 @@ impl Atelier {
                     .small_button("×")
                     .on_hover_text(i18n::tr(
                         ui_lang,
-                        "Hide inspector · restore from Workspace menu",
+                        "Hide the inspector · Window › Properties inspector shows it again",
                     ))
                     .clicked()
                 {

@@ -257,7 +257,7 @@ impl VbdSettings {
             || !self.gravity.is_finite()
             || self.floor.is_some_and(|h| !h.is_finite())
             || !self.friction.is_finite()
-            || !(0.0..=5.0).contains(&self.friction)
+            || !(0.0..=crate::model::MAX_FRICTION).contains(&self.friction)
             || self.wind.as_ref().is_some_and(|w| w.validate().is_err())
             || !(1..=16).contains(&self.max_substeps)
         {
@@ -425,6 +425,9 @@ pub struct VbdSolver {
     /// Collision distance of each vertex's fabric, the largest of its triangles'; none where
     /// the scene's applies. Empty when no fabric sets its own.
     collision: Vec<Option<f64>>,
+    /// Each moving vertex's own friction coefficient, from its fabric; empty when no fabric
+    /// sets one, so every contact takes the scene's.
+    fabric_friction: Vec<Option<f64>>,
 }
 impl VbdSolver {
     /// Move the obstacle (the avatar, with the floor when it has one) to `obstacle`, the same
@@ -564,19 +567,38 @@ impl VbdSolver {
             solid_target: vec![],
             solid_rotation: vec![],
             collision: vec![],
+            fabric_friction: vec![],
         };
         let mut collision = vec![None; n];
+        let mut fabric_friction = vec![None; n];
         for t in &solver.garment.mesh.triangles {
-            if let Some(d) = solver.garment.materials[t.material].collision_distance {
-                for v in t.vertices {
+            let m = &solver.garment.materials[t.material];
+            for v in t.vertices {
+                if let Some(d) = m.collision_distance {
                     collision[v] = Some(collision[v].map_or(d, |c: f64| c.max(d)));
+                }
+                if let Some(mu) = m.friction {
+                    fabric_friction[v] = Some(fabric_friction[v].map_or(mu, |f: f64| f.max(mu)));
                 }
             }
         }
         if collision.iter().any(Option::is_some) {
             solver.collision = collision;
         }
+        if fabric_friction.iter().any(Option::is_some) {
+            solver.fabric_friction = fabric_friction;
+        }
         Ok(solver)
+    }
+    /// Friction data for `contacts` from the positions `start` at the start of the step, with
+    /// each fabric's own coefficient where it sets one.
+    pub(crate) fn friction_terms(
+        &self,
+        contacts: &ContactSet,
+        start: &[DVec3],
+        settings: &VbdSettings,
+    ) -> Vec<Option<friction::FrictionTerm>> {
+        friction::fabric_friction_terms(contacts, start, start, settings, &self.fabric_friction)
     }
     /// Whether vertex `v` gives no way to contact `c`: it sits on the lower-layer side of a
     /// contact between pieces of different simulation layers. That side keeps no energy of
@@ -946,8 +968,7 @@ impl VbdSolver {
         if contacts.minimum_distance <= 1e-12 {
             return Err("OGC zero separation; step rejected, reset the arrangement".into());
         }
-        self.friction =
-            friction::friction_terms(&contacts, &start_positions, &start_positions, settings);
+        self.friction = self.friction_terms(&contacts, &start_positions, settings);
         metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
         metrics.detection_updates += 1;
         metrics.broad_phase_rebuilds += usize::from(contacts.broad_phase_rebuilt);
@@ -995,12 +1016,7 @@ impl VbdSolver {
                 contacts = refreshed;
                 // Normal forces stay lagged to the start of the step: an intermediate iterate
                 // pressed into the barrier would overstate them.
-                self.friction = friction::friction_terms(
-                    &contacts,
-                    &start_positions,
-                    &start_positions,
-                    settings,
-                );
+                self.friction = self.friction_terms(&contacts, &start_positions, settings);
                 colors = self.colors(&contacts, grab);
                 metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
                 metrics.detection_updates += 1;

@@ -18,7 +18,15 @@ const DT: f64 = 1. / 240.;
 
 /// A 12 cm patch lying flat just above a large one-triangle floor at y = 0.
 fn resting_patch() -> (Arc<CompiledGarment>, SurfaceMesh) {
+    fabric_patch(None)
+}
+
+/// [`resting_patch`] of a fabric with its own friction coefficient `own`.
+fn fabric_patch(own: Option<f64>) -> (Arc<CompiledGarment>, SurfaceMesh) {
     let mut t = GarmentTemplate::two_panel_demo();
+    for f in &mut t.fabrics {
+        f.properties.friction = own;
+    }
     t.panels.truncate(1);
     t.seams.clear();
     let p = &mut t.panels[0];
@@ -60,7 +68,12 @@ fn mean_vx(s: &State) -> f64 {
 /// Settle on the floor under vertical gravity, then tilt gravity by 20° and measure the
 /// patch's mean acceleration along the slope between 0.05 s and 0.2 s.
 fn slope_acceleration(mu: f64) -> (f64, State) {
-    let (g, floor) = resting_patch();
+    fabric_slope_acceleration(mu, None)
+}
+
+/// [`slope_acceleration`] with the scene's coefficient `mu` and the fabric's own `own`.
+fn fabric_slope_acceleration(mu: f64, own: Option<f64>) -> (f64, State) {
+    let (g, floor) = fabric_patch(own);
     let mut s = g.initial_state.clone();
     let mut solver = VbdSolver::new(g, Some(&floor), &s).unwrap();
     let rest = settings(mu, DVec3::new(0., -G, 0.));
@@ -184,4 +197,66 @@ fn the_friction_force_is_coulomb_once_sliding() {
         assert!(got.y.abs() < 1e-12, "no normal force from friction");
         assert!(j.v > 0.);
     }
+}
+
+#[test]
+fn a_fabric_with_its_own_friction_slides_by_it() {
+    // Slippery fabric on a grippy scene slides as its own μ says...
+    let (acc, _) = fabric_slope_acceleration(0.6, Some(0.15));
+    assert!(
+        (acc - expected(0.15)).abs() / expected(0.15) < 0.03,
+        "{acc} vs {}",
+        expected(0.15)
+    );
+    // ...and a grippy one sticks on a frictionless scene.
+    let (acc, s) = fabric_slope_acceleration(0., Some(0.6));
+    assert!(acc.abs() < 0.01, "{acc}");
+    assert!(
+        s.v.iter()
+            .all(|v| v.length() < 2. * friction::STICK_SPEED_M_S)
+    );
+    // Saved fabrics without the field take the scene's.
+    use fashioncraft::garment::template::FabricProperties;
+    let saved = serde_json::to_value(FabricProperties::default()).unwrap();
+    assert!(saved.get("friction").is_none());
+    let p: FabricProperties = serde_json::from_value(saved).unwrap();
+    assert_eq!(p.friction, None);
+    let out_of_range = fashioncraft::model::Material {
+        friction: Some(-0.1),
+        ..Default::default()
+    };
+    assert!(out_of_range.validate().is_err());
+}
+
+#[test]
+fn two_fabrics_rub_with_the_mean_of_their_friction() {
+    use fashioncraft::ogc::potential::{Contact, Kind};
+    // Vertices 0 and 1 are cloth with μ 0.2 and 0.6, 2 is cloth on the scene's 0.3; 3 and up
+    // are the avatar.
+    let fabric = [Some(0.2), Some(0.6), None];
+    let contact = |kind, vertices: &[usize]| {
+        let mut ids = [0; 4];
+        ids[..vertices.len()].copy_from_slice(vertices);
+        Contact {
+            kind,
+            vertices: ids,
+            count: vertices.len(),
+            mollifier_epsilon: 0.,
+        }
+    };
+    let mu = |c: &Contact| friction::contact_friction(c, &fabric, 0.3, 3);
+    // Cloth on cloth: the mean of the two sides.
+    assert!((mu(&contact(Kind::PointFace, &[0, 1, 1, 1])) - 0.4).abs() < 1e-15);
+    assert!((mu(&contact(Kind::PointFace, &[2, 0, 0, 0])) - 0.25).abs() < 1e-15);
+    // A side takes its grippiest vertex.
+    assert!((mu(&contact(Kind::EdgeEdge, &[0, 1, 2, 2])) - 0.45).abs() < 1e-15);
+    // Cloth on the avatar: the fabric's own, whichever side it is on.
+    assert!((mu(&contact(Kind::PointFace, &[0, 3, 4, 5])) - 0.2).abs() < 1e-15);
+    assert!((mu(&contact(Kind::PointFace, &[4, 1, 0, 0])) - 0.6).abs() < 1e-15);
+    assert!((mu(&contact(Kind::PointFace, &[2, 3, 4, 5])) - 0.3).abs() < 1e-15);
+    // Without fabric values every contact takes the scene's.
+    assert_eq!(
+        friction::contact_friction(&contact(Kind::PointFace, &[0, 3, 4, 5]), &[], 0.3, 3),
+        0.3
+    );
 }

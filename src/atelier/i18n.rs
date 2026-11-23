@@ -1098,6 +1098,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Overlapping within" => "Superpuestos a menos de",
         "Overlays" => "Superposiciones",
         "Own collision distance" => "Distancia de colisión propia",
+        "Own friction" => "Rozamiento propio",
+        "Coulomb friction coefficient of this fabric on the avatar, the floor and other cloth; two fabrics rub with the mean of theirs. Off: the scene's Friction in Simulation" => {
+            "Coeficiente de rozamiento de Coulomb de este tejido sobre el avatar, el suelo y otra tela; dos tejidos rozan con la media de los suyos. Desactivada: el rozamiento de la escena en Simulación"
+        }
+        "Without its own friction a fabric uses the scene's, in Simulation." => {
+            "Sin rozamiento propio, un tejido usa el de la escena, en Simulación."
+        }
         "PATTERN DISPLAY" => "VISUALIZACIÓN DEL PATRÓN",
         "Pack every piece into the unit square of texture space; fabric textures are left out" => {
             "Empaquetar todas las piezas en el cuadrado unidad del espacio de textura; las texturas de tela se omiten"
@@ -1482,8 +1489,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Commit the seam" => "Confirmar la costura",
         "Convert to straight segment" => "Convertir en segmento recto",
-        "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and on the floor. 0 lets cloth slide freely" => {
-            "Coeficiente de rozamiento de Coulomb de todo contacto: tela sobre el avatar, sobre sí misma y sobre el suelo. 0 deja que la tela resbale libremente"
+        "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and on the floor. 0 lets cloth slide freely. A fabric can set its own in the Fabric tab" => {
+            "Coeficiente de rozamiento de Coulomb de todo contacto: tela sobre el avatar, sobre sí misma y sobre el suelo. 0 deja que la tela resbale libremente. Un tejido puede fijar el suyo en la pestaña Tejido"
         }
         "Crease the piece along this line at a set angle, like a pressed pleat" => {
             "Marca un pliegue en la pieza a lo largo de esta línea con un ángulo dado, como una tabla planchada"

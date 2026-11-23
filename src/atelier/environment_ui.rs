@@ -70,7 +70,7 @@ impl Atelier {
             field.on_hover_text(i18n::tr(
                 ui_lang,
                 "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and \
-                 on the floor. 0 lets cloth slide freely",
+                 on the floor. 0 lets cloth slide freely. A fabric can set its own in the Fabric tab",
             ));
             for (label, value) in [("None", 0.0), ("Cotton", DEFAULT_FRICTION), ("Grippy", 0.6)] {
                 let button = ui.small_button(label);

@@ -384,7 +384,7 @@ impl GpuVbd {
             // Friction is lagged to the start of the step, as on the CPU, also when contacts
             // are found again. The solver keeps it too: its f64 refinement of precision
             // vertices uses the same terms.
-            solver.friction = crate::vbd::friction::friction_terms(&contacts, &x, &x, settings);
+            solver.friction = solver.friction_terms(&contacts, &x, settings);
             let color_start = Instant::now();
             let colors = solver.colors(&contacts, grab);
             profile.coloring_ms += color_start.elapsed().as_secs_f64() * 1000.;

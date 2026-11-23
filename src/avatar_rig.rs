@@ -1195,8 +1195,8 @@ impl Rig {
                     LegacyTarget::Single(b) => self.exact_bone(b).map(|i| (i, i)),
                     LegacyTarget::Split(a, b) => Some((self.exact_bone(a)?, self.exact_bone(b)?)),
                     LegacyTarget::Chain(list) => Some((
-                        self.exact_bone(*list.first()?)?,
-                        self.exact_bone(*list.last()?)?,
+                        self.exact_bone(list.first()?)?,
+                        self.exact_bone(list.last()?)?,
                     )),
                 };
             }

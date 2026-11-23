@@ -16,6 +16,8 @@ The body settings of `src/avatar_maker.rs` follow Anny, NAVER LABS Europe's huma
 
 Anny, Copyright (C) 2025 NAVER Corporation, is licensed under the Apache License, Version 2.0, kept at [anny-LICENSE.txt](assets/makehuman/anny-LICENSE.txt). The calibration file is converted, not otherwise modified; the weighting is reimplemented in Rust here. Anny's own body data are MakeHuman's CC0 assets, as above.
 
+`assets/makehuman/anny-rig.bin` packs MakeHuman/MPFB2's CC0 default skeleton and hand-painted skin weights (`src/anny/data/mpfb2/rigs/standard/rig.default.json` and `weights.default.json` at the same Anny revision, licensed under CC0 1.0 Universal at [anny-rig.LICENSE.md](assets/makehuman/anny-rig.LICENSE.md); see [its provenance](assets/makehuman/anny-rig.provenance.json)), pruned to Anny's 104-bone compact `"anny"` rig by `scripts/convert-anny-rig.py`. No Anny or MakeHuman program code is incorporated; the pruning and skinning rules are reimplemented independently.
+
 ## Dependencies and references
 
 Rust dependencies are resolved by `Cargo.lock` and retain their respective upstream licenses. They are not vendored here. Consult each dependency's manifest/notices when preparing a binary distribution.

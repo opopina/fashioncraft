@@ -384,6 +384,52 @@ pub fn retarget(bvh: &Bvh, rig: &Rig) -> Result<AvatarAnimation, String> {
         }?;
         Some(facing * (tip - positions[k.0]))
     };
+    struct MappedBone {
+        is_root: bool,
+        bvh_joints: (usize, Option<usize>),
+        span_end: usize,
+    }
+    // Map matched BVH bones onto the rig's actual bone indices (104-bone Anny or 19-bone legacy),
+    // using each anatomical segment's full rest span so split bones align cleanly.
+    let mut mapped: BTreeMap<usize, MappedBone> = BTreeMap::new();
+    for (&legacy_name, &pair) in &found {
+        let Some((start_idx, mut end_idx)) = rig.bone_span(legacy_name) else {
+            continue;
+        };
+        if rig.is_anny() {
+            match legacy_name {
+                "clavicle.L" => {
+                    if let Some(s) = rig.bone("shoulder01.L") {
+                        end_idx = s;
+                    }
+                }
+                "clavicle.R" => {
+                    if let Some(s) = rig.bone("shoulder01.R") {
+                        end_idx = s;
+                    }
+                }
+                "hand.L" => {
+                    if let Some(f) = rig.bone("finger3-3.L") {
+                        end_idx = f;
+                    }
+                }
+                "hand.R" => {
+                    if let Some(f) = rig.bone("finger3-3.R") {
+                        end_idx = f;
+                    }
+                }
+                _ => {}
+            }
+        }
+        mapped.insert(
+            start_idx,
+            MappedBone {
+                is_root: legacy_name == "pelvis",
+                bvh_joints: pair,
+                span_end: end_idx,
+            },
+        );
+    }
     let step = ((1. / KEYS_PER_SECOND) / bvh.frame_time).ceil().max(1.) as usize;
     let mut keys: Vec<PoseKey> = Vec::new();
     let mut previous: BTreeMap<&str, [f64; 3]> = BTreeMap::new();
@@ -393,12 +439,20 @@ pub fn retarget(bvh: &Bvh, rig: &Rig) -> Result<AvatarAnimation, String> {
         let mut pose = BTreeMap::new();
         for (index, bone) in rig.bones.iter().enumerate() {
             let parent = bone.parent.map_or(DQuat::IDENTITY, |p| world[p]);
-            let local = match found.get(bone.name.as_str()) {
-                Some(&(joint, _)) if bone.name == "pelvis" => {
+            let local = match mapped.get(&index) {
+                Some(&MappedBone {
+                    is_root: true,
+                    bvh_joints: (joint, _),
+                    ..
+                }) => {
                     facing * rotations[joint] * rest_rotations[joint].inverse() * facing.inverse()
                 }
-                Some(&k) => match direction(k, &rotations, &positions) {
-                    Some(d) => arc(bone.tail - bone.head, parent.inverse() * d),
+                Some(&MappedBone {
+                    is_root: false,
+                    bvh_joints: k,
+                    span_end,
+                }) => match direction(k, &rotations, &positions) {
+                    Some(d) => arc(rig.bones[span_end].tail - bone.head, parent.inverse() * d),
                     None => DQuat::IDENTITY,
                 },
                 None => DQuat::IDENTITY,

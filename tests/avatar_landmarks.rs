@@ -190,7 +190,8 @@ fn a_joint_moved_reshapes_the_skeleton_and_bad_moves_are_refused() {
         .unwrap();
     let surface = SurfaceMesh::load_obj(&mannequin()).unwrap();
     let rig = moved.rig(&surface).unwrap();
-    let upper = &rig.bones[rig.bone("upper_arm.L").unwrap()];
+    let (_, upper_end) = rig.bone_span("upper_arm.L").unwrap();
+    let upper = &rig.bones[upper_end];
     assert!((upper.tail - (elbow + DVec3::new(0.02, 0.03, 0.))).length() < 1e-12);
     // Only that joint moves.
     for (id, p) in &avatar.joints {

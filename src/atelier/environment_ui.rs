@@ -2,7 +2,7 @@
 //! wind, the collision distance, and time-step / iteration presets like a CAD cloth tool's
 //! Normal / Animation / Fitting.
 use super::*;
-use fashioncraft::vbd::Wind;
+use fashioncraft::vbd::{CAPPED_MAX_SUBSTEPS, DEFAULT_MAX_SUBSTEPS, Wind};
 use glam::DVec3;
 
 /// Friction of new documents: a typical value for cotton on skin and on cotton.
@@ -70,7 +70,7 @@ impl Atelier {
             field.on_hover_text(i18n::tr(
                 ui_lang,
                 "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and \
-                 on the floor. 0 lets cloth slide freely",
+                 on the floor. 0 lets cloth slide freely. A fabric can set its own in the Fabric tab",
             ));
             for (label, value) in [("None", 0.0), ("Cotton", DEFAULT_FRICTION), ("Grippy", 0.6)] {
                 let button = ui.small_button(label);
@@ -101,20 +101,27 @@ impl Atelier {
                 self.settings.contact.radius = gap / 1000.;
             }
         });
-        let mut fast = self.settings.max_substeps > 1;
+        // A step is always split while sewing and draping need it (up to four parts, which
+        // share its iterations); this lets free cloth fall at full speed too.
+        let mut fast = self.settings.max_substeps > CAPPED_MAX_SUBSTEPS;
         let changed = prop_row(ui, i18n::tr(ui_lang, "Full-speed falls"), |ui| {
             ui.checkbox(&mut fast, "")
                 .on_hover_text(i18n::tr(
                     ui_lang,
-                    "Split a step into up to 16 shorter ones when the cloth moves faster than one step's \
-                     contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while \
-                     cloth moves fast; settled cloth is unaffected",
+                    "Let cloth fall as fast as gravity takes it: a step is split into up to 16 \
+                     shorter ones while cloth moves fast. Off, it splits into up to 4, enough for \
+                     sewing and draping, and falling cloth is held to about 0.8 m/s. Settled cloth is \
+                     unaffected",
                 ))
                 .changed()
         })
         .inner;
         if changed {
-            self.settings.max_substeps = if fast { 16 } else { 1 };
+            self.settings.max_substeps = if fast {
+                DEFAULT_MAX_SUBSTEPS
+            } else {
+                CAPPED_MAX_SUBSTEPS
+            };
         }
         group_title(ui, i18n::tr(ui_lang, "Environment"));
         let feet = self

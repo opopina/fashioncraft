@@ -4,9 +4,14 @@
 //! nested node records (end offset, property count, property bytes, name, typed properties,
 //! children, a 13-byte null record closing any list of children) and a footer. Each garment
 //! piece is a mesh model with its fabric's material (diffuse colour, and its texture image
-//! copied next to the file); the avatar is one more model. Positions are in centimetres, the
+//! copied next to the file, with its maps linked to the material properties Blender and Maya
+//! read: NormalMap, ShininessExponent for roughness, ReflectionFactor for metalness,
+//! TransparencyFactor for opacity and DisplacementColor; FBX has no ambient-occlusion slot); the
+//! avatar is one more model. Positions are in centimetres, the
 //! file's declared unit, Y up. Polygons are wound counter-clockwise seen from the fabric's
-//! front face; normals and texture coordinates are given per polygon corner.
+//! front face; normals and texture coordinates are given per polygon corner. Each piece has
+//! two sets of texture coordinates: the fabric's own (`UVMap`) and the garment's UV layout,
+//! its island in the unit square (`UVLayout`, see [`crate::garment::uv_layout`]).
 //!
 //! A recorded take animates the cloth (and the avatar, given its frames) with blend shapes,
 //! as the glTF export does with morph targets: each mesh gets a `BlendShape` deformer with one
@@ -363,7 +368,7 @@ fn geometry(
     name: &str,
     points: &[DVec3],
     triangles: &[[usize; 3]],
-    uv: Option<&[[f64; 2]]>,
+    uv: &[(&str, &[[f64; 2]])],
 ) -> Node {
     let mut normal = vec![DVec3::ZERO; points.len()];
     for t in triangles {
@@ -407,29 +412,41 @@ fn geometry(
             node("TypedIndex", vec![Prop::I32(0)]),
         ],
     )];
-    if let Some(uv) = uv {
+    // Each set of texture coordinates is a UV element; the first goes in layer 0 with the
+    // normals and the material, each other one in a layer of its own.
+    let mut extra_layers = vec![];
+    for (k, (name, uv)) in uv.iter().enumerate() {
         let values: Vec<f64> = uv.iter().flatten().copied().collect();
         let index: Vec<i32> = triangles.iter().flatten().map(|i| *i as i32).collect();
         children.push(with(
             "LayerElementUV",
-            vec![Prop::I32(0)],
+            vec![Prop::I32(k as i32)],
             vec![
                 node("Version", vec![Prop::I32(101)]),
-                node("Name", vec![s("UVMap")]),
+                node("Name", vec![s(name)]),
                 node("MappingInformationType", vec![s("ByPolygonVertex")]),
                 node("ReferenceInformationType", vec![s("IndexToDirect")]),
                 node("UV", vec![Prop::F64s(values)]),
                 node("UVIndex", vec![Prop::I32s(index)]),
             ],
         ));
-        layers.push(with(
+        let element = with(
             "LayerElement",
             vec![],
             vec![
                 node("Type", vec![s("LayerElementUV")]),
-                node("TypedIndex", vec![Prop::I32(0)]),
+                node("TypedIndex", vec![Prop::I32(k as i32)]),
             ],
-        ));
+        );
+        if k == 0 {
+            layers.push(element);
+        } else {
+            extra_layers.push(with(
+                "Layer",
+                vec![Prop::I32(k as i32)],
+                vec![node("Version", vec![Prop::I32(100)]), element],
+            ));
+        }
     }
     children.push(with(
         "LayerElementMaterial",
@@ -453,6 +470,7 @@ fn geometry(
     let mut layer = vec![node("Version", vec![Prop::I32(100)])];
     layer.extend(layers);
     children.push(with("Layer", vec![Prop::I32(0)], layer));
+    children.extend(extra_layers);
     with(
         "Geometry",
         vec![Prop::I64(id), object_name(name, "Geometry"), s("Mesh")],
@@ -522,8 +540,8 @@ fn connection(child: i64, parent: i64) -> Node {
     node("C", vec![s("OO"), Prop::I64(child), Prop::I64(parent)])
 }
 
-/// Texture images to copy next to the file, by the name the file uses for each.
-pub type Textures = Vec<(String, PathBuf)>;
+/// Texture images to write next to the file, by the name the file uses for each.
+pub type Textures = Vec<(String, crate::texture_maps::TextureFile)>;
 
 /// The file's bytes, and the texture images to copy next to it by the name it uses.
 pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> {
@@ -534,6 +552,8 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
     let appearances = crate::garment::appearance::bind(scene.template, garment);
     let triangles = front_triangles(scene.template, garment);
     let uv = texture_coordinates(scene.template, garment);
+    // The UV layout, counted from the image's bottom as FBX texture coordinates are.
+    let layout = crate::garment::uv_layout::coordinates(scene.template, garment);
     let take = scene
         .take
         .as_ref()
@@ -564,7 +584,7 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
     let mut objects = Vec::new();
     let mut connections = Vec::new();
     let mut materials: BTreeMap<String, i64> = BTreeMap::new();
-    let mut textures: Vec<(String, PathBuf)> = Vec::new();
+    let mut textures: Textures = Vec::new();
     let (mut models, mut geometries, mut videos) = (0, 0, 0);
     for panel in &garment.panels {
         let fabric = scene
@@ -585,53 +605,66 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
                     appearance.map_or([0.91, 0.92, 0.94], |a| a.linear_color().map(f64::from));
                 objects.push(material(m, &fabric, color));
                 if let Some(t) = appearance.and_then(|a| a.texture.as_ref()) {
-                    let source = scene
-                        .images
-                        .iter()
-                        .find(|(asset, _)| *asset == t.asset_id)
-                        .map(|(_, path)| path.clone())
-                        .ok_or_else(|| format!("Texture image {} is missing", t.asset_id))?;
-                    let extension = source
-                        .extension()
-                        .map_or("png".into(), |e| e.to_string_lossy().to_ascii_lowercase());
-                    let file = format!("{stem}_{}.{extension}", t.asset_id);
-                    let (video, texture) = (id(), id());
-                    objects.push(with(
-                        "Video",
-                        vec![
-                            Prop::I64(video),
-                            object_name(&t.asset_id, "Video"),
-                            s("Clip"),
-                        ],
-                        vec![
-                            node("Type", vec![s("Clip")]),
-                            node("FileName", vec![s(&file)]),
-                            node("RelativeFilename", vec![s(&file)]),
-                        ],
-                    ));
-                    objects.push(with(
-                        "Texture",
-                        vec![
-                            Prop::I64(texture),
-                            object_name(&t.asset_id, "Texture"),
-                            s(""),
-                        ],
-                        vec![
-                            node("Type", vec![s("TextureVideoClip")]),
-                            node("Version", vec![Prop::I32(202)]),
-                            node("TextureName", vec![object_name(&t.asset_id, "Texture")]),
-                            node("Media", vec![object_name(&t.asset_id, "Video")]),
-                            node("FileName", vec![s(&file)]),
-                            node("RelativeFilename", vec![s(&file)]),
-                        ],
-                    ));
-                    connections.push(connection(video, texture));
-                    connections.push(node(
-                        "C",
-                        vec![s("OP"), Prop::I64(texture), Prop::I64(m), s("DiffuseColor")],
-                    ));
-                    textures.push((file, source));
-                    videos += 1;
+                    use crate::{garment::appearance::MapSlot, texture_maps as maps};
+                    // Each image is a video clip and a texture linked to one of the material's
+                    // properties, as Blender and Maya read them: the roughness map goes to
+                    // ShininessExponent as roughness, the way Blender writes and reads it.
+                    let mut link = |asset: &str, file: maps::TextureFile, property: &str| {
+                        let name = file.name(stem, asset);
+                        let label = name.trim_start_matches(&format!("{stem}_")).to_string();
+                        let label = label
+                            .rsplit_once('.')
+                            .map_or(label.clone(), |(l, _)| l.into());
+                        let (video, texture) = (id(), id());
+                        objects.push(with(
+                            "Video",
+                            vec![Prop::I64(video), object_name(&label, "Video"), s("Clip")],
+                            vec![
+                                node("Type", vec![s("Clip")]),
+                                node("FileName", vec![s(&name)]),
+                                node("RelativeFilename", vec![s(&name)]),
+                            ],
+                        ));
+                        objects.push(with(
+                            "Texture",
+                            vec![Prop::I64(texture), object_name(&label, "Texture"), s("")],
+                            vec![
+                                node("Type", vec![s("TextureVideoClip")]),
+                                node("Version", vec![Prop::I32(202)]),
+                                node("TextureName", vec![object_name(&label, "Texture")]),
+                                node("Media", vec![object_name(&label, "Video")]),
+                                node("FileName", vec![s(&name)]),
+                                node("RelativeFilename", vec![s(&name)]),
+                            ],
+                        ));
+                        connections.push(connection(video, texture));
+                        connections.push(node(
+                            "C",
+                            vec![s("OP"), Prop::I64(texture), Prop::I64(m), s(property)],
+                        ));
+                        if !textures.iter().any(|(n, _)| *n == name) {
+                            textures.push((name, file));
+                        }
+                        videos += 1;
+                    };
+                    let color = maps::plain(maps::source(scene.images, &t.asset_id)?, false)?;
+                    link(&t.asset_id, color, "DiffuseColor");
+                    let asset = |slot| t.map(slot).unwrap_or_default();
+                    if let Some(file) = maps::opengl_normal(t, scene.images, false)? {
+                        link(asset(MapSlot::Normal), file, "NormalMap");
+                    }
+                    if let Some(file) = maps::grey_roughness(t, scene.images, false, false)? {
+                        link(asset(MapSlot::Roughness), file, "ShininessExponent");
+                    }
+                    for (slot, property) in [
+                        (MapSlot::Metalness, "ReflectionFactor"),
+                        (MapSlot::Opacity, "TransparencyFactor"),
+                        (MapSlot::Displacement, "DisplacementColor"),
+                    ] {
+                        if let Some(file) = maps::grey(t, slot, scene.images, false)? {
+                            link(asset(slot), file, property);
+                        }
+                    }
                 }
                 materials.insert(fabric.clone(), m);
                 m
@@ -645,8 +678,18 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             .collect();
         let points: Vec<DVec3> = local.iter().map(|i| x[*i]).collect();
         let st: Vec<[f64; 2]> = local.iter().map(|i| [uv[*i].x, uv[*i].y]).collect();
+        let island: Vec<[f64; 2]> = local
+            .iter()
+            .map(|i| [layout[*i].x, 1. - layout[*i].y])
+            .collect();
         let (m, g) = (id(), id());
-        objects.push(geometry(g, &panel.id, &points, &piece, Some(&st)));
+        objects.push(geometry(
+            g,
+            &panel.id,
+            &points,
+            &piece,
+            &[("UVMap", &st), ("UVLayout", &island)],
+        ));
         objects.push(model(m, &panel.id));
         connections.push(connection(m, 0));
         connections.push(connection(g, m));
@@ -680,7 +723,7 @@ pub fn fbx(scene: &FbxScene, stem: &str) -> Result<(Vec<u8>, Textures), String> 
             "avatar",
             bodies.map_or(&avatar.vertices, |b| &b[0]),
             &avatar.triangles,
-            None,
+            &[],
         ));
         if animated && let Some(bodies) = bodies {
             let added = blend_shapes(&mut objects, &mut connections, &mut id, g, "avatar", bodies);
@@ -852,9 +895,8 @@ pub fn write(scene: &FbxScene, path: &Path) -> Result<(), String> {
         .into_owned();
     let (bytes, textures) = fbx(scene, &stem)?;
     let dir = path.parent().unwrap_or(Path::new("."));
-    for (name, source) in textures {
-        std::fs::copy(&source, dir.join(&name))
-            .map_err(|e| format!("{}: {e}", source.display()))?;
+    for (name, file) in textures {
+        file.write(&dir.join(&name))?;
     }
     std::fs::write(path, bytes).map_err(|e| e.to_string())
 }

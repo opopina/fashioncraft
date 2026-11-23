@@ -11,10 +11,23 @@ use eframe::{egui, egui_wgpu::RenderState, wgpu};
 use glam::{Mat4, Vec3};
 
 pub mod appearance;
+pub mod bvh;
 mod environment;
 mod fabric_maps;
 mod graphics;
+pub mod path_trace;
+use crate::garment::appearance::MapSlot;
+use fabric_maps::LayerKind;
 pub use graphics::{GraphicDraw, GraphicImage};
+
+/// A fabric texture's images: its colours, then its maps in [`MapSlot::ALL`] order (normal,
+/// roughness, metalness, opacity, displacement, occlusion).
+pub type FabricImages<'a> = [Option<&'a GraphicImage>; 1 + MapSlot::ALL.len()];
+
+/// Index in [`FabricImages`] of one of a texture's maps.
+pub fn image_index(slot: MapSlot) -> usize {
+    1 + MapSlot::ALL.iter().position(|s| *s == slot).unwrap_or(0)
+}
 
 pub struct DrawModel<'a> {
     pub marked_faces: Option<&'a std::collections::BTreeSet<usize>>,
@@ -30,9 +43,9 @@ pub struct DrawModel<'a> {
     pub trims: &'a [crate::garment::trims::TrimTriangle],
     /// Prints and logos lying on the cloth, drawn over it with their images.
     pub graphics: &'a [GraphicDraw<'a>],
-    /// Images of each material's fabric texture, by material index: its colours, its normal
-    /// map and its roughness map (none where it has none).
-    pub fabric_images: &'a [[Option<&'a GraphicImage>; 3]],
+    /// Images of each material's fabric texture, by material index: its colours, then its
+    /// maps in [`MapSlot::ALL`] order (none where it has none).
+    pub fabric_images: &'a [FabricImages<'a>],
     /// The avatar's skin and parts (eyes, hair…), when it has a look and it is shown.
     pub avatar_look: Option<AvatarLookDraw<'a>>,
     pub display: DisplayOptions<'a>,
@@ -319,8 +332,10 @@ pub fn strain_band(strain: f64, max: f64) -> usize {
 /// Position (4), normal (3), colour (3) and wire flag (1), barycentric (3), roughness (1), back
 /// colour (3), material coordinates along warp and weft in metres (2), weave kind, thread
 /// spacing and contrast (3), fabric texture coordinates, layer (-1 for none) and relief in
-/// metres (4), normal-map and roughness-map layers (-1 for none) (2).
-const VERTEX_FLOATS: usize = 29;
+/// metres (4), normal-map and roughness-map layers (-1 for none) (2), metalness-, opacity-,
+/// displacement- and occlusion-map layers (4), metalness and displacement height in metres
+/// and two spare floats (4).
+pub(crate) const VERTEX_FLOATS: usize = 37;
 
 /// What a cloth triangle shows besides its colour: the back colour, the material coordinates
 /// of its corners (warp, weft) and the weave parameters.
@@ -334,6 +349,25 @@ struct Surface {
     /// Texture layer (-1 for none), relief height in metres, and the normal-map and
     /// roughness-map layers (-1 for none).
     map: [f32; 4],
+    /// Metalness-, opacity-, displacement- and occlusion-map layers (-1 for none).
+    extra: [f32; 4],
+    /// Metalness (where no map gives it), displacement height in metres, spare.
+    params: [f32; 4],
+}
+
+impl Surface {
+    /// No back colour of its own, no weave and no texture.
+    fn plain(color: [f32; 3]) -> Self {
+        Self {
+            back: color,
+            uv: [[0.; 2]; 3],
+            weave: [0.; 3],
+            map_uv: [[0.; 2]; 3],
+            map: [-1., 0., -1., -1.],
+            extra: [-1.; 4],
+            params: [0.; 4],
+        }
+    }
 }
 
 /// A face of a fabric that looks thick, kept to draw the rim along its free edges.
@@ -384,7 +418,8 @@ fn avatar_vertices(
         out.extend_from_slice(&color);
         out.extend_from_slice(&[0.; 5]);
         out.extend_from_slice(&map);
-        out.extend_from_slice(&[-1., -1.]);
+        out.extend_from_slice(&[-1.; 6]);
+        out.extend_from_slice(&[0.; 4]);
     };
     let vertices: Vec<Vec3> = avatar.vertices.iter().map(|v| v.as_vec3()).collect();
     let normals = smooth_normals(&vertices, avatar.triangles.iter().copied());
@@ -468,7 +503,7 @@ fn face_surface(
     grain_degrees: f64,
     uv: [glam::DVec2; 3],
     flipped: bool,
-    layers: [Option<u32>; 3],
+    layers: [Option<u32>; 1 + MapSlot::ALL.len()],
     texture_offset: glam::DVec2,
 ) -> ([f32; 3], Surface) {
     let layer = layers[0];
@@ -476,6 +511,7 @@ fn face_surface(
     let (sin, cos) = grain_degrees.to_radians().sin_cos();
     let warp_weft = uv.map(|p| glam::DVec2::new(p.x * cos + p.y * sin, -p.x * sin + p.y * cos));
     let texture = appearance.texture.as_ref().zip(layer);
+    let detail = |slot: MapSlot| layers[image_index(slot)].map_or(-1., |l| l as f32);
     (
         if flipped { back } else { front },
         Surface {
@@ -491,14 +527,27 @@ fn face_surface(
                 })
             }),
             map: texture.map_or([-1., 0., -1., -1.], |(t, layer)| {
-                let detail = |k: usize| layers[k].map_or(-1., |l| l as f32);
                 [
                     layer as f32,
                     (t.relief_mm / 1000.) as f32,
-                    detail(1),
-                    detail(2),
+                    detail(MapSlot::Normal),
+                    detail(MapSlot::Roughness),
                 ]
             }),
+            extra: texture.map_or([-1.; 4], |_| {
+                [
+                    detail(MapSlot::Metalness),
+                    detail(MapSlot::Opacity),
+                    detail(MapSlot::Displacement),
+                    detail(MapSlot::Occlusion),
+                ]
+            }),
+            params: [
+                appearance.metalness as f32,
+                texture.map_or(0., |(t, _)| (t.displacement_mm / 1000.) as f32),
+                0.,
+                0.,
+            ],
         },
     )
 }
@@ -931,6 +980,9 @@ pub struct Viewport {
     avatar_count: u32,
     graphics: graphics::GraphicLayer,
     fabric_maps: fabric_maps::FabricMaps,
+    /// Keep the next drawn frame's scene for the photoreal render.
+    trace_request: bool,
+    trace_scene: Option<path_trace::TraceScene>,
 }
 impl Viewport {
     fn target(device: &wgpu::Device, size: [u32; 2], depth: bool, samples: u32) -> wgpu::Texture {
@@ -970,7 +1022,7 @@ impl Viewport {
             label: Some("cloth-lit-wireframe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("cloth.wgsl").into()),
         });
-        let attrs = wgpu::vertex_attr_array![0=>Float32x4,1=>Float32x3,2=>Float32x4,3=>Float32x3,4=>Float32,5=>Float32x3,6=>Float32x2,7=>Float32x3,8=>Float32x4,9=>Float32x2];
+        let attrs = wgpu::vertex_attr_array![0=>Float32x4,1=>Float32x3,2=>Float32x4,3=>Float32x3,4=>Float32,5=>Float32x3,6=>Float32x2,7=>Float32x3,8=>Float32x4,9=>Float32x2,10=>Float32x4,11=>Float32x4];
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(if translucent {
                 "cloth-viewport-translucent"
@@ -1103,7 +1155,25 @@ impl Viewport {
             avatar_count: 0,
             graphics,
             fabric_maps,
+            trace_request: false,
+            trace_scene: None,
         }
+    }
+    /// Keep the scene of the next frame drawn, for [`Viewport::take_trace_scene`].
+    pub fn request_trace_scene(&mut self) {
+        self.trace_request = true;
+    }
+    /// The scene kept from the last frame drawn after [`Viewport::request_trace_scene`].
+    pub fn take_trace_scene(&mut self) -> Option<path_trace::TraceScene> {
+        self.trace_scene.take()
+    }
+    /// Pixels of the last frame drawn.
+    pub fn size(&self) -> [u32; 2] {
+        self.size
+    }
+    /// The GPU the viewport draws with, to open other devices on it.
+    pub fn adapter(&self) -> wgpu::Adapter {
+        self.render_state.adapter.clone()
     }
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
@@ -1255,20 +1325,45 @@ impl Viewport {
             avatar,
             state,
         );
-        // The avatar's images go in the same array, after the fabrics'.
-        let look_images: Vec<[Option<&GraphicImage>; 3]> = avatar_look
+        // Each fabric's images, stored the way the shader reads them; the avatar's images go
+        // in the same array, after the fabrics'.
+        let stored: Vec<[Option<(&GraphicImage, LayerKind)>; 7]> = fabric_images
+            .iter()
+            .enumerate()
+            .map(|(material, images)| {
+                let texture = optics
+                    .and_then(|o| o.get(material)?.as_ref())
+                    .and_then(|a| a.texture.as_ref());
+                let flip = texture.is_some_and(|t| t.normal_directx);
+                let gloss = texture.is_some_and(|t| t.roughness_is_glossiness);
+                std::array::from_fn(|k| {
+                    let kind = match k {
+                        0 => LayerKind::Color,
+                        _ if k == image_index(MapSlot::Normal) && flip => LayerKind::FlipGreen,
+                        _ if k == image_index(MapSlot::Roughness) && gloss => LayerKind::Invert,
+                        _ => LayerKind::Data,
+                    };
+                    images[k].map(|image| (image, kind))
+                })
+            })
+            .collect();
+        let look_images: Vec<[Option<(&GraphicImage, LayerKind)>; 7]> = avatar_look
             .iter()
             .flat_map(|look| {
                 std::iter::once(look.skin.map(|(image, _)| image))
                     .chain(look.parts.iter().map(|p| Some(p.image)))
             })
-            .map(|image| [image, None, None])
+            .map(|image| {
+                let mut all = [None; 7];
+                all[0] = image.map(|i| (i, LayerKind::Color));
+                all
+            })
             .collect();
         let mut layers = self.fabric_maps.update(
             device,
             &self.render_state.queue,
             &self.pipeline.get_bind_group_layout(1),
-            &[fabric_images, &look_images].concat(),
+            &[stored.as_slice(), &look_images].concat(),
         );
         let look_layers: Vec<Option<u32>> = layers
             .split_off(fabric_images.len().min(layers.len()))
@@ -1312,18 +1407,14 @@ impl Viewport {
                     if i == 2 { 1.0 } else { 0.0 },
                 ]);
                 data.push(roughness);
-                let surface = surface.unwrap_or(Surface {
-                    back: color,
-                    uv: [[0.; 2]; 3],
-                    weave: [0.; 3],
-                    map_uv: [[0.; 2]; 3],
-                    map: [-1., 0., -1., -1.],
-                });
+                let surface = surface.unwrap_or(Surface::plain(color));
                 data.extend_from_slice(&surface.back);
                 data.extend_from_slice(&surface.uv[i]);
                 data.extend_from_slice(&surface.weave);
                 data.extend_from_slice(&surface.map_uv[i]);
                 data.extend_from_slice(&surface.map);
+                data.extend_from_slice(&surface.extra);
+                data.extend_from_slice(&surface.params);
             }
             emitted.set(emitted.get() + 3);
         };
@@ -1399,7 +1490,7 @@ impl Viewport {
                     material.grain_degrees,
                     t.vertices.map(|i| mesh.uv[i]),
                     flipped,
-                    layers.get(t.material).copied().unwrap_or([None; 3]),
+                    layers.get(t.material).copied().unwrap_or([None; 7]),
                     display
                         .texture_offsets
                         .and_then(|o| o.get(face).copied())
@@ -1550,6 +1641,7 @@ impl Viewport {
                 );
             }
         }
+        let trims_start = emitted.get();
         for t in trims {
             triangle(
                 t.points.map(|p| p.as_vec3()),
@@ -1560,6 +1652,7 @@ impl Viewport {
                 None,
             );
         }
+        let trims_end = emitted.get();
         for seam in seams {
             for side in [1.0, -1.0] {
                 let points: Vec<_> = seam
@@ -1644,6 +1737,30 @@ impl Viewport {
             self.avatar_key = (0, 0, [0; 3], 0, vec![]);
             self.avatar_buffer = None;
         }
+        if std::mem::take(&mut self.trace_request) {
+            // The garment and its trims, the avatar and the prints: no diagnostic lines.
+            let at = |v: u32| v as usize * VERTEX_FLOATS;
+            let mut vertices = data[..at(garment_vertices)].to_vec();
+            vertices.extend_from_slice(&data[at(trims_start)..at(trims_end)]);
+            if let Some(avatar) = avatar {
+                vertices.extend(avatar_vertices(
+                    avatar,
+                    avatar_look,
+                    &look_layers,
+                    display.avatar_color,
+                ));
+            }
+            let mut scene = path_trace::TraceScene {
+                vertices,
+                layers: self.fabric_maps.layers().to_vec(),
+                camera: path_trace::TraceCamera::from_camera(camera),
+                lighting: self.appearance.lighting.uniform(),
+                look: self.appearance.clone(),
+                ground_y: if avatar.is_some() { -0.005 } else { -0.4 },
+            };
+            scene.add_prints(graphics);
+            self.trace_scene = Some(scene);
+        }
         let bytes = bytemuck::cast_slice(&data);
         if bytes.len() as u64 > self.capacity {
             self.capacity = (bytes.len() as u64).next_power_of_two();
@@ -1666,7 +1783,7 @@ impl Viewport {
                     .map(|t| {
                         let appearance = optics.and_then(|v| v.get(t.fabric)?.as_ref())?;
                         let grain = materials.get(t.fabric)?.grain_degrees;
-                        let layers = layers.get(t.fabric).copied().unwrap_or([None; 3]);
+                        let layers = layers.get(t.fabric).copied().unwrap_or([None; 7]);
                         Some(
                             face_surface(
                                 appearance,
@@ -2442,19 +2559,19 @@ mod face_tests {
             ..Default::default()
         };
         let uv = [glam::DVec2::ZERO, glam::DVec2::X, glam::DVec2::Y];
-        let (front, s) = face_surface(&a, 0., uv, false, [None; 3], glam::DVec2::ZERO);
+        let (front, s) = face_surface(&a, 0., uv, false, [None; 7], glam::DVec2::ZERO);
         assert!(
             front[0] > front[2] && s.back[2] > s.back[0],
             "red front, blue back"
         );
-        let (front, s) = face_surface(&a, 0., uv, true, [None; 3], glam::DVec2::ZERO);
+        let (front, s) = face_surface(&a, 0., uv, true, [None; 7], glam::DVec2::ZERO);
         assert!(
             front[2] > front[0] && s.back[0] > s.back[2],
             "flipped: blue front, red back"
         );
         // Without a back colour both faces are the front colour.
         let plain = FabricAppearance::default();
-        let (front, s) = face_surface(&plain, 0., uv, true, [None; 3], glam::DVec2::ZERO);
+        let (front, s) = face_surface(&plain, 0., uv, true, [None; 7], glam::DVec2::ZERO);
         assert_eq!(front, s.back);
     }
 
@@ -2473,7 +2590,7 @@ mod face_tests {
             glam::DVec2::new(0.01, 0.),
             glam::DVec2::Y,
         ];
-        let (_, s) = face_surface(&a, 90., uv, false, [None; 3], glam::DVec2::ZERO);
+        let (_, s) = face_surface(&a, 90., uv, false, [None; 7], glam::DVec2::ZERO);
         assert_eq!(s.weave, [2., 0.002, 0.5]);
         // A quarter-turned grain: the material x direction runs across the warp.
         assert!(
@@ -2493,8 +2610,7 @@ mod face_tests {
                 height_mm: 25.,
                 rotation_degrees: 0.,
                 relief_mm: 0.5,
-                normal_asset_id: None,
-                roughness_asset_id: None,
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -2508,7 +2624,7 @@ mod face_tests {
             0.,
             uv,
             false,
-            [Some(2), None, Some(3)],
+            [Some(2), None, Some(3), None, None, None, None],
             glam::DVec2::ZERO,
         );
         assert_eq!(s.map, [2., 0.0005, -1., 3.]);
@@ -2516,10 +2632,17 @@ mod face_tests {
         assert_eq!(s.map_uv[1], [2., 0.]);
         assert_eq!(s.map_uv[2], [0., 2.]);
         // Without a loaded image (no layer) the face shows no texture.
-        let (_, s) = face_surface(&a, 0., uv, false, [None; 3], glam::DVec2::ZERO);
+        let (_, s) = face_surface(&a, 0., uv, false, [None; 7], glam::DVec2::ZERO);
         assert_eq!(s.map, [-1., 0., -1., -1.]);
         // A quarter-turned grain turns the repeat with it.
-        let (_, s) = face_surface(&a, 90., uv, false, [Some(0), None, None], glam::DVec2::ZERO);
+        let (_, s) = face_surface(
+            &a,
+            90.,
+            uv,
+            false,
+            [Some(0), None, None, None, None, None, None],
+            glam::DVec2::ZERO,
+        );
         assert!((s.map_uv[1][0]).abs() < 1e-6 && (s.map_uv[1][1] + 4.).abs() < 1e-5);
     }
 }

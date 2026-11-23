@@ -1,5 +1,6 @@
 //! Baking a garment's look into one image: every piece laid out in the unit square of texture
-//! space (shelf by shelf, all at one scale, slightly apart) and painted texel by texel with
+//! space as the garment's UV layout places it (see [`crate::garment::uv_layout`]) and painted
+//! texel by texel with
 //! what the cloth shows there — its fabric's colour times its texture image (along the
 //! fabric's grain, repeated) and, over that, the front prints in their order, by their alpha
 //! and opacity. Islands are grown a few texels so filtering never reaches the background.
@@ -25,46 +26,6 @@ pub struct Atlas {
 
 /// Texels the islands are grown by.
 const BLEED: usize = 4;
-
-/// Each box moved into one unit square, shelf by shelf, all at the same scale and slightly
-/// apart: its offset and the common scale.
-pub(crate) fn pack(boxes: &[(DVec2, DVec2)]) -> Vec<(DVec2, f64)> {
-    let gap = boxes
-        .iter()
-        .map(|(lo, hi)| (*hi - *lo).max_element())
-        .fold(0., f64::max)
-        * 0.02;
-    let area: f64 = boxes
-        .iter()
-        .map(|(lo, hi)| (hi.x - lo.x + gap) * (hi.y - lo.y + gap))
-        .sum();
-    let row = area.sqrt() * 1.2;
-    let mut order: Vec<usize> = (0..boxes.len()).collect();
-    order.sort_by(|a, b| {
-        let h = |k: usize| boxes[k].1.y - boxes[k].0.y;
-        h(*b).total_cmp(&h(*a))
-    });
-    let mut offsets = vec![DVec2::ZERO; boxes.len()];
-    let (mut x, mut y, mut shelf) = (0., 0., 0f64);
-    for k in order {
-        let size = boxes[k].1 - boxes[k].0;
-        if x > 0. && x + size.x > row {
-            x = 0.;
-            y += shelf + gap;
-            shelf = 0.;
-        }
-        offsets[k] = DVec2::new(x, y) - boxes[k].0;
-        x += size.x + gap;
-        shelf = shelf.max(size.y);
-    }
-    let extent = boxes
-        .iter()
-        .zip(&offsets)
-        .map(|((_, hi), o)| (*hi + *o).max_element())
-        .fold(0., f64::max)
-        .max(1e-12);
-    offsets.into_iter().map(|o| (o, 1. / extent)).collect()
-}
 
 fn to_linear(c: u8) -> f64 {
     let c = c as f64 / 255.;
@@ -133,23 +94,8 @@ pub fn bake(
         }
     }
     let uv = &garment.mesh.uv;
-    let boxes: Vec<(DVec2, DVec2)> = garment
-        .panels
-        .iter()
-        .map(|p| {
-            p.vertices.clone().fold(
-                (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
-                |(lo, hi), v| (lo.min(uv[v]), hi.max(uv[v])),
-            )
-        })
-        .collect();
-    let packed = pack(&boxes);
-    let mut atlas_uv = vec![DVec2::ZERO; uv.len()];
-    for (panel, (offset, scale)) in garment.panels.iter().zip(&packed) {
-        for v in panel.vertices.clone() {
-            atlas_uv[v] = (uv[v] + *offset) * *scale;
-        }
-    }
+    // Islands outside the square are left out of the image.
+    let atlas_uv = crate::garment::uv_layout::coordinates(template, garment);
     let appearances = crate::garment::appearance::bind(template, garment);
     let n = size as usize;
     let mut color = vec![DVec3::ZERO; n * n];

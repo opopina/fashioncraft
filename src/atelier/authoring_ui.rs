@@ -73,10 +73,18 @@ pub(super) struct AuthoringUi {
     pub camera_props: super::camera_props_ui::CameraPropsUi,
     pub pleats: super::pleats_ui::PleatsUi,
     pub mesh_select: super::mesh_select::MeshSelect,
+    pub seam_breaking: super::seam_break_ui::SeamBreaking,
     pub texture_edit: super::texture_ui::TextureEdit,
+    /// The UV layout of exports and the baked atlas.
+    pub uv_editor: super::uv_editor_ui::UvEditor,
     pub style_lines: super::style_lines::StyleLines,
     pub script: super::script_ui::ScriptUi,
     pub steam: super::steam_ui::SteamUi,
+    /// Materials › Measure fabric: readings of a real fabric and the fabric fitted to them.
+    pub fabric_kit: super::fabric_kit_ui::FabricKitUi,
+    /// Render › Photoreal render.
+    pub render: super::render_ui::RenderUi,
+    pub grading: super::grading_ui::GradingUi,
     /// The drape on the avatar before the last one opened, for Re-drape and Auto fit.
     pub redrape_from: Option<super::redrape_ui::RedrapeSource>,
     /// File › Open › Trim: the object opened, waiting for a click on a piece.

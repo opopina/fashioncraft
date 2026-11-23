@@ -288,6 +288,9 @@ fn counted_nouns(value: &str) -> String {
 }
 
 fn spanish(text: &str) -> Option<&'static str> {
+    if let Some(es) = super::grading_ui::spanish(text) {
+        return Some(es);
+    }
     Some(match text {
         "File" => "Archivo",
         "Edit" => "Editar",
@@ -1098,6 +1101,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Overlapping within" => "Superpuestos a menos de",
         "Overlays" => "Superposiciones",
         "Own collision distance" => "Distancia de colisión propia",
+        "Own friction" => "Rozamiento propio",
+        "Coulomb friction coefficient of this fabric on the avatar, the floor and other cloth; two fabrics rub with the mean of theirs. Off: the scene's Friction in Simulation" => {
+            "Coeficiente de rozamiento de Coulomb de este tejido sobre el avatar, el suelo y otra tela; dos tejidos rozan con la media de los suyos. Desactivada: el rozamiento de la escena en Simulación"
+        }
+        "Without its own friction a fabric uses the scene's, in Simulation." => {
+            "Sin rozamiento propio, un tejido usa el de la escena, en Simulación."
+        }
         "PATTERN DISPLAY" => "VISUALIZACIÓN DEL PATRÓN",
         "Pack every piece into the unit square of texture space; fabric textures are left out" => {
             "Empaquetar todas las piezas en el cuadrado unidad del espacio de textura; las texturas de tela se omiten"
@@ -1323,6 +1333,22 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Your messages, the scene's summary and screenshots go to this provider. A local model keeps them on this computer." => {
             "Tus mensajes, el resumen de la escena y las capturas van a este proveedor. Un modelo local los deja en este ordenador."
         }
+        "Claude Code default" => "Modelo predeterminado de Claude Code",
+        "Uses your Claude Code login. Messages and requested screenshots go to Claude." => {
+            "Usa tu sesión de Claude Code. Los mensajes y las capturas solicitadas se envían a Claude."
+        }
+        "Codex default" => "Modelo predeterminado de Codex",
+        "Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI." => {
+            "Usa la cuenta de ChatGPT conectada con codex login. Los mensajes y las capturas solicitadas se envían a OpenAI."
+        }
+        "Gemini CLI default" => "Modelo predeterminado de Gemini CLI",
+        "Uses your Gemini CLI login. Messages and requested screenshots go to Google." => {
+            "Usa tu sesión de Gemini CLI. Los mensajes y las capturas solicitadas se envían a Google."
+        }
+        "Antigravity default" => "Modelo predeterminado de Antigravity",
+        "Uses your Antigravity CLI (agy) login. Messages and requested screenshots go to Google Antigravity." => {
+            "Usa tu sesión de Antigravity CLI (agy). Los mensajes y las capturas solicitadas se envían a Google Antigravity."
+        }
         "no model chosen" => "ningún modelo elegido",
         "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
             "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
@@ -1482,8 +1508,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Commit the seam" => "Confirmar la costura",
         "Convert to straight segment" => "Convertir en segmento recto",
-        "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and on the floor. 0 lets cloth slide freely" => {
-            "Coeficiente de rozamiento de Coulomb de todo contacto: tela sobre el avatar, sobre sí misma y sobre el suelo. 0 deja que la tela resbale libremente"
+        "Coulomb friction coefficient of every contact: cloth on the avatar, on itself and on the floor. 0 lets cloth slide freely. A fabric can set its own in the Fabric tab" => {
+            "Coeficiente de rozamiento de Coulomb de todo contacto: tela sobre el avatar, sobre sí misma y sobre el suelo. 0 deja que la tela resbale libremente. Un tejido puede fijar el suyo en la pestaña Tejido"
         }
         "Crease the piece along this line at a set angle, like a pressed pleat" => {
             "Marca un pliegue en la pieza a lo largo de esta línea con un ángulo dado, como una tabla planchada"
@@ -2245,8 +2271,8 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Una hoja blanca con piezas tintadas en vez del tablero gris con piezas blancas"
         }
         "Full-speed falls" => "Caídas a toda velocidad",
-        "Split a step into up to 16 shorter ones when the cloth moves faster than one step's contacts allow (about 0.3 m/s), so falling cloth keeps up with gravity. Slower while cloth moves fast; settled cloth is unaffected" => {
-            "Divide un paso en hasta 16 más cortos cuando la tela se mueve más deprisa de lo que permiten los contactos de un paso (unos 0,3 m/s), para que la tela que cae siga a la gravedad. Más lento mientras la tela se mueve deprisa; la tela asentada no cambia"
+        "Let cloth fall as fast as gravity takes it: a step is split into up to 16 shorter ones while cloth moves fast. Off, it splits into up to 4, enough for sewing and draping, and falling cloth is held to about 0.8 m/s. Settled cloth is unaffected" => {
+            "Deja que la tela caiga tan deprisa como la lleva la gravedad: un paso se divide en hasta 16 más cortos mientras la tela se mueve deprisa. Desactivado, se divide en hasta 4, suficiente para coser y drapear, y la tela que cae se frena a unos 0,8 m/s. La tela asentada no cambia"
         }
         "Bones and skin weights" => "Huesos y pesos de la piel",
         "Remove this bone and the bones hanging from it" => {
@@ -2354,8 +2380,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Pick" => "Tomar",
         "Plain" => "Tafetán",
         "Repeat" => "Repetición",
-        "Repeat a PNG image over the fabric along its grain" => {
-            "Repite una imagen PNG sobre el tejido siguiendo el hilo"
+        "Repeat an image over the fabric along its grain" => {
+            "Repite una imagen sobre el tejido siguiendo el hilo"
         }
         "Roughness" => "Rugosidad",
         "Satin" => "Raso",
@@ -2448,6 +2474,60 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Map staged · Apply appearance to show it" => {
             "Mapa preparado · Aplicar apariencia para mostrarlo"
         }
+        "Metalness" => "Metalicidad",
+        "0 for cloth, 1 for bare metal (foil, lamé); a metalness map replaces it" => {
+            "0 para tela, 1 para metal desnudo (lámina, lamé); un mapa de metalicidad la sustituye"
+        }
+        "Metalness map" => "Mapa de metalicidad",
+        "Opacity map" => "Mapa de opacidad",
+        "Displacement map" => "Mapa de desplazamiento",
+        "Ambient occlusion map" => "Mapa de oclusión ambiental",
+        "A grey image of the metalness over one repeat: black cloth, white metal" => {
+            "Una imagen gris de la metalicidad en una repetición: negro tela, blanco metal"
+        }
+        "A grey image of the opacity over one repeat, for lace and mesh: the cloth is cut away where it is dark" => {
+            "Una imagen gris de la opacidad en una repetición, para encajes y mallas: la tela se recorta donde es oscura"
+        }
+        "A grey height image over one repeat, black low and white high, drawn as relief seen in depth" => {
+            "Una imagen gris de altura en una repetición, negro bajo y blanco alto, dibujada como relieve con profundidad"
+        }
+        "A grey ambient-occlusion image over one repeat: darkens the light from all around in its creases" => {
+            "Una imagen gris de oclusión ambiental en una repetición: oscurece la luz del entorno en sus pliegues"
+        }
+        "DirectX normal map (flip green)" => "Mapa de normales DirectX (invertir verde)",
+        "Tick for maps made the DirectX way (Unreal, some Substance presets); OpenGL maps (Blender, glTF) stay unticked" => {
+            "Márcalo para mapas hechos al modo DirectX (Unreal, algunos presets de Substance); los mapas OpenGL (Blender, glTF) quedan sin marcar"
+        }
+        "Glossiness map (inverted)" => "Mapa de brillo (invertido)",
+        "Tick when the map is glossiness: white glossy, black matt" => {
+            "Márcalo si el mapa es de brillo: blanco brillante, negro mate"
+        }
+        "How far the map's white stands above its black; drawn only, the simulation is unchanged" => {
+            "Cuánto sobresale el blanco del mapa sobre su negro; solo se dibuja, la simulación no cambia"
+        }
+        "Texture set" => "Set de texturas",
+        "Import…" => "Importar…",
+        "From a folder…" => "Desde una carpeta…",
+        "From files…" => "Desde archivos…",
+        "Import the maps a texture tool exported (Substance Painter, Designer or Sampler, and others): pick a folder or the files. Names ending in BaseColor, Normal, Roughness or Glossiness, Metallic, Height, Opacity and AO are recognised. Substance .sbsar files are not supported: they need Adobe's proprietary engine, so export the maps as images instead" => {
+            "Importa los mapas que exportó una herramienta de texturas (Substance Painter, Designer o Sampler, y otras): elige una carpeta o los archivos. Se reconocen los nombres que terminan en BaseColor, Normal, Roughness o Glossiness, Metallic, Height, Opacity y AO. Los archivos .sbsar de Substance no se admiten: necesitan el motor propietario de Adobe, así que exporta los mapas como imágenes"
+        }
+        "Choose the material to use:" => "Elige el material que usar:",
+        "Substance .sbsar files cannot be opened: they need Adobe's proprietary engine. Export the maps as images from Substance and pick those" => {
+            "Los archivos .sbsar de Substance no se pueden abrir: necesitan el motor propietario de Adobe. Exporta los mapas como imágenes desde Substance y elige esos"
+        }
+        "No texture maps recognised: their names need a map suffix such as _BaseColor or _Normal" => {
+            "No se reconoció ningún mapa: sus nombres necesitan un sufijo de mapa como _BaseColor o _Normal"
+        }
+        "Several materials found · choose one under Texture set" => {
+            "Se encontraron varios materiales · elige uno en Set de texturas"
+        }
+        "The texture set has no base colour map: add a texture image first" => {
+            "El set de texturas no tiene mapa de color base: añade primero una imagen de textura"
+        }
+        "Texture set staged" => "Set de texturas preparado",
+        "maps" => "mapas",
+        "Apply appearance to show it" => "Aplicar apariencia para mostrarlo",
         "Attach all pins to the avatar" => "Sujetar todos los alfileres al avatar",
         "Detach all pins from the avatar" => "Soltar todos los alfileres del avatar",
         "Pins attached to the avatar · they follow it while an animation records" => {
@@ -2775,6 +2855,41 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Tears" => "Rasgados",
         "Open a stretch of this seam, as a rip" => "Abre un tramo de esta costura, como un rasgado",
         "Mend all" => "Coser todos",
+        "Breaks at" => "Se rompe a",
+        "The seam breaks where it is pulled harder than this while simulating" => {
+            "La costura se rompe donde se tira de ella con más fuerza que esto al simular"
+        }
+        "Breaking strength: pull per centimetre of seam a stitch holds" => {
+            "Resistencia a la rotura: tirón por centímetro de costura que aguanta una puntada"
+        }
+        "Seam broke:" => "Costura rota:",
+        "stitch gave way" => "puntada cedió",
+        "stitches gave way" => "puntadas cedieron",
+        "Seam strength" => "Resistencia de costura",
+        "Seam broke" => "Costura rota",
+        "Fray edge" => "Deshilachar borde",
+        "Fray edge: loose threads along the selected segment" => {
+            "Deshilachar borde: hilos sueltos a lo largo del segmento seleccionado"
+        }
+        "Fray" => "Deshilachado",
+        "Thread length" => "Largo de hilo",
+        "Threads" => "Hilos",
+        "Subdivide selected mesh" => "Subdividir malla seleccionada",
+        "Subdivide the selected mesh: finer triangles there" => {
+            "Subdividir la malla seleccionada: triángulos más finos ahí"
+        }
+        "Subdivide mesh" => "Subdividir malla",
+        "Subdivide" => "Subdividir",
+        "Remove subdivision" => "Quitar subdivisión",
+        "Mesh the selected cloth finer: its triangles split in half, the rest of the piece stays as it is" => {
+            "Mallar más fina la tela seleccionada: sus triángulos se parten por la mitad, el resto de la pieza queda igual"
+        }
+        "Mesh the selected pieces evenly again" => {
+            "Volver a mallar uniformes las piezas seleccionadas"
+        }
+        "The selected pieces have no subdivided zones" => {
+            "Las piezas seleccionadas no tienen zonas subdivididas"
+        }
         "Select mesh with a brush" => "Seleccionar malla con pincel",
         "Mesh the selected pieces as quads along their grain" => {
             "Mallar las piezas seleccionadas en cuadrados a lo largo del hilo"
@@ -2784,6 +2899,76 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Meshed as quads along the grain" => "Mallado en cuadrados a lo largo del hilo",
         "Meshed as triangles" => "Mallado en triángulos",
+        "A fabric's look from a texture set" => {
+            "La apariencia de una tela desde un set de texturas"
+        }
+        "Texture set › Import › From a folder: Substance's exported maps" => {
+            "Set de texturas › Importar › Desde una carpeta: los mapas exportados de Substance"
+        }
+        "Render › Photoreal render: it refines while you keep working" => {
+            "Render › Render fotorrealista: se afina mientras sigues trabajando"
+        }
+        "A closer look" => "Más de cerca",
+        "Depth of field: pick the point in focus on the image" => {
+            "Profundidad de campo: elige en la imagen el punto enfocado"
+        }
+        "Light from an HDR environment" => "Luz de un entorno HDR",
+        "Photoreal render…" => "Render fotorrealista…",
+        "Photoreal render" => "Render fotorrealista",
+        "Photoreal render: a path-traced image of the 3D view" => {
+            "Render fotorrealista: una imagen trazada por rayos de la vista 3D"
+        }
+        "Photoreal render: the image refines while you keep working" => {
+            "Render fotorrealista: la imagen se afina mientras sigues trabajando"
+        }
+        "Image saved:" => "Imagen guardada:",
+        "Preparing the scene…" => "Preparando la escena…",
+        "samples" => "muestras",
+        "Save image…" => "Guardar imagen…",
+        "Write the image as a PNG at the size chosen below" => {
+            "Escribe la imagen como PNG al tamaño elegido abajo"
+        }
+        "Update scene" => "Actualizar escena",
+        "Take the 3D view again: camera, cloth and look" => {
+            "Vuelve a tomar la vista 3D: cámara, tela y apariencia"
+        }
+        "Follow the 3D view" => "Seguir la vista 3D",
+        "Start over whenever the camera, the cloth or the look change" => {
+            "Empieza de nuevo cuando cambian la cámara, la tela o la apariencia"
+        }
+        "Presets" => "Predefinidos",
+        "As the 3D view" => "Como la vista 3D",
+        "Samples" => "Muestras",
+        "Rays per pixel to stop at: more is smoother and slower" => {
+            "Rayos por píxel en los que parar: más es más suave y más lento"
+        }
+        "Bounces" => "Rebotes",
+        "How many times light may bounce between surfaces" => {
+            "Cuántas veces puede rebotar la luz entre superficies"
+        }
+        "Exposure" => "Exposición",
+        "Depth of field" => "Profundidad de campo",
+        "Radius of the lens's opening: wider blurs more" => {
+            "Radio de la apertura de la lente: más abierta desenfoca más"
+        }
+        "Focus distance" => "Distancia de enfoque",
+        "Pick on the image" => "Elegir en la imagen",
+        "Click the image where it should be sharp" => {
+            "Haz clic en la imagen donde debe verse nítida"
+        }
+        "Studio" => "Estudio",
+        "HDR image…" => "Imagen HDR…",
+        "Light the scene with an equirectangular HDR image (.hdr)" => {
+            "Ilumina la escena con una imagen HDR equirectangular (.hdr)"
+        }
+        "Environment strength" => "Intensidad del entorno",
+        "Environment turn" => "Giro del entorno",
+        "Show it behind the scene" => "Mostrarlo detrás de la escena",
+        "Lights" => "Luces",
+        "Key light" => "Luz principal",
+        "The 3D view's own key light, with its direction and strength" => {
+            "La luz principal de la propia vista 3D, con su dirección e intensidad"
+        }
         "High-quality 3D view: draw at twice the resolution" => {
             "Vista 3D de alta calidad: dibujar al doble de resolución"
         }
@@ -3066,6 +3251,182 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "joint moved · Apply and restart to use the new skeleton" => {
             "articulación movida · Aplicar y reiniciar para usar el esqueleto nuevo"
+        }
+        "UV" => "UV",
+        "UV editor" => "Editor UV",
+        "Pack UV islands" => "Empaquetar islas UV",
+        "Automatic UV layout" => "Distribución UV automática",
+        "UV editor: lay out each piece's island in the texture square for exports and baking" => {
+            "Editor UV: coloca la isla de cada pieza en el cuadrado de textura para exportar y hornear"
+        }
+        "Pack UV islands: fit every piece into the texture square without overlap" => {
+            "Empaquetar islas UV: encaja todas las piezas en el cuadrado de textura sin solaparse"
+        }
+        "Automatic UV layout: forget the edited island placements" => {
+            "Distribución UV automática: olvida las posiciones editadas de las islas"
+        }
+        "UV editor: drag islands to move, corners to scale, the round handle to turn" => {
+            "Editor UV: arrastra las islas para moverlas, las esquinas para escalar y el tirador redondo para girar"
+        }
+        "UV islands packed" => "Islas UV empaquetadas",
+        "The UV layout is automatic already" => "La distribución UV ya es automática",
+        "UV layout back to automatic" => "Distribución UV de nuevo automática",
+        "Pack" => "Empaquetar",
+        "Fit every island into the square without overlap, a margin apart" => {
+            "Encaja todas las islas en el cuadrado sin solaparse, separadas por el margen"
+        }
+        "Margin" => "Margen",
+        "Allow quarter turns" => "Permitir giros de 90°",
+        "Keep relative sizes" => "Mantener tamaños relativos",
+        "Automatic layout" => "Distribución automática",
+        "Forget the edited placements and lay the islands out automatically" => {
+            "Olvida las posiciones editadas y distribuye las islas automáticamente"
+        }
+        "Fit view" => "Encuadrar",
+        "Texture units per metre of material" => "Unidades de textura por metro de tela",
+        "Click an island to select it; Shift adds to the selection" => {
+            "Haz clic en una isla para seleccionarla; Mayús añade a la selección"
+        }
+        "automatic layout" => "distribución automática",
+        "overlapping" => "solapadas",
+        "outside the square" => "fuera del cuadrado",
+        "px/cm at 2048 px" => "px/cm a 2048 px",
+        "Move UV islands" => "Mover islas UV",
+        "Scale UV islands" => "Escalar islas UV",
+        "Turn UV islands" => "Girar islas UV",
+        "Edit UV island" => "Editar isla UV",
+        "Measure fabric…" => "Medir tejido…",
+        "Measure fabric" => "Medir tejido",
+        "Measure fabric: fit a fabric to a workshop's tests of a real one" => {
+            "Medir tejido: ajusta un tejido a los ensayos de taller de uno real"
+        }
+        "Measured fabric" => "Tejido medido",
+        "Type the workshop's readings, then Fit fabric" => {
+            "Escribe las lecturas del taller y luego Ajustar tejido"
+        }
+        "Select a piece to cut from this fabric" => {
+            "Selecciona una pieza para cortarla de este tejido"
+        }
+        "Measured fabric applied · simulate to see it drape" => {
+            "Tejido medido aplicado · simula para ver cómo cae"
+        }
+        "Measure a sample of your fabric with simple tools, type the readings and FashionCraft fits a fabric whose virtual tests give the same readings." => {
+            "Mide una muestra de tu tejido con herramientas sencillas, escribe las lecturas y FashionCraft ajusta un tejido cuyos ensayos virtuales dan las mismas lecturas."
+        }
+        "Measuring procedure" => "Procedimiento de medida",
+        "Weight and thickness" => "Peso y espesor",
+        "Weigh a 10 × 10 cm square: its grams × 100 are its g/m²." => {
+            "Pesa un cuadrado de 10 × 10 cm: sus gramos × 100 son sus g/m²."
+        }
+        "Strip test with weights" => "Ensayo de tira con pesas",
+        "Strip width" => "Ancho de la tira",
+        "Length between clamps" => "Largo entre pinzas",
+        "Distance between marks" => "Distancia entre marcas",
+        "Ruler resolution" => "Resolución de la regla",
+        "Bias" => "Bies",
+        "Load: the bottom clamp and everything hanging from it. Length: between the two marks, at the centre of the strip, after a minute." => {
+            "Carga: la pinza de abajo y todo lo que cuelga de ella. Largo: entre las dos marcas, en el centro de la tira, pasado un minuto."
+        }
+        "Hanging load" => "Carga colgada",
+        "Length between marks" => "Largo entre marcas",
+        "Remove reading" => "Quitar lectura",
+        "Add reading" => "Añadir lectura",
+        "Cantilever at 41.5°" => "Voladizo a 41,5°",
+        "Overhang when the tip touches the 41.5° line: the mean of four readings, both ends, face up and face down." => {
+            "Voladizo cuando la punta toca la línea de 41,5°: la media de cuatro lecturas, por ambos extremos, con el derecho y el revés arriba."
+        }
+        "Warp overhang" => "Voladizo de urdimbre",
+        "Weft overhang" => "Voladizo de trama",
+        "Friction (optional)" => "Fricción (opcional)",
+        "Slide angle" => "Ángulo de deslizamiento",
+        "Fit fabric" => "Ajustar tejido",
+        "Run the virtual tests and search the fabric that matches the readings" => {
+            "Ejecuta los ensayos virtuales y busca el tejido que da las lecturas"
+        }
+        "Example readings" => "Lecturas de ejemplo",
+        "Fill in readings of a light cotton poplin to try the window" => {
+            "Rellena lecturas de una popelina de algodón ligera para probar la ventana"
+        }
+        "Starting…" => "Empezando…",
+        "Save to library" => "Guardar en la biblioteca",
+        "Apply to selected piece" => "Aplicar a la pieza seleccionada",
+        "Use friction in simulation" => "Usar la fricción en la simulación",
+        "Cotton poplin (example)" => "Popelina de algodón (ejemplo)",
+        "Fabric saved to the library:" => "Tejido guardado en la biblioteca:",
+        "Simulation friction set to" => "Fricción de la simulación puesta en",
+        "Fabric fitted · compare the readings, then save or apply it" => {
+            "Tejido ajustado · compara las lecturas y luego guárdalo o aplícalo"
+        }
+        "Fitting the warp strip…" => "Ajustando la tira de urdimbre…",
+        "Fitting the weft strip…" => "Ajustando la tira de trama…",
+        "Fitting the bias strip…" => "Ajustando la tira al bies…",
+        "Fitting the weft cantilever…" => "Ajustando el voladizo de trama…",
+        "Fitting the warp cantilever…" => "Ajustando el voladizo de urdimbre…",
+        "Running every test with the fitted fabric…" => {
+            "Repitiendo cada ensayo con el tejido ajustado…"
+        }
+        "Fitted fabric" => "Tejido ajustado",
+        "The readings changed: fit again before saving" => {
+            "Las lecturas cambiaron: ajusta de nuevo antes de guardar"
+        }
+        "Warp stiffness" => "Rigidez de urdimbre",
+        "Weft stiffness" => "Rigidez de trama",
+        "at 5 N / 5 cm" => "con 5 N / 5 cm",
+        "Readings and virtual tests" => "Lecturas y ensayos virtuales",
+        "Test" => "Ensayo",
+        "Measured" => "Medido",
+        "Simulated" => "Simulado",
+        "Cantilever" => "Voladizo",
+        "virtual tests solved" => "ensayos virtuales resueltos",
+        "Name the fabric first" => "Ponle antes un nombre al tejido",
+        "Cancelled" => "Cancelado",
+        "A virtual test did not settle" => "Un ensayo virtual no llegó al equilibrio",
+        "A virtual strip did not reach its load" => "Una tira virtual no llegó a su carga",
+        "A search did not bracket its target" => "Una búsqueda no encerró su objetivo",
+        "A search did not converge" => "Una búsqueda no convergió",
+        "No measured fabrics in this folder yet: make one with Materials › Measure fabric…" => {
+            "Aún no hay tejidos medidos en esta carpeta: crea uno con Materiales › Medir tejido…"
+        }
+        "Apply to piece" => "Aplicar a la pieza",
+        "Cut the selected piece from this fabric" => "Corta la pieza seleccionada de este tejido",
+        "Area weight must be between 5 and 3000 g/m²" => {
+            "El gramaje debe estar entre 5 y 3000 g/m²"
+        }
+        "Thickness must be between 0.01 and 10 mm" => "El espesor debe estar entre 0,01 y 10 mm",
+        "Strip width must be between 10 and 200 mm" => {
+            "El ancho de la tira debe estar entre 10 y 200 mm"
+        }
+        "Gauge length must be between 20 and 800 mm" => {
+            "La distancia entre marcas debe estar entre 20 y 800 mm"
+        }
+        "Free strip length must be at least the gauge length plus 20 mm, at most 1000 mm" => {
+            "El largo libre de la tira debe ser al menos la distancia entre marcas más 20 mm, y como mucho 1000 mm"
+        }
+        "Ruler resolution must be between 0.01 and 5 mm" => {
+            "La resolución de la regla debe estar entre 0,01 y 5 mm"
+        }
+        "Each load must be between 1 g and 50 kg" => "Cada carga debe estar entre 1 g y 50 kg",
+        "Each reading must be longer than the gauge length: the strip stretches" => {
+            "Cada lectura debe ser mayor que la distancia entre marcas: la tira se estira"
+        }
+        "A reading is more than three times the gauge length" => {
+            "Una lectura pasa de tres veces la distancia entre marcas"
+        }
+        "Measure at least the warp or the weft strip" => {
+            "Mide al menos la tira de urdimbre o la de trama"
+        }
+        "Cantilever overhang must be between 5 and 1000 mm" => {
+            "El voladizo debe estar entre 5 y 1000 mm"
+        }
+        "Slide angle must be between 1 and 56°" => {
+            "El ángulo de deslizamiento debe estar entre 1 y 56°"
+        }
+        "Garments" => "Prendas",
+        "Avatars" => "Avatares",
+        "Images" => "Imágenes",
+        "Add to piece" => "Añadir a la pieza",
+        "Fit a fabric to a workshop's tests of your own" => {
+            "Ajusta un tejido a los ensayos de taller del tuyo"
         }
         _ => return None,
     })

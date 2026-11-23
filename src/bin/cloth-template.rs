@@ -1,7 +1,7 @@
 //! A CPU-only frontend; never imports eframe/wgpu or opens a window.
 use clap::{Parser, Subcommand};
 use fashioncraft::{
-    garment::{GarmentTemplate, dxf_aama, export, production_metrics},
+    garment::{GarmentTemplate, dxf_aama, export, grading, production_metrics},
     solver::{ReferenceSolver, SolverSettings},
 };
 use std::{
@@ -63,9 +63,26 @@ enum Command {
         project: bool,
     },
     /// Read a DXF-AAMA or DXF-ASTM file: its dialect, units, pieces and what would not be
-    /// imported, as JSON.
+    /// imported, as JSON. A rule table (`.rul`) beside it is read too.
     DxfInspect {
         file: PathBuf,
+    },
+    /// Write the garment in one size of its grading, as an ungraded template.
+    GradeSize {
+        template: PathBuf,
+        output: PathBuf,
+        /// The size's name.
+        #[arg(long)]
+        size: String,
+        /// The size group's name; the first group when absent.
+        #[arg(long)]
+        group: Option<String>,
+    },
+    /// The points of measure in every size, as JSON (millimetres), or CSV with --csv.
+    Pom {
+        template: PathBuf,
+        #[arg(long)]
+        csv: bool,
     },
     Simulate {
         template: PathBuf,
@@ -152,22 +169,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "in" | "inch" | "inches" | "english" => dxf_aama::Units::Inches,
                 other => return Err(format!("Unknown units {other}: use mm or in").into()),
             };
-            let pieces = dxf_aama::template::pieces(
+            // A graded garment goes out in its base size, with its rule table beside it.
+            let grading::dxf::Export { pieces, table } = grading::dxf::export(
                 &t,
                 &dxf_aama::template::PieceOptions {
                     size: size.clone(),
                     ..Default::default()
                 },
+                units,
+                dialect,
             )?;
+            let mut table = table;
+            let rul_path = output.with_extension("rul");
+            if let Some(table) = &mut table {
+                table.name = grading::rul::size_word(
+                    &output
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_uppercase())
+                        .unwrap_or_default(),
+                );
+            }
             let bytes = dxf_aama::write(
                 &pieces,
                 &dxf_aama::WriteOptions {
                     dialect,
                     units,
                     style: t.name.clone(),
-                    sample_size: size,
+                    sample_size: table.as_ref().map_or(size, |t| t.sample.clone()),
                     author: dxf_aama::template::author(),
                     created: Some(dxf_aama::template::now_utc()),
+                    grade_rule_table: table.as_ref().map(|t| t.name.clone()).unwrap_or_default(),
                 },
             )?;
             fs::write(&output, bytes)?;
@@ -177,6 +208,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 output.display(),
                 dialect.label()
             );
+            if let Some(table) = &table {
+                fs::write(&rul_path, grading::rul::write(table)?)?;
+                println!(
+                    "{} grade rules for sizes {} (sample {}) written to {}",
+                    table.rules.len(),
+                    table.sizes.join(" "),
+                    table.sample,
+                    rul_path.display()
+                );
+            }
         }
         Command::DxfInspect { file } => {
             let text = dxf_aama::load(&file)?;
@@ -199,6 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "boundaries": converted.as_ref().ok().map(|c| c.polygon.points.len()),
                         "size_mm": converted.as_ref().ok().map(|c| [c.size.x * 1000., c.size.y * 1000.]),
                         "notes": converted.as_ref().map(|c| c.notes.clone()).unwrap_or_else(|e| vec![e.clone()]),
+                        "grade_points": p.grade_points.len(),
                     })
                 })
                 .collect();
@@ -223,8 +265,73 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "author": pattern.author,
                     "pieces": pieces,
                     "not_imported": issues,
+                    "rule_table": grading::rul::beside(&file).map(|path| {
+                        match fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| grading::rul::read(&t)) {
+                            Ok(t) => serde_json::json!({"file": path.display().to_string(),
+                                "name": t.name, "sizes": t.sizes, "sample": t.sample,
+                                "rules": t.rules.len(), "notes": t.notes}),
+                            Err(e) => serde_json::json!({"file": path.display().to_string(), "error": e}),
+                        }
+                    }),
                 }))?
             );
+        }
+        Command::GradeSize {
+            template,
+            output,
+            size,
+            group,
+        } => {
+            let t = GarmentTemplate::load(&template)?;
+            let g = t.grading.as_ref().ok_or("The garment is not graded")?;
+            let group = match &group {
+                Some(name) => g
+                    .groups
+                    .iter()
+                    .find(|x| x.name.eq_ignore_ascii_case(name) || &x.id == name)
+                    .ok_or_else(|| format!("No size group {name}"))?,
+                None => &g.groups[0],
+            };
+            let id = group
+                .sizes
+                .iter()
+                .find(|s| s.name.eq_ignore_ascii_case(&size) || s.id == size)
+                .ok_or_else(|| format!("No size {size} in {}", group.name))?
+                .id
+                .clone();
+            let sized = grading::apply::template_in_size(&t, &group.id, &id)?;
+            sized.compile()?;
+            fs::write(&output, serde_json::to_string_pretty(&sized)?)?;
+            println!("{} in size {size} written to {}", t.name, output.display());
+        }
+        Command::Pom { template, csv } => {
+            let t = GarmentTemplate::load(&template)?;
+            if csv {
+                print!("{}", grading::pom::csv(&t));
+                return Ok(());
+            }
+            let g = t.grading.as_ref().ok_or("The garment is not graded")?;
+            let rows: Vec<_> = grading::pom::table(&t)
+                .into_iter()
+                .map(|row| {
+                    let group = g.group(&row.group).expect("listed");
+                    let values: serde_json::Map<String, serde_json::Value> = row
+                        .values
+                        .iter()
+                        .map(|(s, v)| {
+                            let value = match v {
+                                Ok(v) => serde_json::json!((v * 1e4).round() / 10.),
+                                Err(e) => serde_json::json!(e),
+                            };
+                            (group.name_of(s).to_string(), value)
+                        })
+                        .collect();
+                    serde_json::json!({"name": row.name, "group": group.name,
+                        "base": group.base_name(), "tolerance_mm": row.tolerance_m * 1000.,
+                        "values_mm": values})
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&rows)?);
         }
         Command::Simulate {
             template,

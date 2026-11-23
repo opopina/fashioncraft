@@ -176,6 +176,7 @@ const GARMENT_3D: &[Item] = &[
     Run("Select mesh (brush)", C::SelectMeshBrush),
     Run("Select mesh (box)", C::SelectMeshBox),
     Run("Select mesh (lasso)", C::SelectMeshLasso),
+    Run("Subdivide selected mesh", C::SubdivideMesh),
     S,
     Sub(
         "Pins",
@@ -264,6 +265,17 @@ const PATTERN_2D: &[Item] = &[
         ],
     ),
     Run("Auto fit", C::AutoFit),
+    Sub(
+        "Grading",
+        &[
+            Run("Sizes and grade rules…", C::GradingTable),
+            Run("Points of measure (POM)…", C::PointsOfMeasure),
+            Run("Grade point on / off", C::ToggleGradePoint),
+            Run("Review all sizes on the board", C::GradingReview),
+            Run("Next size", C::NextSize),
+            Run("Previous size", C::PreviousSize),
+        ],
+    ),
 ];
 
 const SEWING: &[Item] = &[
@@ -277,12 +289,22 @@ const SEWING: &[Item] = &[
 ];
 
 const MATERIALS: &[Item] = &[
+    Run("Measure fabric…", C::MeasureFabric),
+    S,
     Sub(
         "Texture",
         &[
             Run("Edit texture (2D)", C::EditTexture2d),
             Run("Edit texture (3D)", C::EditTexture3d),
             Run("Refresh textures", C::RefreshTextures),
+        ],
+    ),
+    Sub(
+        "UV",
+        &[
+            Run("UV editor", C::UvEditor),
+            Run("Pack UV islands", C::PackUvIslands),
+            Run("Automatic UV layout", C::AutomaticUvLayout),
         ],
     ),
     Sub(
@@ -303,6 +325,7 @@ const MATERIALS: &[Item] = &[
     ),
     Run("Zipper", C::AddZipper),
     Run("Piping", C::Piping),
+    Run("Fray edge", C::FrayEdge),
     Run("Tape", C::AddTape),
     Sub(
         "Topstitch",
@@ -346,6 +369,8 @@ const ANIMATION: &[Item] = &[
 ];
 
 const RENDER: &[Item] = &[
+    Run("Photoreal render…", C::PhotorealRender),
+    S,
     Run("High-quality 3D view", C::HighQualityView),
     Run("Technical view", C::TechnicalView),
 ];
@@ -439,6 +464,7 @@ const WINDOW: &[Item] = &[
     Run("Library", C::ToggleLibrary),
     Run("Object browser", C::ToggleObjectBrowser),
     Run("History", C::ToggleHistory),
+    Run("UV editor", C::UvEditor),
     Run("Assistant", C::ToggleAssistant),
     S,
     Run("Reset layout", C::ResetLayout),
@@ -531,9 +557,15 @@ impl Atelier {
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::SelectAllSeams => self.authoring.selection.all_seams,
             C::Steam => self.authoring.steam.open,
+            C::MeasureFabric => self.authoring.fabric_kit.open,
             C::HighQualityView => display.high_quality,
+            C::PhotorealRender => self.authoring.render.open,
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::RunPythonScript => self.authoring.script.open,
+            C::UvEditor => self.authoring.uv_editor.open,
+            C::GradingTable => self.authoring.grading.open,
+            C::PointsOfMeasure => self.authoring.grading.pom_open,
+            C::GradingReview => self.authoring.grading.review,
             C::StyleLineEdit => {
                 self.authoring.style_lines.mode == Some(super::style_lines::StyleMode::Edit)
             }
@@ -773,7 +805,7 @@ mod tests {
         let (done, all) = coverage();
         // Every item the bar lays out runs a command; a drop means one lost its command.
         assert_eq!(done, all);
-        assert!(done >= 216, "{done} of {all}");
+        assert!(done >= 218, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

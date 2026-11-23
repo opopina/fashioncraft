@@ -116,7 +116,8 @@ pub(super) fn mirror(
             }
             TrimKind::Zipper { path_m, .. }
             | TrimKind::Topstitch { path_m, .. }
-            | TrimKind::Piping { path_m, .. } => {
+            | TrimKind::Piping { path_m, .. }
+            | TrimKind::Fray { path_m, .. } => {
                 path_m.iter_mut().for_each(reflect);
             }
         }
@@ -328,7 +329,7 @@ pub(super) fn ruffle(
         reverse_b: false,
         allow_ease: true,
         notches: vec![],
-        stiffness: 50_000.,
+        stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
     });
     Ok(id)
 }

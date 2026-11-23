@@ -447,14 +447,12 @@ impl Atelier {
         &mut self,
         ctx: &egui::Context,
     ) -> Vec<(Arc<GraphicImage>, Vec<GraphicTriangle>, f32)> {
-        let placements: Vec<GraphicPlacement> = self
-            .project
-            .template
-            .graphics
-            .iter()
-            .filter(|g| self.panel_shown(&g.panel_id))
-            .cloned()
-            .collect();
+        // In a size other than the base, graphics follow their piece into it.
+        let placements: Vec<GraphicPlacement> =
+            fashioncraft::garment::grading::apply::graphics_shown(&self.project.template)
+                .into_iter()
+                .filter(|g| self.panel_shown(&g.panel_id))
+                .collect();
         let front = self.face_positions(true);
         let back = self.face_positions(false);
         let mut draws = vec![];
@@ -492,30 +490,32 @@ impl Atelier {
         }
     }
 
-    /// The images of each material's fabric texture, by material index: its colours, its
-    /// normal map and its roughness map.
+    /// The images of each material's fabric texture, by material index: its colours, then its
+    /// maps in `MapSlot::ALL` order.
     pub(super) fn fabric_images(
         &mut self,
         ctx: &egui::Context,
         optics: &[Option<fashioncraft::garment::appearance::FabricAppearance>],
-    ) -> Vec<[Option<Arc<GraphicImage>>; 3]> {
+    ) -> Vec<[Option<Arc<GraphicImage>>; 7]> {
+        use fashioncraft::garment::appearance::MapSlot;
         optics
             .iter()
             .map(|appearance| {
                 let Some(texture) = appearance.as_ref().and_then(|a| a.texture.as_ref()) else {
-                    return [None, None, None];
+                    return Default::default();
                 };
-                let mut load = |asset: Option<&String>| -> Option<Arc<GraphicImage>> {
+                let mut load = |asset: Option<&str>| -> Option<Arc<GraphicImage>> {
                     match self.graphic(ctx, asset?)? {
                         Ok(loaded) => Some(loaded.image.clone()),
                         Err(_) => None,
                     }
                 };
-                [
-                    load(Some(&texture.asset_id)),
-                    load(texture.normal_asset_id.as_ref()),
-                    load(texture.roughness_asset_id.as_ref()),
-                ]
+                let mut images: [Option<Arc<GraphicImage>>; 7] = Default::default();
+                images[0] = load(Some(&texture.asset_id));
+                for slot in MapSlot::ALL {
+                    images[fashioncraft::render::image_index(slot)] = load(texture.map(slot));
+                }
+                images
             })
             .collect()
     }

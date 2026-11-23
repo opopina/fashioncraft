@@ -103,7 +103,7 @@ fn segments(points: &[DVec2], closed: bool) -> Vec<[DVec2; 2]> {
     }
     out
 }
-fn simple(points: &[DVec2], closed: bool) -> Result<(), String> {
+pub(crate) fn simple(points: &[DVec2], closed: bool) -> Result<(), String> {
     if points.iter().any(|p| !p.is_finite()) {
         return Err("Coordinate must be finite".into());
     }

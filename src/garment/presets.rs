@@ -152,7 +152,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
             },
             reverse_b: false,
             notches: vec![],
-            stiffness: 50_000.0,
+            stiffness: super::seam::DEFAULT_SEAM_STIFFNESS,
             allow_ease: false,
         })
         .collect();
@@ -168,7 +168,9 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         seam_zippers: Default::default(),
         inactive_seams: Default::default(),
         seam_tears: Default::default(),
+        seam_strengths: Default::default(),
         texture_offsets: Default::default(),
+        uv_layout: Default::default(),
         steam: vec![],
         tacks: vec![],
         line_folds: vec![],
@@ -182,6 +184,7 @@ pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
         locked_panels: Default::default(),
         internal_lines_locked: false,
         pins_attached: false,
+        grading: None,
         version: 2,
         name: format!("{} / MakeHuman 1.75 m engineering fixture", kind.name()),
         fabric_appearance: Default::default(),

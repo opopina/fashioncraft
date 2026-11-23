@@ -105,6 +105,7 @@ impl Atelier {
                         });
                     }
                 }
+                "size_chart" => Ok(ToolResult::json(&self.size_chart())),
                 "save_project" => self.agent_save(ctx, args),
                 "export_garment" => self.agent_export(ctx, args),
                 other => Err(format!("unknown tool '{other}'")),

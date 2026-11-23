@@ -287,15 +287,24 @@ pub struct AvatarPose {
 
 impl AvatarPose {
     /// The avatar's joints from the landmarks shipped next to it, with no rotation yet.
+    /// Keeps all 112 Anny joint landmarks when shipped (MakeHuman bodies), falling back to the 24
+    /// legacy landmarks for non-MakeHuman or estimated sidecars.
     pub fn from_sidecar(avatar_path: &Path) -> Result<Self, String> {
         let sidecar = crate::garment::arrangement::load_sidecar(avatar_path)?
             .ok_or("This avatar ships no joint landmarks, so it cannot be posed")?;
-        let wanted = crate::avatar_rig::joint_ids();
-        let joints: std::collections::BTreeMap<String, [f64; 3]> = sidecar
+        let all: std::collections::BTreeMap<String, [f64; 3]> = sidecar
             .landmarks
             .into_iter()
-            .filter(|l| wanted.contains(l.id.as_str()))
             .map(|l| (l.id, l.position_m.to_array()))
+            .collect();
+        let wanted = if crate::avatar_rig::has_anny_joints(&all) {
+            crate::avatar_rig::anny_joint_ids()
+        } else {
+            crate::avatar_rig::joint_ids()
+        };
+        let joints: std::collections::BTreeMap<String, [f64; 3]> = all
+            .into_iter()
+            .filter(|(id, _)| wanted.contains(id.as_str()))
             .collect();
         if joints.len() != wanted.len() {
             return Err("This avatar lacks some joint landmarks, so it cannot be posed".into());
@@ -308,7 +317,7 @@ impl AvatarPose {
         })
     }
     /// The skeleton with joint `id` moved to `at` (avatar metres, at rest). Refused when the
-    /// joint is unknown, the place is not finite, or a bone would shrink below 5 mm.
+    /// joint is unknown, the place is not finite, or a bone moved by it would shrink below 5 mm.
     pub fn with_joint(&self, id: &str, at: glam::DVec3) -> Result<Self, String> {
         if !self.joints.contains_key(id) {
             return Err(format!("The skeleton has no joint {id}"));
@@ -322,8 +331,18 @@ impl AvatarPose {
             vertices: vec![],
             triangles: vec![],
         };
+        let before = self.rig(&empty)?;
         let rig = moved.rig(&empty)?;
-        if let Some(bone) = rig.bones.iter().find(|b| b.head.distance(b.tail) < 0.005) {
+        if let Some(bone) = rig
+            .bones
+            .iter()
+            .zip(&before.bones)
+            .find_map(|(after, old)| {
+                let changed =
+                    after.head.distance(old.head) > 1e-12 || after.tail.distance(old.tail) > 1e-12;
+                (changed && after.head.distance(after.tail) < 0.005).then_some(after)
+            })
+        {
             return Err(format!("The {} bone would be too short", bone.name));
         }
         Ok(moved)
@@ -879,6 +898,8 @@ fn mesh_signature(template: &GarmentTemplate, g: &CompiledGarment) -> Result<Str
     physical_template.locked_panels.clear();
     physical_template.internal_lines_locked = false;
     physical_template.pins_attached = false;
+    // The UV layout is export metadata: editing it keeps the saved drape.
+    physical_template.uv_layout.clear();
     for panel in &mut physical_template.panels {
         panel.layout_2d = None;
         panel.layout_rotation_degrees = 0.;

@@ -26,7 +26,25 @@ impl GpuContactFilter {
         let limits = self.device.limits();
         let size_limit =
             (limits.max_storage_buffer_binding_size as usize).min(limits.max_buffer_size as usize);
-        let query_count = n + ne;
+        // An edge reports only pairs with edges after it, so an edge of the fixed geometry
+        // (the avatar) finds nothing when every moving edge comes first, as they do when the
+        // cloth's triangles come before the avatar's: its query is skipped. Most edges are the
+        // avatar's.
+        if changed {
+            let moving_edge = |e: &[usize; 2]| e.iter().any(|v| *v < q.moving);
+            let leading = q
+                .topology
+                .edges
+                .iter()
+                .take_while(|e| moving_edge(e))
+                .count();
+            self.edge_queries = if q.topology.edges[leading..].iter().any(moving_edge) {
+                ne
+            } else {
+                leading
+            };
+        }
+        let query_count = n + self.edge_queries;
         let groups = query_count.div_ceil(64);
         let width = groups.min(limits.max_compute_workgroups_per_dimension as usize);
         let node_count = q.triangles.nodes().len() + q.edges.nodes().len();

@@ -33,6 +33,9 @@ pub struct FabricProperties {
     /// Internal damping time, s (see `Material::internal_damping`).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub internal_damping: f64,
+    /// Friction coefficient; none uses the scene's (see `Material::friction`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub friction: Option<f64>,
 }
 impl Default for FabricProperties {
     fn default() -> Self {
@@ -53,6 +56,7 @@ impl From<&Material> for FabricProperties {
             thickness: m.thickness,
             collision_distance: m.collision_distance,
             internal_damping: m.internal_damping,
+            friction: m.friction,
         }
     }
 }
@@ -71,6 +75,7 @@ impl FabricProperties {
             grain_degrees,
             collision_distance: self.collision_distance,
             internal_damping: self.internal_damping,
+            friction: self.friction,
         }
     }
 }
@@ -344,6 +349,10 @@ pub struct GarmentTemplate {
     /// piece, in its material coordinates (metres). Looks only.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub texture_offsets: BTreeMap<String, glam::DVec2>,
+    /// Where each piece's island sits in the UV layout used by exports and the baked atlas, by
+    /// piece id; pieces without one are placed automatically. Never the look in the editor.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub uv_layout: BTreeMap<String, super::uv_layout::UvPlacement>,
     /// Steam brushed onto the pieces: each stamp shrinks or stretches the cloth under it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steam: Vec<super::steam::SteamStamp>,
@@ -351,6 +360,11 @@ pub struct GarmentTemplate {
     /// ripped seam is.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_tears: BTreeMap<String, Vec<[f64; 2]>>,
+    /// Breaking strength of seams, by seam id, in newtons per metre of seam: while simulating,
+    /// a stitch whose pull per metre stays above it for [`super::seam_break::BREAK_HOLD_S`]
+    /// breaks, and the stretch it sewed is added to the seam's tears. Absent = never breaks.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seam_strengths: BTreeMap<String, f64>,
     /// Seams switched off, by id: kept in the document but not sewn, with their folds and
     /// zippers (Sewing › Activate all seams turns them back on).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -402,6 +416,10 @@ pub struct GarmentTemplate {
     /// moves with the spot of the skin it was nearest. Still, nothing changes.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pins_attached: bool,
+    /// Sizes, grade rules and points of measure. The panels are the base size; other sizes
+    /// are derived, and the size on show is what compiles. Absent in ungraded documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grading: Option<super::grading::Grading>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -775,6 +793,14 @@ impl GarmentTemplate {
         .map_err(|e| e.to_string())
     }
     pub fn compile(&self) -> Result<CompiledGarment, String> {
+        // A graded garment compiles in the sizes on show; the derived template carries no
+        // grading, so this does not recurse.
+        if let Some(grading) = &self.grading {
+            grading.validate()?;
+            if let Some(sized) = super::grading::apply::view(self)? {
+                return sized.compile();
+            }
+        }
         if let Some(id) = self
             .locked_panels
             .iter()
@@ -798,6 +824,12 @@ impl GarmentTemplate {
                 return Err(format!("Texture position on unknown piece {id}"));
             }
         }
+        for (id, placement) in &self.uv_layout {
+            if !self.panels.iter().any(|p| &p.id == id) {
+                return Err(format!("UV island of unknown piece {id}"));
+            }
+            placement.validate()?;
+        }
         for (id, tears) in &self.seam_tears {
             if !self.seams.iter().any(|s| &s.id == id) {
                 return Err(format!("Tear on unknown seam {id}"));
@@ -809,6 +841,18 @@ impl GarmentTemplate {
             {
                 return Err(format!(
                     "Seam {id} needs tears within its length, each of some length"
+                ));
+            }
+        }
+        for (id, strength) in &self.seam_strengths {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Breaking strength on unknown seam {id}"));
+            }
+            if !super::seam_break::STRENGTH_N_PER_M.contains(strength) {
+                return Err(format!(
+                    "Seam {id} needs a breaking strength of {} to {} N/m",
+                    super::seam_break::STRENGTH_N_PER_M.start(),
+                    super::seam_break::STRENGTH_N_PER_M.end()
                 ));
             }
         }
@@ -1346,6 +1390,7 @@ impl GarmentTemplate {
                 samples: vec![super::seam::StitchSample {
                     point: point.clone(),
                     weight_m: 1.,
+                    span: [0., 1.],
                 }],
                 probes: vec![point],
                 guides: vec![],
@@ -1353,6 +1398,7 @@ impl GarmentTemplate {
                 stiffness: TACK_STIFFNESS,
                 lengths: [0.01, 0.01],
                 notches: vec![],
+                torn: vec![],
             });
         }
         out.arrangement_positions = out.initial_state.x.clone();
@@ -1514,7 +1560,9 @@ impl GarmentTemplate {
             seam_zippers: Default::default(),
             inactive_seams: Default::default(),
             seam_tears: Default::default(),
+            seam_strengths: Default::default(),
             texture_offsets: Default::default(),
+            uv_layout: Default::default(),
             steam: vec![],
             tacks: vec![],
             line_folds: vec![],
@@ -1528,6 +1576,7 @@ impl GarmentTemplate {
             locked_panels: Default::default(),
             internal_lines_locked: false,
             pins_attached: false,
+            grading: None,
             fabric_appearance: Default::default(),
             graphics: vec![],
             trims: vec![],

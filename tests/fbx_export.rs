@@ -81,6 +81,7 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
                 relief_mm: 0.,
                 normal_asset_id: None,
                 roughness_asset_id: None,
+                ..Default::default()
             }),
             ..Default::default()
         },
@@ -152,7 +153,9 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
             panel.triangles.len()
         );
         assert!(values.chunks(3).all(|t| t[0] >= 0 && t[1] >= 0 && t[2] < 0));
-        assert_eq!(find(&geometry.children, "LayerElementUV").len(), 1);
+        // The fabric's texture coordinates and the UV layout, each in a layer of its own.
+        assert_eq!(find(&geometry.children, "LayerElementUV").len(), 2);
+        assert_eq!(find(&geometry.children, "Layer").len(), 2);
     }
     // Everything hangs from the scene root or from its model.
     let connections = &find(&top, "Connections")[0].children;

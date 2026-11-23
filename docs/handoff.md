@@ -1,5 +1,19 @@
 # Repository handoff
 
+## Simulation speed and settling — 22 November 2026
+
+Read [simulation-speed.md](simulation-speed.md). Steps split by default (`max_substeps` 16,
+parts share the iterations, `SPLIT_SHARE` 0.3 so a part's warm start fits its OGC ball): the
+T-shirt is sewn at 1.04 s and at rest from 2.00 s simulated (2.64 s real on an M1 Max), where
+`public/main` was still moving after 5 s. "Full-speed falls" is on by default; off caps a step
+at four parts. Fabrics can set their own friction (`Material::friction`, mean of two cloth
+sides, a fabric's own on the body). The CPU solver is about 40 % faster per step (`Jet`
+subtraction and symmetric Hessians), friction terms are built only for pressing contacts, Apple
+GPUs use subgroup reductions, and the GPU contact search skips avatar-edge queries. The ~3 mm
+underarm seam gap is the seam spring's equilibrium, not contact (`examples/seam_gap_probe.rs`);
+stiffer seams close it but rest later, so `DEFAULT_SEAM_STIFFNESS` is unchanged. On the GPU only
+the first part of a split step re-detects sweep by sweep after the body moved.
+
 ## GPU recording with a moving body — 21 November 2026
 
 Recording a take with GPU compute on let a walking leg pass through trousers; the CPU solver

@@ -83,6 +83,73 @@ pub fn four_terms(terms: &[(usize, f64)]) -> Vec<(usize, f64)> {
     out
 }
 
+/// The subgroup size a 32-invocation compute workgroup runs with on `device`, as the GPU
+/// reports it from inside a kernel; none when it cannot be read back.
+fn measured_subgroup_size(device: &wgpu::Device, queue: &wgpu::Queue) -> Option<u32> {
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Subgroup size probe"),
+        source: wgpu::ShaderSource::Wgsl(
+            "@group(0) @binding(0) var<storage,read_write> size:array<u32>;\n\
+             @compute @workgroup_size(32)\n\
+             fn main(@builtin(subgroup_size) s:u32,@builtin(local_invocation_index) i:u32){\n\
+                 if i==0u {size[0]=s;}\n\
+             }"
+            .into(),
+        ),
+    });
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Subgroup size probe"),
+        layout: None,
+        module: &module,
+        entry_point: Some("main"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+    let storage = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Subgroup size"),
+        size: 16,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let read = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Subgroup size readback"),
+        size: 16,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Subgroup size probe"),
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: storage.as_entire_binding(),
+        }],
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    {
+        let mut pass = encoder.begin_compute_pass(&Default::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&storage, 0, &read, 0, 16);
+    let submission = queue.submit([encoder.finish()]);
+    let (tx, rx) = std::sync::mpsc::channel();
+    read.map_async(wgpu::MapMode::Read, .., move |r| {
+        let _ = tx.send(r);
+    });
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        })
+        .ok()?;
+    rx.recv().ok()?.ok()?;
+    let size = bytemuck::cast_slice::<u8, u32>(&read.get_mapped_range(..).ok()?)[0];
+    read.unmap();
+    Some(size)
+}
+
 impl Term {
     fn new(ids: &[usize], kind: u32) -> Self {
         let mut t = Self {
@@ -128,9 +195,13 @@ impl GpuVbd {
             immediate_size: 0,
         });
         let info = device.adapter_info();
+        // Metal reports the range of every GPU it drives (4 to 64), but Apple GPUs run every
+        // compute kernel in 32-wide SIMD groups: measured once, the reductions then shuffle
+        // within the group instead of synchronising the workgroup through shared memory.
         let subgroups = device.features().contains(wgpu::Features::SUBGROUP)
-            && info.subgroup_min_size == 32
-            && info.subgroup_max_size == 32;
+            && ((info.subgroup_min_size == 32 && info.subgroup_max_size == 32)
+                || (info.backend == wgpu::Backend::Metal
+                    && measured_subgroup_size(&device, &queue) == Some(32)));
         let source = format!(
             "{}\n{}",
             include_str!("vbd.wgsl").replace(
@@ -210,15 +281,14 @@ impl GpuVbd {
         let start = Instant::now();
         // A step whose motion its contacts cannot allow at once is split, as on the CPU.
         let parts = solver.parts(state, settings);
-        let mut part = settings.clone();
-        part.dt = settings.dt / parts as f64;
-        part.max_substeps = 1;
+        let part = settings.part(parts);
         // The body (the avatar) moved since the last GPU step, as it does while a take is
-        // recorded or a pose changes.
+        // recorded or a pose changes. Only the first part follows it there: the later parts
+        // start from contacts found after it moved.
         let moved = solver.world.take_fixed_moved();
         let mut metrics = self.step_inner(solver, state, &part, grab, moved)?;
         for _ in 1..parts {
-            let next = self.step_inner(solver, state, &part, grab, moved)?;
+            let next = self.step_inner(solver, state, &part, grab, false)?;
             metrics.detection_ms += next.detection_ms;
             metrics.detection_updates += next.detection_updates;
             metrics.broad_phase_rebuilds += next.broad_phase_rebuilds;
@@ -314,7 +384,7 @@ impl GpuVbd {
             // Friction is lagged to the start of the step, as on the CPU, also when contacts
             // are found again. The solver keeps it too: its f64 refinement of precision
             // vertices uses the same terms.
-            solver.friction = crate::vbd::friction::friction_terms(&contacts, &x, &x, settings);
+            solver.friction = solver.friction_terms(&contacts, &x, settings);
             let color_start = Instant::now();
             let colors = solver.colors(&contacts, grab);
             profile.coloring_ms += color_start.elapsed().as_secs_f64() * 1000.;

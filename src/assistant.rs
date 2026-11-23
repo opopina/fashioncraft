@@ -43,20 +43,45 @@ Keep answers short and practical, and reply in the person's language.";
 pub enum Provider {
     Anthropic,
     OpenAi,
+    CodexCli,
+    ClaudeCli,
     Gemini,
+    GeminiCli,
+    AntigravityCli,
     /// Any server with the OpenAI chat-completions API on this computer: Ollama, LM Studio…
     Local,
 }
 
 impl Provider {
-    pub const ALL: [Self; 4] = [Self::Anthropic, Self::OpenAi, Self::Gemini, Self::Local];
+    pub const ALL: [Self; 8] = [
+        Self::Anthropic,
+        Self::ClaudeCli,
+        Self::OpenAi,
+        Self::CodexCli,
+        Self::Gemini,
+        Self::GeminiCli,
+        Self::AntigravityCli,
+        Self::Local,
+    ];
+
+    /// Whether this provider runs through a local CLI binary rather than HTTP.
+    pub fn is_cli(self) -> bool {
+        matches!(
+            self,
+            Self::CodexCli | Self::ClaudeCli | Self::GeminiCli | Self::AntigravityCli
+        )
+    }
 
     /// The name kept in the preferences.
     pub fn id(self) -> &'static str {
         match self {
             Self::Anthropic => "anthropic",
             Self::OpenAi => "openai",
+            Self::CodexCli => "codex-cli",
+            Self::ClaudeCli => "claude-cli",
             Self::Gemini => "gemini",
+            Self::GeminiCli => "gemini-cli",
+            Self::AntigravityCli => "antigravity-cli",
             Self::Local => "local",
         }
     }
@@ -67,7 +92,11 @@ impl Provider {
         match self {
             Self::Anthropic => "Claude (Anthropic)",
             Self::OpenAi => "ChatGPT (OpenAI)",
+            Self::CodexCli => "ChatGPT (Codex CLI)",
+            Self::ClaudeCli => "Claude (Claude Code CLI)",
             Self::Gemini => "Gemini (Google)",
+            Self::GeminiCli => "Gemini (Gemini CLI)",
+            Self::AntigravityCli => "Antigravity (Google CLI)",
             Self::Local => "Local model (Ollama, LM Studio…)",
         }
     }
@@ -83,7 +112,11 @@ impl Provider {
         match self {
             Self::Anthropic => "claude-opus-5-5",
             Self::OpenAi => "the model name, as OpenAI lists it",
+            Self::CodexCli => "Codex default",
+            Self::ClaudeCli => "Claude Code default",
             Self::Gemini => "the model name, as Google lists it",
+            Self::GeminiCli => "Gemini CLI default",
+            Self::AntigravityCli => "Antigravity default",
             Self::Local => "the model name, as `ollama list` shows it",
         }
     }
@@ -91,6 +124,7 @@ impl Provider {
         match self {
             Self::Anthropic => "https://api.anthropic.com/v1",
             Self::OpenAi => "https://api.openai.com/v1",
+            Self::CodexCli | Self::ClaudeCli | Self::GeminiCli | Self::AntigravityCli => "",
             Self::Gemini => "https://generativelanguage.googleapis.com/v1beta/openai",
             Self::Local => "http://localhost:11434/v1",
         }
@@ -101,11 +135,15 @@ impl Provider {
             Self::Anthropic => Some("ANTHROPIC_API_KEY"),
             Self::OpenAi => Some("OPENAI_API_KEY"),
             Self::Gemini => Some("GEMINI_API_KEY"),
-            Self::Local => None,
+            Self::Local
+            | Self::CodexCli
+            | Self::ClaudeCli
+            | Self::GeminiCli
+            | Self::AntigravityCli => None,
         }
     }
     pub fn needs_key(self) -> bool {
-        self != Self::Local
+        !matches!(self, Self::Local) && !self.is_cli()
     }
     /// Whether screenshots go to the model. Many local models read no pictures.
     fn sees_images(self) -> bool {
@@ -139,7 +177,7 @@ impl Settings {
     }
     /// What is missing before a message can be sent, if anything.
     pub fn missing(&self) -> Option<String> {
-        if self.model().is_empty() {
+        if !self.provider.is_cli() && self.model().is_empty() {
             return Some("Choose a model under Connection, at the top of this window".into());
         }
         if self.provider.needs_key() && self.api_key.trim().is_empty() {
@@ -993,6 +1031,16 @@ mod tests {
         assert!(describe_error(404, &gemini).contains("model not found"));
         for p in Provider::ALL {
             assert_eq!(Provider::from_id(p.id()), Some(p));
+            if p.is_cli() {
+                let s = Settings {
+                    provider: p,
+                    model: String::new(),
+                    base_url: String::new(),
+                    api_key: String::new(),
+                };
+                assert!(!p.needs_key());
+                assert_eq!(s.missing(), None);
+            }
         }
     }
 }

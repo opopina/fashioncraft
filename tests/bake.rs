@@ -127,6 +127,7 @@ fn the_fabric_texture_multiplies_the_colour() {
         relief_mm: 0.,
         normal_asset_id: None,
         roughness_asset_id: None,
+        ..Default::default()
     });
     let g = t.compile().unwrap();
     let green = solid([0, 200, 0, 255]);

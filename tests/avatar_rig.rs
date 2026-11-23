@@ -2,7 +2,7 @@
 //! is at rest and bends each limb about its joint without dragging the rest of the body.
 use fashioncraft::{
     avatar::SurfaceMesh,
-    avatar_rig::{Pose, Rig, preset},
+    avatar_rig::{INFLUENCES, Pose, Rig, preset},
     garment::arrangement::load_sidecar,
 };
 use glam::DVec3;
@@ -27,7 +27,7 @@ fn the_rest_pose_leaves_the_body_untouched_and_weights_are_normalised() {
     let rig = Rig::new(&landmarks, &surface).unwrap();
     assert_eq!(rig.weights.len(), surface.vertices.len());
     for w in &rig.weights {
-        assert!(!w.is_empty() && w.len() <= 4);
+        assert!(!w.is_empty() && w.len() <= INFLUENCES);
         let sum: f64 = w.iter().map(|p| p.1).sum();
         assert!((sum - 1.).abs() < 1e-9);
     }

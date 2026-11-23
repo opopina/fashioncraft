@@ -207,7 +207,11 @@ fn aliases(id: CommandId) -> &'static str {
         PleatSewing => "pleat sewing tack close pleats",
         Puckering => "puckering pucker seam ripple wrinkle tight",
         Steam => "steam brush shrink stretch iron",
+        MeasureFabric => {
+            "measure fabric kit test real tensile stretch bending cantilever weight gsm calibrate library"
+        }
         Piping => "piping cord binding edge seam trim",
+        FrayEdge => "fray frayed edge threads loose raw cut distressed fringe",
         TearSeam => "tear rip seam open ripped distressed",
         EditTears => "edit tears rip seam mend",
         TraceShape => "trace shape pattern piece new",
@@ -215,9 +219,11 @@ fn aliases(id: CommandId) -> &'static str {
         SelectMeshBrush => "select mesh brush paint points cloth freeze",
         SelectMeshBox => "select mesh box rectangle points cloth freeze",
         SelectMeshLasso => "select mesh lasso points cloth freeze",
+        SubdivideMesh => "subdivide mesh refine finer triangles selection detail resolution",
         ConvertToQuads => "convert quads quad mesh grid squares",
         ConvertToTriangles => "convert triangles triangle mesh",
         HighQualityView => "high quality view render supersample smooth antialias",
+        PhotorealRender => "photoreal render path trace image hdr environment depth of field png",
         SuperimposeSide => "superimpose side beside lay flat seam",
         DeleteAvatar => "delete remove avatar body mannequin",
         EditTexture2d => "edit texture shift offset position grain repeat 2d board",
@@ -231,6 +237,17 @@ fn aliases(id: CommandId) -> &'static str {
         ReDrape => "redrape re-drape retarget carry avatar new body keep size",
         AutoFit => "auto fit fitting grade resize avatar new body size",
         RunPythonScript => "python script py automate api run code",
+        UvEditor => "uv editor layout islands unwrap texture coordinates atlas export",
+        PackUvIslands => "pack uv islands layout arrange atlas unified texture square",
+        AutomaticUvLayout => "automatic uv layout reset islands default",
+        GradingTable => {
+            "grading grade sizes size range rules nest base size escalado tallas reglas"
+        }
+        PointsOfMeasure => "pom points of measure measurement spec size chart tolerance medidas",
+        ToggleGradePoint => "grade point proportional rule point escalado punto",
+        GradingReview => "grading review nest all sizes overlay stack revision tallas",
+        NextSize => "next size larger grading talla siguiente",
+        PreviousSize => "previous size smaller grading talla anterior",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

@@ -62,6 +62,12 @@ mod commands;
 mod demo;
 #[path = "atelier/demo_cargo.rs"]
 mod demo_cargo;
+#[path = "atelier/demo_effects.rs"]
+mod demo_effects;
+#[path = "atelier/demo_grading.rs"]
+mod demo_grading;
+#[path = "atelier/demo_looks.rs"]
+mod demo_looks;
 #[path = "atelier/demo_outfit.rs"]
 mod demo_outfit;
 #[path = "atelier/demo_vest.rs"]
@@ -74,6 +80,8 @@ mod drafting_ui;
 mod edges_3d;
 #[path = "atelier/environment_ui.rs"]
 mod environment_ui;
+#[path = "atelier/fabric_kit_ui.rs"]
+mod fabric_kit_ui;
 #[path = "atelier/fabrics_ui.rs"]
 mod fabrics_ui;
 #[path = "atelier/garment_display.rs"]
@@ -82,6 +90,8 @@ mod garment_display;
 mod garment_files;
 #[path = "atelier/gizmo.rs"]
 mod gizmo;
+#[path = "atelier/grading_ui.rs"]
+mod grading_ui;
 #[path = "atelier/graphics_ui.rs"]
 mod graphics_ui;
 #[path = "atelier/history_ui.rs"]
@@ -132,10 +142,14 @@ mod quick_actions;
 mod radial;
 #[path = "atelier/redrape_ui.rs"]
 mod redrape_ui;
+#[path = "atelier/render_ui.rs"]
+mod render_ui;
 #[path = "atelier/scene_ui.rs"]
 mod scene_ui;
 #[path = "atelier/script_ui.rs"]
 mod script_ui;
+#[path = "atelier/seam_break_ui.rs"]
+mod seam_break_ui;
 #[path = "atelier/seam_links.rs"]
 mod seam_links;
 #[path = "atelier/seams_ui.rs"]
@@ -165,6 +179,8 @@ mod trims_ui;
 #[cfg(test)]
 #[path = "atelier/ui_preview.rs"]
 mod ui_preview;
+#[path = "atelier/uv_editor_ui.rs"]
+mod uv_editor_ui;
 #[path = "atelier/view_controls.rs"]
 mod view_controls;
 #[path = "atelier/window_tools.rs"]
@@ -847,9 +863,15 @@ impl Atelier {
             Id::GraphicOn3dGarment => self.start_graphic_3d(),
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
+            Id::MeasureFabric => self.open_fabric_kit(),
             Id::Piping => self.pipe_selected()?,
+            Id::FrayEdge => self.fray_selected()?,
+            Id::SubdivideMesh => self.subdivide_selection()?,
             Id::SuperimposeSide => self.superimpose_side()?,
             Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
+            Id::UvEditor => self.open_uv_editor(),
+            Id::PackUvIslands => self.pack_uv_islands()?,
+            Id::AutomaticUvLayout => self.automatic_uv_layout(),
             Id::OpenTrim => self.open_trim(),
             Id::AddAvatarObject => self.add_avatar_object(),
             Id::StyleLineEdit => self.start_style_lines(style_lines::StyleMode::Edit),
@@ -859,6 +881,13 @@ impl Atelier {
             Id::ReDrape => self.redrape()?,
             Id::AutoFit => self.auto_fit()?,
             Id::RunPythonScript => self.open_python_script(),
+            Id::PhotorealRender => self.open_photoreal_render(),
+            Id::GradingTable => self.open_grading(),
+            Id::PointsOfMeasure => self.open_points_of_measure(),
+            Id::ToggleGradePoint => self.toggle_grade_point(),
+            Id::GradingReview => self.toggle_grading_review(),
+            Id::NextSize => self.step_shown_size(true),
+            Id::PreviousSize => self.step_shown_size(false),
             Id::HighQualityView => {
                 let display = &mut self.prefs.garment_display;
                 display.high_quality = !display.high_quality;
@@ -1293,6 +1322,7 @@ impl Atelier {
                     self.status = "Dynamic simulation · OGC contacts".into();
                     self.metrics = Some(m);
                     self.advance_pose_transition();
+                    self.observe_seam_breaks();
                 }
                 Err(e) => {
                     self.playing = false;
@@ -1830,8 +1860,12 @@ impl eframe::App for Atelier {
             self.pleats_window(&ctx);
             self.mesh_select_window(&ctx);
             self.texture_edit_window(&ctx);
+            self.uv_editor_window(&ctx);
             self.script_window(&ctx);
             self.steam_window(&ctx);
+            self.fabric_kit_window(&ctx);
+            self.render_window(&ctx);
+            self.grading_window(&ctx);
             self.object_browser_window(&ctx);
             self.native_menu_windows(&ctx, palette_idle);
         }

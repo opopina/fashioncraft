@@ -40,21 +40,37 @@ pub struct VbdSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor: Option<f64>,
     /// Most parts a step may be split into when the cloth would move further in it than
-    /// its contacts let one step go (about 0.3 m/s at 1/60 s): each part is a whole step,
-    /// contacts and all, of a share of the time. One never splits, as before.
-    #[serde(default = "one_part", skip_serializing_if = "is_one_part")]
+    /// its contacts let one step go (about 0.13 m/s at 1/60 s): each part is a whole step,
+    /// contacts and all, of a share of the time and of the iterations (see
+    /// [`VbdSettings::part`]). [`DEFAULT_MAX_SUBSTEPS`] lets free cloth fall as fast as
+    /// gravity takes it; one never splits. Settings saved before this field existed split by
+    /// default too.
+    #[serde(
+        default = "default_max_substeps",
+        skip_serializing_if = "is_default_max_substeps"
+    )]
     pub max_substeps: usize,
 }
-fn one_part() -> usize {
-    1
+/// Most parts a step is split into by default: at 1/60 s with the 3 mm contact distance,
+/// enough for cloth moving at about 3.4 m/s, as fast as it falls in a 60 cm drop.
+pub const DEFAULT_MAX_SUBSTEPS: usize = 16;
+/// The split a step gets with "Full-speed falls" off: enough for sewing and draping (cloth
+/// moving up to about 0.8 m/s at 1/60 s and 3 mm), and no more work while cloth falls.
+pub const CAPPED_MAX_SUBSTEPS: usize = 4;
+fn default_max_substeps() -> usize {
+    DEFAULT_MAX_SUBSTEPS
 }
-fn is_one_part(v: &usize) -> bool {
-    *v == 1
+fn is_default_max_substeps(v: &usize) -> bool {
+    *v == DEFAULT_MAX_SUBSTEPS
 }
 /// Share of the contact query radius one step's motion may use before a split step is
 /// split: the warm start keeps each vertex within 0.45 of its distance to the nearest
-/// geometry, at most the query radius of four contact radii.
-const SPLIT_SHARE: f64 = 0.4;
+/// geometry, at most the query radius of four contact radii. The query of a part reaches its
+/// contact radius plus its motion, so a part moving 0.3 of four radii (3.6 mm at 3 mm) has a
+/// ball of about 3 mm: its warm start is barely clipped, and the cloth moves together in few
+/// iterations. At 0.4 the ball fell well short of the motion; a vertex sent ahead alone was
+/// pulled back by its neighbours, and a falling sheet needed many iterations per part.
+const SPLIT_SHARE: f64 = 0.3;
 /// Energy of one elastic or tape spring, tension only: ½·k·max(0, |x_a − x_b| − rest)².
 pub(crate) fn line_energy<S: Scalar>(
     line: &crate::garment::template::CompiledLine,
@@ -225,7 +241,7 @@ impl Default for VbdSettings {
             friction: 0.0,
             wind: None,
             floor: None,
-            max_substeps: 1,
+            max_substeps: DEFAULT_MAX_SUBSTEPS,
         }
     }
 }
@@ -241,7 +257,7 @@ impl VbdSettings {
             || !self.gravity.is_finite()
             || self.floor.is_some_and(|h| !h.is_finite())
             || !self.friction.is_finite()
-            || !(0.0..=5.0).contains(&self.friction)
+            || !(0.0..=crate::model::MAX_FRICTION).contains(&self.friction)
             || self.wind.as_ref().is_some_and(|w| w.validate().is_err())
             || !(1..=16).contains(&self.max_substeps)
         {
@@ -249,7 +265,28 @@ impl VbdSettings {
         }
         Ok(())
     }
+
+    /// The settings of one of `parts` equal parts of a split step: a share of the time and a
+    /// share of the iterations, at least [`MIN_PART_ITERATIONS`]. Many short steps with few
+    /// iterations each converge better than one long step with many (Macklin et al. 2019,
+    /// "Small steps in physics simulation"), and each part finds its contacts again, so
+    /// cloth that is moving fast can go further for the same work.
+    pub fn part(&self, parts: usize) -> VbdSettings {
+        let parts = parts.max(1);
+        let mut part = self.clone();
+        part.dt = self.dt / parts as f64;
+        part.iterations = self
+            .iterations
+            .div_ceil(parts)
+            .max(MIN_PART_ITERATIONS)
+            .min(self.iterations);
+        part.max_substeps = 1;
+        part
+    }
 }
+
+/// Fewest local iterations a part of a split step gets.
+pub const MIN_PART_ITERATIONS: usize = 4;
 
 #[derive(Clone, Debug)]
 pub struct Grab {
@@ -388,6 +425,9 @@ pub struct VbdSolver {
     /// Collision distance of each vertex's fabric, the largest of its triangles'; none where
     /// the scene's applies. Empty when no fabric sets its own.
     collision: Vec<Option<f64>>,
+    /// Each moving vertex's own friction coefficient, from its fabric; empty when no fabric
+    /// sets one, so every contact takes the scene's.
+    fabric_friction: Vec<Option<f64>>,
 }
 impl VbdSolver {
     /// Move the obstacle (the avatar, with the floor when it has one) to `obstacle`, the same
@@ -459,6 +499,8 @@ impl VbdSolver {
                 });
             }
         }
+        // Torn stretches keep their sides out of each other's contacts, as when sewn.
+        excluded.extend(garment.seams.iter().flat_map(|s| s.contact_exclusions()));
         let mut world = OgcWorld::new(&x, faces, n, excluded)?;
         world.set_inert(garment.inert.clone())?;
         world.validate_start(&x)?;
@@ -527,19 +569,38 @@ impl VbdSolver {
             solid_target: vec![],
             solid_rotation: vec![],
             collision: vec![],
+            fabric_friction: vec![],
         };
         let mut collision = vec![None; n];
+        let mut fabric_friction = vec![None; n];
         for t in &solver.garment.mesh.triangles {
-            if let Some(d) = solver.garment.materials[t.material].collision_distance {
-                for v in t.vertices {
+            let m = &solver.garment.materials[t.material];
+            for v in t.vertices {
+                if let Some(d) = m.collision_distance {
                     collision[v] = Some(collision[v].map_or(d, |c: f64| c.max(d)));
+                }
+                if let Some(mu) = m.friction {
+                    fabric_friction[v] = Some(fabric_friction[v].map_or(mu, |f: f64| f.max(mu)));
                 }
             }
         }
         if collision.iter().any(Option::is_some) {
             solver.collision = collision;
         }
+        if fabric_friction.iter().any(Option::is_some) {
+            solver.fabric_friction = fabric_friction;
+        }
         Ok(solver)
+    }
+    /// Friction data for `contacts` from the positions `start` at the start of the step, with
+    /// each fabric's own coefficient where it sets one.
+    pub(crate) fn friction_terms(
+        &self,
+        contacts: &ContactSet,
+        start: &[DVec3],
+        settings: &VbdSettings,
+    ) -> Vec<Option<friction::FrictionTerm>> {
+        friction::fabric_friction_terms(contacts, start, start, settings, &self.fabric_friction)
     }
     /// Whether vertex `v` gives no way to contact `c`: it sits on the lower-layer side of a
     /// contact between pieces of different simulation layers. That side keeps no energy of
@@ -805,9 +866,7 @@ impl VbdSolver {
         if parts <= 1 {
             return self.step_once(state, settings, grab);
         }
-        let mut part = settings.clone();
-        part.dt = settings.dt / parts as f64;
-        part.max_substeps = 1;
+        let part = settings.part(parts);
         let mut total: Option<VbdMetrics> = None;
         for _ in 0..parts {
             let m = self.step_once(state, &part, grab)?;
@@ -911,8 +970,7 @@ impl VbdSolver {
         if contacts.minimum_distance <= 1e-12 {
             return Err("OGC zero separation; step rejected, reset the arrangement".into());
         }
-        self.friction =
-            friction::friction_terms(&contacts, &start_positions, &start_positions, settings);
+        self.friction = self.friction_terms(&contacts, &start_positions, settings);
         metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
         metrics.detection_updates += 1;
         metrics.broad_phase_rebuilds += usize::from(contacts.broad_phase_rebuilt);
@@ -960,12 +1018,7 @@ impl VbdSolver {
                 contacts = refreshed;
                 // Normal forces stay lagged to the start of the step: an intermediate iterate
                 // pressed into the barrier would overstate them.
-                self.friction = friction::friction_terms(
-                    &contacts,
-                    &start_positions,
-                    &start_positions,
-                    settings,
-                );
+                self.friction = self.friction_terms(&contacts, &start_positions, settings);
                 colors = self.colors(&contacts, grab);
                 metrics.detection_ms += detect.elapsed().as_secs_f64() * 1000.0;
                 metrics.detection_updates += 1;

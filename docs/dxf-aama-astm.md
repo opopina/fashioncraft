@@ -31,7 +31,8 @@ by an INSERT in a row. Inside each block:
 
 Once in the drawing, on layer 1 below the pieces, the Style System Text: `Style Name:`,
 `Creation Date:` (dd-mm-yyyy) and `Creation Time:` (hh:mm), both in UTC, `Author:`
-(`FashionCraft;FashionCraft;<release>`), `Sample Size:`, `Grade Rule Table:` (empty),
+(`FashionCraft;FashionCraft;<release>`), `Sample Size:`, `Grade Rule Table:` (the rule table's
+name for a graded garment, else empty),
 `Units: METRIC` or `ENGLISH`, for ASTM `ASTM/D13 Proposal 1 Version: D 6673-04`, and
 `Curve Tolerance:` (0.25 mm). Metric files are in millimetres with 2 decimals, English files in
 inches with 4. The header also sets `$INSUNITS` and `$MEASUREMENT` for general CAD viewers.
@@ -92,8 +93,12 @@ step.
 - A notch too close to a boundary's end is left out.
 - A notch without a depth gets 5 mm.
 
-**Shown but not stored:** size, quantity and material. The garment has no place for them yet;
-grading will add one.
+**Grading:** a graded garment is written in its base size, with grade rule numbers (`# n`) on
+its points (layer 5, notches on layer 4), a grade reference line on layer 5 and the rule table
+in a `.rul` file beside the DXF. A `.rul` beside a DXF being imported is read with it. What is
+written and why: [grading](grading.md).
+
+**Shown but not stored:** size, quantity and material.
 
 **Not imported, and listed:**
 - Mirror (fold) lines (6): the piece comes in as drawn, so a half piece stays a half.
@@ -109,8 +114,8 @@ grading will add one.
   they come in as outline shape or internal lines.
 - Notches on an internal cutout's rim are listed as away from the cut line. Only the outer cut
   line takes notches on import, although the export writes them on cutouts too.
-- Grading (`.RUL` files, graded nests) is not read. Each size block of a nest would come in as
-  its own piece.
+- Graded nests are not read: each size block of a nest would come in as its own piece. A rule
+  table (`.RUL`) beside the file is read; see [grading](grading.md).
 - Binary DXF and UTF-16 files are refused.
 
 ## Round trip

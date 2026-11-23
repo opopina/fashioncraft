@@ -169,15 +169,65 @@ fn factor(y: f64, l: &Levels, top: f64, bottom: f64, f: [f64; 3]) -> f64 {
 }
 
 /// Bones whose vertices follow the torso's scale across, and the joints the limbs hang from.
+/// Recognises both the 104-bone Anny skeleton and the 19-bone legacy skeleton.
 fn region(bone: &str) -> Option<&'static str> {
-    match bone {
-        "pelvis" | "spine" | "chest" => Some("torso"),
-        "clavicle.L" | "upper_arm.L" | "forearm.L" | "hand.L" => Some("joint-l-shoulder"),
-        "clavicle.R" | "upper_arm.R" | "forearm.R" | "hand.R" => Some("joint-r-shoulder"),
-        "thigh.L" | "shin.L" | "foot.L" => Some("joint-l-upper-leg"),
-        "thigh.R" | "shin.R" | "foot.R" => Some("joint-r-upper-leg"),
-        _ => None,
+    if matches!(
+        bone,
+        "pelvis" | "spine" | "chest" | "root" | "pelvis.L" | "pelvis.R"
+    ) || bone.starts_with("spine")
+    {
+        return Some("torso");
     }
+    if let Some(stem) = bone.strip_suffix(".L") {
+        if matches!(
+            stem,
+            "clavicle" | "shoulder01" | "upper_arm" | "forearm" | "hand" | "wrist"
+        ) || stem.starts_with("upperarm")
+            || stem.starts_with("lowerarm")
+            || stem.starts_with("metacarpal")
+            || stem.starts_with("finger")
+        {
+            return Some("joint-l-shoulder");
+        }
+        if matches!(stem, "thigh" | "shin" | "foot")
+            || stem.starts_with("upperleg")
+            || stem.starts_with("lowerleg")
+            || stem.starts_with("toe")
+        {
+            return Some("joint-l-upper-leg");
+        }
+    }
+    if let Some(stem) = bone.strip_suffix(".R") {
+        if matches!(
+            stem,
+            "clavicle" | "shoulder01" | "upper_arm" | "forearm" | "hand" | "wrist"
+        ) || stem.starts_with("upperarm")
+            || stem.starts_with("lowerarm")
+            || stem.starts_with("metacarpal")
+            || stem.starts_with("finger")
+        {
+            return Some("joint-r-shoulder");
+        }
+        if matches!(stem, "thigh" | "shin" | "foot")
+            || stem.starts_with("upperleg")
+            || stem.starts_with("lowerleg")
+            || stem.starts_with("toe")
+        {
+            return Some("joint-r-upper-leg");
+        }
+    }
+    None
+}
+
+fn is_arm_bone(bone: &str, suffix: &str) -> bool {
+    let Some(stem) = bone.strip_suffix(suffix) else {
+        return false;
+    };
+    matches!(stem, "upper_arm" | "forearm" | "hand" | "wrist")
+        || stem.starts_with("upperarm")
+        || stem.starts_with("lowerarm")
+        || stem.starts_with("metacarpal")
+        || stem.starts_with("finger")
 }
 
 /// `surface` and its joint `landmarks` reshaped to `target`. Returns both.
@@ -318,10 +368,7 @@ pub fn reshape(
             .collect();
     }
     // Each arm along itself, from its shoulder, to the length asked for.
-    for (side, bones) in [
-        ("l", ["upper_arm.L", "forearm.L", "hand.L"]),
-        ("r", ["upper_arm.R", "forearm.R", "hand.R"]),
-    ] {
+    for (side, suffix) in [("l", ".L"), ("r", ".R")] {
         let (length, shoulder, hand) = arm(&joints, side)?;
         let k = target.arm_m / length;
         if !(0.5..=2.).contains(&k) {
@@ -332,7 +379,7 @@ pub fn reshape(
         for (p, weights) in body.vertices.iter_mut().zip(&rig.weights) {
             let w: f64 = weights
                 .iter()
-                .filter(|(bone, _)| bones.contains(&rig.bones[*bone].name.as_str()))
+                .filter(|(bone, _)| is_arm_bone(&rig.bones[*bone].name, suffix))
                 .map(|(_, w)| *w)
                 .sum();
             *p += reach(*p) * w;

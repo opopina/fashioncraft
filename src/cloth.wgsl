@@ -23,14 +23,21 @@ struct VertexOut {
     @location(8) map: vec4f,
     // Layers of the normal map and the roughness map (-1 for none).
     @location(9) detail: vec2f,
+    // Layers of the metalness, opacity, displacement and ambient-occlusion maps (-1 for none).
+    @location(10) extra: vec4f,
+    // Metalness (without a map) and displacement height in metres.
+    @location(11) params: vec4f,
 };
 
 @vertex
 fn vs_main(@location(0) clip: vec4<f32>, @location(1) normal: vec3<f32>,
            @location(2) color: vec4<f32>, @location(3) bary: vec3<f32>, @location(4) roughness: f32,
            @location(5) back: vec3f, @location(6) uv: vec2f, @location(7) weave: vec3f,
-           @location(8) map: vec4f, @location(9) detail: vec2f) -> VertexOut {
+           @location(8) map: vec4f, @location(9) detail: vec2f,
+           @location(10) extra: vec4f, @location(11) params: vec4f) -> VertexOut {
     var out: VertexOut;
+    out.extra = extra;
+    out.params = params;
     out.map = map;
     out.detail = detail;
     out.back = back;
@@ -113,21 +120,66 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
     // The fabric's front is the side its pattern shows on the 2D board, which faces away from
     // the faces' winding normal: a placed garment shows it outside.
     var base = select(in.color.rgb, in.back, front);
-    // The fabric texture and two neighbouring texels for its relief, sampled in uniform
-    // control flow; faces without a texture ignore them.
-    let layer = i32(max(in.map.z, 0.0));
-    let texel = 1.0 / vec2f(textureDimensions(fabric_maps));
-    let image_rgba = textureSample(fabric_maps, fabric_sampler, in.map.xy, layer);
-    let image = image_rgba.rgb;
-    let image_u = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(texel.x, 0.0), layer).rgb;
-    let image_v = textureSample(fabric_maps, fabric_sampler, in.map.xy + vec2f(0.0, texel.y), layer).rgb;
+    let has_map = in.map.z > -0.5;
     let dmap_dx = dpdx(in.map.xy);
     let dmap_dy = dpdy(in.map.xy);
-    // The normal and roughness maps, stored so that sampling returns their values.
-    let normal_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.x, 0.0))).rgb;
-    let rough_texel = textureSample(fabric_maps, fabric_sampler, in.map.xy, i32(max(in.detail.y, 0.0))).r;
+    // Gradients of the map coordinates along the surface (per metre), for relief, normal maps
+    // and parallax.
+    let r1 = cross(dp_dy, n);
+    let r2 = cross(n, dp_dx);
+    let det = dot(dp_dx, r1);
+    let frame_ok = abs(det) > 1e-24;
+    let grad_u = (r1 * dmap_dx.x + r2 * dmap_dy.x) / select(1.0, det, frame_ok);
+    let grad_v = (r1 * dmap_dx.y + r2 * dmap_dy.y) / select(1.0, det, frame_ok);
+    let to_eye = view.eye.xyz - in.world * view.eye.w;
+    let v = to_eye / max(length(to_eye), 0.000001);
+    // Displacement drawn by parallax: the surface sits at the map's white, and the view ray
+    // walks down into the height field to where it meets it. Every sample past this point
+    // reads at the shifted coordinates with the original footprint.
+    var uv = in.map.xy;
+    let height_layer = i32(max(in.extra.z, 0.0));
+    let displaced = has_map && in.extra.z > -0.5 && in.params.y > 0.0 && frame_ok;
+    if displaced {
+        let nv = max(dot(n, v), 0.2);
+        let shift = -vec2f(dot(grad_u, v), dot(grad_v, v)) / nv * in.params.y;
+        var previous_uv = uv;
+        var previous_gap = 1.0;
+        for (var k = 0; k <= 24; k++) {
+            let depth = f32(k) / 24.0;
+            let at = in.map.xy + shift * depth;
+            let h = textureSampleGrad(fabric_maps, fabric_sampler, at, height_layer, dmap_dx, dmap_dy).r;
+            let gap = (1.0 - h) - depth;
+            if gap <= 0.0 {
+                let w = select(0.0, previous_gap / max(previous_gap - gap, 1e-6), k > 0);
+                uv = mix(previous_uv, at, w);
+                break;
+            }
+            previous_uv = at;
+            previous_gap = gap;
+            uv = at;
+        }
+    }
+    // The fabric texture and two neighbouring texels for its relief; faces without a texture
+    // ignore them.
+    let layer = i32(max(in.map.z, 0.0));
+    let texel = 1.0 / vec2f(textureDimensions(fabric_maps));
+    let image_rgba = textureSampleGrad(fabric_maps, fabric_sampler, uv, layer, dmap_dx, dmap_dy);
+    let image = image_rgba.rgb;
+    let image_u = textureSampleGrad(fabric_maps, fabric_sampler, uv + vec2f(texel.x, 0.0), layer, dmap_dx, dmap_dy).rgb;
+    let image_v = textureSampleGrad(fabric_maps, fabric_sampler, uv + vec2f(0.0, texel.y), layer, dmap_dx, dmap_dy).rgb;
+    // The maps, stored so that sampling returns their values (a DirectX normal map's green
+    // already flipped, a glossiness map already inverted).
+    let normal_texel = textureSampleGrad(fabric_maps, fabric_sampler, uv, i32(max(in.detail.x, 0.0)), dmap_dx, dmap_dy).rgb;
+    let rough_texel = textureSampleGrad(fabric_maps, fabric_sampler, uv, i32(max(in.detail.y, 0.0)), dmap_dx, dmap_dy).r;
+    let metal_texel = textureSampleGrad(fabric_maps, fabric_sampler, uv, i32(max(in.extra.x, 0.0)), dmap_dx, dmap_dy).r;
+    let opacity_texel = textureSampleGrad(fabric_maps, fabric_sampler, uv, i32(max(in.extra.y, 0.0)), dmap_dx, dmap_dy);
+    let occlusion_texel = textureSampleGrad(fabric_maps, fabric_sampler, uv, i32(max(in.extra.w, 0.0)), dmap_dx, dmap_dy).r;
     // A negative relief marks a cut-out image (hair, eyelashes): clear texels are not drawn.
-    if in.map.z > -0.5 && in.map.w < 0.0 && image_rgba.a < 0.4 {
+    if has_map && in.map.w < 0.0 && image_rgba.a < 0.4 {
+        discard;
+    }
+    // Lace and mesh: the opacity map cuts the cloth away where it is under one half.
+    if has_map && in.extra.y > -0.5 && opacity_texel.r * opacity_texel.a < 0.5 {
         discard;
     }
     if in.weave.x > 0.5 {
@@ -143,17 +195,12 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
         let scale = inverseSqrt(max(max(dot(t, t), dot(b, b)), 1e-20));
         n = normalize(n - 0.35 * in.weave.z * fade * (w.y * t + w.z * b) * scale);
     }
-    if in.map.z > -0.5 {
+    if has_map {
         base = base * image;
         // Brightness as height: tilt the normal against its gradient along the surface.
         let luma = vec3f(0.2126, 0.7152, 0.0722);
         let slope = vec2f(dot(image_u - image, luma), dot(image_v - image, luma)) / texel;
-        let r1 = cross(dp_dy, n);
-        let r2 = cross(n, dp_dx);
-        let det = dot(dp_dx, r1);
-        if abs(det) > 1e-24 {
-            let grad_u = (r1 * dmap_dx.x + r2 * dmap_dy.x) / det;
-            let grad_v = (r1 * dmap_dx.y + r2 * dmap_dy.y) / det;
+        if frame_ok {
             n = normalize(n - max(in.map.w, 0.0) * (slope.x * grad_u + slope.y * grad_v));
             // A normal map in the repeat's frame: red along it, green up it (against the
             // image's rows), blue out of the cloth.
@@ -163,6 +210,13 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
                 let b = normalize(b0 - n * dot(b0, n));
                 let m = normal_texel * 2.0 - vec3f(1.0);
                 n = normalize(t * m.x + b * m.y + n * max(m.z, 0.05));
+            } else if displaced {
+                // Without a normal map, the displacement shades its own relief.
+                let h = textureSampleGrad(fabric_maps, fabric_sampler, uv, height_layer, dmap_dx, dmap_dy).r;
+                let h_u = textureSampleGrad(fabric_maps, fabric_sampler, uv + vec2f(texel.x, 0.0), height_layer, dmap_dx, dmap_dy).r;
+                let h_v = textureSampleGrad(fabric_maps, fabric_sampler, uv + vec2f(0.0, texel.y), height_layer, dmap_dx, dmap_dy).r;
+                let rise = vec2f(h_u - h, h_v - h) / texel;
+                n = normalize(n - in.params.y * (rise.x * grad_u + rise.y * grad_v));
             }
         }
     }
@@ -171,22 +225,28 @@ fn shade(in: VertexOut, front: bool) -> vec4<f32> {
         return vec4f(base * lighting * wire_factor, 1.0);
     }
     let l = normalize(view.light.xyz);
-    let to_eye = view.eye.xyz - in.world * view.eye.w;
-    let v = to_eye / max(length(to_eye), 0.000001);
     let h = (l + v) / max(length(l + v), 0.000001);
     let nl = clamp(dot(n, l), 0.0, 1.0);
     let nv = clamp(dot(n, v), 0.0001, 1.0);
     let nh = clamp(dot(n, h), 0.0, 1.0);
     let vh = clamp(dot(v, h), 0.0, 1.0);
-    let roughness = select(in.roughness, rough_texel, in.map.z > -0.5 && in.detail.y > -0.5);
+    let roughness = select(in.roughness, rough_texel, has_map && in.detail.y > -0.5);
+    let metal = clamp(select(in.params.x, metal_texel, has_map && in.extra.x > -0.5), 0.0, 1.0);
+    let occlusion = select(1.0, occlusion_texel, has_map && in.extra.w > -0.5);
     let alpha = max(roughness * roughness, 0.02);
     let a2 = alpha * alpha;
     let denom = nh * nh * (a2 - 1.0) + 1.0;
     let distribution = a2 / (3.14159265 * denom * denom);
     let gv = 2.0 * nv / (nv + sqrt(a2 + (1.0 - a2) * nv * nv));
     let gl = 2.0 * nl / max(nl + sqrt(a2 + (1.0 - a2) * nl * nl), 0.0001);
-    let fresnel = 0.04 + 0.96 * pow(1.0 - vh, 5.0);
+    // Metals reflect in their own colour and have no diffuse part.
+    let f0 = mix(vec3f(0.04), base, metal);
+    let fresnel = f0 + (vec3f(1.0) - f0) * pow(1.0 - vh, 5.0);
     let specular = distribution * gv * gl * fresnel / max(4.0 * nv, 0.0001);
-    let rgb = (base * (0.25 * view.ambient.x + 0.7 * view.light.w * nl * (1.0 - fresnel)) + vec3f(0.2 * view.light.w * specular)) * wire_factor;
+    let diffuse = base * (1.0 - metal);
+    // A metal shows the room around it: a dim, rough stand-in for the environment.
+    let surroundings = f0 * metal * 0.45 * view.ambient.x * occlusion;
+    let rgb = (diffuse * (0.25 * view.ambient.x * occlusion + 0.7 * view.light.w * nl * (vec3f(1.0) - fresnel))
+        + view.light.w * mix(0.2, 1.0, metal) * specular + surroundings) * wire_factor;
     return vec4f(encode_srgb(rgb), 1.0);
 }

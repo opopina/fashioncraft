@@ -1,6 +1,6 @@
 [package]
 name = "fashioncraft"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "3D garment design and cloth simulation: pattern editor, sewing and draping on an avatar"
 license = "MIT"
@@ -26,7 +26,6 @@ desktop = [
     "dep:eframe",
     "dep:bytemuck",
     "dep:pollster",
-    "dep:image",
     "dep:rfd",
     "dep:ureq",
     "dep:keyring",
@@ -54,7 +53,9 @@ clap = { version = "4.5", features = ["derive"] }
 eframe = { version = "0.36.2", optional = true, default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
 bytemuck = { version = "1", optional = true }
 pollster = { version = "1.0.1", optional = true }
-image = { version = "0.25.10", optional = true, default-features = false, features = ["png", "jpeg"] }
+# Fabric maps: exports convert them (green flip, glossiness, packing); the studio reads the
+# formats texture tools export, and Radiance HDR environments for the photoreal render.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "tga", "bmp", "hdr"] }
 miniz_oxide = "0.8.9"
 # The Assistant panel's calls to Claude and OpenAI-compatible APIs (rustls, Mozilla's roots).
 ureq = { version = "3", optional = true, features = ["json"] }

@@ -285,7 +285,8 @@ impl Atelier {
                     }
                 });
                 ui.separator();
-                let names: Vec<String> = avatar_rig::bone_names()
+                let names: Vec<String> = avatar_rig::built_in_bone_names(&draft.joints)
+                    .into_iter()
                     .map(String::from)
                     .chain(draft.added_bones.iter().map(|b| b.name.clone()))
                     .collect();
@@ -751,7 +752,8 @@ impl Atelier {
     /// The selected bone's name in the pose window.
     fn selected_bone(&self) -> Option<String> {
         let draft = self.authoring.pose.draft.as_ref()?;
-        avatar_rig::bone_names()
+        avatar_rig::built_in_bone_names(&draft.joints)
+            .into_iter()
             .map(str::to_string)
             .chain(draft.added_bones.iter().map(|b| b.name.clone()))
             .nth(self.authoring.pose.bone)
@@ -833,7 +835,7 @@ impl Atelier {
                     .total_cmp(&avatar_rig::segment_distance_to(head, b.head, b.tail))
             })
             .map(|b| b.name.clone())
-            .unwrap_or_else(|| "pelvis".into());
+            .unwrap_or_else(|| if rig.is_anny() { "root" } else { "pelvis" }.into());
         let name = (1..)
             .map(|k| format!("bone_{k}"))
             .find(|n| rig.bone(n).is_none() && !draft.added_bones.iter().any(|b| &b.name == n))
@@ -854,8 +856,9 @@ impl Atelier {
             Ok(_) => {
                 *draft = next;
                 self.authoring.pose.bones = None;
-                self.authoring.pose.bone =
-                    avatar_rig::bone_names().count() + draft.added_bones.len() - 1;
+                self.authoring.pose.bone = avatar_rig::built_in_bone_names(&draft.joints).len()
+                    + draft.added_bones.len()
+                    - 1;
                 self.status = format!(
                     "{name} ({parent}) · {}",
                     i18n::tr(ui_lang, "Apply and restart uses the new bones and weights.")
@@ -905,7 +908,7 @@ impl Atelier {
             let weight = match draft.painted_weights.get(&v) {
                 Some(list) => list
                     .iter()
-                    .find(|(b, _)| *b == bone)
+                    .find(|(b, _)| rig.bone(b) == Some(index))
                     .map_or(0., |(_, w)| *w),
                 None => rig.weights[v]
                     .iter()

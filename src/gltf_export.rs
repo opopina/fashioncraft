@@ -4,9 +4,15 @@
 //! https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 //!
 //! The garment is one mesh with a primitive per fabric. Each fabric becomes a metallic-
-//! roughness material with its colour and roughness, double-sided like cloth, and its image
-//! texture (embedded) when it has one; texture coordinates then count image repeats along the
-//! grain, otherwise they are the pattern's warp and weft in metres. Triangles are wound so
+//! roughness material with its colour, roughness and metalness, double-sided like cloth, and its
+//! image texture (embedded) when it has one, with its maps where glTF has a place for them:
+//! the normal map (made OpenGL-handed), roughness and metalness packed into one image, ambient
+//! occlusion, and opacity in the colour image's alpha (cut out at one half). glTF has no
+//! displacement, so a displacement map is left out. Texture coordinates then count image
+//! repeats along the grain, otherwise they are the pattern's warp and weft in metres. A second
+//! set of texture coordinates (`TEXCOORD_1`) holds the garment's UV layout, every piece's island
+//! in the unit square (see [`crate::garment::uv_layout`]), for baking and texture painting
+//! elsewhere. Triangles are wound so
 //! the fabric's front face (opposite the solver's winding normal, or along it on a flipped
 //! piece) is glTF's front face, as the editor draws it. Vertices stay split along seams, each
 //! piece keeping its own texture coordinates. Units are metres, Y up.
@@ -18,6 +24,7 @@
 use crate::{
     avatar::SurfaceMesh,
     avatar_animation::Take,
+    garment::appearance::MapSlot,
     garment::{CompiledGarment, GarmentTemplate},
     model::State,
 };
@@ -217,15 +224,37 @@ fn normals(points: &[DVec3], triangles: &[[u32; 3]]) -> Vec<f32> {
         .collect()
 }
 
-fn mime(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("jpg" | "jpeg") => "image/jpeg",
-        _ => "image/png",
+/// The texture index of `file` (an asset's image, as it is or converted), embedding it the
+/// first time it is asked for.
+fn embed(
+    b: &mut Builder,
+    index: &mut Vec<(String, usize)>,
+    asset: &str,
+    file: crate::texture_maps::TextureFile,
+) -> Result<usize, String> {
+    let key = file.name("", asset);
+    if let Some((_, k)) = index.iter().find(|(id, _)| *id == key) {
+        return Ok(*k);
     }
+    let bytes = file.bytes()?;
+    let view = b.view(&bytes, None);
+    if b.json.get("samplers").is_none() {
+        b.json["samplers"] = json!([{"wrapS": 10497, "wrapT": 10497}]);
+        b.json["textures"] = json!([]);
+        b.json["images"] = json!([]);
+    }
+    let mime = if file.extension() == "png" {
+        "image/png"
+    } else {
+        "image/jpeg"
+    };
+    let image = b.push(
+        "images",
+        json!({"bufferView": view, "mimeType": mime, "name": key.trim_start_matches('_')}),
+    );
+    let k = b.push("textures", json!({"sampler": 0, "source": image}));
+    index.push((key, k));
+    Ok(k)
 }
 
 fn build(scene: &GltfScene) -> Result<Builder, String> {
@@ -275,10 +304,16 @@ fn build(scene: &GltfScene) -> Result<Builder, String> {
     let position = b.floats(&positions, 3, true);
     let normal = b.floats(&normals(&base, &triangles), 3, false);
     let texcoord = b.floats(&uv.concat(), 2, false);
+    let layout_uv: Vec<f32> = crate::garment::uv_layout::coordinates(scene.template, garment)
+        .iter()
+        .flat_map(|p| p.as_vec2().to_array())
+        .collect();
+    let layout = b.floats(&layout_uv, 2, false);
     let targets = cloth_frames
         .as_ref()
         .map(|frames| b.targets(&base, frames))
         .unwrap_or_default();
+    // Embedded images and their textures, by asset and conversion.
     let mut image_index: Vec<(String, usize)> = Vec::new();
     let mut primitives = Vec::new();
     for (slot, fabric) in fabric_of.iter().enumerate() {
@@ -295,51 +330,72 @@ fn build(scene: &GltfScene) -> Result<Builder, String> {
         }
         let appearance = appearances[slot].as_ref();
         let color = appearance.map_or([0.91, 0.92, 0.94], |a| a.linear_color());
+        let metalness = appearance.map_or(0., |a| a.metalness);
         let mut pbr = json!({
             "baseColorFactor": [color[0], color[1], color[2], 1.0],
-            "metallicFactor": 0.0,
+            "metallicFactor": metalness,
             "roughnessFactor": appearance.map_or(0.8, |a| a.roughness),
         });
-        if let Some(texture) = appearance.and_then(|a| a.texture.as_ref()) {
-            let image = match image_index.iter().find(|(id, _)| *id == texture.asset_id) {
-                Some((_, k)) => *k,
-                None => {
-                    let path = scene
-                        .images
-                        .iter()
-                        .find(|(id, _)| *id == texture.asset_id)
-                        .map(|(_, p)| p)
-                        .ok_or_else(|| format!("Texture image {} is missing", texture.asset_id))?;
-                    let bytes =
-                        std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-                    let view = b.view(&bytes, None);
-                    if b.json.get("samplers").is_none() {
-                        b.json["samplers"] = json!([{"wrapS": 10497, "wrapT": 10497}]);
-                        b.json["textures"] = json!([]);
-                        b.json["images"] = json!([]);
-                    }
-                    let image = b.push(
-                        "images",
-                        json!({"bufferView": view, "mimeType": mime(path), "name": texture.asset_id}),
-                    );
-                    let k = b.push("textures", json!({"sampler": 0, "source": image}));
-                    image_index.push((texture.asset_id.clone(), k));
-                    k
+        let mut material = json!({
+            "name": fabric.clone().unwrap_or_else(|| format!("fabric {slot}")),
+            "doubleSided": true,
+        });
+        if let Some((appearance, texture)) = appearance.and_then(|a| Some((a, a.texture.as_ref()?)))
+        {
+            use crate::texture_maps as maps;
+            // The colour image, with the opacity map in its alpha when there is one: glTF
+            // cuts the cloth away where that alpha is under one half.
+            let (color, key) = match maps::color_with_opacity(texture, scene.images)? {
+                Some(file) => {
+                    material["alphaMode"] = json!("MASK");
+                    material["alphaCutoff"] = json!(0.5);
+                    let opacity = texture.opacity_asset_id.as_deref().unwrap_or_default();
+                    (file, format!("{}+{opacity}", texture.asset_id))
                 }
+                None => (
+                    maps::plain(maps::source(scene.images, &texture.asset_id)?, true)?,
+                    texture.asset_id.clone(),
+                ),
             };
-            pbr["baseColorTexture"] = json!({"index": image});
+            pbr["baseColorTexture"] =
+                json!({"index": embed(&mut b, &mut image_index, &key, color)?});
+            if let Some(file) = maps::gltf_metallic_roughness(appearance, scene.images)? {
+                // Packed from both maps, or a map and the fabric's single value.
+                let key = format!(
+                    "{}+{}",
+                    texture
+                        .roughness_asset_id
+                        .clone()
+                        .unwrap_or_else(|| format!("{:.3}", appearance.roughness)),
+                    texture
+                        .metalness_asset_id
+                        .clone()
+                        .unwrap_or_else(|| format!("{:.3}", appearance.metalness)),
+                );
+                pbr["metallicRoughnessTexture"] =
+                    json!({"index": embed(&mut b, &mut image_index, &key, file)?});
+                pbr["metallicFactor"] = json!(1.0);
+                pbr["roughnessFactor"] = json!(1.0);
+            }
+            if let Some(file) = maps::opengl_normal(texture, scene.images, true)? {
+                let asset = texture.normal_asset_id.as_deref().unwrap_or_default();
+                material["normalTexture"] =
+                    json!({"index": embed(&mut b, &mut image_index, asset, file)?});
+            }
+            if let Some(file) = maps::grey(texture, MapSlot::Occlusion, scene.images, true)? {
+                let asset = texture.occlusion_asset_id.as_deref().unwrap_or_default();
+                material["occlusionTexture"] =
+                    json!({"index": embed(&mut b, &mut image_index, asset, file)?});
+            }
         }
-        let material = b.push(
-            "materials",
-            json!({
-                "name": fabric.clone().unwrap_or_else(|| format!("fabric {slot}")),
-                "pbrMetallicRoughness": pbr,
-                "doubleSided": true,
-            }),
-        );
+        material["pbrMetallicRoughness"] = pbr;
+        let material = b.push("materials", material);
         let indices = b.indices(&indices);
         let mut primitive = json!({
-            "attributes": {"POSITION": position, "NORMAL": normal, "TEXCOORD_0": texcoord},
+            "attributes": {
+                "POSITION": position, "NORMAL": normal, "TEXCOORD_0": texcoord,
+                "TEXCOORD_1": layout,
+            },
             "indices": indices,
             "material": material,
             "mode": 4,

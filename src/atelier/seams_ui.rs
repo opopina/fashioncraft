@@ -443,6 +443,9 @@ impl Atelier {
                 label(ui, "Zipper");
                 self.seam_zipper_controls(ui, id);
                 ui.end_row();
+                label(ui, "Breaks at");
+                self.seam_strength_controls(ui, id);
+                ui.end_row();
             });
         self.seam_tear_controls(ui, id);
         ui.horizontal_wrapped(|ui| {

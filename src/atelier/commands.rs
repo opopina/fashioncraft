@@ -195,7 +195,9 @@ pub enum CommandId {
     PleatSewing,
     Puckering,
     Steam,
+    MeasureFabric,
     Piping,
+    FrayEdge,
     TearSeam,
     EditTears,
     TraceShape,
@@ -203,9 +205,11 @@ pub enum CommandId {
     SelectMeshBrush,
     SelectMeshBox,
     SelectMeshLasso,
+    SubdivideMesh,
     ConvertToQuads,
     ConvertToTriangles,
     HighQualityView,
+    PhotorealRender,
     SuperimposeSide,
     DeleteAvatar,
     EditTexture2d,
@@ -219,6 +223,15 @@ pub enum CommandId {
     ReDrape,
     AutoFit,
     RunPythonScript,
+    UvEditor,
+    PackUvIslands,
+    AutomaticUvLayout,
+    GradingTable,
+    PointsOfMeasure,
+    ToggleGradePoint,
+    GradingReview,
+    NextSize,
+    PreviousSize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1963,9 +1976,27 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NativeWorkspace
     ),
     entry!(
+        MeasureFabric,
+        "materials.measure_fabric",
+        "Measure fabric: fit a fabric to a workshop's tests of a real one",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
         Piping,
         "trims.piping",
         "Piping along the selected seam or segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        FrayEdge,
+        "trims.fray",
+        "Fray edge: loose threads along the selected segment",
         Pattern,
         None,
         TemplateHistory,
@@ -2035,6 +2066,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NativeWorkspace
     ),
     entry!(
+        SubdivideMesh,
+        "garment.subdivide_mesh",
+        "Subdivide the selected mesh: finer triangles there",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
         ConvertToQuads,
         "garment.convert_quads",
         "Mesh the selected pieces as quads along their grain",
@@ -2056,6 +2096,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         HighQualityView,
         "view.high_quality",
         "High-quality 3D view: draw at twice the resolution",
+        Workspace,
+        None,
+        Preference,
+        NativeWorkspace
+    ),
+    entry!(
+        PhotorealRender,
+        "render.photoreal",
+        "Photoreal render: a path-traced image of the 3D view",
         Workspace,
         None,
         Preference,
@@ -2182,6 +2231,87 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         FoldArrangement,
         "garment.fold_arrangement",
         "Fold arrangement: start folded along the selected internal line",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        UvEditor,
+        "materials.uv_editor",
+        "UV editor: lay out each piece's island in the texture square for exports and baking",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PackUvIslands,
+        "materials.pack_uv",
+        "Pack UV islands: fit every piece into the texture square without overlap",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        AutomaticUvLayout,
+        "materials.automatic_uv_layout",
+        "Automatic UV layout: forget the edited island placements",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        GradingTable,
+        "grading.table",
+        "Grading: sizes and grade rules…",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        PointsOfMeasure,
+        "grading.points_of_measure",
+        "Points of measure (POM): measurements in every size…",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        ToggleGradePoint,
+        "grading.toggle_grade_point",
+        "Grade point: make the selected point a grade point or a proportional one",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        GradingReview,
+        "grading.review",
+        "Grading review: every size laid over the base on the board",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        NextSize,
+        "grading.next_size",
+        "Show the next size in 3D",
+        Pattern,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        PreviousSize,
+        "grading.previous_size",
+        "Show the previous size in 3D",
         Pattern,
         None,
         NotUndoable,

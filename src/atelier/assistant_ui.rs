@@ -1,6 +1,9 @@
 //! Window › Assistant: a chat with Claude, ChatGPT, Gemini or a local model that works in the
 //! open project. The conversation runs on its own thread (see `fashioncraft::assistant`); its
 //! tools run here, on the window's queue, like an MCP client's (see `agent_hub`).
+#[path = "codex_cli.rs"]
+mod codex_cli;
+
 use super::agent_hub::{Job, QUEUED, wait_for};
 use super::assistant_keys::{self, Source};
 use super::*;
@@ -339,12 +342,16 @@ impl Atelier {
         let spawned = std::thread::Builder::new()
             .name("assistant".into())
             .spawn(move || {
-                let mut http = Http::new();
+                let mut transport: Box<dyn Transport> = if settings.provider == Provider::CodexCli {
+                    Box::new(codex_cli::Cli(&stopped))
+                } else {
+                    Box::new(Http::new())
+                };
                 let mut conversation = conversation.lock().unwrap_or_else(|e| e.into_inner());
                 let result = conversation.turn(
                     &settings,
                     &text,
-                    &mut http,
+                    transport.as_mut(),
                     &mut |name, arguments| run_in_window(&sender, &ctx, name, arguments),
                     &mut |event| {
                         let _ = updates.send(Update::Event(event));
@@ -396,6 +403,10 @@ impl Atelier {
                     .desired_width(ui.available_width().min(230.)),
             );
         });
+        if provider == Provider::CodexCli {
+            ui.small(tr("Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI."));
+            return;
+        }
         super::workspace::prop_row(ui, tr("Address"), |ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.prefs.ai.base_url)
@@ -533,6 +544,7 @@ impl Atelier {
                 // while a turn runs; the connection and a new chat as icons at the right.
                 ui.horizontal(|ui| {
                     let model = match settings.model() {
+                        "" if settings.provider == Provider::CodexCli => tr("Codex default"),
                         "" => tr("no model chosen"),
                         _ => settings.model(),
                     };

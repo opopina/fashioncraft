@@ -1333,6 +1333,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Your messages, the scene's summary and screenshots go to this provider. A local model keeps them on this computer." => {
             "Tus mensajes, el resumen de la escena y las capturas van a este proveedor. Un modelo local los deja en este ordenador."
         }
+        "Codex default" => "Modelo predeterminado de Codex",
+        "Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI." => {
+            "Usa la cuenta de ChatGPT conectada con codex login. Los mensajes y las capturas solicitadas se envían a OpenAI."
+        }
         "no model chosen" => "ningún modelo elegido",
         "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
             "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."

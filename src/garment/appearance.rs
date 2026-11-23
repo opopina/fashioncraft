@@ -22,13 +22,17 @@ pub struct FabricAppearance {
     /// the outline. Zero draws one surface. Never changes the simulation.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub render_thickness_mm: f64,
+    /// How metallic the surface is, 0 (cloth, plastic) to 1 (bare metal: foil, lamé). A
+    /// texture's metalness map replaces it.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub metalness: f64,
 }
 
 /// Thickest a fabric may look, mm.
 pub const MAX_RENDER_THICKNESS_MM: f64 = 20.;
 
 /// An image tiled over a fabric. Its pixels live in the project's image assets.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FabricTexture {
     pub asset_id: String,
@@ -52,17 +56,101 @@ pub struct FabricTexture {
     /// the fabric's single roughness.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roughness_asset_id: Option<String>,
+    /// The normal map is drawn the DirectX way (green pointing down the repeat): its green
+    /// channel is flipped when it is read.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub normal_directx: bool,
+    /// The roughness map holds glossiness (black matt, white glossy): it is inverted when read.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub roughness_is_glossiness: bool,
+    /// Grey image of the metalness over one repeat (black cloth, white metal), in place of
+    /// the fabric's single metalness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metalness_asset_id: Option<String>,
+    /// Grey image of the opacity over one repeat (black clear, white solid), for lace and
+    /// mesh: the cloth is cut away where it is dark. Its alpha channel counts too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opacity_asset_id: Option<String>,
+    /// Grey height image over one repeat (black low, white high), drawn as displacement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub displacement_asset_id: Option<String>,
+    /// Height between the displacement map's black and white, mm.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub displacement_mm: f64,
+    /// Grey ambient-occlusion image over one repeat (black hidden, white open): darkens the
+    /// light that comes from all around.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occlusion_asset_id: Option<String>,
+}
+
+/// A map of a fabric texture besides its colour image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MapSlot {
+    Normal,
+    Roughness,
+    Metalness,
+    Opacity,
+    Displacement,
+    Occlusion,
+}
+
+impl MapSlot {
+    pub const ALL: [Self; 6] = [
+        Self::Normal,
+        Self::Roughness,
+        Self::Metalness,
+        Self::Opacity,
+        Self::Displacement,
+        Self::Occlusion,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal map",
+            Self::Roughness => "Roughness map",
+            Self::Metalness => "Metalness map",
+            Self::Opacity => "Opacity map",
+            Self::Displacement => "Displacement map",
+            Self::Occlusion => "Ambient occlusion map",
+        }
+    }
 }
 
 impl FabricTexture {
-    /// Every image asset the texture draws on: its colours, then its normal and roughness
-    /// maps when it has them.
+    /// Every image asset the texture draws on: its colours, then its maps when it has them.
     pub fn asset_ids(&self) -> impl Iterator<Item = &str> {
         std::iter::once(self.asset_id.as_str())
-            .chain(self.normal_asset_id.as_deref())
-            .chain(self.roughness_asset_id.as_deref())
+            .chain(MapSlot::ALL.into_iter().filter_map(|slot| self.map(slot)))
+    }
+    /// The asset of one of the texture's maps.
+    pub fn map(&self, slot: MapSlot) -> Option<&str> {
+        match slot {
+            MapSlot::Normal => self.normal_asset_id.as_deref(),
+            MapSlot::Roughness => self.roughness_asset_id.as_deref(),
+            MapSlot::Metalness => self.metalness_asset_id.as_deref(),
+            MapSlot::Opacity => self.opacity_asset_id.as_deref(),
+            MapSlot::Displacement => self.displacement_asset_id.as_deref(),
+            MapSlot::Occlusion => self.occlusion_asset_id.as_deref(),
+        }
+    }
+    /// The asset slot of one of the texture's maps, to set or clear it.
+    pub fn map_mut(&mut self, slot: MapSlot) -> &mut Option<String> {
+        match slot {
+            MapSlot::Normal => &mut self.normal_asset_id,
+            MapSlot::Roughness => &mut self.roughness_asset_id,
+            MapSlot::Metalness => &mut self.metalness_asset_id,
+            MapSlot::Opacity => &mut self.opacity_asset_id,
+            MapSlot::Displacement => &mut self.displacement_asset_id,
+            MapSlot::Occlusion => &mut self.occlusion_asset_id,
+        }
     }
 }
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+/// Largest height a displacement map may draw, mm.
+pub const MAX_DISPLACEMENT_MM: f64 = 10.;
 
 fn is_zero(value: &f64) -> bool {
     *value == 0.0
@@ -142,6 +230,7 @@ impl Default for FabricAppearance {
             weave: None,
             texture: None,
             render_thickness_mm: 0.,
+            metalness: 0.,
         }
     }
 }
@@ -149,6 +238,9 @@ impl FabricAppearance {
     pub fn validate(&self) -> Result<(), String> {
         if !self.roughness.is_finite() || !(0.0..=1.0).contains(&self.roughness) {
             return Err("Optical roughness must be finite and between 0 and 1".into());
+        }
+        if !(0.0..=1.0).contains(&self.metalness) {
+            return Err("Metalness must be between 0 and 1".into());
         }
         if let Some(w) = &self.weave
             && (!(0.05..=20.0).contains(&w.spacing_mm) || !(0.0..=1.0).contains(&w.contrast))
@@ -181,6 +273,11 @@ impl FabricAppearance {
             {
                 return Err(format!(
                     "A fabric texture needs a finite angle and a relief of 0 to {MAX_TEXTURE_RELIEF_MM} mm"
+                ));
+            }
+            if !(0.0..=MAX_DISPLACEMENT_MM).contains(&t.displacement_mm) {
+                return Err(format!(
+                    "A displacement map's height must be 0 to {MAX_DISPLACEMENT_MM} mm"
                 ));
             }
         }

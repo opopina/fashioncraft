@@ -81,6 +81,7 @@ fn a_binary_fbx_holds_a_model_per_piece_and_the_avatar() {
                 relief_mm: 0.,
                 normal_asset_id: None,
                 roughness_asset_id: None,
+                ..Default::default()
             }),
             ..Default::default()
         },

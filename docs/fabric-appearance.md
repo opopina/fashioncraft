@@ -41,8 +41,9 @@ Custom sRGB bytes are decoded to linear RGB. The shader applies a bounded
 fixed-light dielectric GGX highlight controlled by perceptual roughness and
 encodes the result to sRGB for the existing unorm viewport target. This is a
 presentation approximation, not a calibrated woven/knitted material model,
-film renderer or complete PBR pipeline. There are no texture maps, transparency,
-metalness, sheen, optical displacement or asset download controls.
+film renderer or complete PBR pipeline. Texture maps (normal, roughness, metalness,
+opacity, displacement, occlusion), texture-set import and the photoreal render are described
+in `fabric-maps-and-photoreal-render.md`; there is no sheen or asset download.
 
 Absent appearance and diagnostic overlays use the previous shading path.
 Marked faces, contact visualization and strain heatmaps retain their priority

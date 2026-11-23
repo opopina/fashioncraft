@@ -358,6 +358,8 @@ const ANIMATION: &[Item] = &[
 ];
 
 const RENDER: &[Item] = &[
+    Run("Photoreal render…", C::PhotorealRender),
+    S,
     Run("High-quality 3D view", C::HighQualityView),
     Run("Technical view", C::TechnicalView),
 ];
@@ -546,6 +548,7 @@ impl Atelier {
             C::Steam => self.authoring.steam.open,
             C::MeasureFabric => self.authoring.fabric_kit.open,
             C::HighQualityView => display.high_quality,
+            C::PhotorealRender => self.authoring.render.open,
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::RunPythonScript => self.authoring.script.open,
             C::UvEditor => self.authoring.uv_editor.open,

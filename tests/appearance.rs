@@ -174,6 +174,7 @@ fn fabric_textures_are_validated_and_turn_with_their_angle() {
         relief_mm: 1.,
         normal_asset_id: None,
         roughness_asset_id: None,
+        ..Default::default()
     };
     let mut a = FabricAppearance {
         texture: Some(texture.clone()),

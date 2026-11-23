@@ -7,6 +7,12 @@
 //! pieces along their edges rather than vertex to vertex, so welding first adds each side's
 //! vertices to the other side's edge. Faces are wound counter-clockwise seen from the
 //! fabric's front face.
+//!
+//! Each fabric's material carries its colour and, in the PBR extension most readers take
+//! (`Pr`, `Pm`, `map_Pr`, `map_Pm`), its roughness and metalness; a textured fabric's maps
+//! are written beside the file: `map_Pr` (roughness, a glossiness map inverted), `map_Pm`,
+//! `map_d` (opacity), `disp` (displacement) and `map_Bump` (the normal map, OpenGL-handed, as
+//! Blender reads it). MTL has no ambient-occlusion map.
 use crate::{
     avatar::SurfaceMesh,
     garment::{CompiledGarment, GarmentTemplate, appearance::FabricAppearance},
@@ -492,24 +498,41 @@ pub fn write(scene: &ObjScene, options: &ObjOptions, path: &Path) -> Result<ObjS
         writeln!(mtl, "Ka 0 0 0\nKs 0.04 0.04 0.04").unwrap();
         writeln!(mtl, "Ns {:.1}", (1. - roughness) * 900. + 10.).unwrap();
         writeln!(mtl, "d 1\nillum 2").unwrap();
+        if let Some(a) = appearance.as_ref() {
+            // The PBR extension most readers take (Blender among them).
+            writeln!(mtl, "Pr {:.3}\nPm {:.3}", a.roughness, a.metalness).unwrap();
+        }
         // Packed coordinates no longer tile an image: the texture goes with real-size ones.
         if let Some(texture) = appearance.as_ref().and_then(|a| a.texture.as_ref())
             && !options.unified_uv
         {
-            let source = scene
-                .images
-                .iter()
-                .find(|(id, _)| *id == texture.asset_id)
-                .map(|(_, p)| p)
-                .ok_or_else(|| format!("Texture image {} is missing", texture.asset_id))?;
-            let extension = source
-                .extension()
-                .map_or("png".into(), |e| e.to_string_lossy().to_ascii_lowercase());
-            let name = format!("{stem}_{}.{extension}", texture.asset_id);
-            std::fs::copy(source, dir.join(&name))
-                .map_err(|e| format!("{}: {e}", source.display()))?;
-            writeln!(mtl, "map_Kd {name}").unwrap();
-            textures += 1;
+            use crate::{garment::appearance::MapSlot, texture_maps as maps};
+            let mut write_map = |key: &str, asset: &str, file: maps::TextureFile| {
+                let name = file.name(&stem, asset);
+                file.write(&dir.join(&name))?;
+                writeln!(mtl, "{key} {name}").unwrap();
+                textures += 1;
+                Ok::<_, String>(())
+            };
+            let color = maps::plain(maps::source(scene.images, &texture.asset_id)?, false)?;
+            write_map("map_Kd", &texture.asset_id, color)?;
+            let asset = |slot| texture.map(slot).unwrap_or_default();
+            if let Some(file) = maps::grey_roughness(texture, scene.images, false, false)? {
+                write_map("map_Pr", asset(MapSlot::Roughness), file)?;
+            }
+            for (key, slot) in [
+                ("map_Pm", MapSlot::Metalness),
+                ("map_d", MapSlot::Opacity),
+                ("disp", MapSlot::Displacement),
+            ] {
+                if let Some(file) = maps::grey(texture, slot, scene.images, false)? {
+                    write_map(key, asset(slot), file)?;
+                }
+            }
+            // A normal map, OpenGL-handed, where readers look for one.
+            if let Some(file) = maps::opengl_normal(texture, scene.images, false)? {
+                write_map("map_Bump", asset(MapSlot::Normal), file)?;
+            }
         }
     }
     if scene.avatar.is_some() {

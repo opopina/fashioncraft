@@ -1,0 +1,13 @@
+{
+  "license": "CC0-1.0",
+  "license_file": "anny-rig.LICENSE.md",
+  "pruning_reference_license": "Apache-2.0",
+  "pruning_reference_license_file": "anny-LICENSE.txt",
+  "source": "https://github.com/naver/anny/tree/8f35dc2df1c4062fd2fae86734f9705de50c0c2b/src/anny/data/mpfb2/rigs/standard",
+  "files": ["rig.default.json", "weights.default.json"],
+  "revision": "8f35dc2df1c4062fd2fae86734f9705de50c0c2b",
+  "repository": "https://github.com/naver/anny",
+  "downloaded": "2026-11-23",
+  "converted_by": "scripts/convert-anny-rig.py",
+  "contents": "Anny's compact 104-bone skeleton (MakeHuman/MPFB2 default 163-bone rig pruned of tongue, breast, facial-expression and zero-weight bones, with removed bones' weights merged onto their nearest retained ancestor) and hand-painted linear blend skinning weights over the 13,380 body vertices of MakeHuman hm08 (up to 8 influences per vertex, normalised to sum to 1)."
+}

@@ -1,8 +1,8 @@
 //! Select mesh (3D Garment › Select mesh: brush, box, lasso): pick points of the draped cloth
 //! in the 3D view, then freeze them where they are (they are pinned in place), release them,
-//! or select every frozen point. Shift adds to the selection, Cmd/Ctrl takes away; the brush
-//! paints while dragged. Only cloth that can be seen is taken. The selection lasts until the
-//! garment is rebuilt.
+//! or select every frozen point, or subdivide it (finer triangles there only). Shift adds to the
+//! selection, Cmd/Ctrl takes away; the brush paints while dragged. Only cloth that can be seen
+//! is taken. The selection lasts until the garment is rebuilt.
 use super::*;
 use std::collections::BTreeSet;
 
@@ -220,6 +220,38 @@ impl Atelier {
         true
     }
 
+    /// 3D Garment › Subdivide selected mesh: finer triangles where cloth is selected (each time
+    /// about half as long as they are), the rest of each piece as it is, the drape kept.
+    pub(super) fn subdivide_selection(&mut self) -> Result<(), String> {
+        let selected = self.current_selection();
+        if selected.is_empty() {
+            return Err(
+                "Select cloth first: 3D Garment › Select mesh (brush, box or lasso)".into(),
+            );
+        }
+        if self.pending {
+            return Err("Wait for the current step to finish, then try again".into());
+        }
+        self.playing = false;
+        let zones = fashioncraft::authoring::subdivide_zones(
+            &self.project.template,
+            &self.scene.garment,
+            &selected,
+        )?;
+        let pieces = zones.len();
+        let before = self.scene.garment.mesh.triangles.len();
+        if !self.edit(fashioncraft::authoring::Command::SetMeshRefinement { zones }) {
+            return Err(self.status.clone());
+        }
+        let after = self.scene.garment.mesh.triangles.len();
+        self.status = format!(
+            "Subdivided the selection on {} · {} more triangles there; the rest is unchanged",
+            super::garment_display::counted(pieces, "piece", "pieces"),
+            after.saturating_sub(before)
+        );
+        Ok(())
+    }
+
     /// The selected points, the brush and the box or lasso being drawn.
     pub(super) fn paint_mesh_select(&mut self, ui: &egui::Ui, rect: egui::Rect) {
         if self.authoring.mesh_select.shape.is_none()
@@ -317,6 +349,25 @@ impl Atelier {
                     if ui.button(t("Select frozen")).clicked() {
                         action = Some("frozen");
                     }
+                    let subdivide = ui
+                        .add_enabled(!selected.is_empty(), egui::Button::new(t("Subdivide")))
+                        .on_hover_text(t(
+                            "Mesh the selected cloth finer: its triangles split in half, the rest of the piece stays as it is",
+                        ));
+                    super::demo::mark(ui.ctx(), "mesh_select.subdivide", subdivide.rect);
+                    if subdivide.clicked() {
+                        action = Some("subdivide");
+                    }
+                    if ui
+                        .add_enabled(
+                            !selected.is_empty(),
+                            egui::Button::new(t("Remove subdivision")),
+                        )
+                        .on_hover_text(t("Mesh the selected pieces evenly again"))
+                        .clicked()
+                    {
+                        action = Some("unsubdivide");
+                    }
                     if ui
                         .add_enabled(
                             !selected.is_empty(),
@@ -337,6 +388,23 @@ impl Atelier {
                 self.combine(frozen, Combine::Replace);
             }
             Some("clear") => self.combine(vec![], Combine::Replace),
+            Some("subdivide") => {
+                if let Err(error) = self.subdivide_selection() {
+                    self.status = error;
+                }
+            }
+            Some("unsubdivide") => {
+                let zones = fashioncraft::authoring::unsubdivide_zones(
+                    &self.project.template,
+                    &self.scene.garment,
+                    &selected,
+                );
+                if zones.is_empty() {
+                    self.status = t("The selected pieces have no subdivided zones").into();
+                } else {
+                    self.edit(fashioncraft::authoring::Command::SetMeshRefinement { zones });
+                }
+            }
             _ => {}
         }
         if !open {

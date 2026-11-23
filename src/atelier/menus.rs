@@ -176,6 +176,7 @@ const GARMENT_3D: &[Item] = &[
     Run("Select mesh (brush)", C::SelectMeshBrush),
     Run("Select mesh (box)", C::SelectMeshBox),
     Run("Select mesh (lasso)", C::SelectMeshLasso),
+    Run("Subdivide selected mesh", C::SubdivideMesh),
     S,
     Sub(
         "Pins",
@@ -303,6 +304,7 @@ const MATERIALS: &[Item] = &[
     ),
     Run("Zipper", C::AddZipper),
     Run("Piping", C::Piping),
+    Run("Fray edge", C::FrayEdge),
     Run("Tape", C::AddTape),
     Sub(
         "Topstitch",
@@ -773,7 +775,7 @@ mod tests {
         let (done, all) = coverage();
         // Every item the bar lays out runs a command; a drop means one lost its command.
         assert_eq!(done, all);
-        assert!(done >= 216, "{done} of {all}");
+        assert!(done >= 218, "{done} of {all}");
         assert!(all >= 150, "{done} of {all}");
     }
 

@@ -459,6 +459,8 @@ impl VbdSolver {
                 });
             }
         }
+        // Torn stretches keep their sides out of each other's contacts, as when sewn.
+        excluded.extend(garment.seams.iter().flat_map(|s| s.contact_exclusions()));
         let mut world = OgcWorld::new(&x, faces, n, excluded)?;
         world.set_inert(garment.inert.clone())?;
         world.validate_start(&x)?;

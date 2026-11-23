@@ -38,6 +38,14 @@ pub enum TrimKind {
         path_m: Vec<DVec2>,
         diameter_m: f64,
     },
+    /// A frayed cut edge: loose threads hanging off the cloth along `path_m` (a path just
+    /// inside the edge), `length_m` long at most and `density_per_m` threads per metre of
+    /// edge. Looks only: drawn in the 3D view, not simulated and not exported.
+    Fray {
+        path_m: Vec<DVec2>,
+        length_m: f64,
+        density_per_m: f64,
+    },
     /// A rigid 3D object fixed on the cloth (a buckle, a badge, a carved button) opened from a
     /// mesh file. Its mesh is kept in metres in its own frame: X along the piece's material u
     /// axis, Z out of the front face, centred across and with its back at Z = 0. The origin
@@ -58,6 +66,15 @@ pub enum TrimKind {
 fn unit_scale() -> f64 {
     1.
 }
+
+/// Lengths of fray threads, metres.
+pub const FRAY_LENGTH_M: std::ops::RangeInclusive<f64> = 0.001..=0.05;
+/// Fray threads per metre of edge.
+pub const FRAY_DENSITY_PER_M: std::ops::RangeInclusive<f64> = 20.0..=2000.0;
+/// Most threads one fray draws.
+pub const MAX_FRAY_THREADS: usize = 8000;
+/// How far inside the cut edge a fray's path runs, metres: the threads start on the cloth.
+pub const FRAY_INSET_M: f64 = 0.001;
 
 /// Most triangles an object trim may have.
 pub const MAX_OBJECT_TRIANGLES: usize = 100_000;
@@ -191,6 +208,15 @@ impl Trim {
                 spacing_m,
             } => path(path_m) && (1..=8).contains(rows) && size(*spacing_m),
             TrimKind::Piping { path_m, diameter_m } => path(path_m) && size(*diameter_m),
+            TrimKind::Fray {
+                path_m,
+                length_m,
+                density_per_m,
+            } => {
+                path(path_m)
+                    && FRAY_LENGTH_M.contains(length_m)
+                    && FRAY_DENSITY_PER_M.contains(density_per_m)
+            }
             TrimKind::Object {
                 name,
                 center_m,
@@ -464,6 +490,7 @@ pub fn trim_triangles(
         }
         samples
     };
+    let mut frayed = vec![];
     for trim in trims {
         if !garment.panels.iter().any(|r| r.id == trim.panel_id) {
             continue;
@@ -600,6 +627,7 @@ pub fn trim_triangles(
                     tri(t.map(place), OBJECT_COLOR);
                 }
             }
+            TrimKind::Fray { .. } => frayed.push(trim),
             TrimKind::Topstitch {
                 path_m,
                 rows,
@@ -626,6 +654,226 @@ pub fn trim_triangles(
                         );
                     }
                 }
+            }
+        }
+    }
+    for trim in frayed {
+        out.extend(fray_triangles(trim, garment, x, FRAY_COLOR));
+    }
+    out
+}
+
+/// Colour of fray threads drawn without their fabric's colour, linear RGB.
+pub const FRAY_COLOR: [f32; 3] = [0.8, 0.77, 0.7];
+
+/// Finds where material points fall in one piece's mesh, for points that follow each other
+/// along a path: it tries the triangle found last, then those around it, before all of them.
+struct Finder<'a> {
+    garment: &'a super::CompiledGarment,
+    triangles: std::ops::Range<usize>,
+    /// Triangles at each vertex of the piece.
+    around: std::collections::HashMap<usize, Vec<usize>>,
+    last: Option<usize>,
+}
+
+impl<'a> Finder<'a> {
+    fn new(garment: &'a super::CompiledGarment, panel: &str) -> Option<Self> {
+        let range = garment.panels.iter().find(|r| r.id == panel)?;
+        let mut around: std::collections::HashMap<usize, Vec<usize>> = Default::default();
+        for t in range.triangles.clone() {
+            for v in garment.mesh.triangles[t].vertices {
+                around.entry(v).or_default().push(t);
+            }
+        }
+        Some(Self {
+            garment,
+            triangles: range.triangles.clone(),
+            around,
+            last: None,
+        })
+    }
+
+    /// Barycentric weights of `uv` in triangle `t`, when it is not degenerate.
+    fn weights(&self, t: usize, uv: DVec2) -> Option<[f64; 3]> {
+        let [a, b, c] = self.garment.mesh.triangles[t]
+            .vertices
+            .map(|v| self.garment.mesh.uv[v]);
+        let (e0, e1, e2) = (b - a, c - a, uv - a);
+        let det = e0.perp_dot(e1);
+        (det.abs() >= 1e-18).then(|| {
+            let wb = e2.perp_dot(e1) / det;
+            let wc = e0.perp_dot(e2) / det;
+            [1. - wb - wc, wb, wc]
+        })
+    }
+
+    /// The triangle holding `uv` (else the nearest), its barycentric weights clamped into
+    /// that triangle, and whether `uv` lies on the cloth.
+    fn find(&mut self, uv: DVec2) -> Option<([usize; 3], [f64; 3], bool)> {
+        let score = |w: &[f64; 3]| w.iter().copied().fold(f64::INFINITY, f64::min);
+        let near: Vec<usize> = self.last.map_or(vec![], |t| {
+            std::iter::once(t)
+                .chain(
+                    self.garment.mesh.triangles[t]
+                        .vertices
+                        .iter()
+                        .flat_map(|v| self.around[v].iter().copied()),
+                )
+                .collect()
+        });
+        let holding = near
+            .into_iter()
+            .find_map(|t| Some((t, self.weights(t, uv)?)).filter(|(_, w)| score(w) >= -1e-9));
+        let (t, w, inside) = match holding {
+            Some((t, w)) => (t, w, true),
+            None => {
+                let mut best: Option<(f64, usize, [f64; 3])> = None;
+                for t in self.triangles.clone() {
+                    let Some(w) = self.weights(t, uv) else {
+                        continue;
+                    };
+                    let s = score(&w);
+                    if best.as_ref().is_none_or(|(b, ..)| s > *b) {
+                        best = Some((s, t, w));
+                    }
+                }
+                let (s, t, w) = best?;
+                (t, w, s >= -1e-9)
+            }
+        };
+        self.last = Some(t);
+        let w = w.map(|x| x.max(0.));
+        let sum: f64 = w.iter().sum();
+        Some((
+            self.garment.mesh.triangles[t].vertices,
+            w.map(|x| x / sum),
+            inside,
+        ))
+    }
+}
+
+/// A number in [0, 1) that depends only on `seed`, `k` and `salt`.
+fn noise(seed: u64, k: u64, salt: u64) -> f64 {
+    let mut z =
+        seed ^ k.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ salt.wrapping_mul(0xD1B5_4A32_D192_ED03);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^= z >> 31;
+    (z >> 11) as f64 / (1u64 << 53) as f64
+}
+
+/// The loose threads of a fray trim (other trims give none) on the cloth at positions `x`:
+/// each starts on the trim's path, just inside the cut edge, and runs out across the edge in
+/// the cloth's surface, drooping a little and curling off the face. Their spacing, length and
+/// direction vary from thread to thread, the same way every time for the same trim. Drawn in
+/// `color`, each thread a little lighter or darker; each is two thin crossed ribbons, so it
+/// shows from any side.
+pub fn fray_triangles(
+    trim: &Trim,
+    garment: &super::CompiledGarment,
+    x: &[glam::DVec3],
+    color: [f32; 3],
+) -> Vec<TrimTriangle> {
+    use glam::DVec3;
+    let TrimKind::Fray {
+        path_m,
+        length_m,
+        density_per_m,
+    } = &trim.kind
+    else {
+        return vec![];
+    };
+    let panel = trim.panel_id.as_str();
+    let lengths: Vec<f64> = path_m.windows(2).map(|w| w[0].distance(w[1])).collect();
+    let total: f64 = lengths.iter().sum();
+    if path_m.len() < 2 || total <= 0. || x.len() != garment.mesh.uv.len() {
+        return vec![];
+    }
+    let seed = trim.id.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01B3)
+    });
+    let count = ((total * density_per_m).round() as usize).clamp(1, MAX_FRAY_THREADS);
+    let spacing = total / count as f64;
+    let Some(mut finder) = Finder::new(garment, panel) else {
+        return vec![];
+    };
+    // The side of each stretch of the path the cloth is not on.
+    let probe = 3. * FRAY_INSET_M;
+    let outward: Vec<DVec2> = path_m
+        .windows(2)
+        .map(|w| {
+            let mid = (w[0] + w[1]) * 0.5;
+            let left = (w[1] - w[0]).normalize_or_zero().perp();
+            let mut on = |d: DVec2| finder.find(mid + d * probe).is_some_and(|l| l.2);
+            if on(left) && !on(-left) { -left } else { left }
+        })
+        .collect();
+    let mut out = vec![];
+    let (mut segment, mut start) = (0, 0.);
+    for k in 0..count as u64 {
+        let r = |salt| noise(seed, k, salt);
+        let s = ((k as f64 + 0.5 + (r(1) - 0.5) * 0.7) * spacing).clamp(0., total);
+        while segment + 1 < lengths.len() && start + lengths[segment] < s {
+            start += lengths[segment];
+            segment += 1;
+        }
+        let (a, b) = (path_m[segment], path_m[segment + 1]);
+        let along2 = (b - a).normalize_or_zero();
+        let uv = a + along2 * (s - start).clamp(0., lengths[segment]);
+        let Some(([ia, ib, ic], w, _)) = finder.find(uv) else {
+            continue;
+        };
+        let (ua, ub, uc) = (
+            garment.mesh.uv[ia],
+            garment.mesh.uv[ib],
+            garment.mesh.uv[ic],
+        );
+        let m = glam::DMat2::from_cols(ub - ua, uc - ua);
+        if m.determinant().abs() < 1e-18 {
+            continue;
+        }
+        let inverse = m.inverse();
+        // Material directions carried onto the cloth as it lies now.
+        let carry = |d: DVec2| {
+            let k = inverse * d;
+            (x[ib] - x[ia]) * k.x + (x[ic] - x[ia]) * k.y
+        };
+        // The front face's normal, as the other trims use it.
+        let front = -(x[ib] - x[ia]).cross(x[ic] - x[ia]).normalize_or_zero();
+        let across = carry(outward[segment]).normalize_or_zero();
+        let along = carry(along2).normalize_or_zero();
+        if front == DVec3::ZERO || across == DVec3::ZERO {
+            continue;
+        }
+        let p = x[ia] * w[0] + x[ib] * w[1] + x[ic] * w[2];
+        let length = length_m * (0.45 + 0.55 * r(2));
+        let sway = (r(3) - 0.5) * 0.8;
+        let curl = (r(4) - 0.5) * 0.6;
+        let droop = 0.1 + 0.4 * r(5);
+        let first = (across + along * sway + front * curl).normalize_or_zero();
+        let second = (first + DVec3::NEG_Y * droop + along * sway * 0.3).normalize_or_zero();
+        let base = p + front * (0.5 * TRIM_LIFT_M);
+        let points = [
+            base,
+            base + first * (0.5 * length),
+            base + first * (0.5 * length) + second * (0.5 * length),
+        ];
+        let widths = [0.00045, 0.00038, 0.00025];
+        let shade = (0.8 + 0.35 * r(6)) as f32;
+        let thread = color.map(|c| (c * shade).min(1.));
+        for i in 0..2 {
+            let d = (points[i + 1] - points[i]).normalize_or_zero();
+            for side in [d.cross(front).normalize_or_zero(), front] {
+                let (s0, s1) = (side * (0.5 * widths[i]), side * (0.5 * widths[i + 1]));
+                let (p0, p1) = (points[i], points[i + 1]);
+                out.push(TrimTriangle {
+                    points: [p0 - s0, p0 + s0, p1 + s1],
+                    color: thread,
+                });
+                out.push(TrimTriangle {
+                    points: [p0 - s0, p1 + s1, p1 - s1],
+                    color: thread,
+                });
             }
         }
     }

@@ -2775,6 +2775,41 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Tears" => "Rasgados",
         "Open a stretch of this seam, as a rip" => "Abre un tramo de esta costura, como un rasgado",
         "Mend all" => "Coser todos",
+        "Breaks at" => "Se rompe a",
+        "The seam breaks where it is pulled harder than this while simulating" => {
+            "La costura se rompe donde se tira de ella con más fuerza que esto al simular"
+        }
+        "Breaking strength: pull per centimetre of seam a stitch holds" => {
+            "Resistencia a la rotura: tirón por centímetro de costura que aguanta una puntada"
+        }
+        "Seam broke:" => "Costura rota:",
+        "stitch gave way" => "puntada cedió",
+        "stitches gave way" => "puntadas cedieron",
+        "Seam strength" => "Resistencia de costura",
+        "Seam broke" => "Costura rota",
+        "Fray edge" => "Deshilachar borde",
+        "Fray edge: loose threads along the selected segment" => {
+            "Deshilachar borde: hilos sueltos a lo largo del segmento seleccionado"
+        }
+        "Fray" => "Deshilachado",
+        "Thread length" => "Largo de hilo",
+        "Threads" => "Hilos",
+        "Subdivide selected mesh" => "Subdividir malla seleccionada",
+        "Subdivide the selected mesh: finer triangles there" => {
+            "Subdividir la malla seleccionada: triángulos más finos ahí"
+        }
+        "Subdivide mesh" => "Subdividir malla",
+        "Subdivide" => "Subdividir",
+        "Remove subdivision" => "Quitar subdivisión",
+        "Mesh the selected cloth finer: its triangles split in half, the rest of the piece stays as it is" => {
+            "Mallar más fina la tela seleccionada: sus triángulos se parten por la mitad, el resto de la pieza queda igual"
+        }
+        "Mesh the selected pieces evenly again" => {
+            "Volver a mallar uniformes las piezas seleccionadas"
+        }
+        "The selected pieces have no subdivided zones" => {
+            "Las piezas seleccionadas no tienen zonas subdivididas"
+        }
         "Select mesh with a brush" => "Seleccionar malla con pincel",
         "Mesh the selected pieces as quads along their grain" => {
             "Mallar las piezas seleccionadas en cuadrados a lo largo del hilo"

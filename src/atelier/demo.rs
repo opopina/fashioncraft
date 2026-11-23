@@ -93,6 +93,9 @@ pub(super) enum Step {
     Drag(Target, Target),
     /// The same with the secondary button: in the 3D view, how a person turns the camera.
     DragRight(Target, Target),
+    /// Like `Drag`, holding the button at the second target this many seconds before letting
+    /// go: a person keeping up a pull on the cloth.
+    DragHold(Target, Target, f64),
     /// Press a key.
     Key(egui::Key, egui::Modifiers),
     /// Type text into the focused field.
@@ -160,7 +163,11 @@ enum AfterGlide {
     Click,
     /// Press here, then glide to the target held.
     PressThenGlide(egui::Pos2),
+    /// The same, then hold it there this many seconds.
+    PressThenGlideHold(egui::Pos2, f64),
     Release,
+    /// Keep the button down this many seconds, then let go.
+    HoldThenRelease(f64),
 }
 
 /// Raw RGBA frames piped to ffmpeg.
@@ -517,9 +524,26 @@ impl Atelier {
                             });
                             return;
                         }
+                        AfterGlide::PressThenGlideHold(end, seconds) => {
+                            demo.button(true);
+                            demo.phase = Some(Phase::Glide {
+                                from: to,
+                                to: end,
+                                started: now + 0.12,
+                                then: AfterGlide::HoldThenRelease(seconds),
+                            });
+                            return;
+                        }
                         AfterGlide::Release => {
                             demo.button(false);
                             demo.drag_button = egui::PointerButton::Primary;
+                        }
+                        AfterGlide::HoldThenRelease(seconds) => {
+                            demo.phase = Some(Phase::Holding {
+                                until: now + seconds,
+                                release_at: to,
+                            });
+                            return;
                         }
                     }
                 }
@@ -624,7 +648,7 @@ impl Atelier {
                     }
                 }
             }
-            Step::Drag(a, b) | Step::DragRight(a, b) => {
+            Step::Drag(a, b) | Step::DragRight(a, b) | Step::DragHold(a, b, _) => {
                 match (locate(self, ctx, a), locate(self, ctx, b)) {
                     (Some(from), Some(to)) => {
                         demo.seeking_since = None;
@@ -636,7 +660,12 @@ impl Atelier {
                             from: demo.cursor,
                             to: from,
                             started: now,
-                            then: AfterGlide::PressThenGlide(to),
+                            then: match step {
+                                Step::DragHold(_, _, seconds) => {
+                                    AfterGlide::PressThenGlideHold(to, seconds)
+                                }
+                                _ => AfterGlide::PressThenGlide(to),
+                            },
                         });
                     }
                     _ => {
@@ -838,6 +867,9 @@ fn describe(step: &Step) -> String {
         Step::Click(t) => format!("click {}", target(t)),
         Step::Drag(a, b) => format!("drag {} → {}", target(a), target(b)),
         Step::DragRight(a, b) => format!("right-drag {} → {}", target(a), target(b)),
+        Step::DragHold(a, b, seconds) => {
+            format!("drag {} → {} and hold {seconds} s", target(a), target(b))
+        }
         _ => String::new(),
     }
 }

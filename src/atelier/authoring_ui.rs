@@ -73,6 +73,7 @@ pub(super) struct AuthoringUi {
     pub camera_props: super::camera_props_ui::CameraPropsUi,
     pub pleats: super::pleats_ui::PleatsUi,
     pub mesh_select: super::mesh_select::MeshSelect,
+    pub seam_breaking: super::seam_break_ui::SeamBreaking,
     pub texture_edit: super::texture_ui::TextureEdit,
     pub style_lines: super::style_lines::StyleLines,
     pub script: super::script_ui::ScriptUi,

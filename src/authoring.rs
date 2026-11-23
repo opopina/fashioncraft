@@ -356,6 +356,17 @@ pub enum Command {
         seam: String,
         tears: Vec<[f64; 2]>,
     },
+    /// The breaking strength of `seam`, in newtons per metre of seam; `None`, it never breaks.
+    /// While simulating, a stitch pulled harder than that for a moment breaks. One undo step.
+    SetSeamStrength {
+        seam: String,
+        strength: Option<f64>,
+    },
+    /// Stitches that broke while simulating: the stretches they sewed join their seams' tears.
+    /// One undo step for all of them.
+    BreakStitches {
+        breaks: Vec<crate::garment::seam_break::StitchBreak>,
+    },
     /// Turn `panel`'s grain to `degrees` (warp direction in its material, counter-clockwise from
     /// its x axis): the fabric's warp and weft, and its texture, follow. One undo step.
     SetPanelGrain {
@@ -373,6 +384,11 @@ pub enum Command {
     SetMeshQuads {
         panels: Vec<String>,
         quads: bool,
+    },
+    /// The finer-meshed zones of each listed piece, replacing the ones it had (none: meshed
+    /// evenly again). The pieces keep their drape. One undo step.
+    SetMeshRefinement {
+        zones: std::collections::BTreeMap<String, Vec<crate::garment::meshing::RefineZone>>,
     },
     /// Brush steam onto the cloth: the stamps of one stroke. One undo step.
     AddSteam {
@@ -740,10 +756,13 @@ impl Command {
             Self::RemoveSeams { .. } => "Remove seams",
             Self::AddSteam { .. } => "Steam",
             Self::SetSeamTears { .. } => "Tear seam",
+            Self::SetSeamStrength { .. } => "Seam strength",
+            Self::BreakStitches { .. } => "Seam broke",
             Self::SetTextureOffset { .. } => "Edit texture",
             Self::SetPanelGrain { .. } => "Grain",
             Self::SetMeshQuads { quads: true, .. } => "Convert to quads",
             Self::SetMeshQuads { quads: false, .. } => "Convert to triangles",
+            Self::SetMeshRefinement { .. } => "Subdivide mesh",
             Self::RemoveSteam { .. } => "Remove steam",
             Self::SetSeamsActive { active: true, .. } => "Activate seams",
             Self::SetSeamsActive { active: false, .. } => "Deactivate seams",
@@ -977,6 +996,109 @@ pub fn prepare_pin_edit(
         &std::collections::BTreeMap::from([(panel.to_owned(), selection.to_vec())]),
         hold,
     )
+}
+
+/// Finer zones for the cloth at `vertices` of `garment` (built from `template`), for
+/// [`Command::SetMeshRefinement`]: on each piece with selected points, a new zone covering the
+/// triangles whose three corners are selected (those touching a selected point when none
+/// is), asking for edges a little over half as long as theirs are now, added to the zones
+/// the piece has. Each subdivision halves the triangles there again.
+pub fn subdivide_zones(
+    template: &GarmentTemplate,
+    garment: &CompiledGarment,
+    vertices: &[usize],
+) -> Result<std::collections::BTreeMap<String, Vec<crate::garment::meshing::RefineZone>>, String> {
+    use crate::garment::meshing::{MIN_ZONE_EDGE_M, RefineZone};
+    /// New longest edge, as a share of the selected triangles' longest edges now.
+    const SHARE: f64 = 0.55;
+    let selected: std::collections::BTreeSet<usize> = vertices.iter().copied().collect();
+    let mut out = std::collections::BTreeMap::new();
+    let mut flat = false;
+    for range in &garment.panels {
+        if !selected.iter().any(|v| range.vertices.contains(v)) {
+            continue;
+        }
+        let Some(polygon) = template
+            .panels
+            .iter()
+            .find(|p| p.id == range.id)
+            .and_then(|p| p.polygon.as_ref())
+        else {
+            flat = true;
+            continue;
+        };
+        let triangles = &garment.mesh.triangles[range.triangles.clone()];
+        let mut chosen: Vec<_> = triangles
+            .iter()
+            .filter(|t| t.vertices.iter().all(|v| selected.contains(v)))
+            .collect();
+        if chosen.is_empty() {
+            chosen = triangles
+                .iter()
+                .filter(|t| t.vertices.iter().any(|v| selected.contains(v)))
+                .collect();
+        }
+        if chosen.is_empty() {
+            continue;
+        }
+        let corners: Vec<[DVec2; 3]> = chosen
+            .iter()
+            .map(|t| t.vertices.map(|v| garment.mesh.uv[v]))
+            .collect();
+        let mut longest: Vec<f64> = corners
+            .iter()
+            .map(|t| {
+                (0..3)
+                    .map(|k| t[k].distance(t[(k + 1) % 3]))
+                    .fold(0., f64::max)
+            })
+            .collect();
+        longest.sort_by(f64::total_cmp);
+        let edge_m = longest[longest.len() / 2] * SHARE;
+        if edge_m < MIN_ZONE_EDGE_M {
+            return Err(format!(
+                "The mesh there is as fine as it goes ({:.1} mm)",
+                longest[longest.len() / 2] * 1000.
+            ));
+        }
+        let mut zones = polygon.meshing_settings().refine;
+        zones.push(RefineZone {
+            triangles: corners,
+            edge_m,
+        });
+        out.insert(range.id.clone(), zones);
+    }
+    if out.is_empty() {
+        return Err(if flat {
+            "Only drafted pieces can be subdivided".into()
+        } else {
+            "Select the cloth to subdivide first".into()
+        });
+    }
+    Ok(out)
+}
+
+/// The pieces with points among `vertices` that have finer zones, each with none: what
+/// [`Command::SetMeshRefinement`] takes to mesh them evenly again.
+pub fn unsubdivide_zones(
+    template: &GarmentTemplate,
+    garment: &CompiledGarment,
+    vertices: &[usize],
+) -> std::collections::BTreeMap<String, Vec<crate::garment::meshing::RefineZone>> {
+    garment
+        .panels
+        .iter()
+        .filter(|range| vertices.iter().any(|v| range.vertices.contains(v)))
+        .filter(|range| {
+            template
+                .panels
+                .iter()
+                .find(|p| p.id == range.id)
+                .and_then(|p| p.polygon.as_ref())
+                .is_some_and(|polygon| !polygon.meshing_settings().refine.is_empty())
+        })
+        .map(|range| (range.id.clone(), vec![]))
+        .collect()
 }
 
 /// One atomic pin edit across panels. Source freshness and the final candidate
@@ -1641,6 +1763,7 @@ pub fn prune_simulation_settings(template: &mut GarmentTemplate) {
     template.seam_zippers.retain(|id, _| seams.contains(id));
     template.inactive_seams.retain(|id| seams.contains(id));
     template.seam_tears.retain(|id, _| seams.contains(id));
+    template.seam_strengths.retain(|id, _| seams.contains(id));
     template.steam.retain(|s| panels.contains(&s.panel));
     template.texture_offsets.retain(|id, _| panels.contains(id));
 }
@@ -1658,6 +1781,9 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
         t.locked_panels.clear();
         t.flipped_panels.clear();
         t.texture_offsets.clear();
+        // A breaking strength changes nothing in the compiled garment: only when the
+        // simulation opens a tear.
+        t.seam_strengths.clear();
         t.internal_lines_locked = false;
         // Pins held on to the avatar only move while an animation records.
         t.pins_attached = false;
@@ -1684,8 +1810,9 @@ pub fn same_physics(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
     without_layout(a) == without_layout(b)
 }
 /// A strict nonphysical draft change, distinct from other board edits: fabric
-/// optics, graphics, trims and per-boundary seam allowances/notches. Installing
-/// one must not stop playback, bump the worker generation or discard the drape.
+/// optics, graphics, trims, seams' breaking strengths and per-boundary seam
+/// allowances/notches. Installing one must not stop playback, bump the worker generation or
+/// discard the drape.
 pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool {
     let markings = |t: &GarmentTemplate| {
         t.panels
@@ -1705,6 +1832,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         && a.internal_lines_locked == b.internal_lines_locked
         && a.flipped_panels == b.flipped_panels
         && a.texture_offsets == b.texture_offsets
+        && a.seam_strengths == b.seam_strengths
     {
         return false;
     }
@@ -1717,6 +1845,7 @@ pub fn only_appearance_changed(a: &GarmentTemplate, b: &GarmentTemplate) -> bool
         t.internal_lines_locked = false;
         t.flipped_panels.clear();
         t.texture_offsets.clear();
+        t.seam_strengths.clear();
         for p in &mut t.panels {
             if let Some(polygon) = p.polygon.as_mut() {
                 polygon.seam_allowances.clear();
@@ -4958,6 +5087,30 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             }
             selected = Some(panel);
         }
+        Command::SetMeshRefinement { zones } => {
+            if zones.is_empty() {
+                return Err("Select the cloth to subdivide first".into());
+            }
+            let mut changed = 0;
+            for (id, wanted) in &zones {
+                let index = panel_index(&template, id)?;
+                let Some(polygon) = template.panels[index].polygon.as_mut() else {
+                    return Err(format!("Piece {id} has no drafted outline to remesh"));
+                };
+                let mut settings = polygon.meshing_settings();
+                if &settings.refine == wanted {
+                    continue;
+                }
+                settings.refine = wanted.clone();
+                settings.validate()?;
+                polygon.meshing = Some(settings);
+                changed += 1;
+            }
+            if changed == 0 {
+                return Err("Those pieces are meshed like that already".into());
+            }
+            selected = zones.keys().next().cloned();
+        }
         Command::SetMeshQuads { panels, quads } => {
             if panels.is_empty() {
                 return Err("Select the pieces first".into());
@@ -5016,6 +5169,53 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             } else {
                 template.seam_tears.insert(seam, merged);
             }
+        }
+        Command::SetSeamStrength { seam, strength } => {
+            if !template.seams.iter().any(|s| s.id == seam) {
+                return Err(format!("There is no seam {seam}"));
+            }
+            let before = template.seam_strengths.get(&seam).copied();
+            match strength {
+                Some(value) => {
+                    let range = crate::garment::seam_break::STRENGTH_N_PER_M;
+                    if !range.contains(&value) {
+                        return Err(format!(
+                            "A breaking strength is {} to {} N/m",
+                            range.start(),
+                            range.end()
+                        ));
+                    }
+                    if before == Some(value) {
+                        return Err("The seam has that strength already".into());
+                    }
+                    template.seam_strengths.insert(seam, value);
+                }
+                None => {
+                    if before.is_none() {
+                        return Err("The seam does not break already".into());
+                    }
+                    template.seam_strengths.remove(&seam);
+                }
+            }
+        }
+        Command::BreakStitches { breaks } => {
+            if breaks.is_empty() {
+                return Err("No stitches broke".into());
+            }
+            for b in &breaks {
+                if !template.seams.iter().any(|s| s.id == b.seam) {
+                    return Err(format!("There is no seam {}", b.seam));
+                }
+                let [lo, hi] = b.span;
+                if !(lo.is_finite() && hi.is_finite()) || !(0. ..hi).contains(&lo) || hi > 1. {
+                    return Err("A broken stitch lies within its seam".into());
+                }
+            }
+            let tears = crate::garment::seam_break::tears_after(&template.seam_tears, &breaks);
+            if tears == template.seam_tears {
+                return Err("Those stitches are torn already".into());
+            }
+            template.seam_tears = tears;
         }
         Command::AddSteam { stamps } => {
             if stamps.is_empty() {
@@ -5167,7 +5367,8 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                     }
                     TrimKind::Zipper { path_m, .. }
                     | TrimKind::Topstitch { path_m, .. }
-                    | TrimKind::Piping { path_m, .. } => {
+                    | TrimKind::Piping { path_m, .. }
+                    | TrimKind::Fray { path_m, .. } => {
                         for point in path_m {
                             *point += delta;
                         }

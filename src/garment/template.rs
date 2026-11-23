@@ -351,6 +351,11 @@ pub struct GarmentTemplate {
     /// ripped seam is.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seam_tears: BTreeMap<String, Vec<[f64; 2]>>,
+    /// Breaking strength of seams, by seam id, in newtons per metre of seam: while simulating,
+    /// a stitch whose pull per metre stays above it for [`super::seam_break::BREAK_HOLD_S`]
+    /// breaks, and the stretch it sewed is added to the seam's tears. Absent = never breaks.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seam_strengths: BTreeMap<String, f64>,
     /// Seams switched off, by id: kept in the document but not sewn, with their folds and
     /// zippers (Sewing › Activate all seams turns them back on).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -809,6 +814,18 @@ impl GarmentTemplate {
             {
                 return Err(format!(
                     "Seam {id} needs tears within its length, each of some length"
+                ));
+            }
+        }
+        for (id, strength) in &self.seam_strengths {
+            if !self.seams.iter().any(|s| &s.id == id) {
+                return Err(format!("Breaking strength on unknown seam {id}"));
+            }
+            if !super::seam_break::STRENGTH_N_PER_M.contains(strength) {
+                return Err(format!(
+                    "Seam {id} needs a breaking strength of {} to {} N/m",
+                    super::seam_break::STRENGTH_N_PER_M.start(),
+                    super::seam_break::STRENGTH_N_PER_M.end()
                 ));
             }
         }
@@ -1346,6 +1363,7 @@ impl GarmentTemplate {
                 samples: vec![super::seam::StitchSample {
                     point: point.clone(),
                     weight_m: 1.,
+                    span: [0., 1.],
                 }],
                 probes: vec![point],
                 guides: vec![],
@@ -1353,6 +1371,7 @@ impl GarmentTemplate {
                 stiffness: TACK_STIFFNESS,
                 lengths: [0.01, 0.01],
                 notches: vec![],
+                torn: vec![],
             });
         }
         out.arrangement_positions = out.initial_state.x.clone();
@@ -1514,6 +1533,7 @@ impl GarmentTemplate {
             seam_zippers: Default::default(),
             inactive_seams: Default::default(),
             seam_tears: Default::default(),
+            seam_strengths: Default::default(),
             texture_offsets: Default::default(),
             steam: vec![],
             tacks: vec![],

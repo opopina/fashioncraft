@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use spade::{
     AngleLimit, ConstrainedDelaunayTriangulation, Point2, RefinementParameters, Triangulation,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,6 +26,43 @@ pub struct MeshingSettings {
     /// holes and internal lines.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub quads: bool,
+    /// Zones meshed finer than the rest (3D Garment › Subdivide selected mesh).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refine: Vec<RefineZone>,
+}
+
+/// A zone of a piece meshed finer than the rest: after the piece is meshed, every triangle
+/// whose centre lies in one of `triangles` (material coordinates, metres) is split along its
+/// longest edge until no edge of it is longer than `edge_m`. Triangles elsewhere keep their
+/// shape, except next to the zone, where splits spread just enough to keep the mesh whole.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RefineZone {
+    pub triangles: Vec<[DVec2; 3]>,
+    pub edge_m: f64,
+}
+
+/// Most refined zones a piece may have.
+pub const MAX_REFINE_ZONES: usize = 16;
+/// Most triangles that may outline one zone.
+pub const MAX_ZONE_TRIANGLES: usize = 50_000;
+/// Shortest longest-edge a zone may ask for, metres.
+pub const MIN_ZONE_EDGE_M: f64 = 0.002;
+
+impl RefineZone {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.triangles.is_empty()
+            || self.triangles.len() > MAX_ZONE_TRIANGLES
+            || self.triangles.iter().flatten().any(|p| !p.is_finite())
+            || !self.edge_m.is_finite()
+            || !(MIN_ZONE_EDGE_M..=0.5).contains(&self.edge_m)
+        {
+            return Err(format!(
+                "A subdivided zone needs 1 to {MAX_ZONE_TRIANGLES} triangles and an edge of 2 to 500 mm"
+            ));
+        }
+        Ok(())
+    }
 }
 fn one() -> f64 {
     1.0
@@ -45,6 +82,7 @@ impl Default for MeshingSettings {
             min_angle_degrees: angle(),
             quads: false,
             max_vertices: budget(),
+            refine: vec![],
         }
     }
 }
@@ -60,6 +98,14 @@ impl MeshingSettings {
             || !(64..=100_000).contains(&self.max_vertices)
         {
             return Err("Invalid meshing settings: size 3..500 mm, anisotropy 1..4, angle 15..30 degrees, budget 64..100000".into());
+        }
+        if self.refine.len() > MAX_REFINE_ZONES {
+            return Err(format!(
+                "A piece may have {MAX_REFINE_ZONES} subdivided zones at most"
+            ));
+        }
+        for zone in &self.refine {
+            zone.validate()?;
         }
         Ok(())
     }
@@ -135,6 +181,157 @@ fn seed_grid(
             cdt.insert(Point2::new(q.x, q.y))
                 .map_err(|e| e.to_string())?;
         }
+    }
+    Ok(())
+}
+
+/// A refined zone ready for point queries: its triangles bucketed on a grid.
+struct Zone {
+    triangles: Vec<[DVec2; 3]>,
+    edge_m: f64,
+    cell: f64,
+    grid: HashMap<(i64, i64), Vec<usize>>,
+}
+
+impl Zone {
+    fn new(zone: &RefineZone) -> Self {
+        let size = zone
+            .triangles
+            .iter()
+            .map(|t| (t[1] - t[0]).abs().max(t[2] - t[0]).max_element())
+            .fold(0., f64::max);
+        let cell = size.max(1e-4);
+        let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        for (i, t) in zone.triangles.iter().enumerate() {
+            let lo = t[0].min(t[1]).min(t[2]);
+            let hi = t[0].max(t[1]).max(t[2]);
+            for x in (lo.x / cell).floor() as i64..=(hi.x / cell).floor() as i64 {
+                for y in (lo.y / cell).floor() as i64..=(hi.y / cell).floor() as i64 {
+                    grid.entry((x, y)).or_default().push(i);
+                }
+            }
+        }
+        Self {
+            triangles: zone.triangles.clone(),
+            edge_m: zone.edge_m,
+            cell,
+            grid,
+        }
+    }
+    fn contains(&self, p: DVec2) -> bool {
+        let key = (
+            (p.x / self.cell).floor() as i64,
+            (p.y / self.cell).floor() as i64,
+        );
+        self.grid.get(&key).is_some_and(|list| {
+            list.iter().any(|i| {
+                let [a, b, c] = self.triangles[*i];
+                let (d1, d2, d3) = (
+                    (b - a).perp_dot(p - a),
+                    (c - b).perp_dot(p - b),
+                    (a - c).perp_dot(p - c),
+                );
+                let tolerance = -1e-12;
+                (d1 >= tolerance && d2 >= tolerance && d3 >= tolerance)
+                    || (d1 <= -tolerance && d2 <= -tolerance && d3 <= -tolerance)
+            })
+        })
+    }
+}
+
+fn edge_key(a: usize, b: usize) -> (usize, usize) {
+    (a.min(b), a.max(b))
+}
+
+/// Split the triangles `too_big` asks for along their longest edge, by longest-edge
+/// propagation (Rivara): when that edge is not also the longest of the triangle across it,
+/// that neighbour is split first, along its own longest edge, and so on, so every split
+/// halves an edge shared by two triangles that both have it as their longest (or one on the
+/// outline). The mesh stays whole, its smallest angle is at least half of the smallest it had,
+/// and triangles away from the split ones keep their vertices. New vertices go after the
+/// existing ones, each at the middle of the edge it splits (so on the outline when the edge
+/// is). Winding is kept.
+pub fn refine_longest_edge(
+    uv: &mut Vec<DVec2>,
+    faces: &mut Vec<[usize; 3]>,
+    too_big: impl Fn([DVec2; 3]) -> bool,
+    max_vertices: usize,
+) -> Result<(), String> {
+    let mut edges: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    for (f, t) in faces.iter().enumerate() {
+        for k in 0..3 {
+            edges
+                .entry(edge_key(t[k], t[(k + 1) % 3]))
+                .or_default()
+                .push(f);
+        }
+    }
+    // Edges in a strict order (length, then vertices), so a longest-edge path cannot cycle.
+    let longest = |uv: &[DVec2], t: [usize; 3]| {
+        (0..3)
+            .map(|k| edge_key(t[k], t[(k + 1) % 3]))
+            .max_by(|x, y| {
+                uv[x.0]
+                    .distance_squared(uv[x.1])
+                    .total_cmp(&uv[y.0].distance_squared(uv[y.1]))
+                    .then(x.cmp(y))
+            })
+            .unwrap()
+    };
+    let corners = |uv: &[DVec2], t: [usize; 3]| t.map(|i| uv[i]);
+    let mut stack: Vec<usize> = (0..faces.len())
+        .filter(|f| too_big(corners(uv, faces[*f])))
+        .collect();
+    while let Some(f) = stack.pop() {
+        if !too_big(corners(uv, faces[f])) {
+            continue;
+        }
+        // Walk the longest-edge path from f to the edge to split.
+        let mut current = f;
+        let mut walked = 0;
+        let edge = loop {
+            let e = longest(uv, faces[current]);
+            let across = edges[&e].iter().copied().find(|g| *g != current);
+            match across {
+                Some(g) if longest(uv, faces[g]) != e => current = g,
+                _ => break e,
+            }
+            walked += 1;
+            if walked > faces.len() {
+                return Err("Mesh subdivision did not converge".into());
+            }
+        };
+        if uv.len() >= max_vertices {
+            return Err(
+                "Subdividing there exceeds the meshing vertex budget; select a smaller zone".into(),
+            );
+        }
+        let middle = uv.len();
+        uv.push((uv[edge.0] + uv[edge.1]) * 0.5);
+        let sharing = edges.remove(&edge).unwrap_or_default();
+        for g in sharing {
+            let t = faces[g];
+            let k = (0..3)
+                .find(|k| edge_key(t[*k], t[(*k + 1) % 3]) == edge)
+                .expect("the split edge is the triangle's");
+            let (p, q, c) = (t[k], t[(k + 1) % 3], t[(k + 2) % 3]);
+            let new = faces.len();
+            faces[g] = [p, middle, c];
+            faces.push([middle, q, c]);
+            edges.entry(edge_key(p, middle)).or_default().push(g);
+            edges.entry(edge_key(middle, q)).or_default().push(new);
+            edges
+                .entry(edge_key(middle, c))
+                .or_default()
+                .extend([g, new]);
+            if let Some(owners) = edges.get_mut(&edge_key(q, c)) {
+                for owner in owners.iter_mut().filter(|o| **o == g) {
+                    *owner = new;
+                }
+            }
+            stack.extend([g, new]);
+        }
+        stack.push(f);
     }
     Ok(())
 }
@@ -390,10 +587,29 @@ pub fn triangulate_domain(
             uv.push(settings.material_point(DVec2::new(p.x, p.y)));
         }
     }
-    let faces = raw_faces
+    let mut faces: Vec<[usize; 3]> = raw_faces
         .into_iter()
         .map(|f| f.map(|i| remap[&i]))
         .collect();
+    // Finer zones: split there, before the named edges are recovered, so their new points on
+    // outlines and lines join those edges.
+    if !settings.refine.is_empty() {
+        let zones: Vec<Zone> = settings.refine.iter().map(Zone::new).collect();
+        refine_longest_edge(
+            &mut uv,
+            &mut faces,
+            |t| {
+                let centre = (t[0] + t[1] + t[2]) / 3.;
+                let longest = (0..3)
+                    .map(|k| t[k].distance(t[(k + 1) % 3]))
+                    .fold(0., f64::max);
+                zones
+                    .iter()
+                    .any(|z| longest > z.edge_m * (1. + 1e-9) && z.contains(centre))
+            },
+            settings.max_vertices,
+        )?;
+    }
     let mut boundaries = BTreeMap::new();
     for i in 0..points.len() {
         let a = points[i];

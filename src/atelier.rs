@@ -74,6 +74,8 @@ mod drafting_ui;
 mod edges_3d;
 #[path = "atelier/environment_ui.rs"]
 mod environment_ui;
+#[path = "atelier/fabric_kit_ui.rs"]
+mod fabric_kit_ui;
 #[path = "atelier/fabrics_ui.rs"]
 mod fabrics_ui;
 #[path = "atelier/garment_display.rs"]
@@ -847,6 +849,7 @@ impl Atelier {
             Id::GraphicOn3dGarment => self.start_graphic_3d(),
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
+            Id::MeasureFabric => self.open_fabric_kit(),
             Id::Piping => self.pipe_selected()?,
             Id::SuperimposeSide => self.superimpose_side()?,
             Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
@@ -1832,6 +1835,7 @@ impl eframe::App for Atelier {
             self.texture_edit_window(&ctx);
             self.script_window(&ctx);
             self.steam_window(&ctx);
+            self.fabric_kit_window(&ctx);
             self.object_browser_window(&ctx);
             self.native_menu_windows(&ctx, palette_idle);
         }

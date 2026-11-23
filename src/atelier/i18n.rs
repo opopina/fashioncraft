@@ -3067,6 +3067,139 @@ fn spanish(text: &str) -> Option<&'static str> {
         "joint moved · Apply and restart to use the new skeleton" => {
             "articulación movida · Aplicar y reiniciar para usar el esqueleto nuevo"
         }
+        "Measure fabric…" => "Medir tejido…",
+        "Measure fabric" => "Medir tejido",
+        "Measure fabric: fit a fabric to a workshop's tests of a real one" => {
+            "Medir tejido: ajusta un tejido a los ensayos de taller de uno real"
+        }
+        "Measured fabric" => "Tejido medido",
+        "Type the workshop's readings, then Fit fabric" => {
+            "Escribe las lecturas del taller y luego Ajustar tejido"
+        }
+        "Select a piece to cut from this fabric" => {
+            "Selecciona una pieza para cortarla de este tejido"
+        }
+        "Measured fabric applied · simulate to see it drape" => {
+            "Tejido medido aplicado · simula para ver cómo cae"
+        }
+        "Measure a sample of your fabric with simple tools, type the readings and FashionCraft fits a fabric whose virtual tests give the same readings." => {
+            "Mide una muestra de tu tejido con herramientas sencillas, escribe las lecturas y FashionCraft ajusta un tejido cuyos ensayos virtuales dan las mismas lecturas."
+        }
+        "Measuring procedure" => "Procedimiento de medida",
+        "Weight and thickness" => "Peso y espesor",
+        "Weigh a 10 × 10 cm square: its grams × 100 are its g/m²." => {
+            "Pesa un cuadrado de 10 × 10 cm: sus gramos × 100 son sus g/m²."
+        }
+        "Strip test with weights" => "Ensayo de tira con pesas",
+        "Strip width" => "Ancho de la tira",
+        "Length between clamps" => "Largo entre pinzas",
+        "Distance between marks" => "Distancia entre marcas",
+        "Ruler resolution" => "Resolución de la regla",
+        "Bias" => "Bies",
+        "Load: the bottom clamp and everything hanging from it. Length: between the two marks, at the centre of the strip, after a minute." => {
+            "Carga: la pinza de abajo y todo lo que cuelga de ella. Largo: entre las dos marcas, en el centro de la tira, pasado un minuto."
+        }
+        "Hanging load" => "Carga colgada",
+        "Length between marks" => "Largo entre marcas",
+        "Remove reading" => "Quitar lectura",
+        "Add reading" => "Añadir lectura",
+        "Cantilever at 41.5°" => "Voladizo a 41,5°",
+        "Overhang when the tip touches the 41.5° line: the mean of four readings, both ends, face up and face down." => {
+            "Voladizo cuando la punta toca la línea de 41,5°: la media de cuatro lecturas, por ambos extremos, con el derecho y el revés arriba."
+        }
+        "Warp overhang" => "Voladizo de urdimbre",
+        "Weft overhang" => "Voladizo de trama",
+        "Friction (optional)" => "Fricción (opcional)",
+        "Slide angle" => "Ángulo de deslizamiento",
+        "Fit fabric" => "Ajustar tejido",
+        "Run the virtual tests and search the fabric that matches the readings" => {
+            "Ejecuta los ensayos virtuales y busca el tejido que da las lecturas"
+        }
+        "Example readings" => "Lecturas de ejemplo",
+        "Fill in readings of a light cotton poplin to try the window" => {
+            "Rellena lecturas de una popelina de algodón ligera para probar la ventana"
+        }
+        "Starting…" => "Empezando…",
+        "Save to library" => "Guardar en la biblioteca",
+        "Apply to selected piece" => "Aplicar a la pieza seleccionada",
+        "Use friction in simulation" => "Usar la fricción en la simulación",
+        "Cotton poplin (example)" => "Popelina de algodón (ejemplo)",
+        "Fabric saved to the library:" => "Tejido guardado en la biblioteca:",
+        "Simulation friction set to" => "Fricción de la simulación puesta en",
+        "Fabric fitted · compare the readings, then save or apply it" => {
+            "Tejido ajustado · compara las lecturas y luego guárdalo o aplícalo"
+        }
+        "Fitting the warp strip…" => "Ajustando la tira de urdimbre…",
+        "Fitting the weft strip…" => "Ajustando la tira de trama…",
+        "Fitting the bias strip…" => "Ajustando la tira al bies…",
+        "Fitting the weft cantilever…" => "Ajustando el voladizo de trama…",
+        "Fitting the warp cantilever…" => "Ajustando el voladizo de urdimbre…",
+        "Running every test with the fitted fabric…" => {
+            "Repitiendo cada ensayo con el tejido ajustado…"
+        }
+        "Fitted fabric" => "Tejido ajustado",
+        "The readings changed: fit again before saving" => {
+            "Las lecturas cambiaron: ajusta de nuevo antes de guardar"
+        }
+        "Warp stiffness" => "Rigidez de urdimbre",
+        "Weft stiffness" => "Rigidez de trama",
+        "at 5 N / 5 cm" => "con 5 N / 5 cm",
+        "Readings and virtual tests" => "Lecturas y ensayos virtuales",
+        "Test" => "Ensayo",
+        "Measured" => "Medido",
+        "Simulated" => "Simulado",
+        "Cantilever" => "Voladizo",
+        "virtual tests solved" => "ensayos virtuales resueltos",
+        "Name the fabric first" => "Ponle antes un nombre al tejido",
+        "Cancelled" => "Cancelado",
+        "A virtual test did not settle" => "Un ensayo virtual no llegó al equilibrio",
+        "A virtual strip did not reach its load" => "Una tira virtual no llegó a su carga",
+        "A search did not bracket its target" => "Una búsqueda no encerró su objetivo",
+        "A search did not converge" => "Una búsqueda no convergió",
+        "No measured fabrics in this folder yet: make one with Materials › Measure fabric…" => {
+            "Aún no hay tejidos medidos en esta carpeta: crea uno con Materiales › Medir tejido…"
+        }
+        "Apply to piece" => "Aplicar a la pieza",
+        "Cut the selected piece from this fabric" => "Corta la pieza seleccionada de este tejido",
+        "Area weight must be between 5 and 3000 g/m²" => {
+            "El gramaje debe estar entre 5 y 3000 g/m²"
+        }
+        "Thickness must be between 0.01 and 10 mm" => "El espesor debe estar entre 0,01 y 10 mm",
+        "Strip width must be between 10 and 200 mm" => {
+            "El ancho de la tira debe estar entre 10 y 200 mm"
+        }
+        "Gauge length must be between 20 and 800 mm" => {
+            "La distancia entre marcas debe estar entre 20 y 800 mm"
+        }
+        "Free strip length must be at least the gauge length plus 20 mm, at most 1000 mm" => {
+            "El largo libre de la tira debe ser al menos la distancia entre marcas más 20 mm, y como mucho 1000 mm"
+        }
+        "Ruler resolution must be between 0.01 and 5 mm" => {
+            "La resolución de la regla debe estar entre 0,01 y 5 mm"
+        }
+        "Each load must be between 1 g and 50 kg" => "Cada carga debe estar entre 1 g y 50 kg",
+        "Each reading must be longer than the gauge length: the strip stretches" => {
+            "Cada lectura debe ser mayor que la distancia entre marcas: la tira se estira"
+        }
+        "A reading is more than three times the gauge length" => {
+            "Una lectura pasa de tres veces la distancia entre marcas"
+        }
+        "Measure at least the warp or the weft strip" => {
+            "Mide al menos la tira de urdimbre o la de trama"
+        }
+        "Cantilever overhang must be between 5 and 1000 mm" => {
+            "El voladizo debe estar entre 5 y 1000 mm"
+        }
+        "Slide angle must be between 1 and 56°" => {
+            "El ángulo de deslizamiento debe estar entre 1 y 56°"
+        }
+        "Garments" => "Prendas",
+        "Avatars" => "Avatares",
+        "Images" => "Imágenes",
+        "Add to piece" => "Añadir a la pieza",
+        "Fit a fabric to a workshop's tests of your own" => {
+            "Ajusta un tejido a los ensayos de taller del tuyo"
+        }
         _ => return None,
     })
 }

@@ -277,6 +277,8 @@ const SEWING: &[Item] = &[
 ];
 
 const MATERIALS: &[Item] = &[
+    Run("Measure fabric…", C::MeasureFabric),
+    S,
     Sub(
         "Texture",
         &[
@@ -531,6 +533,7 @@ impl Atelier {
             C::Pleats | C::SinglePleat => self.authoring.pleats.open,
             C::SelectAllSeams => self.authoring.selection.all_seams,
             C::Steam => self.authoring.steam.open,
+            C::MeasureFabric => self.authoring.fabric_kit.open,
             C::HighQualityView => display.high_quality,
             C::EditTexture2d | C::EditTexture3d => self.authoring.texture_edit.open,
             C::RunPythonScript => self.authoring.script.open,

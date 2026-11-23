@@ -195,6 +195,7 @@ pub enum CommandId {
     PleatSewing,
     Puckering,
     Steam,
+    MeasureFabric,
     Piping,
     TearSeam,
     EditTears,
@@ -1960,6 +1961,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
+        MeasureFabric,
+        "materials.measure_fabric",
+        "Measure fabric: fit a fabric to a workshop's tests of a real one",
+        Workspace,
+        None,
+        NotUndoable,
         NativeWorkspace
     ),
     entry!(

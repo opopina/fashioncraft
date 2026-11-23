@@ -75,11 +75,23 @@ pub fn friction_terms(
     }
     let k = settings.contact.stiffness;
     let eps = STICK_SPEED_M_S * settings.dt;
-    contacts
+    // Most found pairs lie beyond the contact radius, where the energy and all its derivatives
+    // are exactly zero: no push, no friction. One plain evaluation each tells, in one pass on
+    // this thread; only the few that press (a few percent) are differentiated, in parallel.
+    let pressing: Vec<(usize, f64)> = contacts
         .contacts
-        .par_iter()
+        .iter()
         .enumerate()
-        .map(|(i, c)| {
+        .filter_map(|(i, c)| {
+            (c.value(x, contacts.radius(i, settings.contact.radius), k) > 0.)
+                .then_some((i, settings.friction))
+        })
+        .collect();
+    let mut terms = vec![None; contacts.contacts.len()];
+    let found: Vec<_> = pressing
+        .par_iter()
+        .map(|&(i, mu)| {
+            let c = &contacts.contacts[i];
             let r = contacts.radius(i, settings.contact.radius);
             let mut gradients = [DVec3::ZERO; 4];
             for (g, &v) in gradients.iter_mut().zip(&c.vertices[..c.count]) {
@@ -103,20 +115,27 @@ pub fn friction_terms(
             let normal = push / lambda;
             let mut weights = [0.; 4];
             let mut anchor = DVec3::ZERO;
-            for i in 0..c.count {
-                weights[i] = -gradients[i].dot(normal) / lambda;
-                anchor += start[c.vertices[i]] * weights[i];
+            for j in 0..c.count {
+                weights[j] = -gradients[j].dot(normal) / lambda;
+                anchor += start[c.vertices[j]] * weights[j];
             }
-            Some(FrictionTerm {
-                kind: c.kind,
-                vertices: c.vertices,
-                count: c.count,
-                weights,
-                normal,
-                mu_lambda: settings.friction * lambda,
-                anchor,
-                eps,
-            })
+            Some((
+                i,
+                FrictionTerm {
+                    kind: c.kind,
+                    vertices: c.vertices,
+                    count: c.count,
+                    weights,
+                    normal,
+                    mu_lambda: mu * lambda,
+                    anchor,
+                    eps,
+                },
+            ))
         })
-        .collect()
+        .collect();
+    for (i, term) in found.into_iter().flatten() {
+        terms[i] = Some(term);
+    }
+    terms
 }

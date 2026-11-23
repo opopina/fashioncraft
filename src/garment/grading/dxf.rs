@@ -650,8 +650,7 @@ pub fn attach(
                 piece.name
             ));
         }
-        for i in 0..n {
-            let edge = &poly.edges[i];
+        for (i, edge) in poly.edges.iter().enumerate().take(n) {
             match corners.get(&i) {
                 Some(deltas) => {
                     let deltas = deltas

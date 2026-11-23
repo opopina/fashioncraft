@@ -2,8 +2,10 @@
 use super::cli_process;
 use fashioncraft::assistant::{SYSTEM_PROMPT, Transport};
 use serde_json::{Value, json};
+#[cfg(any(target_os = "macos", test))]
+use std::fs;
 use std::{
-    fs::{self, File},
+    fs::File,
     io::{self, BufRead, BufReader, Seek, Write},
     path::{Path, PathBuf},
     process::Command,

@@ -64,10 +64,10 @@ mod demo;
 mod demo_cargo;
 #[path = "atelier/demo_effects.rs"]
 mod demo_effects;
-#[path = "atelier/demo_looks.rs"]
-mod demo_looks;
 #[path = "atelier/demo_grading.rs"]
 mod demo_grading;
+#[path = "atelier/demo_looks.rs"]
+mod demo_looks;
 #[path = "atelier/demo_outfit.rs"]
 mod demo_outfit;
 #[path = "atelier/demo_vest.rs"]

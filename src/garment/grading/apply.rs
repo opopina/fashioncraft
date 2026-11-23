@@ -468,7 +468,16 @@ pub fn template_in_sizes(
         for p in &mut panel.pin_points {
             *p = graded.field.map(*p);
         }
-        panel.polygon = Some(graded.polygon);
+        let mut polygon = graded.polygon;
+        // Subdivided zones are drawn on the base size's piece: they follow it.
+        if let Some(meshing) = polygon.meshing.as_mut() {
+            for zone in &mut meshing.refine {
+                for t in &mut zone.triangles {
+                    *t = t.map(|p| graded.field.map(p));
+                }
+            }
+        }
+        panel.polygon = Some(polygon);
         fields.insert(panel.id.clone(), (graded.field, Some(size.to_string())));
     }
     if fields.is_empty() {
@@ -496,7 +505,10 @@ pub fn template_in_sizes(
                 *start_m = f.map(*start_m);
                 *end_m = f.map(*end_m);
             }
-            K::Zipper { path_m, .. } | K::Topstitch { path_m, .. } | K::Piping { path_m, .. } => {
+            K::Zipper { path_m, .. }
+            | K::Topstitch { path_m, .. }
+            | K::Piping { path_m, .. }
+            | K::Fray { path_m, .. } => {
                 for p in path_m {
                     *p = f.map(*p);
                 }

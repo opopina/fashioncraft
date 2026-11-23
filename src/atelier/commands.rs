@@ -196,6 +196,7 @@ pub enum CommandId {
     Puckering,
     Steam,
     Piping,
+    FrayEdge,
     TearSeam,
     EditTears,
     TraceShape,
@@ -203,6 +204,7 @@ pub enum CommandId {
     SelectMeshBrush,
     SelectMeshBox,
     SelectMeshLasso,
+    SubdivideMesh,
     ConvertToQuads,
     ConvertToTriangles,
     HighQualityView,
@@ -1975,6 +1977,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NativeWorkspace
     ),
     entry!(
+        FrayEdge,
+        "trims.fray",
+        "Fray edge: loose threads along the selected segment",
+        Pattern,
+        None,
+        TemplateHistory,
+        NativeWorkspace
+    ),
+    entry!(
         TearSeam,
         "garment.tear_seam",
         "Tear seam: open a stretch of the selected seam, as a rip",
@@ -2035,6 +2046,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         Pattern,
         None,
         NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        SubdivideMesh,
+        "garment.subdivide_mesh",
+        "Subdivide the selected mesh: finer triangles there",
+        Pattern,
+        None,
+        TemplateHistory,
         NativeWorkspace
     ),
     entry!(

@@ -23,6 +23,7 @@ pub mod presets;
 pub mod print_pdf;
 pub mod production_metrics;
 pub mod seam;
+pub mod seam_break;
 pub mod shapes;
 pub mod shapes2d;
 pub mod steam;

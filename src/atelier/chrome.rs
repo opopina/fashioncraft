@@ -313,7 +313,7 @@ impl Atelier {
             }
         });
         ui.separator();
-        egui::ScrollArea::vertical()
+        let body = egui::ScrollArea::vertical()
             .id_salt("inspector-body")
             .show(ui, |ui| match self.inspector_tab {
                 InspectorTab::Piece => {
@@ -450,6 +450,7 @@ impl Atelier {
                     });
                 }
             });
+        super::demo::mark(ui.ctx(), "inspector.body", body.inner_rect);
     }
 }
 
@@ -613,11 +614,33 @@ impl Atelier {
                 .cloned()
                 .collect();
             let front = self.face_positions(true);
-            fashioncraft::garment::trims::trim_triangles(
-                &shown,
-                &self.scene.garment,
-                front.as_ref().unwrap_or(&self.scene.state.x),
-            )
+            let x = front.as_ref().unwrap_or(&self.scene.state.x);
+            let (frayed, others): (Vec<_>, Vec<_>) = shown.into_iter().partition(|t| {
+                matches!(t.kind, fashioncraft::garment::trims::TrimKind::Fray { .. })
+            });
+            let mut triangles =
+                fashioncraft::garment::trims::trim_triangles(&others, &self.scene.garment, x);
+            // Loose threads in the colour of their own piece's fabric.
+            for trim in &frayed {
+                let color = self
+                    .scene
+                    .garment
+                    .panels
+                    .iter()
+                    .find(|p| p.id == trim.panel_id)
+                    .and_then(|p| optics.get(p.material))
+                    .and_then(|look| look.as_ref())
+                    .map_or(fashioncraft::garment::trims::FRAY_COLOR, |look| {
+                        look.linear_color()
+                    });
+                triangles.extend(fashioncraft::garment::trims::fray_triangles(
+                    trim,
+                    &self.scene.garment,
+                    x,
+                    color,
+                ));
+            }
+            triangles
         } else {
             vec![]
         };

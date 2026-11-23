@@ -62,6 +62,8 @@ mod commands;
 mod demo;
 #[path = "atelier/demo_cargo.rs"]
 mod demo_cargo;
+#[path = "atelier/demo_effects.rs"]
+mod demo_effects;
 #[path = "atelier/demo_outfit.rs"]
 mod demo_outfit;
 #[path = "atelier/demo_vest.rs"]
@@ -136,6 +138,8 @@ mod redrape_ui;
 mod scene_ui;
 #[path = "atelier/script_ui.rs"]
 mod script_ui;
+#[path = "atelier/seam_break_ui.rs"]
+mod seam_break_ui;
 #[path = "atelier/seam_links.rs"]
 mod seam_links;
 #[path = "atelier/seams_ui.rs"]
@@ -850,6 +854,8 @@ impl Atelier {
             Id::Puckering => self.pucker_selected()?,
             Id::Steam => self.open_steam(),
             Id::Piping => self.pipe_selected()?,
+            Id::FrayEdge => self.fray_selected()?,
+            Id::SubdivideMesh => self.subdivide_selection()?,
             Id::SuperimposeSide => self.superimpose_side()?,
             Id::EditTexture2d | Id::EditTexture3d => self.open_texture_edit(),
             Id::UvEditor => self.open_uv_editor(),
@@ -1298,6 +1304,7 @@ impl Atelier {
                     self.status = "Dynamic simulation · OGC contacts".into();
                     self.metrics = Some(m);
                     self.advance_pose_transition();
+                    self.observe_seam_breaks();
                 }
                 Err(e) => {
                     self.playing = false;

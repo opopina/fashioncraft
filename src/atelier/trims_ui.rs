@@ -11,6 +11,60 @@ use fashioncraft::{
 };
 use glam::DVec2;
 
+/// Length and density of a fray's threads; the trim as changed once an edit ends.
+fn fray_trim_controls(ui: &mut egui::Ui, ui_lang: i18n::Language, trim: &Trim) -> Option<Trim> {
+    use fashioncraft::garment::trims::{FRAY_DENSITY_PER_M, FRAY_LENGTH_M};
+    let TrimKind::Fray {
+        length_m,
+        density_per_m,
+        ..
+    } = &trim.kind
+    else {
+        return None;
+    };
+    let commit = |r: &egui::Response| r.drag_stopped() || (r.changed() && !r.dragged());
+    let mut length_mm = *length_m * 1000.;
+    // Threads per centimetre of edge.
+    let mut per_cm = *density_per_m / 100.;
+    let mut done = false;
+    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Thread length"), |ui| {
+        done |= commit(
+            &ui.add(
+                egui::DragValue::new(&mut length_mm)
+                    .range(FRAY_LENGTH_M.start() * 1000.0..=FRAY_LENGTH_M.end() * 1000.)
+                    .speed(0.1)
+                    .max_decimals(1)
+                    .suffix(" mm"),
+            ),
+        );
+    });
+    super::workspace::prop_row(ui, i18n::tr(ui_lang, "Threads"), |ui| {
+        done |= commit(
+            &ui.add(
+                egui::DragValue::new(&mut per_cm)
+                    .range(FRAY_DENSITY_PER_M.start() / 100.0..=FRAY_DENSITY_PER_M.end() / 100.)
+                    .speed(0.05)
+                    .max_decimals(1)
+                    .suffix(" /cm"),
+            ),
+        );
+    });
+    if !done {
+        return None;
+    }
+    let mut changed = trim.clone();
+    if let TrimKind::Fray {
+        length_m,
+        density_per_m,
+        ..
+    } = &mut changed.kind
+    {
+        *length_m = length_mm / 1000.;
+        *density_per_m = per_cm * 100.;
+    }
+    (changed != *trim && changed.validate().is_ok()).then_some(changed)
+}
+
 /// Position, size and turn of an object trim; the trim as changed once an edit ends.
 fn object_trim_controls(ui: &mut egui::Ui, ui_lang: i18n::Language, trim: &Trim) -> Option<Trim> {
     let TrimKind::Object {
@@ -313,6 +367,7 @@ impl Atelier {
                         TrimKind::Zipper { .. } => "Zipper",
                         TrimKind::Topstitch { .. } => "Topstitch",
                         TrimKind::Piping { .. } => "Piping",
+                        TrimKind::Fray { .. } => "Fray",
                         TrimKind::Object { .. } => "Object",
                     };
                     let kind = i18n::tr(ui_lang, kind);
@@ -326,7 +381,9 @@ impl Atelier {
                         });
                     }
                 });
-                if let Some(changed) = object_trim_controls(ui, ui_lang, trim) {
+                if let Some(changed) = object_trim_controls(ui, ui_lang, trim)
+                    .or_else(|| fray_trim_controls(ui, ui_lang, trim))
+                {
                     command = Some(Command::SetTrim { trim: changed });
                 }
             }
@@ -628,6 +685,81 @@ impl Atelier {
         }
         self.status = format!(
             "Piping along {} · it changes the look, not the drape",
+            super::garment_display::counted(done, "segment", "segments")
+        );
+        Ok(())
+    }
+
+    /// Materials › Fray edge: loose threads along the selected segment (a cut edge), or along
+    /// both sides of the selected seam. Looks only.
+    pub(super) fn fray_selected(&mut self) -> Result<(), String> {
+        use fashioncraft::garment::trims::FRAY_INSET_M;
+        /// Longest thread of a new fray, metres.
+        const FRAY_LENGTH_M: f64 = 0.006;
+        /// Threads per metre of edge of a new fray.
+        const FRAY_DENSITY_PER_M: f64 = 400.;
+        let seam = self.authoring.selection.seam.clone().and_then(|id| {
+            self.project
+                .template
+                .seams
+                .iter()
+                .find(|s| s.id == id)
+                .cloned()
+        });
+        let targets: Vec<(String, String)> = match (&self.authoring.edge, seam) {
+            (Some(edge), _) if edge.edge.is_some() => {
+                vec![(edge.panel.clone(), edge.edge.clone().unwrap_or_default())]
+            }
+            (_, Some(seam)) => seam
+                .side(false)
+                .chain(seam.side(true))
+                .filter(|r| r.range == [0., 1.])
+                .filter_map(|r| Some((r.panel.clone(), r.edge.clone()?)))
+                .collect(),
+            _ => return Err("Select a segment (a cut edge) or a seam first".into()),
+        };
+        let mut done = 0;
+        for (panel, edge) in targets {
+            let Some(polygon) = self
+                .project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == panel)
+                .and_then(|p| p.polygon.clone())
+            else {
+                continue;
+            };
+            if !polygon.edges.contains(&edge) {
+                continue;
+            }
+            let Some(path_m) =
+                lines2d::offset_lines(&polygon, &edge, 1, FRAY_INSET_M, false, false)
+                    .ok()
+                    .and_then(|mut lines| lines.pop())
+            else {
+                continue;
+            };
+            let trim = Trim {
+                id: self.new_trim_id(),
+                panel_id: panel,
+                kind: TrimKind::Fray {
+                    path_m,
+                    length_m: FRAY_LENGTH_M,
+                    density_per_m: FRAY_DENSITY_PER_M,
+                },
+            };
+            done += usize::from(self.edit(Command::SetTrim { trim }));
+        }
+        if done == 0 {
+            return Err(if self.status.is_empty() {
+                "Fraying goes along whole outline segments".into()
+            } else {
+                self.status.clone()
+            });
+        }
+        self.status = format!(
+            "Frayed {} · loose threads drawn in 3D; change their length under Trims",
             super::garment_display::counted(done, "segment", "segments")
         );
         Ok(())

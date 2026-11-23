@@ -82,7 +82,8 @@ fn carried(template: &GarmentTemplate, panel: &str) -> Vec<(Carried, Vec<DVec2>)
                 TrimKind::Object { center_m, .. } => vec![*center_m],
                 TrimKind::Zipper { path_m, .. }
                 | TrimKind::Topstitch { path_m, .. }
-                | TrimKind::Piping { path_m, .. } => path_m.clone(),
+                | TrimKind::Piping { path_m, .. }
+                | TrimKind::Fray { path_m, .. } => path_m.clone(),
             };
             out.push((Carried::Trim(k), points));
         }
@@ -138,7 +139,8 @@ fn carry(
                 }
                 TrimKind::Zipper { path_m, .. }
                 | TrimKind::Topstitch { path_m, .. }
-                | TrimKind::Piping { path_m, .. } => {
+                | TrimKind::Piping { path_m, .. }
+                | TrimKind::Fray { path_m, .. } => {
                     for p in path_m {
                         *p = map(*p);
                     }

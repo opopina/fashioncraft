@@ -116,7 +116,8 @@ pub(super) fn mirror(
             }
             TrimKind::Zipper { path_m, .. }
             | TrimKind::Topstitch { path_m, .. }
-            | TrimKind::Piping { path_m, .. } => {
+            | TrimKind::Piping { path_m, .. }
+            | TrimKind::Fray { path_m, .. } => {
                 path_m.iter_mut().for_each(reflect);
             }
         }

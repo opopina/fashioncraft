@@ -277,6 +277,9 @@ impl StitchPoint {
 pub struct StitchSample {
     pub point: StitchPoint,
     pub weight_m: f64,
+    /// The stretch of the seam this sample sews, as shares of its length: where a tear opens
+    /// when the stitch there breaks.
+    pub span: [f64; 2],
 }
 
 #[derive(Clone, Debug)]
@@ -294,6 +297,10 @@ pub struct CompiledSeam {
     pub stiffness: f64,
     pub lengths: [f64; 2],
     pub notches: Vec<[f64; 2]>,
+    /// The points a torn stretch would sew: not sewn, but the solvers keep their two sides out
+    /// of each other's contacts as when they were, so a seam torn while its sides still touch
+    /// (a stitch that just broke) simulates on from there.
+    pub torn: Vec<StitchPoint>,
 }
 pub type StitchGuide = [[(usize, f64); 2]; 2];
 
@@ -397,9 +404,14 @@ impl CompiledSeam {
         partition.sort_by(f64::total_cmp);
         partition.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         let mut samples = vec![];
+        let mut torn = vec![];
         for interval in partition.windows(2) {
             let [lo, hi] = [interval[0], interval[1]];
             if open((lo + hi) * 0.5) {
+                torn.extend(
+                    [lo, (lo + hi) * 0.5, hi]
+                        .map(|s| StitchPoint::new(&a, &b, s, interpolate(&knots, s, 0))),
+                );
                 continue;
             }
             let [blo, bhi] = [interpolate(&knots, lo, 0), interpolate(&knots, hi, 0)];
@@ -409,6 +421,7 @@ impl CompiledSeam {
                 samples.push(StitchSample {
                     point: StitchPoint::new(&a, &b, s, interpolate(&knots, s, 0)),
                     weight_m,
+                    span: [lo, hi],
                 });
             }
         }
@@ -456,7 +469,24 @@ impl CompiledSeam {
             stiffness: spec.stiffness,
             lengths: [a.length, b.length],
             notches: spec.notches.clone(),
+            torn,
         })
+    }
+    /// Pairs of vertices, one from each side, that sewn or torn stitches join: kept out of
+    /// each other's contacts.
+    pub fn contact_exclusions(&self) -> impl Iterator<Item = [usize; 2]> + '_ {
+        self.samples
+            .iter()
+            .map(|s| &s.point)
+            .chain(&self.torn)
+            .flat_map(|p| {
+                p.terms.iter().flat_map(move |(a, wa)| {
+                    p.terms
+                        .iter()
+                        .filter(move |(_, wb)| wa * wb < 0.0)
+                        .map(move |(b, _)| [(*a).min(*b), (*a).max(*b)])
+                })
+            })
     }
     pub fn energy(&self, x: &[DVec3]) -> f64 {
         self.samples

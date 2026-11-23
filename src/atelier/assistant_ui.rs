@@ -1,6 +1,17 @@
 //! Window › Assistant: a chat with Claude, ChatGPT, Gemini or a local model that works in the
 //! open project. The conversation runs on its own thread (see `fashioncraft::assistant`); its
 //! tools run here, on the window's queue, like an MCP client's (see `agent_hub`).
+#[path = "antigravity_cli.rs"]
+mod antigravity_cli;
+#[path = "claude_cli.rs"]
+mod claude_cli;
+#[path = "cli_process.rs"]
+mod cli_process;
+#[path = "codex_cli.rs"]
+mod codex_cli;
+#[path = "gemini_cli.rs"]
+mod gemini_cli;
+
 use super::agent_hub::{Job, QUEUED, wait_for};
 use super::assistant_keys::{self, Source};
 use super::*;
@@ -339,12 +350,18 @@ impl Atelier {
         let spawned = std::thread::Builder::new()
             .name("assistant".into())
             .spawn(move || {
-                let mut http = Http::new();
+                let mut transport: Box<dyn Transport> = match settings.provider {
+                    Provider::CodexCli => Box::new(codex_cli::Cli(&stopped)),
+                    Provider::ClaudeCli => Box::new(claude_cli::Cli(&stopped)),
+                    Provider::GeminiCli => Box::new(gemini_cli::Cli(&stopped)),
+                    Provider::AntigravityCli => Box::new(antigravity_cli::Cli(&stopped)),
+                    _ => Box::new(Http::new()),
+                };
                 let mut conversation = conversation.lock().unwrap_or_else(|e| e.into_inner());
                 let result = conversation.turn(
                     &settings,
                     &text,
-                    &mut http,
+                    transport.as_mut(),
                     &mut |name, arguments| run_in_window(&sender, &ctx, name, arguments),
                     &mut |event| {
                         let _ = updates.send(Update::Event(event));
@@ -396,6 +413,28 @@ impl Atelier {
                     .desired_width(ui.available_width().min(230.)),
             );
         });
+        if provider == Provider::ClaudeCli {
+            ui.small(tr(
+                "Uses your Claude Code login. Messages and requested screenshots go to Claude.",
+            ));
+            return;
+        }
+        if provider == Provider::CodexCli {
+            ui.small(tr("Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI."));
+            return;
+        }
+        if provider == Provider::GeminiCli {
+            ui.small(tr(
+                "Uses your Gemini CLI login. Messages and requested screenshots go to Google.",
+            ));
+            return;
+        }
+        if provider == Provider::AntigravityCli {
+            ui.small(tr(
+                "Uses your Antigravity CLI (agy) login. Messages and requested screenshots go to Google Antigravity.",
+            ));
+            return;
+        }
         super::workspace::prop_row(ui, tr("Address"), |ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.prefs.ai.base_url)
@@ -533,6 +572,12 @@ impl Atelier {
                 // while a turn runs; the connection and a new chat as icons at the right.
                 ui.horizontal(|ui| {
                     let model = match settings.model() {
+                        "" if settings.provider == Provider::ClaudeCli => tr("Claude Code default"),
+                        "" if settings.provider == Provider::CodexCli => tr("Codex default"),
+                        "" if settings.provider == Provider::GeminiCli => tr("Gemini CLI default"),
+                        "" if settings.provider == Provider::AntigravityCli => {
+                            tr("Antigravity default")
+                        }
                         "" => tr("no model chosen"),
                         _ => settings.model(),
                     };

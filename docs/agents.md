@@ -18,8 +18,12 @@ Open **Window › Assistant** and press **Connection** to set it up:
 | Provider | Model | Address | Key |
 |---|---|---|---|
 | Claude (Anthropic) | `claude-opus-5-5` unless you type another | `https://api.anthropic.com/v1` | An API key from the Claude Console, or `ANTHROPIC_API_KEY` |
+| Claude (Claude Code CLI) | Leave blank for the Claude Code default, or enter a model | Detected on this computer | Your Claude Code login |
 | ChatGPT (OpenAI) | The model name, as OpenAI lists it | `https://api.openai.com/v1` | An OpenAI API key, or `OPENAI_API_KEY` |
+| ChatGPT (Codex CLI) | Leave blank for the default from Codex, or enter a model | Detected on this computer | Sign in with ChatGPT using `codex login` |
 | Gemini (Google) | The model name, as Google lists it | Google's OpenAI-compatible address | A Gemini API key, or `GEMINI_API_KEY` |
+| Gemini (Gemini CLI) | Leave blank for the Gemini CLI default, or enter a model | Detected on this computer | Your Gemini CLI login |
+| Antigravity (Google CLI) | Leave blank for the Antigravity default, or enter a model | Detected on this computer | Your Antigravity CLI (`agy`) login |
 | Local model | The name your server shows, for example `ollama list` | `http://localhost:11434/v1` (Ollama); LM Studio uses `http://localhost:1234/v1` | None |
 
 Leave the address empty to use the one shown. Any service with OpenAI's chat-completions API works
@@ -31,8 +35,30 @@ never written to the preferences file. **Forget it** removes a saved key. When n
 provider's environment variable is used.
 
 **Privacy and cost.** Your messages, the scene summary and the screenshots the model asks for go to
-the provider you pick. The provider bills its API to your account. A local model keeps everything
+the provider you pick. API-key connections use the provider’s API billing. A local model keeps everything
 on your computer.
+
+**Claude through Claude Code.** Select **Claude (Claude Code CLI)** in Connection. Sign in to Claude Code with `claude auth login` if prompted. On macOS the app detects the Claude Code executable installed by Claude Desktop, including when Finder has a different PATH from Terminal. Set `FASHIONCRAFT_CLAUDE` to select a particular executable. The assistant passes chat history and requested screenshots to Claude Code and runs the requested garment tools in the open editor. External MCP access can stay off.
+
+**ChatGPT through Codex CLI.** Choose **ChatGPT (Codex CLI)** under Connection. The panel starts
+Codex in the background and sends the chat, available garment tools and any requested screenshots
+to OpenAI using the CLI's ChatGPT login. Each tool result returns to the same visible chat. This
+mode works with external MCP access turned off. It uses a recent Codex CLI with structured output
+and ephemeral execution. On macOS it also detects the CLI bundled with ChatGPT. To select another
+installation, set `FASHIONCRAFT_CODEX` to the executable path. Stop cancels the current model
+request; garment edits already applied can be undone in the editor.
+
+**Gemini through Gemini CLI.** Select **Gemini (Gemini CLI)** under Connection. The assistant runs
+`gemini` in read-only headless mode (`--approval-mode plan --skip-trust --output-format json`) with
+your existing Gemini CLI login and passes requested screenshots as temporary files (`@view-N.png`).
+Set `FASHIONCRAFT_GEMINI` to pick a specific executable. External MCP access can stay off.
+
+**Google Antigravity through Antigravity CLI (`agy`).** Select **Antigravity (Google CLI)** under
+Connection. The assistant runs `agy` in sandboxed headless streaming mode with `--json-schema`
+structured output using your existing Antigravity login, and passes requested screenshots in the
+isolated working directory. Run `agy models` to see available model IDs, or leave Model blank for
+your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
+stay off.
 
 **Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
 model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn

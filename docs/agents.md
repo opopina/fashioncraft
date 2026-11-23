@@ -18,6 +18,7 @@ Open **Window › Assistant** and press **Connection** to set it up:
 | Provider | Model | Address | Key |
 |---|---|---|---|
 | Claude (Anthropic) | `claude-opus-5-5` unless you type another | `https://api.anthropic.com/v1` | An API key from the Claude Console, or `ANTHROPIC_API_KEY` |
+| Claude (Claude Code CLI) | Leave blank for the Claude Code default, or enter a model | Detected on this computer | Your Claude Code login |
 | ChatGPT (OpenAI) | The model name, as OpenAI lists it | `https://api.openai.com/v1` | An OpenAI API key, or `OPENAI_API_KEY` |
 | ChatGPT (Codex CLI) | Leave blank for the default from Codex, or enter a model | Detected on this computer | Sign in with ChatGPT using `codex login` |
 | Gemini (Google) | The model name, as Google lists it | Google's OpenAI-compatible address | A Gemini API key, or `GEMINI_API_KEY` |
@@ -34,6 +35,8 @@ provider's environment variable is used.
 **Privacy and cost.** Your messages, the scene summary and the screenshots the model asks for go to
 the provider you pick. API-key connections use the provider’s API billing. A local model keeps everything
 on your computer.
+
+**Claude through Claude Code.** Select **Claude (Claude Code CLI)** in Connection. Sign in to Claude Code with `claude auth login` if prompted. On macOS the app detects the Claude Code executable installed by Claude Desktop, including when Finder has a different PATH from Terminal. Set `FASHIONCRAFT_CLAUDE` to select a particular executable. The assistant passes chat history and requested screenshots to Claude Code and runs the requested garment tools in the open editor. External MCP access can stay off.
 
 **ChatGPT through Codex CLI.** Choose **ChatGPT (Codex CLI)** under Connection. The panel starts
 Codex in the background and sends the chat, available garment tools and any requested screenshots

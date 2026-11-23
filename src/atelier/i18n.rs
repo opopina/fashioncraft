@@ -1333,6 +1333,10 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Your messages, the scene's summary and screenshots go to this provider. A local model keeps them on this computer." => {
             "Tus mensajes, el resumen de la escena y las capturas van a este proveedor. Un modelo local los deja en este ordenador."
         }
+        "Claude Code default" => "Modelo predeterminado de Claude Code",
+        "Uses your Claude Code login. Messages and requested screenshots go to Claude." => {
+            "Usa tu sesión de Claude Code. Los mensajes y las capturas solicitadas se envían a Claude."
+        }
         "Codex default" => "Modelo predeterminado de Codex",
         "Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI." => {
             "Usa la cuenta de ChatGPT conectada con codex login. Los mensajes y las capturas solicitadas se envían a OpenAI."

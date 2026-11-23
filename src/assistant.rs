@@ -44,16 +44,18 @@ pub enum Provider {
     Anthropic,
     OpenAi,
     CodexCli,
+    ClaudeCli,
     Gemini,
     /// Any server with the OpenAI chat-completions API on this computer: Ollama, LM Studio…
     Local,
 }
 
 impl Provider {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Anthropic,
         Self::OpenAi,
         Self::CodexCli,
+        Self::ClaudeCli,
         Self::Gemini,
         Self::Local,
     ];
@@ -64,6 +66,7 @@ impl Provider {
             Self::Anthropic => "anthropic",
             Self::OpenAi => "openai",
             Self::CodexCli => "codex-cli",
+            Self::ClaudeCli => "claude-cli",
             Self::Gemini => "gemini",
             Self::Local => "local",
         }
@@ -76,6 +79,7 @@ impl Provider {
             Self::Anthropic => "Claude (Anthropic)",
             Self::OpenAi => "ChatGPT (OpenAI)",
             Self::CodexCli => "ChatGPT (Codex CLI)",
+            Self::ClaudeCli => "Claude (Claude Code CLI)",
             Self::Gemini => "Gemini (Google)",
             Self::Local => "Local model (Ollama, LM Studio…)",
         }
@@ -93,6 +97,7 @@ impl Provider {
             Self::Anthropic => "claude-opus-5-5",
             Self::OpenAi => "the model name, as OpenAI lists it",
             Self::CodexCli => "Codex default",
+            Self::ClaudeCli => "Claude Code default",
             Self::Gemini => "the model name, as Google lists it",
             Self::Local => "the model name, as `ollama list` shows it",
         }
@@ -101,7 +106,7 @@ impl Provider {
         match self {
             Self::Anthropic => "https://api.anthropic.com/v1",
             Self::OpenAi => "https://api.openai.com/v1",
-            Self::CodexCli => "",
+            Self::CodexCli | Self::ClaudeCli => "",
             Self::Gemini => "https://generativelanguage.googleapis.com/v1beta/openai",
             Self::Local => "http://localhost:11434/v1",
         }
@@ -113,11 +118,11 @@ impl Provider {
             Self::OpenAi => Some("OPENAI_API_KEY"),
             Self::Gemini => Some("GEMINI_API_KEY"),
             Self::Local => None,
-            Self::CodexCli => None,
+            Self::CodexCli | Self::ClaudeCli => None,
         }
     }
     pub fn needs_key(self) -> bool {
-        !matches!(self, Self::Local | Self::CodexCli)
+        !matches!(self, Self::Local | Self::CodexCli | Self::ClaudeCli)
     }
     /// Whether screenshots go to the model. Many local models read no pictures.
     fn sees_images(self) -> bool {
@@ -151,7 +156,9 @@ impl Settings {
     }
     /// What is missing before a message can be sent, if anything.
     pub fn missing(&self) -> Option<String> {
-        if self.provider != Provider::CodexCli && self.model().is_empty() {
+        if !matches!(self.provider, Provider::CodexCli | Provider::ClaudeCli)
+            && self.model().is_empty()
+        {
             return Some("Choose a model under Connection, at the top of this window".into());
         }
         if self.provider.needs_key() && self.api_key.trim().is_empty() {

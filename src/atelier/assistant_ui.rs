@@ -1,6 +1,10 @@
 //! Window › Assistant: a chat with Claude, ChatGPT, Gemini or a local model that works in the
 //! open project. The conversation runs on its own thread (see `fashioncraft::assistant`); its
 //! tools run here, on the window's queue, like an MCP client's (see `agent_hub`).
+#[path = "claude_cli.rs"]
+mod claude_cli;
+#[path = "cli_process.rs"]
+mod cli_process;
 #[path = "codex_cli.rs"]
 mod codex_cli;
 
@@ -342,10 +346,10 @@ impl Atelier {
         let spawned = std::thread::Builder::new()
             .name("assistant".into())
             .spawn(move || {
-                let mut transport: Box<dyn Transport> = if settings.provider == Provider::CodexCli {
-                    Box::new(codex_cli::Cli(&stopped))
-                } else {
-                    Box::new(Http::new())
+                let mut transport: Box<dyn Transport> = match settings.provider {
+                    Provider::CodexCli => Box::new(codex_cli::Cli(&stopped)),
+                    Provider::ClaudeCli => Box::new(claude_cli::Cli(&stopped)),
+                    _ => Box::new(Http::new()),
                 };
                 let mut conversation = conversation.lock().unwrap_or_else(|e| e.into_inner());
                 let result = conversation.turn(
@@ -403,6 +407,12 @@ impl Atelier {
                     .desired_width(ui.available_width().min(230.)),
             );
         });
+        if provider == Provider::ClaudeCli {
+            ui.small(tr(
+                "Uses your Claude Code login. Messages and requested screenshots go to Claude.",
+            ));
+            return;
+        }
         if provider == Provider::CodexCli {
             ui.small(tr("Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI."));
             return;
@@ -544,6 +554,7 @@ impl Atelier {
                 // while a turn runs; the connection and a new chat as icons at the right.
                 ui.horizontal(|ui| {
                     let model = match settings.model() {
+                        "" if settings.provider == Provider::ClaudeCli => tr("Claude Code default"),
                         "" if settings.provider == Provider::CodexCli => tr("Codex default"),
                         "" => tr("no model chosen"),
                         _ => settings.model(),

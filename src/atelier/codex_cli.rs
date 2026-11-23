@@ -3,11 +3,10 @@
 use fashioncraft::assistant::Transport;
 use serde_json::{Value, json};
 use std::fs::{self, File};
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicBool;
 
 pub(super) struct Cli<'a>(pub &'a AtomicBool);
 
@@ -77,13 +76,7 @@ impl Cli<'_> {
         let dir = tempfile::tempdir()?;
         let schema = dir.path().join("response.schema.json");
         let answer = dir.path().join("answer.json");
-        fs::write(
-            &schema,
-            json!({"type":"object","properties":{
-            "text":{"type":"string"},"tool":{"type":"string"},"arguments":{"type":"string"}
-        },"required":["text","tool","arguments"],"additionalProperties":false})
-            .to_string(),
-        )?;
+        fs::write(&schema, super::cli_process::schema().to_string())?;
         let mut command = Command::new(executable);
         command
             .current_dir(dir.path())
@@ -115,46 +108,9 @@ impl Cli<'_> {
         let mut errors = tempfile::tempfile()?;
         let mut child = command.arg("-").stdin(input).stdout(Stdio::null())
             .stderr(errors.try_clone()?).spawn().map_err(|e| io::Error::other(format!("Could not start Codex CLI: {e}. Install Codex CLI or set FASHIONCRAFT_CODEX to its executable.")))?;
-        let start = Instant::now();
-        loop {
-            if self.0.load(Ordering::Relaxed) || start.elapsed() > Duration::from_secs(600) {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(io::Error::other(if self.0.load(Ordering::Relaxed) {
-                    "Stopped."
-                } else {
-                    "Codex timed out."
-                }));
-            }
-            if let Some(status) = child.try_wait()? {
-                if !status.success() {
-                    let offset = errors.metadata()?.len().saturating_sub(1500);
-                    errors.seek(SeekFrom::Start(offset))?;
-                    let mut tail = Vec::new();
-                    errors.read_to_end(&mut tail)?;
-                    return Err(io::Error::other(format!(
-                        "Codex exited with {status}. Check codex login status and the connection. {}",
-                        String::from_utf8_lossy(&tail)
-                    )));
-                }
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(80));
-        }
+        super::cli_process::wait(&mut child, &mut errors, self.0, "Codex")?;
         let reply: Value = serde_json::from_slice(&fs::read(answer)?)?;
-        let text = reply["text"]
-            .as_str()
-            .ok_or_else(|| io::Error::other("Missing Codex response text"))?;
-        let tool = reply["tool"]
-            .as_str()
-            .ok_or_else(|| io::Error::other("Missing Codex tool field"))?;
-        let mut message = json!({"role":"assistant","content":text});
-        if !tool.is_empty() {
-            let index = body["messages"].as_array().map_or(0, Vec::len);
-            message["tool_calls"] = json!([{"id":format!("fc_{index}"),"type":"function",
-                "function":{"name":tool,"arguments":reply["arguments"]}}]);
-        }
-        Ok(json!({"choices":[{"message":message}]}))
+        super::cli_process::response(&reply, body)
     }
 }
 

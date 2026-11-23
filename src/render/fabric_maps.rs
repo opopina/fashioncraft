@@ -1,16 +1,32 @@
 //! Fabric textures for the cloth shader: every fabric image resized into one layer of a
 //! mipmapped sRGB texture array, so the single cloth draw shows them all. With no textures
-//! the array holds one white layer that no vertex uses. Normal and roughness maps are data,
-//! not colours: their layers are stored sRGB-encoded so that sampling returns their values.
+//! the array holds one white layer that no vertex uses. Maps (normal, roughness, metalness,
+//! opacity, displacement, occlusion) are data, not colours: their layers are stored
+//! sRGB-encoded so that sampling returns their values, a DirectX normal map with its green
+//! flipped and a glossiness map inverted, so the shader reads every map one way.
 use super::graphics::{GraphicImage, mip_chain};
 use super::*;
 
 /// Side of every layer; images are resized to it, as each repeat spans the whole layer.
 const LAYER_SIDE: u32 = 1024;
 
+/// How an image is stored in its layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LayerKind {
+    /// Colours, decoded from sRGB when sampled.
+    Color,
+    /// Values (a normal, roughness, metalness, opacity, height or occlusion map) returned as
+    /// they are.
+    Data,
+    /// A DirectX normal map, its green flipped to read the OpenGL way.
+    FlipGreen,
+    /// A glossiness map, inverted to read as roughness.
+    Invert,
+}
+
 pub(super) struct FabricMaps {
-    /// Keys of the images in layer order, and whether each holds data rather than colour.
-    keys: Vec<(u64, bool)>,
+    /// Keys of the images in layer order, and how each is stored.
+    keys: Vec<(u64, LayerKind)>,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
     pub bind: wgpu::BindGroup,
@@ -27,7 +43,7 @@ fn srgb_encoded(value: u8) -> u8 {
     (e * 255.).round().clamp(0., 255.) as u8
 }
 
-fn layer_pixels(image: &GraphicImage, data: bool) -> Option<GraphicImage> {
+fn layer_pixels(image: &GraphicImage, kind: LayerKind) -> Option<GraphicImage> {
     let [w, h] = image.size;
     let buffer = image::RgbaImage::from_raw(w, h, image.rgba.clone())?;
     let resized = if [w, h] == [LAYER_SIDE; 2] {
@@ -41,11 +57,14 @@ fn layer_pixels(image: &GraphicImage, data: bool) -> Option<GraphicImage> {
         )
     };
     let mut rgba = resized.into_raw();
-    if data {
+    if kind != LayerKind::Color {
         for (k, byte) in rgba.iter_mut().enumerate() {
-            if k % 4 != 3 {
-                *byte = srgb_encoded(*byte);
-            }
+            let value = match (kind, k % 4) {
+                (_, 3) => continue,
+                (LayerKind::FlipGreen, 1) | (LayerKind::Invert, _) => 255 - *byte,
+                _ => *byte,
+            };
+            *byte = srgb_encoded(value);
         }
     }
     Some(GraphicImage {
@@ -174,48 +193,47 @@ impl FabricMaps {
         self.bind = bind_group(device, layout, &self.view, &self.sampler);
     }
 
-    /// The layers of each material's colour image, normal map and roughness map (`None`
-    /// where it has none), rebuilding the array when the set of images changed.
-    pub fn update(
+    /// The layer of each image of each material (`None` where it has none), rebuilding the
+    /// array when the set of images or the way they are stored changed.
+    pub fn update<const N: usize>(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
-        images: &[[Option<&GraphicImage>; 3]],
-    ) -> Vec<[Option<u32>; 3]> {
-        let mut distinct: Vec<(&GraphicImage, bool)> = vec![];
+        images: &[[Option<(&GraphicImage, LayerKind)>; N]],
+    ) -> Vec<[Option<u32>; N]> {
+        let mut distinct: Vec<(&GraphicImage, LayerKind)> = vec![];
         let layers = images
             .iter()
             .map(|maps| {
-                let mut out = [None; 3];
+                let mut out = [None; N];
                 for (k, image) in maps.iter().enumerate() {
-                    let Some(image) = *image else {
+                    let Some((image, kind)) = *image else {
                         continue;
                     };
-                    let data = k > 0;
                     let at = distinct
                         .iter()
-                        .position(|(d, is_data)| d.key == image.key && *is_data == data);
+                        .position(|(d, stored)| d.key == image.key && *stored == kind);
                     out[k] = Some(at.unwrap_or_else(|| {
-                        distinct.push((image, data));
+                        distinct.push((image, kind));
                         distinct.len() - 1
                     }) as u32);
                 }
                 out
             })
             .collect();
-        let keys: Vec<(u64, bool)> = distinct.iter().map(|(d, data)| (d.key, *data)).collect();
+        let keys: Vec<(u64, LayerKind)> = distinct.iter().map(|(d, kind)| (d.key, *kind)).collect();
         if keys != self.keys {
             let pixels: Vec<GraphicImage> = distinct
                 .iter()
-                .filter_map(|(d, data)| layer_pixels(d, *data))
+                .filter_map(|(d, kind)| layer_pixels(d, *kind))
                 .collect();
             if pixels.len() == distinct.len() {
                 self.view = array(device, queue, &pixels);
                 self.bind = bind_group(device, layout, &self.view, &self.sampler);
                 self.keys = keys;
             } else {
-                return vec![[None; 3]; images.len()];
+                return vec![[None; N]; images.len()];
             }
         }
         layers

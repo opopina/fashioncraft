@@ -3,8 +3,12 @@ use super::*;
 use fashioncraft::{
     authoring::Command,
     fabrics::{self, PRESETS},
-    garment::template::{FabricProperties, Panel},
+    garment::{
+        template::{FabricProperties, Panel},
+        texture_set,
+    },
 };
+use std::path::PathBuf;
 
 pub(super) struct FabricDraft {
     panel: String,
@@ -14,6 +18,9 @@ pub(super) struct FabricDraft {
     preset: Option<usize>,
     all_panels: bool,
     pub(super) appearance: Option<fashioncraft::garment::appearance::FabricAppearance>,
+    /// Texture sets found in the last folder or files picked, when there was more than one to
+    /// choose from.
+    texture_sets: Vec<fashioncraft::garment::texture_set::TextureSet>,
 }
 impl Atelier {
     pub(super) fn fabric_properties(&mut self, ui: &mut egui::Ui, panel: &Panel) {
@@ -53,6 +60,7 @@ impl Atelier {
                     .fabric_appearance
                     .get(&fabric.id)
                     .cloned(),
+                texture_sets: vec![],
             });
         }
         let mut appearance_targets = Vec::new();
@@ -69,10 +77,27 @@ impl Atelier {
             })
             .and_then(|a| a.path.file_stem())
             .map(|s| s.to_string_lossy().into_owned());
+        let set_names: Vec<String> = self
+            .authoring
+            .fabric_draft
+            .as_ref()
+            .map(|d| {
+                d.texture_sets
+                    .iter()
+                    .map(|s| {
+                        let name = if s.name.is_empty() { "—" } else { &s.name };
+                        format!("{name} ({})", s.len())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut extras = AppearanceExtras {
             texture_name,
             pick_texture: false,
             pick_map: None,
+            pick_set: None,
+            set_names,
+            chosen_set: None,
             palette: Some(&mut self.project.color_palette),
             eyedropper: self.authoring.eyedropper,
             language: ui_lang,
@@ -85,6 +110,7 @@ impl Atelier {
         );
         let (pick_texture, pick_map, eyedropper) =
             (extras.pick_texture, extras.pick_map, extras.eyedropper);
+        let (pick_set, chosen_set) = (extras.pick_set, extras.chosen_set);
         if eyedropper != self.authoring.eyedropper {
             self.authoring.eyedropper = eyedropper;
             self.status = if eyedropper {
@@ -96,8 +122,19 @@ impl Atelier {
         if pick_texture {
             self.pick_fabric_texture();
         }
-        if let Some(k) = pick_map {
-            self.pick_fabric_map(k);
+        if let Some(slot) = pick_map {
+            self.pick_fabric_map(slot);
+        }
+        if let Some(folder) = pick_set {
+            self.pick_texture_set(folder);
+        }
+        if let Some(k) = chosen_set
+            && let Some(d) = self.authoring.fabric_draft.as_mut()
+            && k < d.texture_sets.len()
+        {
+            let set = d.texture_sets.remove(k);
+            d.texture_sets.clear();
+            self.stage_texture_set(set);
         }
         for (name, rect) in appearance_targets {
             super::demo::mark(ui.ctx(), name, rect);
@@ -248,11 +285,11 @@ impl Atelier {
     }
 }
 impl Atelier {
-    /// Stage a PNG as the drafted fabric texture's normal map (1) or roughness map (2).
-    fn pick_fabric_map(&mut self, which: usize) {
+    /// Stage an image as one of the drafted fabric texture's maps.
+    fn pick_fabric_map(&mut self, slot: fashioncraft::garment::appearance::MapSlot) {
         let ui_lang = self.prefs.language;
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
+            .add_filter("Image", &texture_set::IMAGE_EXTENSIONS)
             .pick_file()
         else {
             return;
@@ -271,53 +308,186 @@ impl Atelier {
         else {
             return;
         };
-        if which == 1 {
-            texture.normal_asset_id = Some(asset_id);
-        } else {
-            texture.roughness_asset_id = Some(asset_id);
+        *texture.map_mut(slot) = Some(asset_id);
+        if slot == fashioncraft::garment::appearance::MapSlot::Displacement
+            && texture.displacement_mm == 0.
+        {
+            texture.displacement_mm = DEFAULT_DISPLACEMENT_MM;
         }
         self.status = i18n::tr(ui_lang, "Map staged · Apply appearance to show it").into();
     }
 
-    /// Stage a PNG as the drafted fabric's texture; its height follows the image's aspect.
+    /// Stage an image as the drafted fabric's texture; its height follows the image's aspect.
     fn pick_fabric_texture(&mut self) {
         let ui_lang = self.prefs.language;
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
+            .add_filter("Image", &texture_set::IMAGE_EXTENSIONS)
             .pick_file()
         else {
             return;
         };
+        if self.stage_fabric_image(path).is_some() {
+            self.status = i18n::tr(ui_lang, "Texture staged · Apply appearance to show it").into();
+        }
+    }
+
+    /// Make `path` the drafted fabric's texture image, keeping the repeat's width, its angle,
+    /// relief and maps; its height follows the image's aspect. None when it cannot be read.
+    fn stage_fabric_image(&mut self, path: PathBuf) -> Option<()> {
         let (w, h) = match image::image_dimensions(&path) {
             Ok(size) => size,
             Err(e) => {
                 self.status = format!("Cannot open {}: {e}", path.display());
-                return;
+                return None;
             }
         };
         let asset_id = self.asset_for(path);
-        let Some(appearance) = self
+        let appearance = self
             .authoring
             .fabric_draft
             .as_mut()
-            .and_then(|d| d.appearance.as_mut())
-        else {
-            return;
-        };
-        let width_mm = appearance.texture.as_ref().map_or(100., |t| t.width_mm);
+            .and_then(|d| d.appearance.as_mut())?;
         let previous = appearance.texture.take();
+        let width_mm = previous.as_ref().map_or(100., |t| t.width_mm);
         appearance.texture = Some(fashioncraft::garment::appearance::FabricTexture {
             asset_id,
             width_mm,
             height_mm: (width_mm * f64::from(h) / f64::from(w.max(1))).clamp(1., 5000.),
-            rotation_degrees: previous.as_ref().map_or(0., |t| t.rotation_degrees),
-            relief_mm: previous.as_ref().map_or(0., |t| t.relief_mm),
-            normal_asset_id: previous.as_ref().and_then(|t| t.normal_asset_id.clone()),
-            roughness_asset_id: previous.as_ref().and_then(|t| t.roughness_asset_id.clone()),
+            ..previous.unwrap_or_default()
         });
-        self.status = i18n::tr(ui_lang, "Texture staged · Apply appearance to show it").into();
+        Some(())
+    }
+
+    /// Pick a folder (or files) holding a texture set exported from a texture tool, and stage
+    /// it.
+    fn pick_texture_set(&mut self, folder: bool) {
+        let paths = if folder {
+            let Some(folder) = rfd::FileDialog::new().pick_folder() else {
+                return;
+            };
+            match texture_set::folder_files(&folder) {
+                Ok(files) => files,
+                Err(e) => {
+                    self.status = format!("Cannot read {}: {e}", folder.display());
+                    return;
+                }
+            }
+        } else {
+            let mut extensions = texture_set::IMAGE_EXTENSIONS.to_vec();
+            extensions.push("sbsar");
+            let Some(files) = rfd::FileDialog::new()
+                .add_filter("Texture maps", &extensions)
+                .pick_files()
+            else {
+                return;
+            };
+            files
+        };
+        self.texture_set_from_files(&paths);
+    }
+
+    /// Stage the texture set among `paths` (a folder's files or the files picked); when they
+    /// hold several materials' sets, list them to choose from.
+    pub(super) fn texture_set_from_files(&mut self, paths: &[PathBuf]) {
+        let ui_lang = self.prefs.language;
+        let found = texture_set::group(paths);
+        if found.sets.is_empty() {
+            self.status = if paths.iter().any(|p| texture_set::is_substance_archive(p)) {
+                i18n::tr(ui_lang, SBSAR_NOTE).into()
+            } else {
+                i18n::tr(ui_lang, "No texture maps recognised: their names need a map suffix such as _BaseColor or _Normal").into()
+            };
+            return;
+        }
+        if found.sets.len() == 1 {
+            let set = found.sets.into_iter().next().unwrap();
+            self.stage_texture_set(set);
+            return;
+        }
+        if let Some(d) = self.authoring.fabric_draft.as_mut() {
+            d.texture_sets = found.sets;
+        }
+        self.status = i18n::tr(
+            ui_lang,
+            "Several materials found · choose one under Texture set",
+        )
+        .into();
+    }
+
+    /// Stage every map of `set` on the drafted fabric's texture.
+    fn stage_texture_set(&mut self, set: texture_set::TextureSet) {
+        use fashioncraft::garment::appearance::MapSlot;
+        let ui_lang = self.prefs.language;
+        let has_texture = self
+            .authoring
+            .fabric_draft
+            .as_ref()
+            .and_then(|d| d.appearance.as_ref())
+            .is_some_and(|a| a.texture.is_some());
+        match set.base_color.clone() {
+            Some(path) => {
+                if self.stage_fabric_image(path).is_none() {
+                    return;
+                }
+            }
+            None if has_texture => {}
+            None => {
+                self.status = i18n::tr(
+                    ui_lang,
+                    "The texture set has no base colour map: add a texture image first",
+                )
+                .into();
+                return;
+            }
+        }
+        let maps = [
+            (MapSlot::Normal, set.normal.clone()),
+            (MapSlot::Roughness, set.roughness.clone()),
+            (MapSlot::Metalness, set.metalness.clone()),
+            (MapSlot::Opacity, set.opacity.clone()),
+            (MapSlot::Displacement, set.height.clone()),
+            (MapSlot::Occlusion, set.occlusion.clone()),
+        ];
+        let assets: Vec<(MapSlot, String)> = maps
+            .into_iter()
+            .filter_map(|(slot, path)| Some((slot, self.asset_for(path?))))
+            .collect();
+        let Some(texture) = self
+            .authoring
+            .fabric_draft
+            .as_mut()
+            .and_then(|d| d.appearance.as_mut())
+            .and_then(|a| a.texture.as_mut())
+        else {
+            return;
+        };
+        // The set replaces the maps the texture had.
+        for slot in MapSlot::ALL {
+            *texture.map_mut(slot) = None;
+        }
+        for (slot, asset) in assets {
+            *texture.map_mut(slot) = Some(asset);
+        }
+        texture.normal_directx = set.normal_directx();
+        texture.roughness_is_glossiness = set.roughness_is_glossiness;
+        if set.height.is_some() && texture.displacement_mm == 0. {
+            texture.displacement_mm = DEFAULT_DISPLACEMENT_MM;
+        }
+        self.status = format!(
+            "{} · {} {} · {}",
+            i18n::tr(ui_lang, "Texture set staged"),
+            set.len(),
+            i18n::tr(ui_lang, "maps"),
+            i18n::tr(ui_lang, "Apply appearance to show it"),
+        );
     }
 }
+
+/// Height a new displacement map draws, mm.
+const DEFAULT_DISPLACEMENT_MM: f64 = 1.;
+
+/// Why `.sbsar` files cannot be opened, and what to do instead.
+const SBSAR_NOTE: &str = "Substance .sbsar files cannot be opened: they need Adobe's proprietary engine. Export the maps as images from Substance and pick those";
 
 fn value(
     ui: &mut egui::Ui,
@@ -347,14 +517,22 @@ struct AppearanceExtras<'a> {
     texture_name: Option<String>,
     /// Set when a new texture image was asked for.
     pick_texture: bool,
-    /// Set when a normal map (1) or a roughness map (2) was asked for.
-    pick_map: Option<usize>,
+    /// Set when an image for one of the texture's maps was asked for.
+    pick_map: Option<fashioncraft::garment::appearance::MapSlot>,
+    /// Set when a texture set was asked for: from a folder (true) or from files (false).
+    pick_set: Option<bool>,
+    /// Texture sets to choose from (names and map counts), and the one chosen.
+    set_names: Vec<String>,
+    chosen_set: Option<usize>,
     palette: Option<&'a mut Vec<[u8; 3]>>,
     /// Whether the eyedropper is waiting for a click on the 3D view; the controls toggle it.
     eyedropper: bool,
     /// Interface language of the labels.
     language: super::i18n::Language,
 }
+
+/// What the Texture set button does, and why `.sbsar` files are not on the list.
+const TEXTURE_SET_HOVER: &str = "Import the maps a texture tool exported (Substance Painter, Designer or Sampler, and others): pick a folder or the files. Names ending in BaseColor, Normal, Roughness or Glossiness, Metallic, Height, Opacity and AO are recognised. Substance .sbsar files are not supported: they need Adobe's proprietary engine, so export the maps as images instead";
 
 fn appearance_controls(
     ui: &mut egui::Ui,
@@ -492,6 +670,12 @@ fn appearance_controls(
                 tr("Draw the cloth this thick, with a rim along its outline; the simulation is unchanged"),
             );
         });
+        super::workspace::prop_row(ui, tr("Metalness"), |ui| {
+            super::workspace::slim(ui, egui::Slider::new(&mut value.metalness, 0.0..=1.0))
+                .on_hover_text(tr(
+                    "0 for cloth, 1 for bare metal (foil, lamé); a metalness map replaces it",
+                ));
+        });
         super::workspace::prop_row(ui, tr("Texture"), |ui| {
             if value.texture.is_some() {
                 ui.label(extras.texture_name.as_deref().unwrap_or(tr("image")));
@@ -503,12 +687,36 @@ fn appearance_controls(
             };
             extras.pick_texture = ui
                 .button(pick)
-                .on_hover_text(tr("Repeat a PNG image over the fabric along its grain"))
+                .on_hover_text(tr("Repeat an image over the fabric along its grain"))
                 .clicked();
             if value.texture.is_some() && ui.small_button(tr("Remove")).clicked() {
                 value.texture = None;
             }
         });
+        super::workspace::prop_row(ui, tr("Texture set"), |ui| {
+            let hover = tr(TEXTURE_SET_HOVER);
+            let menu = ui.menu_button(tr("Import…"), |ui| {
+                if ui.button(tr("From a folder…")).clicked() {
+                    extras.pick_set = Some(true);
+                    ui.close();
+                }
+                if ui.button(tr("From files…")).clicked() {
+                    extras.pick_set = Some(false);
+                    ui.close();
+                }
+            });
+            menu.response.on_hover_text(hover);
+        });
+        if !extras.set_names.is_empty() {
+            ui.small(tr("Choose the material to use:"));
+            ui.horizontal_wrapped(|ui| {
+                for (k, name) in extras.set_names.iter().enumerate() {
+                    if ui.small_button(name).clicked() {
+                        extras.chosen_set = Some(k);
+                    }
+                }
+            });
+        }
         if let Some(t) = value.texture.as_mut() {
             super::workspace::prop_row(ui, tr("Repeat"), |ui| {
                 ui.add(
@@ -549,36 +757,79 @@ fn appearance_controls(
                 ));
             });
             ui.small(tr("The colours tint the image: white shows it as it is."));
-            for (k, label, hover) in [
-                (
-                    1,
-                    "Normal map",
-                    "An image of the surface's normals over one repeat: red along it, green up it, blue out of the cloth",
-                ),
-                (
-                    2,
-                    "Roughness map",
-                    "A grey image of the roughness over one repeat: black glossy, white matt",
-                ),
-            ] {
-                let id = if k == 1 {
-                    &mut t.normal_asset_id
-                } else {
-                    &mut t.roughness_asset_id
+            use fashioncraft::garment::appearance::MapSlot;
+            for slot in MapSlot::ALL {
+                let hover = match slot {
+                    MapSlot::Normal => {
+                        "An image of the surface's normals over one repeat: red along it, green up it, blue out of the cloth"
+                    }
+                    MapSlot::Roughness => {
+                        "A grey image of the roughness over one repeat: black glossy, white matt"
+                    }
+                    MapSlot::Metalness => {
+                        "A grey image of the metalness over one repeat: black cloth, white metal"
+                    }
+                    MapSlot::Opacity => {
+                        "A grey image of the opacity over one repeat, for lace and mesh: the cloth is cut away where it is dark"
+                    }
+                    MapSlot::Displacement => {
+                        "A grey height image over one repeat, black low and white high, drawn as relief seen in depth"
+                    }
+                    MapSlot::Occlusion => {
+                        "A grey ambient-occlusion image over one repeat: darkens the light from all around in its creases"
+                    }
                 };
-                super::workspace::prop_row(ui, tr(label), |ui| {
-                    let pick = if id.is_some() {
+                super::workspace::prop_row(ui, tr(slot.label()), |ui| {
+                    let set = t.map(slot).is_some();
+                    let pick = if set {
                         tr("Replace…")
                     } else {
                         tr("Image…")
                     };
                     if ui.small_button(pick).on_hover_text(tr(hover)).clicked() {
-                        extras.pick_map = Some(k);
+                        extras.pick_map = Some(slot);
                     }
-                    if id.is_some() && ui.small_button(tr("Remove")).clicked() {
-                        *id = None;
+                    if set && ui.small_button(tr("Remove")).clicked() {
+                        *t.map_mut(slot) = None;
                     }
                 });
+                if t.map(slot).is_none() {
+                    continue;
+                }
+                match slot {
+                    MapSlot::Normal => {
+                        ui.checkbox(&mut t.normal_directx, tr("DirectX normal map (flip green)"))
+                            .on_hover_text(tr(
+                                "Tick for maps made the DirectX way (Unreal, some Substance presets); OpenGL maps (Blender, glTF) stay unticked",
+                            ));
+                    }
+                    MapSlot::Roughness => {
+                        ui.checkbox(
+                            &mut t.roughness_is_glossiness,
+                            tr("Glossiness map (inverted)"),
+                        )
+                        .on_hover_text(tr(
+                            "Tick when the map is glossiness: white glossy, black matt",
+                        ));
+                    }
+                    MapSlot::Displacement => {
+                        super::workspace::prop_row(ui, tr("Height"), |ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut t.displacement_mm)
+                                    .range(
+                                        0.0..=fashioncraft::garment::appearance::MAX_DISPLACEMENT_MM,
+                                    )
+                                    .speed(0.05)
+                                    .fixed_decimals(2)
+                                    .suffix(" mm"),
+                            )
+                            .on_hover_text(tr(
+                                "How far the map's white stands above its black; drawn only, the simulation is unchanged",
+                            ));
+                        });
+                    }
+                    _ => {}
+                }
             }
         }
     }

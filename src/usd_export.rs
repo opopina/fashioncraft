@@ -6,16 +6,20 @@
 //! uncompressed zip whose first file is the root layer and whose files start on 64-byte
 //! boundaries.
 //!
-//! Each garment piece is a mesh with its fabric's preview-surface material; triangles are
+//! Each garment piece is a mesh with its fabric's preview-surface material, its texture's maps
+//! (normal, roughness, metalness, opacity, occlusion, displacement) wired into the surface's
+//! inputs through texture readers whose scale and bias flip a DirectX normal map's green and
+//! invert a glossiness map; images that are not PNG or JPEG are re-encoded as PNG. Triangles are
 //! counter-clockwise seen from the fabric's front face, USD's default orientation, and
 //! marked double-sided. The avatar is one more mesh. A take animates the points with one
 //! time sample per frame, at the take's frame rate. Units are metres, Y up.
 use crate::{
     avatar::SurfaceMesh,
     avatar_animation::Take,
-    garment::{CompiledGarment, GarmentTemplate},
+    garment::{CompiledGarment, GarmentTemplate, appearance::MapSlot},
     gltf_export::{front_triangles, texture_coordinates},
     model::State,
+    texture_maps::{self, TextureFile},
 };
 use glam::DVec3;
 use std::{
@@ -136,21 +140,81 @@ fn mesh(
     .unwrap();
 }
 
-/// A preview-surface material, textured when `texture` names an image in the package.
-fn material(out: &mut String, name: &str, color: [f32; 3], roughness: f64, texture: Option<&str>) {
+/// A map feeding one of the preview surface's inputs.
+struct MapInput {
+    /// The surface input: `normal`, `roughness`, `metallic`, `opacity`, `occlusion`,
+    /// `displacement`.
+    input: &'static str,
+    /// The image in the package.
+    file: String,
+    /// What the texture reader does to the image's values: `value × scale + bias`.
+    scale: [f64; 4],
+    bias: [f64; 4],
+}
+
+/// How a material looks: its colours and values, and the images that replace them.
+struct Look {
+    color: [f32; 3],
+    roughness: f64,
+    metalness: f64,
+    /// The colour image, tinted by `color`.
+    texture: Option<String>,
+    maps: Vec<MapInput>,
+}
+
+impl Look {
+    fn plain(color: [f32; 3], roughness: f64) -> Self {
+        Self {
+            color,
+            roughness,
+            metalness: 0.,
+            texture: None,
+            maps: vec![],
+        }
+    }
+}
+
+/// A texture reader of the material at `path`, named `prim`, repeating over the pieces.
+fn uv_texture(out: &mut String, path: &str, prim: &str, file: &str, data: bool, extra: &str) {
+    writeln!(
+        out,
+        "            def Shader \"{prim}\"\n            {{\n                uniform token info:id = \"UsdUVTexture\"\n                asset inputs:file = @{file}@\n                float2 inputs:st.connect = <{path}/Coordinates.outputs:result>\n                token inputs:wrapS = \"repeat\"\n                token inputs:wrapT = \"repeat\"{}{extra}\n                float3 outputs:rgb\n                float outputs:r\n            }}",
+        if data {
+            "\n                token inputs:sourceColorSpace = \"raw\""
+        } else {
+            ""
+        }
+    )
+    .unwrap();
+}
+
+fn vec4(v: [f64; 4]) -> String {
+    format!("({:.4}, {:.4}, {:.4}, {:.4})", v[0], v[1], v[2], v[3])
+}
+
+/// A preview-surface material, its inputs read from images in the package where it has them.
+fn material(out: &mut String, name: &str, look: &Look) {
     let path = format!("/Root/Materials/{name}");
+    let color = look.color;
     writeln!(out, "        def Material \"{name}\"\n        {{").unwrap();
     writeln!(
         out,
         "            token outputs:surface.connect = <{path}/Surface.outputs:surface>"
     )
     .unwrap();
+    if look.maps.iter().any(|m| m.input == "displacement") {
+        writeln!(
+            out,
+            "            token outputs:displacement.connect = <{path}/Surface.outputs:displacement>"
+        )
+        .unwrap();
+    }
     writeln!(
         out,
         "            def Shader \"Surface\"\n            {{\n                uniform token info:id = \"UsdPreviewSurface\""
     )
     .unwrap();
-    match texture {
+    match look.texture {
         Some(_) => writeln!(
             out,
             "                color3f inputs:diffuseColor.connect = <{path}/Image.outputs:rgb>"
@@ -163,29 +227,123 @@ fn material(out: &mut String, name: &str, color: [f32; 3], roughness: f64, textu
         )
         .unwrap(),
     }
-    writeln!(
-        out,
-        "                float inputs:roughness = {roughness:.3}\n                float inputs:metallic = 0\n                token outputs:surface\n            }}"
-    )
-    .unwrap();
-    if let Some(file) = texture {
+    let mapped = |input: &str| look.maps.iter().any(|m| m.input == input);
+    if !mapped("roughness") {
+        writeln!(
+            out,
+            "                float inputs:roughness = {:.3}",
+            look.roughness
+        )
+        .unwrap();
+    }
+    if !mapped("metallic") {
+        writeln!(
+            out,
+            "                float inputs:metallic = {:.3}",
+            look.metalness
+        )
+        .unwrap();
+    }
+    for (k, map) in look.maps.iter().enumerate() {
+        let (kind, output) = match map.input {
+            "normal" => ("normal3f", "rgb"),
+            _ => ("float", "r"),
+        };
+        writeln!(
+            out,
+            "                {kind} inputs:{}.connect = <{path}/Map{k}.outputs:{output}>",
+            map.input
+        )
+        .unwrap();
+        if map.input == "opacity" {
+            // Lace and mesh: cut away where the opacity is under one half.
+            writeln!(out, "                float inputs:opacityThreshold = 0.5").unwrap();
+        }
+    }
+    writeln!(out, "                token outputs:surface").unwrap();
+    if mapped("displacement") {
+        writeln!(out, "                token outputs:displacement").unwrap();
+    }
+    writeln!(out, "            }}").unwrap();
+    if look.texture.is_some() || !look.maps.is_empty() {
         writeln!(
             out,
             "            def Shader \"Coordinates\"\n            {{\n                uniform token info:id = \"UsdPrimvarReader_float2\"\n                string inputs:varname = \"st\"\n                float2 outputs:result\n            }}"
         )
         .unwrap();
-        writeln!(
-            out,
-            "            def Shader \"Image\"\n            {{\n                uniform token info:id = \"UsdUVTexture\"\n                asset inputs:file = @{file}@\n                float2 inputs:st.connect = <{path}/Coordinates.outputs:result>\n                token inputs:wrapS = \"repeat\"\n                token inputs:wrapT = \"repeat\"\n                float4 inputs:scale = ({:.4}, {:.4}, {:.4}, 1)\n                float3 outputs:rgb\n            }}",
+    }
+    if let Some(file) = &look.texture {
+        let tint = format!(
+            "\n                float4 inputs:scale = ({:.4}, {:.4}, {:.4}, 1)",
             color[0], color[1], color[2]
-        )
-        .unwrap();
+        );
+        uv_texture(out, &path, "Image", file, false, &tint);
+    }
+    for (k, map) in look.maps.iter().enumerate() {
+        let extra = format!(
+            "\n                float4 inputs:scale = {}\n                float4 inputs:bias = {}",
+            vec4(map.scale),
+            vec4(map.bias)
+        );
+        uv_texture(out, &path, &format!("Map{k}"), &map.file, true, &extra);
     }
     writeln!(out, "        }}").unwrap();
 }
 
+/// The texture images a fabric's maps feed into its preview surface, adding the files to
+/// `textures`. Normal maps are read the OpenGL way, a DirectX one by flipping its green with
+/// the reader's scale and bias; a glossiness map is inverted the same way.
+fn map_inputs(
+    texture: &crate::garment::appearance::FabricTexture,
+    images: &[(String, PathBuf)],
+    textures: &mut Vec<(String, TextureFile)>,
+) -> Result<Vec<MapInput>, String> {
+    let mut inputs = vec![];
+    for slot in MapSlot::ALL {
+        let Some(asset) = texture.map(slot) else {
+            continue;
+        };
+        let file = texture_maps::plain(texture_maps::source(images, asset)?, true)?;
+        let name = match &file {
+            TextureFile::Original(_) => {
+                format!("textures/{}.{}", identifier(asset), file.extension())
+            }
+            TextureFile::Converted { .. } => format!("textures/{}.png", identifier(asset)),
+        };
+        if !textures.iter().any(|(f, _)| *f == name) {
+            textures.push((name.clone(), file));
+        }
+        let identity = ([1.; 4], [0.; 4]);
+        let (input, (scale, bias)) = match slot {
+            MapSlot::Normal if texture.normal_directx => {
+                ("normal", ([2., -2., 2., 1.], [-1., 1., -1., 0.]))
+            }
+            MapSlot::Normal => ("normal", ([2., 2., 2., 1.], [-1., -1., -1., 0.])),
+            MapSlot::Roughness if texture.roughness_is_glossiness => {
+                ("roughness", ([-1., -1., -1., 1.], [1., 1., 1., 0.]))
+            }
+            MapSlot::Roughness => ("roughness", identity),
+            MapSlot::Metalness => ("metallic", identity),
+            MapSlot::Opacity => ("opacity", identity),
+            MapSlot::Occlusion => ("occlusion", identity),
+            // Metres along the normal: the stage's unit is the metre.
+            MapSlot::Displacement => {
+                let h = texture.displacement_mm / 1000.;
+                ("displacement", ([h, h, h, 1.], [0.; 4]))
+            }
+        };
+        inputs.push(MapInput {
+            input,
+            file: name,
+            scale,
+            bias,
+        });
+    }
+    Ok(inputs)
+}
+
 /// The layer's text and the texture images it refers to, by the name it uses for each.
-pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String> {
+pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, TextureFile)>), String> {
     let garment = scene.garment;
     let n = garment.mesh.uv.len();
     if scene.state.x.len() != n {
@@ -224,8 +382,8 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
         .unwrap();
     }
     out.push_str("    doc = \"FashionCraft garment\"\n)\n\ndef Xform \"Root\"\n{\n");
-    let mut materials: BTreeMap<String, (usize, Option<String>)> = BTreeMap::new();
-    let mut textures: Vec<(String, PathBuf)> = Vec::new();
+    let mut materials: BTreeMap<String, (usize, Option<String>, Vec<MapInput>)> = BTreeMap::new();
+    let mut textures: Vec<(String, TextureFile)> = Vec::new();
     let mut names: HashMap<String, usize> = HashMap::new();
     for panel in &garment.panels {
         let fabric = scene
@@ -239,29 +397,26 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
             );
         let material_name = identifier(&fabric);
         if !materials.contains_key(&material_name) {
-            let texture = match appearances[panel.material]
+            let fabric_texture = appearances[panel.material]
                 .as_ref()
-                .and_then(|a| a.texture.as_ref())
-            {
+                .and_then(|a| a.texture.as_ref());
+            let texture = match fabric_texture {
                 Some(t) => {
-                    let source = scene
-                        .images
-                        .iter()
-                        .find(|(id, _)| *id == t.asset_id)
-                        .map(|(_, p)| p.clone())
-                        .ok_or_else(|| format!("Texture image {} is missing", t.asset_id))?;
-                    let extension = source
-                        .extension()
-                        .map_or("png".into(), |e| e.to_string_lossy().to_ascii_lowercase());
-                    let file = format!("textures/{}.{extension}", identifier(&t.asset_id));
-                    if !textures.iter().any(|(f, _)| *f == file) {
-                        textures.push((file.clone(), source));
+                    let source = texture_maps::source(scene.images, &t.asset_id)?;
+                    let file = texture_maps::plain(source, true)?;
+                    let name = format!("textures/{}.{}", identifier(&t.asset_id), file.extension());
+                    if !textures.iter().any(|(f, _)| *f == name) {
+                        textures.push((name.clone(), file));
                     }
-                    Some(file)
+                    Some(name)
                 }
                 None => None,
             };
-            materials.insert(material_name.clone(), (panel.material, texture));
+            let maps = match fabric_texture {
+                Some(t) => map_inputs(t, scene.images, &mut textures)?,
+                None => vec![],
+            };
+            materials.insert(material_name.clone(), (panel.material, texture, maps));
         }
         // Piece names may repeat once made identifiers: keep them apart.
         let mut name = identifier(&panel.id);
@@ -309,14 +464,19 @@ pub fn usda(scene: &UsdScene) -> Result<(String, Vec<(String, PathBuf)>), String
         );
     }
     out.push_str("    def Scope \"Materials\"\n    {\n");
-    for (name, (slot, texture)) in &materials {
-        let appearance = appearances[*slot].as_ref();
-        let color = appearance.map_or([0.91, 0.92, 0.94], |a| a.linear_color());
-        let roughness = appearance.map_or(0.8, |a| a.roughness);
-        material(&mut out, name, color, roughness, texture.as_deref());
+    for (name, (slot, texture, maps)) in materials {
+        let appearance = appearances[slot].as_ref();
+        let look = Look {
+            color: appearance.map_or([0.91, 0.92, 0.94], |a| a.linear_color()),
+            roughness: appearance.map_or(0.8, |a| a.roughness),
+            metalness: appearance.map_or(0., |a| a.metalness),
+            texture,
+            maps,
+        };
+        material(&mut out, &name, &look);
     }
     if scene.avatar.is_some() {
-        material(&mut out, "avatar", [0.45, 0.45, 0.47], 0.7, None);
+        material(&mut out, "avatar", &Look::plain([0.45, 0.45, 0.47], 0.7));
     }
     out.push_str("    }\n}\n");
     Ok((out, textures))
@@ -419,19 +579,18 @@ pub fn write(scene: &UsdScene, path: &Path) -> Result<(), String> {
             .to_string_lossy()
             .into_owned();
         let mut files = vec![(format!("{stem}.usda"), text.into_bytes())];
-        for (name, source) in textures {
-            let bytes = std::fs::read(&source).map_err(|e| format!("{}: {e}", source.display()))?;
-            files.push((name, bytes));
+        for (name, file) in textures {
+            files.push((name, file.bytes()?));
         }
         std::fs::write(path, usdz_package(&files)?).map_err(|e| e.to_string())
     } else {
         let dir = path.parent().unwrap_or(Path::new("."));
-        for (name, source) in textures {
+        for (name, file) in textures {
             let target = dir.join(&name);
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            std::fs::copy(&source, &target).map_err(|e| format!("{}: {e}", source.display()))?;
+            file.write(&target)?;
         }
         std::fs::write(path, text).map_err(|e| e.to_string())
     }

@@ -170,6 +170,7 @@ fn packed_coordinates_fit_the_unit_square_and_textures_travel_with_real_size_one
                 relief_mm: 0.,
                 normal_asset_id: None,
                 roughness_asset_id: None,
+                ..Default::default()
             }),
             ..Default::default()
         },

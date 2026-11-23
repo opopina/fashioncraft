@@ -233,6 +233,7 @@ fn images_used_by_fabric_textures_are_kept_with_the_project() {
                 relief_mm: 0.,
                 normal_asset_id: None,
                 roughness_asset_id: None,
+                ..Default::default()
             }),
             ..Default::default()
         },
@@ -276,6 +277,7 @@ fn a_fabric_textures_normal_and_roughness_maps_travel_with_it() {
         relief_mm: 0.,
         normal_asset_id: Some("image_2".into()),
         roughness_asset_id: Some("image_3".into()),
+        ..Default::default()
     };
     let appearance = FabricAppearance {
         texture: Some(texture.clone()),

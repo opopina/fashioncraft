@@ -28,6 +28,7 @@ pub mod shapes2d;
 pub mod steam;
 pub mod svg_import;
 pub mod template;
+pub mod texture_set;
 pub mod transfer;
 pub mod trims;
 

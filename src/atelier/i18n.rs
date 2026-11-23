@@ -2354,8 +2354,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Pick" => "Tomar",
         "Plain" => "Tafetán",
         "Repeat" => "Repetición",
-        "Repeat a PNG image over the fabric along its grain" => {
-            "Repite una imagen PNG sobre el tejido siguiendo el hilo"
+        "Repeat an image over the fabric along its grain" => {
+            "Repite una imagen sobre el tejido siguiendo el hilo"
         }
         "Roughness" => "Rugosidad",
         "Satin" => "Raso",
@@ -2448,6 +2448,60 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Map staged · Apply appearance to show it" => {
             "Mapa preparado · Aplicar apariencia para mostrarlo"
         }
+        "Metalness" => "Metalicidad",
+        "0 for cloth, 1 for bare metal (foil, lamé); a metalness map replaces it" => {
+            "0 para tela, 1 para metal desnudo (lámina, lamé); un mapa de metalicidad la sustituye"
+        }
+        "Metalness map" => "Mapa de metalicidad",
+        "Opacity map" => "Mapa de opacidad",
+        "Displacement map" => "Mapa de desplazamiento",
+        "Ambient occlusion map" => "Mapa de oclusión ambiental",
+        "A grey image of the metalness over one repeat: black cloth, white metal" => {
+            "Una imagen gris de la metalicidad en una repetición: negro tela, blanco metal"
+        }
+        "A grey image of the opacity over one repeat, for lace and mesh: the cloth is cut away where it is dark" => {
+            "Una imagen gris de la opacidad en una repetición, para encajes y mallas: la tela se recorta donde es oscura"
+        }
+        "A grey height image over one repeat, black low and white high, drawn as relief seen in depth" => {
+            "Una imagen gris de altura en una repetición, negro bajo y blanco alto, dibujada como relieve con profundidad"
+        }
+        "A grey ambient-occlusion image over one repeat: darkens the light from all around in its creases" => {
+            "Una imagen gris de oclusión ambiental en una repetición: oscurece la luz del entorno en sus pliegues"
+        }
+        "DirectX normal map (flip green)" => "Mapa de normales DirectX (invertir verde)",
+        "Tick for maps made the DirectX way (Unreal, some Substance presets); OpenGL maps (Blender, glTF) stay unticked" => {
+            "Márcalo para mapas hechos al modo DirectX (Unreal, algunos presets de Substance); los mapas OpenGL (Blender, glTF) quedan sin marcar"
+        }
+        "Glossiness map (inverted)" => "Mapa de brillo (invertido)",
+        "Tick when the map is glossiness: white glossy, black matt" => {
+            "Márcalo si el mapa es de brillo: blanco brillante, negro mate"
+        }
+        "How far the map's white stands above its black; drawn only, the simulation is unchanged" => {
+            "Cuánto sobresale el blanco del mapa sobre su negro; solo se dibuja, la simulación no cambia"
+        }
+        "Texture set" => "Set de texturas",
+        "Import…" => "Importar…",
+        "From a folder…" => "Desde una carpeta…",
+        "From files…" => "Desde archivos…",
+        "Import the maps a texture tool exported (Substance Painter, Designer or Sampler, and others): pick a folder or the files. Names ending in BaseColor, Normal, Roughness or Glossiness, Metallic, Height, Opacity and AO are recognised. Substance .sbsar files are not supported: they need Adobe's proprietary engine, so export the maps as images instead" => {
+            "Importa los mapas que exportó una herramienta de texturas (Substance Painter, Designer o Sampler, y otras): elige una carpeta o los archivos. Se reconocen los nombres que terminan en BaseColor, Normal, Roughness o Glossiness, Metallic, Height, Opacity y AO. Los archivos .sbsar de Substance no se admiten: necesitan el motor propietario de Adobe, así que exporta los mapas como imágenes"
+        }
+        "Choose the material to use:" => "Elige el material que usar:",
+        "Substance .sbsar files cannot be opened: they need Adobe's proprietary engine. Export the maps as images from Substance and pick those" => {
+            "Los archivos .sbsar de Substance no se pueden abrir: necesitan el motor propietario de Adobe. Exporta los mapas como imágenes desde Substance y elige esos"
+        }
+        "No texture maps recognised: their names need a map suffix such as _BaseColor or _Normal" => {
+            "No se reconoció ningún mapa: sus nombres necesitan un sufijo de mapa como _BaseColor o _Normal"
+        }
+        "Several materials found · choose one under Texture set" => {
+            "Se encontraron varios materiales · elige uno en Set de texturas"
+        }
+        "The texture set has no base colour map: add a texture image first" => {
+            "El set de texturas no tiene mapa de color base: añade primero una imagen de textura"
+        }
+        "Texture set staged" => "Set de texturas preparado",
+        "maps" => "mapas",
+        "Apply appearance to show it" => "Aplicar apariencia para mostrarlo",
         "Attach all pins to the avatar" => "Sujetar todos los alfileres al avatar",
         "Detach all pins from the avatar" => "Soltar todos los alfileres del avatar",
         "Pins attached to the avatar · they follow it while an animation records" => {

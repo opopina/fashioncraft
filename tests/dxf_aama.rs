@@ -158,6 +158,7 @@ fn write_options(dialect: Dialect, units: Units) -> WriteOptions {
         sample_size: "M".into(),
         author: "FashionCraft;FashionCraft;test".into(),
         created: None,
+        grade_rule_table: String::new(),
     }
 }
 
@@ -491,13 +492,20 @@ fn handmade_aama_file() {
         "Bolsillo | 6 | LINE | Mirror (fold) lines are not imported; the piece comes in as drawn | 1",
         "Bolsillo | 8 | SPLINE | SPLINE entities are not part of the apparel layers | 1",
         "Bolsillo | CORTE | LINE | Not on a numbered AAMA/ASTM layer | 1",
-        "Delantero | 2 | TEXT | Texts on this layer (grade rule numbers, marks) are not imported | 2",
     ] {
         assert!(
             listed.iter().any(|l| l == expected),
             "{expected}\n{listed:#?}"
         );
     }
+    // Grade rule numbers on the turn points' layer are read as such; they grade the piece
+    // with a rule table beside the file (tests/grading.rs).
+    let rules: Vec<i64> = file.pieces[0].grade_points.iter().map(|g| g.rule).collect();
+    assert_eq!(rules, [1, 2]);
+    assert!(
+        !listed.iter().any(|l| l.contains("grade rule numbers")),
+        "{listed:#?}"
+    );
 }
 
 /// Written by hand: an ASTM file in inches with its version line, a piece inserted turned

@@ -231,6 +231,14 @@ fn aliases(id: CommandId) -> &'static str {
         ReDrape => "redrape re-drape retarget carry avatar new body keep size",
         AutoFit => "auto fit fitting grade resize avatar new body size",
         RunPythonScript => "python script py automate api run code",
+        GradingTable => {
+            "grading grade sizes size range rules nest base size escalado tallas reglas"
+        }
+        PointsOfMeasure => "pom points of measure measurement spec size chart tolerance medidas",
+        ToggleGradePoint => "grade point proportional rule point escalado punto",
+        GradingReview => "grading review nest all sizes overlay stack revision tallas",
+        NextSize => "next size larger grading talla siguiente",
+        PreviousSize => "previous size smaller grading talla anterior",
         LockSelectedPieces => "lock freeze protect selected piece pattern 2d",
         LockAllPieces => "lock all pieces patterns 2d",
         UnlockAllPieces => "unlock all pieces patterns 2d",

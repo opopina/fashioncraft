@@ -77,6 +77,7 @@ pub(super) struct AuthoringUi {
     pub style_lines: super::style_lines::StyleLines,
     pub script: super::script_ui::ScriptUi,
     pub steam: super::steam_ui::SteamUi,
+    pub grading: super::grading_ui::GradingUi,
     /// The drape on the avatar before the last one opened, for Re-drape and Auto fit.
     pub redrape_from: Option<super::redrape_ui::RedrapeSource>,
     /// File › Open › Trim: the object opened, waiting for a click on a piece.

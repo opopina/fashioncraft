@@ -447,14 +447,12 @@ impl Atelier {
         &mut self,
         ctx: &egui::Context,
     ) -> Vec<(Arc<GraphicImage>, Vec<GraphicTriangle>, f32)> {
-        let placements: Vec<GraphicPlacement> = self
-            .project
-            .template
-            .graphics
-            .iter()
-            .filter(|g| self.panel_shown(&g.panel_id))
-            .cloned()
-            .collect();
+        // In a size other than the base, graphics follow their piece into it.
+        let placements: Vec<GraphicPlacement> =
+            fashioncraft::garment::grading::apply::graphics_shown(&self.project.template)
+                .into_iter()
+                .filter(|g| self.panel_shown(&g.panel_id))
+                .collect();
         let front = self.face_positions(true);
         let back = self.face_positions(false);
         let mut draws = vec![];

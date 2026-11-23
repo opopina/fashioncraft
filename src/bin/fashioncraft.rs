@@ -7,9 +7,13 @@
 //! the program: in `Contents/Resources/assets` of a macOS app bundle, in `assets/` beside the
 //! program on Windows and in portable folders, and in `share/fashioncraft/assets` under a Unix
 //! prefix (`bin/` and `share/`). `FASHIONCRAFT_ASSETS` overrides them.
+//!
+//! `--version` and `--help` print and quit; any other option is refused, never taken for a
+//! project to open.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use fashioncraft::{fitting::FittingProject, garment::presets::GarmentKind, vbd::VbdSettings};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[path = "../atelier.rs"]
@@ -65,41 +69,88 @@ fn data_dir() -> PathBuf {
         .join("session")
 }
 
+/// What the command line asks FashionCraft to do.
+#[derive(Debug, PartialEq)]
+enum Request {
+    /// Open the studio, on this project when one is given (a double-clicked file).
+    Open(Option<PathBuf>),
+    /// Print the version and quit.
+    Version,
+    /// Print how to start FashionCraft and quit.
+    Help,
+    /// An option FashionCraft does not have.
+    Unknown(OsString),
+}
+
+/// Reads the command line, the program's name first. Only the first argument counts. Old macOS
+/// versions pass a `-psn_…` process serial number first; it is neither a project nor an option.
+fn request(args: impl IntoIterator<Item = OsString>) -> Request {
+    let Some(first) = args.into_iter().nth(1) else {
+        return Request::Open(None);
+    };
+    let text = first.to_string_lossy().into_owned();
+    match text.as_str() {
+        _ if text.starts_with("-psn_") => Request::Open(None),
+        "-V" | "--version" => Request::Version,
+        "-h" | "--help" => Request::Help,
+        _ if text.starts_with('-') => Request::Unknown(first),
+        _ => Request::Open(Some(PathBuf::from(first))),
+    }
+}
+
+/// How to start FashionCraft, for `--help`.
+fn usage() -> String {
+    format!(
+        "FashionCraft {}\n\n\
+         Usage: fashioncraft [PROJECT]\n\n\
+         Opens the studio on PROJECT, or on the mannequin with a T-shirt when none is given.\n\n\
+         Options:\n  \
+         -h, --help     Print this help\n  \
+         -V, --version  Print the version",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
 /// Why a project given to open cannot be, in the interface's language.
 fn unreadable(path: &Path, output: &Path) -> String {
     let spanish = std::fs::read_to_string(output.join("preferences.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .is_some_and(|prefs| prefs["language"] == "spanish");
-    if spanish {
-        format!(
-            "FashionCraft no puede leer {}.\n\nSi está en una carpeta de la nube (Nextcloud, iCloud, Dropbox…), \
-             dale acceso en Ajustes del Sistema › Privacidad y seguridad, o ábrelo desde Archivo › Abrir.",
-            path.display()
-        )
-    } else {
-        format!(
-            "FashionCraft cannot read {}.\n\nIf it is in a cloud folder (Nextcloud, iCloud, Dropbox…), \
-             give FashionCraft access in System Settings › Privacy & Security, or open it with File › Open.",
-            path.display()
-        )
+    unreadable_message(path, spanish, cfg!(target_os = "macos"))
+}
+
+/// The message of [`unreadable`]. Only macOS keeps an app out of a cloud folder until it is
+/// given access in System Settings, so only there does the message give that advice.
+fn unreadable_message(path: &Path, spanish: bool, macos: bool) -> String {
+    let path = path.display();
+    match (spanish, macos) {
+        (true, true) => format!(
+            "FashionCraft no puede leer {path}.\n\nSi está en una carpeta de la nube (Nextcloud, iCloud, Dropbox…), \
+             dale acceso en Ajustes del Sistema › Privacidad y seguridad, o ábrelo desde Archivo › Abrir."
+        ),
+        (true, false) => format!(
+            "FashionCraft no puede leer {path}.\n\nComprueba que el archivo existe, o ábrelo desde Archivo › Abrir."
+        ),
+        (false, true) => format!(
+            "FashionCraft cannot read {path}.\n\nIf it is in a cloud folder (Nextcloud, iCloud, Dropbox…), \
+             give FashionCraft access in System Settings › Privacy & Security, or open it with File › Open."
+        ),
+        (false, false) => format!(
+            "FashionCraft cannot read {path}.\n\nCheck that the file exists, or open it with File › Open."
+        ),
     }
 }
 
-fn start() -> Result<(), String> {
+fn start(source: Option<PathBuf>) -> Result<(), String> {
     let assets = assets_dir().ok_or(
         "FashionCraft could not find its mannequin beside the program. Reinstall FashionCraft.",
     )?;
     let output = data_dir();
     std::fs::create_dir_all(&output).map_err(|e| format!("{}: {e}", output.display()))?;
     // A project given on the command line, as a double-clicked file is. One that cannot be read
-    // is an error, not a reason to open the T-shirt in its place. (Old macOS versions pass a
-    // `-psn_…` process serial number first; it is not a file.)
-    let source = match std::env::args_os()
-        .nth(1)
-        .filter(|a| !a.to_string_lossy().starts_with("-psn_"))
-        .map(PathBuf::from)
-    {
+    // is an error, not a reason to open the T-shirt in its place.
+    let source = match source {
         Some(path) if path.is_file() => Some(path),
         Some(path) => return Err(unreadable(&path, &output)),
         None => None,
@@ -129,7 +180,26 @@ fn start() -> Result<(), String> {
 }
 
 fn main() {
-    if let Err(error) = start() {
+    let source = match request(std::env::args_os()) {
+        Request::Open(source) => source,
+        Request::Version => {
+            println!("FashionCraft {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        Request::Help => {
+            println!("{}", usage());
+            return;
+        }
+        Request::Unknown(option) => {
+            eprintln!(
+                "FashionCraft: unknown option {}\n\n{}",
+                option.to_string_lossy(),
+                usage()
+            );
+            std::process::exit(2);
+        }
+    };
+    if let Err(error) = start(source) {
         eprintln!("FashionCraft: {error}");
         rfd::MessageDialog::new()
             .set_title("FashionCraft")
@@ -143,6 +213,45 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn args(list: &[&str]) -> Vec<OsString> {
+        std::iter::once("fashioncraft")
+            .chain(list.iter().copied())
+            .map(OsString::from)
+            .collect()
+    }
+
+    /// Options print and quit; only what is not an option is a project to open.
+    #[test]
+    fn reads_the_command_line() {
+        assert_eq!(request(args(&[])), Request::Open(None));
+        assert_eq!(request(args(&["--version"])), Request::Version);
+        assert_eq!(request(args(&["-V"])), Request::Version);
+        assert_eq!(request(args(&["--help"])), Request::Help);
+        assert_eq!(request(args(&["-h"])), Request::Help);
+        assert_eq!(request(args(&["-psn_0_12345"])), Request::Open(None));
+        assert_eq!(
+            request(args(&["--verbose"])),
+            Request::Unknown("--verbose".into())
+        );
+        assert_eq!(
+            request(args(&["vest.fashioncraft", "--version"])),
+            Request::Open(Some("vest.fashioncraft".into()))
+        );
+    }
+
+    /// The System Settings advice is given on macOS only, in either language.
+    #[test]
+    fn suggests_system_settings_only_on_macos() {
+        let path = Path::new("vest.fashioncraft");
+        for spanish in [false, true] {
+            let mac = unreadable_message(path, spanish, true);
+            let other = unreadable_message(path, spanish, false);
+            assert!(mac.contains("vest.fashioncraft") && other.contains("vest.fashioncraft"));
+            assert!(mac.contains("Privacy & Security") || mac.contains("Privacidad y seguridad"));
+            assert!(!other.contains("Privacy") && !other.contains("Privacidad"));
+        }
+    }
 
     /// Each installed layout finds its own mannequin and no other.
     #[test]

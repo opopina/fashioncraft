@@ -1,12 +1,16 @@
 //! Window › Assistant: a chat with Claude, ChatGPT, Gemini or a local model that works in the
 //! open project. The conversation runs on its own thread (see `fashioncraft::assistant`); its
 //! tools run here, on the window's queue, like an MCP client's (see `agent_hub`).
+#[path = "antigravity_cli.rs"]
+mod antigravity_cli;
 #[path = "claude_cli.rs"]
 mod claude_cli;
 #[path = "cli_process.rs"]
 mod cli_process;
 #[path = "codex_cli.rs"]
 mod codex_cli;
+#[path = "gemini_cli.rs"]
+mod gemini_cli;
 
 use super::agent_hub::{Job, QUEUED, wait_for};
 use super::assistant_keys::{self, Source};
@@ -349,6 +353,8 @@ impl Atelier {
                 let mut transport: Box<dyn Transport> = match settings.provider {
                     Provider::CodexCli => Box::new(codex_cli::Cli(&stopped)),
                     Provider::ClaudeCli => Box::new(claude_cli::Cli(&stopped)),
+                    Provider::GeminiCli => Box::new(gemini_cli::Cli(&stopped)),
+                    Provider::AntigravityCli => Box::new(antigravity_cli::Cli(&stopped)),
                     _ => Box::new(Http::new()),
                 };
                 let mut conversation = conversation.lock().unwrap_or_else(|e| e.into_inner());
@@ -415,6 +421,18 @@ impl Atelier {
         }
         if provider == Provider::CodexCli {
             ui.small(tr("Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI."));
+            return;
+        }
+        if provider == Provider::GeminiCli {
+            ui.small(tr(
+                "Uses your Gemini CLI login. Messages and requested screenshots go to Google.",
+            ));
+            return;
+        }
+        if provider == Provider::AntigravityCli {
+            ui.small(tr(
+                "Uses your Antigravity CLI (agy) login. Messages and requested screenshots go to Google Antigravity.",
+            ));
             return;
         }
         super::workspace::prop_row(ui, tr("Address"), |ui| {
@@ -556,6 +574,10 @@ impl Atelier {
                     let model = match settings.model() {
                         "" if settings.provider == Provider::ClaudeCli => tr("Claude Code default"),
                         "" if settings.provider == Provider::CodexCli => tr("Codex default"),
+                        "" if settings.provider == Provider::GeminiCli => tr("Gemini CLI default"),
+                        "" if settings.provider == Provider::AntigravityCli => {
+                            tr("Antigravity default")
+                        }
                         "" => tr("no model chosen"),
                         _ => settings.model(),
                     };

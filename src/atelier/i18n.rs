@@ -1341,6 +1341,14 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Uses the ChatGPT account signed in with codex login. Messages and requested screenshots go to OpenAI." => {
             "Usa la cuenta de ChatGPT conectada con codex login. Los mensajes y las capturas solicitadas se envían a OpenAI."
         }
+        "Gemini CLI default" => "Modelo predeterminado de Gemini CLI",
+        "Uses your Gemini CLI login. Messages and requested screenshots go to Google." => {
+            "Usa tu sesión de Gemini CLI. Los mensajes y las capturas solicitadas se envían a Google."
+        }
+        "Antigravity default" => "Modelo predeterminado de Antigravity",
+        "Uses your Antigravity CLI (agy) login. Messages and requested screenshots go to Google Antigravity." => {
+            "Usa tu sesión de Antigravity CLI (agy). Los mensajes y las capturas solicitadas se envían a Google Antigravity."
+        }
         "no model chosen" => "ningún modelo elegido",
         "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
             "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."

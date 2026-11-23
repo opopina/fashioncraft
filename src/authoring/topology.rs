@@ -665,7 +665,7 @@ pub(super) fn cut_and_sew(
         b_tail: vec![],
         reverse_b: true,
         notches: vec![],
-        stiffness: 50_000.,
+        stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
         allow_ease: false,
     });
     for (item, to_b) in moving {
@@ -1567,7 +1567,7 @@ pub(super) fn diamond_dart(
             b_tail: vec![],
             reverse_b: true,
             notches: vec![],
-            stiffness: 50_000.,
+            stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
             allow_ease: false,
         });
     }

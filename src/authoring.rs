@@ -4347,7 +4347,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 b_tail: vec![],
                 reverse_b: true,
                 notches: vec![],
-                stiffness: 50_000.,
+                stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
                 allow_ease: false,
             });
             normalize(p);
@@ -4852,7 +4852,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 reverse_b: reverse,
                 allow_ease: ease,
                 notches: vec![],
-                stiffness: 50_000.,
+                stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
             });
         }
         Command::SewMany { seams } => {
@@ -4870,7 +4870,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                     reverse_b: reverse,
                     allow_ease: ease,
                     notches: vec![],
-                    stiffness: 50_000.,
+                    stiffness: crate::garment::seam::DEFAULT_SEAM_STIFFNESS,
                 });
             }
         }
@@ -4907,7 +4907,11 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                 b_tail: b,
                 reverse_b: reverse,
                 allow_ease: ease,
-                stiffness: old.as_ref().map_or(50_000., |s| s.stiffness),
+                stiffness: old
+                    .as_ref()
+                    .map_or(crate::garment::seam::DEFAULT_SEAM_STIFFNESS, |s| {
+                        s.stiffness
+                    }),
                 notches: old.map_or_else(Vec::new, |s| s.notches),
             });
         }

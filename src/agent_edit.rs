@@ -227,9 +227,7 @@ pub fn parse(op: &str, fields: &Value) -> Result<Command, String> {
         fields.clone()
     };
     serde_json::from_value::<Command>(json!({ known.name.clone(): fields })).map_err(|e| {
-        format!(
-            "{op}'s fields are wrong: {e}. edit_ops with names [\"{op}\"] shows its schema."
-        )
+        format!("{op}'s fields are wrong: {e}. edit_ops with names [\"{op}\"] shows its schema.")
     })
 }
 
@@ -636,9 +634,7 @@ fn type_schema(
     let ty = ty.trim_start_matches('&').trim_start_matches("'static ");
     let base = ty.split('<').next().unwrap_or(ty);
     let last = base.rsplit("::").next().unwrap_or(base).trim();
-    let numbers = |n: usize, what: &str| {
-        json!({"type": "array", "items": {"type": "number"}, "minItems": n, "maxItems": n, "description": what})
-    };
+    let numbers = |n: usize, what: &str| json!({"type": "array", "items": {"type": "number"}, "minItems": n, "maxItems": n, "description": what});
     match last {
         "String" | "str" | "char" | "PathBuf" => json!({"type": "string"}),
         "f64" | "f32" => json!({"type": "number"}),
@@ -647,7 +643,10 @@ fn type_schema(
         "bool" => json!({"type": "boolean"}),
         "DVec2" | "Vec2" => numbers(2, "[x, y]"),
         "DVec3" | "Vec3" => numbers(3, "[x, y, z]"),
-        "DQuat" | "Quat" => numbers(4, "a rotation quaternion [x, y, z, w]; [0, 0, 0, 1] is none"),
+        "DQuat" | "Quat" => numbers(
+            4,
+            "a rotation quaternion [x, y, z, w]; [0, 0, 0, 1] is none",
+        ),
         "Vec" | "VecDeque" | "BTreeSet" | "HashSet" | "SmallVec" => {
             let args = generic_args(ty);
             json!({"type": "array", "items": type_schema(items, args.first().copied().unwrap_or("String"), defs)})
@@ -775,9 +774,7 @@ fn enum_schema(
 ) -> Value {
     let variants: Vec<&Variant> = variants.iter().filter(|v| !v.skipped).collect();
     let name_of = |v: &Variant| renamed(&v.name, attrs.rename_all.as_deref());
-    if variants
-        .iter()
-        .all(|v| matches!(v.kind, VariantKind::Unit))
+    if variants.iter().all(|v| matches!(v.kind, VariantKind::Unit))
         && attrs.tag.is_none()
         && !attrs.untagged
     {

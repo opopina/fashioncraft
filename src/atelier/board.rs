@@ -3985,6 +3985,31 @@ impl Atelier {
 /// Board navigation is presentation-only math: these tests need no window, and
 /// they pin the invariant that rotating or zooming the board never changes a
 /// material coordinate.
+/// `text` cut with an ellipsis to fit `width` points in `font`.
+fn fit_label(painter: &egui::Painter, text: String, font: &egui::FontId, width: f32) -> String {
+    let measure = |t: &str| {
+        painter
+            .layout_no_wrap(t.to_owned(), font.clone(), Color32::WHITE)
+            .size()
+            .x
+    };
+    if measure(&text) <= width {
+        return text;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let candidate: String = chars[..mid].iter().collect::<String>() + "…";
+        if measure(&candidate) <= width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    chars[..lo].iter().collect::<String>().trim_end().to_owned() + "…"
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -4689,29 +4714,4 @@ mod tests {
         assert!(authoring.draft.is_empty());
         assert!(authoring.tangents.is_empty());
     }
-}
-
-/// `text` cut with an ellipsis to fit `width` points in `font`.
-fn fit_label(painter: &egui::Painter, text: String, font: &egui::FontId, width: f32) -> String {
-    let measure = |t: &str| {
-        painter
-            .layout_no_wrap(t.to_owned(), font.clone(), Color32::WHITE)
-            .size()
-            .x
-    };
-    if measure(&text) <= width {
-        return text;
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let (mut lo, mut hi) = (0, chars.len());
-    while lo < hi {
-        let mid = (lo + hi).div_ceil(2);
-        let candidate: String = chars[..mid].iter().collect::<String>() + "…";
-        if measure(&candidate) <= width {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    chars[..lo].iter().collect::<String>().trim_end().to_owned() + "…"
 }

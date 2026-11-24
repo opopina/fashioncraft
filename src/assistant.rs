@@ -1246,7 +1246,12 @@ mod tests {
         assert_eq!(u.context_window, Some(1_000_000));
         // An unknown model: tokens, no money. A CLI: its own figures.
         let openai = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}});
-        assert_eq!(usage_of(Provider::OpenAi, "some-model", &openai).unwrap().cost_usd, None);
+        assert_eq!(
+            usage_of(Provider::OpenAi, "some-model", &openai)
+                .unwrap()
+                .cost_usd,
+            None
+        );
         let cli = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}, "x_cost_usd": 0.01,
             "x_rate_limit": {"used_percent": 40.0, "what": "plan limit, 5 h window"}});
         let u = usage_of(Provider::ClaudeCli, "", &cli).unwrap();

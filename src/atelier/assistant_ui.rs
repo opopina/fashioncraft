@@ -61,6 +61,45 @@ pub(super) struct AssistantUi {
     thumbs: std::collections::HashMap<String, egui::TextureHandle>,
     /// Why the last attach or paste found nothing, shown under the chips.
     attach_note: Option<String>,
+    /// What this conversation has used so far (kept in memory only).
+    usage: Totals,
+}
+
+/// A conversation's usage, added up from each request's report.
+#[derive(Default)]
+struct Totals {
+    input: u64,
+    cached: u64,
+    output: u64,
+    /// Money where it is known for every request.
+    cost: f64,
+    priced: bool,
+    /// The plan limit, as the provider last reported it.
+    limit: Option<fashioncraft::assistant::Limit>,
+    /// The last request's input against the model's context window.
+    context: Option<(u64, u64)>,
+}
+
+impl Totals {
+    fn add(&mut self, u: &fashioncraft::assistant::Usage) {
+        let first = self.input + self.output == 0;
+        self.input += u.input;
+        self.cached += u.cached;
+        self.output += u.output;
+        match u.cost_usd {
+            Some(c) if first || self.priced => {
+                self.cost += c;
+                self.priced = true;
+            }
+            _ => self.priced = false,
+        }
+        if u.limit.is_some() {
+            self.limit = u.limit.clone();
+        }
+        if let Some(window) = u.context_window {
+            self.context = Some((u.input, window));
+        }
+    }
 }
 
 impl Default for AssistantUi {
@@ -84,6 +123,7 @@ impl Default for AssistantUi {
             sent: Vec::new(),
             thumbs: Default::default(),
             attach_note: None,
+            usage: Totals::default(),
         }
     }
 }
@@ -102,6 +142,8 @@ enum Entry {
     },
     Notice(String),
     Problem(String),
+    /// Paused for a review after this many steps; Continue resumes.
+    Paused(usize),
 }
 
 struct Worker {
@@ -412,6 +454,7 @@ impl Atelier {
             model: self.prefs.ai.model.clone(),
             base_url: self.prefs.ai.base_url.clone(),
             api_key,
+            pause_every: self.prefs.ai.pause_every,
         }
     }
 
@@ -438,6 +481,10 @@ impl Atelier {
                 Update::Event(Event::Notice(text)) => {
                     self.assistant.entries.push(Entry::Notice(text))
                 }
+                Update::Event(Event::Paused { steps }) => {
+                    self.assistant.entries.push(Entry::Paused(steps))
+                }
+                Update::Event(Event::Usage(usage)) => self.assistant.usage.add(&usage),
                 Update::Event(Event::ToolStarted { name, arguments }) => {
                     self.assistant.calls.push(fashioncraft::agent_eval::Call {
                         name: name.clone(),
@@ -519,6 +566,7 @@ impl Atelier {
         self.assistant.replies.clear();
         self.assistant.failure = None;
         self.assistant.sent.clear();
+        self.assistant.usage = Totals::default();
     }
 
     /// Send `text` as if typed in the Assistant's box.
@@ -731,6 +779,113 @@ impl Atelier {
             .small()
             .weak(),
         );
+        super::workspace::prop_row(ui, tr("Review"), |ui| {
+            let mut on = self.prefs.ai.pause_every > 0;
+            if ui
+                .checkbox(&mut on, tr("Pause every"))
+                .on_hover_text(tr(
+                    "Stop after this many steps so you can look before it goes on (off: it works \
+                     until the job is done)",
+                ))
+                .changed()
+            {
+                self.prefs.ai.pause_every = if on { 20 } else { 0 };
+            }
+            if on {
+                ui.add(
+                    egui::DragValue::new(&mut self.prefs.ai.pause_every)
+                        .range(1..=500)
+                        .suffix(tr(" steps")),
+                );
+            }
+        });
+    }
+
+    /// Tokens, money and the limit this conversation has used, beside the provider's name.
+    fn assistant_usage_readout(&self, ui: &mut egui::Ui) {
+        use fashioncraft::assistant::short_count;
+        let lang = self.prefs.language;
+        let u = &self.assistant.usage;
+        if u.input + u.output == 0 {
+            return;
+        }
+        let mut text = format!(
+            "{} {} · {} {}",
+            short_count(u.input - u.cached.min(u.input)),
+            i18n::tr(lang, "in"),
+            short_count(u.output),
+            i18n::tr(lang, "out")
+        );
+        if u.cached > 0 {
+            text.push_str(&format!(
+                " · {} {}",
+                short_count(u.cached),
+                i18n::tr(lang, "cached")
+            ));
+        }
+        if u.priced {
+            text.push_str(&format!(" · ≈ ${:.2}", u.cost));
+        }
+        ui.label(egui::RichText::new(text).weak().size(11.))
+            .on_hover_text(i18n::tr(
+                lang,
+                "This conversation's tokens, as the provider reported them: new input, output and \
+             input read from its cache. Money is estimated from published prices, where they are \
+             known (≈).",
+            ));
+        // The plan's limit where the provider reports it; otherwise how full the context is.
+        let (share, hover) = match (&u.limit, u.context) {
+            (Some(limit), _) => (
+                limit.used_percent / 100.,
+                format!(
+                    "{:.0} % {} ({})",
+                    limit.used_percent,
+                    i18n::tr(lang, "of the usage limit used, as the provider reports it"),
+                    limit.what
+                ),
+            ),
+            (None, Some((used, window))) => (
+                used as f64 / window.max(1) as f64,
+                format!(
+                    "{} {} / {} ({})",
+                    i18n::tr(lang, "Context:"),
+                    short_count(used),
+                    short_count(window),
+                    i18n::tr(
+                        lang,
+                        "how full the model's context window is; not the plan's limit, which \
+                         this provider does not report"
+                    )
+                ),
+            ),
+            _ => return,
+        };
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(14., 14.), egui::Sense::hover());
+        let painter = ui.painter();
+        let c = rect.center();
+        let r = 5.5;
+        painter.circle_stroke(
+            c,
+            r,
+            egui::Stroke::new(2., ui.visuals().widgets.inactive.bg_fill),
+        );
+        let share = share.clamp(0., 1.) as f32;
+        let colour = if share > 0.85 {
+            ui.visuals().warn_fg_color
+        } else {
+            super::workspace::accent(ui.visuals())
+        };
+        let points: Vec<egui::Pos2> = (0..=32)
+            .map(|k| {
+                let a =
+                    -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * share * k as f32 / 32.;
+                c + r * egui::vec2(a.cos(), a.sin())
+            })
+            .collect();
+        if share > 0. {
+            painter.add(egui::Shape::line(points, egui::Stroke::new(2., colour)));
+        }
+        response.on_hover_text(hover);
     }
 
     /// A turn is running (for the demo mode).
@@ -843,6 +998,7 @@ impl Atelier {
                             .strong()
                             .size(12.5),
                     );
+                    self.assistant_usage_readout(ui);
                     ui.add(
                         egui::Label::new(egui::RichText::new(model).weak().size(12.)).truncate(),
                     );
@@ -858,6 +1014,7 @@ impl Atelier {
                         });
                         if new_chat.inner.clicked() {
                             self.assistant.entries.clear();
+                            self.assistant.usage = Totals::default();
                             *self
                                 .assistant
                                 .conversation
@@ -893,6 +1050,7 @@ impl Atelier {
                 // The message box's height as last drawn (with its attachments), so the
                 // conversation above takes exactly the rest and the window never grows.
                 let input_height_id = egui::Id::new("assistant.input_height");
+                let mut resume = false;
                 let input_height = ui
                     .ctx()
                     .data(|d| d.get_temp::<f32>(input_height_id))
@@ -925,6 +1083,20 @@ impl Atelier {
                         for entry in &self.assistant.entries {
                             self.assistant_entry(ui, entry);
                         }
+                        if !busy && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
+                        {
+                            ui.vertical_centered(|ui| {
+                                if ui
+                                    .button(tr("Continue"))
+                                    .on_hover_text(tr(
+                                        "Go on from where it paused, with everything so far",
+                                    ))
+                                    .clicked()
+                                {
+                                    resume = true;
+                                }
+                            });
+                        }
                         if busy {
                             ui.horizontal(|ui| {
                                 ui.add(egui::Spinner::new().size(12.).color(accent));
@@ -947,6 +1119,10 @@ impl Atelier {
                             });
                         }
                     });
+                if resume {
+                    self.assistant.input = tr("Continue.").to_owned();
+                    self.assistant_send(ctx);
+                }
                 let below_top = ui.cursor().top();
                 ui.add_space(6.);
                 // The message field and its send button share one rounded box, as chat apps
@@ -1195,6 +1371,20 @@ impl Atelier {
             Entry::Notice(text) => {
                 ui.vertical_centered(|ui| {
                     ui.label(egui::RichText::new(text).small().italics().weak());
+                });
+            }
+            Entry::Paused(steps) => {
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} {steps} {}",
+                            i18n::tr(lang, "Paused for your review after"),
+                            i18n::tr(lang, "steps.")
+                        ))
+                        .small()
+                        .italics()
+                        .weak(),
+                    );
                 });
             }
             Entry::Problem(text) => {

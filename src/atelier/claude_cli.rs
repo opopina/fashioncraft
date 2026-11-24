@@ -179,7 +179,9 @@ impl Cli<'_> {
             }
             return Err(error);
         }
-        cli_process::response(&result(&mut output)?, body)
+        let mut answer = cli_process::response(&result(&mut output)?, body)?;
+        cli_process::attach_usage(&mut answer, &mut output);
+        Ok(answer)
     }
 }
 

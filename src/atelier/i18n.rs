@@ -1389,6 +1389,32 @@ fn spanish(text: &str) -> Option<&'static str> {
         "The clipboard holds no picture or file." => {
             "El portapapeles no tiene ninguna imagen ni archivo."
         }
+        "Paused for your review after" => "En pausa para que revises, tras",
+        "steps." => "pasos.",
+        "Continue" => "Continuar",
+        "Continue." => "Continúa.",
+        "Go on from where it paused, with everything so far" => {
+            "Seguir desde donde se pausó, con todo lo hecho hasta ahora"
+        }
+        "Review" => "Revisión",
+        "Pause every" => "Pausar cada",
+        " steps" => " pasos",
+        "Stop after this many steps so you can look before it goes on (off: it works until the job is done)" => {
+            "Parar tras estos pasos para que mires antes de seguir (apagado: trabaja hasta terminar)"
+        }
+        "in" => "entrada",
+        "out" => "salida",
+        "cached" => "en caché",
+        "This conversation's tokens, as the provider reported them: new input, output and input read from its cache. Money is estimated from published prices, where they are known (≈)." => {
+            "Tokens de esta conversación según el proveedor: entrada nueva, salida y entrada leída de su caché. El dinero se estima con los precios publicados, donde se conocen (≈)."
+        }
+        "of the usage limit used, as the provider reports it" => {
+            "del límite de uso consumido, según el proveedor"
+        }
+        "Context:" => "Contexto:",
+        "how full the model's context window is; not the plan's limit, which this provider does not report" => {
+            "cuánto ocupa la ventana de contexto del modelo; no es el límite del plan, que este proveedor no informa"
+        }
         "Reading a piece" => "Leyendo una pieza",
         "Selecting" => "Seleccionando",
         "Creating a piece" => "Creando una pieza",

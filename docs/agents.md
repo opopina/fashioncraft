@@ -64,7 +64,37 @@ stay off.
 
 **Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
 model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
-after the current step. **New chat** starts a fresh conversation. Some requests to try:
+after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
+Cmd+V while the message box has focus, or with **Paste**.
+
+**How long a job runs.** The Assistant works until the job is done: there is no limit on its
+steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
+5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
+**Connection › Review › Pause every N steps** (off by default): it stops after that many steps and
+**Continue** goes on with everything so far.
+
+**Usage.** Beside the provider's name the panel shows what this conversation has used, kept in
+memory only: new input, output and cached input tokens (12.4k in · 3.1k out · 40k cached), the
+money for API keys (≈, from published prices in `PRICES` in `src/assistant.rs`, which lists
+Claude's models; other models show tokens without money until their prices are added) and a small
+ring. The ring shows the plan's usage limit where the provider reports it, and otherwise how full
+the model's context window is (its tooltip says which):
+
+| Provider | Tokens | Money | Ring |
+|---|---|---|---|
+| Claude, API key | Each response's `usage` | Price table | Context window |
+| ChatGPT / Gemini / local, API | Each response's `usage` | Price table (where listed) | Context window (where listed) |
+| Claude Code CLI | `usage` in its `result` | Its `total_cost_usd` (API-equivalent; a subscription is not billed per token) | None reported |
+| Codex CLI | `usage` in `turn.completed` | None | The plan limit, when an event carries `rate_limits` (`used_percent`, `window_minutes`) |
+| Gemini CLI | `stats.models.*.tokens` | None | None reported |
+| Antigravity CLI | What it prints, if any | None | Its `used_percent`, if it prints one |
+
+**Long sessions.** Every request sends the person's messages and attachments whole, the latest 2
+screenshots (older ones become a line of text), earlier long tool results cut short, and at most
+the last 80 messages, so a long session neither grows without end nor resends every picture. When
+a CLI fails, the chat shows the error it gave.
+
+Some requests to try:
 
 - "Draft a denim skirt for this avatar, simulate it and show me how it falls."
 - "Make a shirt with set-in sleeves, then add a 15 × 17 cm pocket to the front."
@@ -213,6 +243,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `style_line` | The 3D view's style-line tool: bends, moves or stretches a segment by a 3D move in cm, across the seams it is sewn into. |
 | `add_internal_line` | An internal line through points in cm. |
 | `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
+| `set_sleeve` | Sets a sleeve into its armhole as draft_garment's shirt does: the cap sewn to the front and back armholes with ease (a puffed sleeve is gathered), the underarm closed, and the sleeve wrapped round the avatar's arm below the shoulder, clear of the body. Agents never place a sleeve by moving it. On the stock mannequin the armholes close to under 8 mm (`tests/set_sleeve.rs`). |
 | `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
 | `pin` | Pins cloth around a point of a piece, removes or moves pins. |
 | `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
@@ -239,6 +270,11 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
 
 `fashioncraft-cli tools` prints the tools with their input schemas.
+
+**Cloth that starts inside cloth.** A change that would make cloth start inside other cloth or
+the body is undone and refused, with the pieces named. If the simulation still pauses on such an
+intersection, `simulate` and `check_garment` say so first, name the pieces and where, and tell the
+agent to undo, move the piece clear or reset the arrangement.
 
 **Every menu command is covered.** Each command in the registry either runs with `command_run`,
 is done by an agent tool (`agent_instead` in `src/atelier/commands.rs`), or has a written reason

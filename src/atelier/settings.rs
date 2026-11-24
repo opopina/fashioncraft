@@ -90,6 +90,8 @@ pub(super) struct AiPrefs {
     pub(super) model: String,
     /// The provider's address; empty uses the provider's default.
     pub(super) base_url: String,
+    /// Pause the Assistant for a review every this many steps (0: never, the default).
+    pub(super) pause_every: usize,
 }
 
 impl Default for AiPrefs {
@@ -99,6 +101,7 @@ impl Default for AiPrefs {
             provider: "anthropic".into(),
             model: String::new(),
             base_url: String::new(),
+            pause_every: 0,
         }
     }
 }

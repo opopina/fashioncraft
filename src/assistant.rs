@@ -12,7 +12,11 @@ pub const ANTHROPIC_VERSION: &str = "2026-10-21";
 /// The beta that lets a declined request be retried on Anthropic's recommended fallback model.
 pub const ANTHROPIC_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
 /// A turn stops after this many rounds of tool calls; the person can say "continue".
-pub const MAX_ROUNDS: usize = 40;
+/// A safety stop against a runaway loop: this many rounds of tools in one turn. A turn has no
+/// other limit; [`Settings::pause_every`] pauses it for a review when the person wants that.
+pub const SAFETY_ROUNDS: usize = 400;
+/// …or the same call failing this many times in a row.
+pub const SAME_FAILURES: usize = 5;
 const MAX_TOKENS: u32 = 16000;
 
 /// What the model is told about FashionCraft and how to work in it. The Assistant sends it as
@@ -208,6 +212,8 @@ pub struct Settings {
     /// Empty: [`Provider::default_base_url`].
     pub base_url: String,
     pub api_key: String,
+    /// Pause for a review after this many rounds of tools (0: never).
+    pub pause_every: usize,
 }
 
 impl Settings {
@@ -265,6 +271,122 @@ pub enum Event {
     },
     /// Something about the turn itself: stopped, cut off, declined.
     Notice(String),
+    /// The turn paused for a review after `steps` rounds of tools ([`Settings::pause_every`]);
+    /// a message such as "Continue." resumes it with everything so far.
+    Paused { steps: usize },
+    /// What one request used.
+    Usage(Usage),
+}
+
+/// What one request used, as the provider reported it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Usage {
+    /// Input tokens, cached ones included.
+    pub input: u64,
+    /// Of those, read from the provider's cache.
+    pub cached: u64,
+    pub output: u64,
+    /// US dollars: from [`PRICES`] for an API key, or as a CLI reports it.
+    pub cost_usd: Option<f64>,
+    /// How much of the plan's usage limit is used, when the provider says.
+    pub limit: Option<Limit>,
+    /// The model's context window in tokens, when [`PRICES`] knows the model.
+    pub context_window: Option<u64>,
+}
+
+/// A plan's usage limit, as a provider reports it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Limit {
+    pub used_percent: f64,
+    /// What it is, for the person: "Codex plan, 5 h window".
+    pub what: String,
+}
+
+/// Prices in US dollars per million tokens (input, output, cache read) and the context window
+/// in tokens, by model id prefix, most specific first. Anthropic's published API rates
+/// (2026-11-03); cache writes cost 1.25 × input. Models not listed show tokens without money:
+/// add them here.
+pub const PRICES: &[(&str, f64, f64, f64, u64)] = &[
+    ("claude-fable-5-2", 8., 40., 0.2, 1_000_000),
+    ("claude-mythos-5-2", 8., 40., 0.2, 1_000_000),
+    ("claude-fable-5-1", 10., 50., 1., 1_000_000),
+    ("claude-fable-5", 10., 50., 1., 1_000_000),
+    ("claude-opus-5-5", 4., 20., 0.2, 1_000_000),
+    ("claude-opus-5", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-8", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-7", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-6", 5., 25., 0.5, 1_000_000),
+    ("claude-sonnet-5-5", 2., 10., 0.1, 1_000_000),
+    ("claude-sonnet-5", 2., 10., 0.2, 1_000_000),
+    ("claude-sonnet-4-6", 3., 15., 0.3, 1_000_000),
+    ("claude-haiku-5-5", 0.1, 0.5, 0.01, 1_000_000),
+    ("claude-haiku-4-5", 1., 5., 0.1, 200_000),
+];
+
+/// What a request used, from the provider's answer: Anthropic's `usage`, the OpenAI-style
+/// `usage` (which the CLIs' answers are given too), and what a CLI adds (`x_cost_usd`,
+/// `x_rate_limit`).
+pub fn usage_of(provider: Provider, model: &str, answer: &Value) -> Option<Usage> {
+    let u = &answer["usage"];
+    if !u.is_object() && answer.get("x_cost_usd").is_none() && answer.get("x_rate_limit").is_none()
+    {
+        return None;
+    }
+    let n = |v: &Value| v.as_u64().unwrap_or(0);
+    let (input, cached, written, output) = if provider == Provider::Anthropic {
+        let (read, write) = (
+            n(&u["cache_read_input_tokens"]),
+            n(&u["cache_creation_input_tokens"]),
+        );
+        (
+            n(&u["input_tokens"]) + read + write,
+            read,
+            write,
+            n(&u["output_tokens"]),
+        )
+    } else {
+        (
+            n(&u["prompt_tokens"]),
+            n(&u["prompt_tokens_details"]["cached_tokens"]),
+            0,
+            n(&u["completion_tokens"]),
+        )
+    };
+    let price = PRICES.iter().find(|p| model.starts_with(p.0));
+    let cost_usd = if provider.is_cli() || provider == Provider::Local {
+        answer["x_cost_usd"].as_f64()
+    } else {
+        price.map(|(_, i, o, r, _)| {
+            let plain = input.saturating_sub(cached + written) as f64;
+            (plain * i + written as f64 * i * 1.25 + cached as f64 * r + output as f64 * o) / 1e6
+        })
+    };
+    let limit = answer["x_rate_limit"]["used_percent"]
+        .as_f64()
+        .map(|used_percent| Limit {
+            used_percent,
+            what: answer["x_rate_limit"]["what"]
+                .as_str()
+                .unwrap_or("plan limit")
+                .to_owned(),
+        });
+    Some(Usage {
+        input,
+        cached,
+        output,
+        cost_usd,
+        limit,
+        context_window: price.map(|p| p.4),
+    })
+}
+
+/// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
+pub fn short_count(n: u64) -> String {
+    match n {
+        0..1_000 => n.to_string(),
+        1_000..1_000_000 => format!("{:.1}k", n as f64 / 1e3),
+        _ => format!("{:.1}M", n as f64 / 1e6),
+    }
 }
 
 /// One tool call the model asked for.
@@ -302,7 +424,7 @@ impl Conversation {
     }
 
     /// Sends the person's `text` and lets the model work until it answers, `stop` turns true,
-    /// or [`MAX_ROUNDS`] rounds of tools have run. `run_tool` runs one tool in the window.
+    /// or a safety stop or the optional pause (see [`SAFETY_ROUNDS`]) ends it. `run_tool` runs one tool in the window.
     ///
     /// The conversation stays valid whatever happens: a failed request adds nothing, and a
     /// stop answers every call the model asked for.
@@ -335,9 +457,20 @@ impl Conversation {
         }
         self.push_user(text, attachments);
         let known: Vec<&str> = tools().iter().map(|t| t.name).collect();
-        for _ in 0..MAX_ROUNDS {
+        let mut rounds = 0usize;
+        // The last call that failed, and how many times in a row it has.
+        let mut failing: Option<(String, String)> = None;
+        let mut failures = 0usize;
+        loop {
             if stop() {
                 events(Event::Notice("Stopped.".into()));
+                return Ok(());
+            }
+            if rounds >= SAFETY_ROUNDS {
+                events(Event::Notice(format!(
+                    "Stopped after {SAFETY_ROUNDS} rounds of tools in one turn: a safety stop \
+                     against a loop that never ends. Say \"continue\" to go on."
+                )));
                 return Ok(());
             }
             let calls = match self.provider {
@@ -373,17 +506,45 @@ impl Conversation {
                         }
                     }
                 };
+                // The same call failing again and again is a loop, not progress.
+                if result.is_error {
+                    let key = (
+                        call.name.clone(),
+                        call.arguments
+                            .as_ref()
+                            .map(Value::to_string)
+                            .unwrap_or_default(),
+                    );
+                    if failing.as_ref() == Some(&key) {
+                        failures += 1;
+                    } else {
+                        failing = Some(key);
+                        failures = 1;
+                    }
+                } else {
+                    failing = None;
+                    failures = 0;
+                }
                 results.push((call, result));
             }
             match self.provider {
                 Provider::Anthropic => self.push_anthropic_results(results),
                 _ => self.push_openai_results(results),
             }
+            if failures >= SAME_FAILURES {
+                let name = failing.map(|(n, _)| n).unwrap_or_default();
+                events(Event::Notice(format!(
+                    "Stopped: the same {name} call failed {SAME_FAILURES} times in a row. \
+                     Something must change before trying again."
+                )));
+                return Ok(());
+            }
+            rounds += 1;
+            if settings.pause_every > 0 && rounds.is_multiple_of(settings.pause_every) {
+                events(Event::Paused { steps: rounds });
+                return Ok(());
+            }
         }
-        events(Event::Notice(format!(
-            "Paused after {MAX_ROUNDS} rounds of tools: say \"continue\" to go on."
-        )));
-        Ok(())
     }
 
     /// The person's message and its attachments. After a stop or a failed request the last
@@ -425,6 +586,9 @@ impl Conversation {
         }
         let url = format!("{}/messages", settings.base_url());
         let answer = transport.post(&url, &headers, &body)?;
+        if let Some(usage) = usage_of(self.provider, settings.model(), &answer) {
+            events(Event::Usage(usage));
+        }
         let content = answer["content"]
             .as_array()
             .ok_or_else(|| format!("Unexpected answer from {url}"))?;
@@ -516,6 +680,9 @@ impl Conversation {
         }
         let url = format!("{}/chat/completions", settings.base_url());
         let answer = transport.post(&url, &headers, &body)?;
+        if let Some(usage) = usage_of(self.provider, settings.model(), &answer) {
+            events(Event::Usage(usage));
+        }
         let choice = &answer["choices"][0];
         let message = &choice["message"];
         if !message.is_object() {
@@ -706,17 +873,18 @@ pub fn compact(messages: &[Value]) -> Vec<Value> {
             let mut m = message.clone();
             let old_picture = carries_screenshot(message) && i < keep_from;
             let old = i < recent && !from_person(message);
-            if let Some(parts) = m["content"].as_array_mut() {
+            // `get_mut`, never `[]` on a mutable value: indexing would add the missing key.
+            if let Some(parts) = m.get_mut("content").and_then(Value::as_array_mut) {
                 for part in parts.iter_mut() {
                     if old_picture && part["type"] == "image_url" {
                         *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
                     }
-                    if let Some(inner) = part["content"].as_array_mut() {
+                    if let Some(inner) = part.get_mut("content").and_then(Value::as_array_mut) {
                         for block in inner.iter_mut() {
                             if old_picture && block["type"] == "image" {
                                 *block = json!({"type": "text", "text": OMITTED_SCREENSHOT});
                             }
-                            if old && let Some(text) = block["text"].as_str() {
+                            if old && let Some(text) = block.get("text").and_then(Value::as_str) {
                                 block["text"] = json!(shorten(text));
                             }
                         }
@@ -897,6 +1065,10 @@ mod compact_tests {
             .collect();
         let text = serde_json::to_string(&compact(&anthropic)).unwrap();
         assert_eq!(text.matches("\"IMG\"").count(), KEEP_SCREENSHOTS);
+        // Blocks are passed on exactly: nothing is added to them.
+        let thinking = vec![json!({"role": "assistant", "content": [
+            {"type": "thinking", "thinking": "plan", "signature": "sig"}]})];
+        assert_eq!(compact(&thinking), thinking);
     }
 }
 
@@ -950,6 +1122,7 @@ mod tests {
             model: String::new(),
             base_url: String::new(),
             api_key: "test-key".into(),
+            pause_every: 0,
         }
     }
 
@@ -988,6 +1161,100 @@ mod tests {
             &|| false,
         );
         (result, events, ran)
+    }
+
+    fn calls(n: usize, tool: &str) -> Vec<Result<Value, String>> {
+        (0..n)
+            .map(|k| {
+                Ok(json!({
+                    "content": [{"type": "tool_use", "id": format!("t{k}"), "name": tool, "input": {}}],
+                    "stop_reason": "tool_use",
+                    "usage": {"input_tokens": 1000, "cache_read_input_tokens": 9000, "output_tokens": 100}
+                }))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_long_job_runs_on_unless_a_pause_is_asked_for() {
+        // 60 rounds of tools: more than the old cap of 40, and the job finishes.
+        let mut answers = calls(60, "scene_summary");
+        answers.push(Ok(
+            json!({"content": [{"type": "text", "text": "Done."}], "stop_reason": "end_turn"}),
+        ));
+        let mut transport = Canned::new(answers);
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let (result, events, ran) = run(
+            &mut conversation,
+            &settings(Provider::Anthropic),
+            &mut transport,
+            "do it",
+        );
+        assert!(result.is_ok());
+        assert_eq!(ran.len(), 60);
+        assert!(events.contains(&Event::Text("Done.".into())));
+        // Every request reported its usage.
+        let used: Vec<&Usage> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Usage(u) => Some(u),
+                _ => None,
+            })
+            .collect();
+        // (The last answer reported none.)
+        assert_eq!(used.len(), 60);
+
+        // With a pause every 25 steps it stops after 25, and goes on when asked.
+        let mut transport = Canned::new(calls(30, "scene_summary"));
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let paused = Settings {
+            pause_every: 25,
+            ..settings(Provider::Anthropic)
+        };
+        let (result, events, ran) = run(&mut conversation, &paused, &mut transport, "do it");
+        assert!(result.is_ok());
+        assert_eq!(ran.len(), 25);
+        assert_eq!(events.last(), Some(&Event::Paused { steps: 25 }));
+    }
+
+    #[test]
+    fn the_same_failing_call_stops_the_turn() {
+        let mut transport = Canned::new(calls(20, "no_such_tool"));
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let (result, events, _) = run(
+            &mut conversation,
+            &settings(Provider::Anthropic),
+            &mut transport,
+            "do it",
+        );
+        assert!(result.is_ok());
+        let stopped = events.iter().any(|e| {
+            matches!(e, Event::Notice(t) if t.contains(&format!("failed {SAME_FAILURES} times")))
+        });
+        assert!(stopped, "{events:?}");
+        assert_eq!(transport.sent.len(), SAME_FAILURES);
+    }
+
+    #[test]
+    fn usage_is_read_and_priced_where_the_price_is_known() {
+        let answer = json!({"usage": {"input_tokens": 1000, "cache_read_input_tokens": 9000,
+            "cache_creation_input_tokens": 0, "output_tokens": 500}});
+        let u = usage_of(Provider::Anthropic, "claude-opus-5-5", &answer).unwrap();
+        assert_eq!((u.input, u.cached, u.output), (10_000, 9_000, 500));
+        // 1000 × $4 + 9000 × $0.20 + 500 × $20, per million.
+        assert!((u.cost_usd.unwrap() - 0.0158).abs() < 1e-9);
+        assert_eq!(u.context_window, Some(1_000_000));
+        // An unknown model: tokens, no money. A CLI: its own figures.
+        let openai = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}});
+        assert_eq!(usage_of(Provider::OpenAi, "some-model", &openai).unwrap().cost_usd, None);
+        let cli = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}, "x_cost_usd": 0.01,
+            "x_rate_limit": {"used_percent": 40.0, "what": "plan limit, 5 h window"}});
+        let u = usage_of(Provider::ClaudeCli, "", &cli).unwrap();
+        assert_eq!(u.cost_usd, Some(0.01));
+        assert_eq!(u.limit.unwrap().used_percent, 40.);
+        assert_eq!(short_count(950), "950");
+        assert_eq!(short_count(12_400), "12.4k");
+        assert_eq!(short_count(3_100_000), "3.1M");
     }
 
     #[test]
@@ -1241,6 +1508,7 @@ mod tests {
             model: "qwen".into(),
             base_url: "http://127.0.0.1:1234/v1/".into(),
             api_key: String::new(),
+            pause_every: 0,
         };
         run(&mut conversation, &s, &mut transport, "hi").0.unwrap();
         assert_eq!(
@@ -1351,6 +1619,7 @@ mod tests {
                     model: String::new(),
                     base_url: String::new(),
                     api_key: String::new(),
+                    pause_every: 0,
                 };
                 assert!(!p.needs_key());
                 assert_eq!(s.missing(), None);

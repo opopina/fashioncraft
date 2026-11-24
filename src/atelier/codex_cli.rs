@@ -119,7 +119,9 @@ impl Cli<'_> {
             });
         }
         let reply: Value = serde_json::from_slice(&fs::read(answer)?)?;
-        super::cli_process::response(&reply, body)
+        let mut answer = super::cli_process::response(&reply, body)?;
+        super::cli_process::attach_usage(&mut answer, &mut events);
+        Ok(answer)
     }
 }
 
@@ -162,6 +164,7 @@ fi
             model: String::new(),
             base_url: String::new(),
             api_key: String::new(),
+            pause_every: 0,
         };
         let mut conversation = Conversation::new(settings.provider);
         let mut calls = Vec::new();

@@ -19,7 +19,8 @@ appimage=$1
 seconds=${2:-30}
 screenshot=${3:-}
 
-echo "Network interfaces: $(ls /sys/class/net | tr '\n' ' ')"
+# /proc/net is this process's network namespace (/sys/class/net would show the host's).
+echo "Network interfaces: $(awk -F: 'NR > 2 { gsub(/ /, "", $1); printf "%s ", $1 }' /proc/net/dev)"
 if ! xwininfo -root >/dev/null; then
     echo "ERROR: xwininfo cannot reach the X server (DISPLAY=${DISPLAY:-unset})"
     exit 1

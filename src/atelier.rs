@@ -307,11 +307,16 @@ pub fn run(
             // runs "GPU" compute on the CPU anyway, slowly, and WARP crashed during a demo on a
             // Windows VM: simulate on the CPU there. GPU compute stays a choice in the settings.
             // FASHIONCRAFT_GPU_COMPUTE=0 or 1 chooses it outright, to test or to work round a driver.
-            let gpu_compute = match std::env::var("FASHIONCRAFT_GPU_COMPUTE").as_deref() {
-                Ok("0") => false,
-                Ok("1") => true,
-                _ => render.adapter.get_info().device_type != eframe::wgpu::DeviceType::Cpu,
-            };
+            // A device that cannot run the solver's kernels (OpenGL, with WebGL 2's limits) gets
+            // no GPU solver at all: the simulation runs on the CPU.
+            let gpu_solver =
+                fashioncraft::gpu_vbd::GpuVbd::supported(&render.adapter, &render.device);
+            let gpu_compute = gpu_solver
+                && match std::env::var("FASHIONCRAFT_GPU_COMPUTE").as_deref() {
+                    Ok("0") => false,
+                    Ok("1") => true,
+                    _ => render.adapter.get_info().device_type != eframe::wgpu::DeviceType::Cpu,
+                };
             // Preferences choose the theme and the startup display defaults, so
             // they are loaded and applied before the first frame is drawn.
             // Applying them afterwards would show a flash of the wrong theme.
@@ -337,7 +342,8 @@ pub fn run(
             };
             authoring.board.snap_mm = prefs.snap_mm;
             let camera_fov_degrees = prefs.camera_fov_degrees;
-            let (tx, receive) = worker::start(render.device.clone(), render.queue.clone())?;
+            let (tx, receive) =
+                worker::start(gpu_solver.then(|| (render.device.clone(), render.queue.clone())))?;
             let m = project
                 .template
                 .panels

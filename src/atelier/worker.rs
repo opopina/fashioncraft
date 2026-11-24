@@ -146,12 +146,13 @@ fn accept(active: &mut Option<Work>, mut new: Work, deadline: &mut Instant) {
     }
     *active = Some(new);
 }
+/// `backend`: the window's device and queue when they can run the GPU solver
+/// (`GpuVbd::supported`); without them every simulation runs on the CPU.
 pub(super) fn start(
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    backend: Option<(wgpu::Device, wgpu::Queue)>,
 ) -> Result<(mpsc::Sender<Work>, Latest), std::io::Error> {
     let (tx, latest, _thread) = start_inner(
-        Some((device, queue)),
+        backend,
         #[cfg(test)]
         None,
     )?;

@@ -144,6 +144,7 @@ jobs:
             libosmesa6 libfuse2
       # A network namespace of its own (only `lo`, down); the program runs as the normal user.
       - name: Start the AppImage without network
+        timeout-minutes: 5
         run: |
           sudo unshare --net -- runuser -u "$USER" -- env APPIMAGE_EXTRACT_AND_RUN=1 \
             xvfb-run -a -s '-screen 0 1280x1024x24' \
@@ -181,11 +182,16 @@ jobs:
               fi
             done'
           docker commit bare bare-x11
+      # Xvfb started by hand: xvfb-run as the container's first process hung without output
+      # until the job's time limit. --init reaps the AppImage's processes.
       - name: Start the AppImage there, without network
+        timeout-minutes: 5
         run: |
-          docker run --rm --network none -v "$PWD:/w" -w /w -e APPIMAGE_EXTRACT_AND_RUN=1 bare-x11 \
-            xvfb-run -a -s '-screen 0 1280x1024x24' \
-            sh scripts/check-appimage.sh dist/fashioncraft-*.AppImage 30
+          docker run --rm --init --network none -v "$PWD:/w" -w /w \
+            -e APPIMAGE_EXTRACT_AND_RUN=1 -e DISPLAY=:99 bare-x11 sh -c '
+              Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+              for second in $(seq 20); do xwininfo -root >/dev/null 2>&1 && break; sleep 1; done
+              sh scripts/check-appimage.sh "$0" 30' dist/fashioncraft-*.AppImage
 
   release:
     if: github.event_name != 'pull_request'

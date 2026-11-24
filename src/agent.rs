@@ -220,8 +220,9 @@ pub fn tools() -> Vec<Tool> {
              which side they face, internal lines, placement), every seam (both sides' lengths, \
              and after a simulation its gap and whether it closed), fabrics with their physical \
              parameters, the avatar's measurements and pose, sizes and grading, the current \
-             selection, warnings and the simulation state. Call it first and after changes.",
-            object(json!({}), &[]),
+             selection, warnings and the simulation state. Call it first and after changes; \
+             after the first call it gives only what changed (full: true for everything).",
+            object(json!({"full": {"type": "boolean"}}), &[]),
             false,
         ),
         tool(

@@ -638,10 +638,168 @@ pub fn fabric_measurements(args: &Value) -> Result<crate::fabric_kit::Measuremen
     Ok(m)
 }
 
+/// The tools the Assistant declares in every request: the ones most jobs need. The others are
+/// listed and described by `more_tools` and run through `use_tool`, so each request carries a
+/// short catalogue instead of every schema (MCP clients still see every tool).
+pub const CORE: &[&str] = &[
+    "scene_summary",
+    "piece_detail",
+    "check_garment",
+    "simulate",
+    "screenshot",
+    "camera",
+    "draft_garment",
+    "create_piece",
+    "piece_edit",
+    "sew",
+    "set_sleeve",
+    "add_detail",
+    "set_fabric",
+    "set_color",
+    "command_run",
+    "edit",
+    "guide",
+];
+
+/// `more_tools` and `use_tool`: the way to the tools outside [`CORE`].
+pub fn gateway_tools() -> Vec<Tool> {
+    vec![
+        tool(
+            "more_tools",
+            "List FashionCraft's other tools (beyond the ones you have), or, with names, give \
+             their full descriptions and input schemas. Run one with use_tool. They include: \
+             move_points, set_segment_length, add_point, add_dart, add_pleats, seam_edit, \
+             place_piece, transform_piece, bend_segment, style_line, add_internal_line, \
+             add_buttons, pin, grab, trace_on_body, set_fabric_parameters, measure_fabric, \
+             set_avatar, set_pose, pose_joints, avatar_maker, grading, size_chart, \
+             points_of_measure, measure, simulation_settings, render_settings, render, \
+             command_list, select, edit_ops, save_project, export_garment.",
+            object(
+                json!({"names": {"type": "array", "items": {"type": "string"}}}),
+                &[],
+            ),
+            false,
+        ),
+        tool(
+            "use_tool",
+            "Run one of the tools more_tools describes: its name and its input.",
+            object(
+                json!({
+                    "name": {"type": "string"},
+                    "arguments": {"type": "object"}
+                }),
+                &["name"],
+            ),
+            true,
+        ),
+    ]
+}
+
+/// What the Assistant declares in a request: [`CORE`] and the gateway.
+pub fn assistant_tools() -> Vec<Tool> {
+    crate::agent::tools()
+        .into_iter()
+        .filter(|t| CORE.contains(&t.name))
+        .chain(gateway_tools())
+        .collect()
+}
+
+/// `more_tools`: every tool outside [`CORE`] in a line, or the named ones in full.
+pub fn more_tools(names: &[String]) -> Value {
+    let all = crate::agent::tools();
+    if names.is_empty() {
+        let others: Vec<Value> = all
+            .iter()
+            .filter(|t| !CORE.contains(&t.name))
+            .map(|t| {
+                let line = t.description.split(". ").next().unwrap_or(t.description);
+                json!({"name": t.name, "does": line})
+            })
+            .collect();
+        return json!({"tools": others, "note": "more_tools with names gives their inputs; use_tool runs one"});
+    }
+    let found: Vec<Value> = all
+        .iter()
+        .filter(|t| names.iter().any(|n| n == t.name))
+        .map(|t| json!({"name": t.name, "description": t.description, "input_schema": t.input_schema}))
+        .collect();
+    let unknown: Vec<&String> = names
+        .iter()
+        .filter(|n| !all.iter().any(|t| t.name == n.as_str()))
+        .collect();
+    json!({"tools": found, "unknown": unknown, "note": "Run one with use_tool {name, arguments}"})
+}
+
+/// What changed between two scene summaries, for `scene_summary` after its first call: top-level
+/// fields that changed (whole), and for the lists of pieces and seams only the entries added,
+/// changed or removed (by id). Unchanged fields are named, not repeated.
+pub fn scene_diff(before: &Value, after: &Value) -> Value {
+    let mut changed = serde_json::Map::new();
+    let mut same = Vec::new();
+    for (key, now) in after.as_object().into_iter().flatten() {
+        let was = &before[key];
+        if was == now {
+            same.push(key.clone());
+            continue;
+        }
+        let by_id = |v: &Value| -> Option<Vec<(String, Value)>> {
+            v.as_array()?
+                .iter()
+                .map(|e| Some((e.get("id")?.as_str()?.to_owned(), e.clone())))
+                .collect()
+        };
+        match (by_id(was), by_id(now)) {
+            (Some(old), Some(new)) => {
+                let added: Vec<&Value> = new
+                    .iter()
+                    .filter(|(id, _)| !old.iter().any(|(o, _)| o == id))
+                    .map(|(_, v)| v)
+                    .collect();
+                let removed: Vec<&String> = old
+                    .iter()
+                    .filter(|(id, _)| !new.iter().any(|(n, _)| n == id))
+                    .map(|(id, _)| id)
+                    .collect();
+                let altered: Vec<&Value> = new
+                    .iter()
+                    .filter(|(id, v)| old.iter().any(|(o, w)| o == id && w != v))
+                    .map(|(_, v)| v)
+                    .collect();
+                changed.insert(
+                    key.clone(),
+                    json!({"added": added, "changed": altered, "removed": removed,
+                           "unchanged": new.len() - added.len() - altered.len()}),
+                );
+            }
+            _ => {
+                changed.insert(key.clone(), now.clone());
+            }
+        }
+    }
+    json!({
+        "since_your_last_scene_summary": changed,
+        "unchanged": same,
+        "note": "Only what changed since your last scene_summary. If you no longer have it in \
+                 full, call scene_summary with full: true.",
+    })
+}
+
 /// The base tools that change nothing in the document and need no window state beyond it.
 pub fn answer_without_window(name: &str, args: &Value) -> Option<crate::agent::ToolResult> {
     use crate::agent::ToolResult;
     match name {
+        "more_tools" => {
+            let names: Vec<String> = args
+                .get("names")
+                .and_then(Value::as_array)
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|n| n.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(ToolResult::json(&more_tools(&names)))
+        }
         "guide" => Some(ToolResult::text(crate::agent_guide::guide(
             args.get("topic").and_then(Value::as_str).unwrap_or(""),
         ))),
@@ -684,6 +842,71 @@ mod tests {
         assert!(answer_without_window("guide", &json!({"topic": "darts"})).is_some());
         let ops = answer_without_window("edit_ops", &json!({"names": ["SetSeamZipper"]})).unwrap();
         assert!(ops.joined_text().contains("SeamZipper"));
+    }
+
+    #[test]
+    fn a_second_scene_summary_says_only_what_changed() {
+        let before = json!({"garment_name": "Dress", "pieces": [{"id": "front", "cm": 40}, {"id": "back", "cm": 40}],
+            "seams": [{"id": "s1", "gap_mm": 9}], "avatar": {"arrangement_points": ["a", "b"]}});
+        let after = json!({"garment_name": "Dress", "pieces": [{"id": "front", "cm": 42}, {"id": "back", "cm": 40}, {"id": "sleeve", "cm": 30}],
+            "seams": [], "avatar": {"arrangement_points": ["a", "b"]}});
+        let d = scene_diff(&before, &after);
+        let pieces = &d["since_your_last_scene_summary"]["pieces"];
+        assert_eq!(pieces["added"][0]["id"], "sleeve");
+        assert_eq!(pieces["changed"][0]["id"], "front");
+        assert_eq!(pieces["unchanged"], 1);
+        assert_eq!(
+            d["since_your_last_scene_summary"]["seams"]["removed"][0],
+            "s1"
+        );
+        assert!(
+            d["unchanged"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("avatar"))
+        );
+        assert!(
+            serde_json::to_string(&d).unwrap().len()
+                < serde_json::to_string(&after).unwrap().len() + 300
+        );
+    }
+
+    #[test]
+    fn the_assistant_declares_a_short_catalogue_and_reaches_the_rest() {
+        let declared = assistant_tools();
+        assert!(declared.len() <= CORE.len() + 2);
+        assert!(declared.iter().any(|t| t.name == "use_tool"));
+        let size = |tools: &[Tool]| {
+            tools
+                .iter()
+                .map(|t| t.description.len() + t.input_schema.to_string().len())
+                .sum::<usize>()
+        };
+        assert!(
+            size(&declared) * 2 < size(&crate::agent::tools()),
+            "the short list is less than half"
+        );
+        let more = more_tools(&[]);
+        assert!(
+            more["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|t| t["name"] == "pin")
+        );
+        let pin = more_tools(&["pin".into()]);
+        assert_eq!(pin["tools"][0]["input_schema"]["type"], "object");
+        // Every tool named in more_tools' description exists.
+        let all: Vec<&str> = crate::agent::tools().iter().map(|t| t.name).collect();
+        let gateway = gateway_tools();
+        for word in gateway[0]
+            .description
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        {
+            if word.contains('_') && word != "use_tool" {
+                assert!(all.contains(&word), "{word}");
+            }
+        }
     }
 
     #[test]

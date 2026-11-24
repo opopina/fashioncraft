@@ -51,7 +51,8 @@ FashionCraft compute geometry rather than placing raw points: add_detail (patch 
 collar, placket), bend_segment, add_internal_line, add_buttons, transform_piece, style_line, pin, \
 grab, trace_on_body. Any other edit: edit_ops, then edit. The windows are tools too: \
 simulation_settings, camera, render_settings, avatar_maker, pose_joints, measure_fabric, \
-points_of_measure, measure. guide(topic) gives pattern-making basics and how FashionCraft does \
+points_of_measure, measure. Your tool list holds the common tools; more_tools lists the others \
+and gives their inputs, and use_tool runs one. guide(topic) gives pattern-making basics and how FashionCraft does \
 each thing.
 4. Simulate after changing the pattern, fabric, avatar or placement (5 to 15 s), then always call \
 check_garment: it lists open seams, strained cloth, tight spots, cloth inside the body and a drape \
@@ -398,6 +399,15 @@ struct Call {
     arguments: Result<Value, String>,
 }
 
+/// Counts conversations, so what a tool remembers between calls (such as the last scene
+/// summary) starts afresh with a new one.
+static CONVERSATION_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Which conversation this is (see [`Conversation::new`]).
+pub fn conversation_epoch() -> u64 {
+    CONVERSATION_EPOCH.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// A conversation with one provider, in that provider's own message format: Anthropic's
 /// content blocks (thinking and fallback blocks included) go back exactly as they came.
 #[derive(Clone, Debug)]
@@ -408,6 +418,7 @@ pub struct Conversation {
 
 impl Conversation {
     pub fn new(provider: Provider) -> Self {
+        CONVERSATION_EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
             provider,
             messages: Vec::new(),
@@ -456,7 +467,12 @@ impl Conversation {
             return Err(missing);
         }
         self.push_user(text, attachments);
-        let known: Vec<&str> = tools().iter().map(|t| t.name).collect();
+        let all = tools();
+        let known: Vec<&str> = all
+            .iter()
+            .map(|t| t.name)
+            .chain(["more_tools", "use_tool"])
+            .collect();
         let mut rounds = 0usize;
         // The last call that failed, and how many times in a row it has.
         let mut failing: Option<(String, String)> = None;
@@ -487,22 +503,34 @@ impl Conversation {
                 } else {
                     match &call.arguments {
                         Err(e) => ToolResult::error(e.clone()),
-                        Ok(_) if !known.contains(&call.name.as_str()) => {
-                            ToolResult::error(format!("There is no tool called '{}'", call.name))
-                        }
                         Ok(arguments) => {
-                            events(Event::ToolStarted {
-                                name: call.name.clone(),
-                                arguments: arguments.clone(),
-                            });
-                            let result = run_tool(&call.name, arguments);
-                            events(Event::ToolFinished {
-                                name: call.name.clone(),
-                                text: result.joined_text(),
-                                images: images(&result),
-                                is_error: result.is_error,
-                            });
-                            result
+                            // use_tool runs a tool outside the short catalogue.
+                            let (name, arguments) = if call.name == "use_tool" {
+                                (
+                                    arguments["name"].as_str().unwrap_or_default().to_owned(),
+                                    arguments.get("arguments").cloned().unwrap_or(json!({})),
+                                )
+                            } else {
+                                (call.name.clone(), arguments.clone())
+                            };
+                            if !known.contains(&name.as_str()) || name == "use_tool" {
+                                ToolResult::error(format!(
+                                    "There is no tool called '{name}': more_tools lists them"
+                                ))
+                            } else {
+                                events(Event::ToolStarted {
+                                    name: name.clone(),
+                                    arguments: arguments.clone(),
+                                });
+                                let result = run_tool(&name, &arguments);
+                                events(Event::ToolFinished {
+                                    name,
+                                    text: result.joined_text(),
+                                    images: images(&result),
+                                    is_error: result.is_error,
+                                });
+                                result
+                            }
                         }
                     }
                 };
@@ -784,15 +812,17 @@ fn current_claude(model: &str) -> bool {
         .any(|prefix| model.starts_with(prefix))
 }
 
-/// Screenshots kept whole in what is sent: the latest ones. Older ones become a line of text,
-/// so a long session does not resend every picture it ever took.
-pub const KEEP_SCREENSHOTS: usize = 2;
-/// Tool results older than the last few messages are cut to this many characters.
-pub const OLD_RESULT_CHARS: usize = 2000;
-/// At most this many messages are sent; older ones are left out from the start.
+/// Tool results before the recent part of the conversation are cut to this many characters,
+/// and their screenshots become a line of text.
+pub const OLD_RESULT_CHARS: usize = 600;
+/// At most about this many messages are sent; older ones are left out from the start.
 pub const MAX_MESSAGES: usize = 80;
-/// How many of the latest messages keep their tool results whole.
+/// At least this many of the latest messages are sent whole…
 const RECENT_MESSAGES: usize = 8;
+/// …and where the whole part starts moves in steps of this many messages, so what comes before
+/// stays byte for byte the same from one request to the next and the provider's prompt cache
+/// serves it.
+const CHUNK: usize = 10;
 
 const OMITTED_SCREENSHOT: &str =
     "(An earlier screenshot, left out to keep the conversation short.)";
@@ -812,19 +842,6 @@ fn from_person(message: &Value) -> bool {
     }
 }
 
-/// Whether a message carries a tool's screenshot (in Anthropic's or OpenAI's form).
-fn carries_screenshot(message: &Value) -> bool {
-    !from_person(message)
-        && message["content"].as_array().is_some_and(|parts| {
-            parts.iter().any(|p| {
-                p["type"] == "image_url"
-                    || p["content"]
-                        .as_array()
-                        .is_some_and(|c| c.iter().any(|b| b["type"] == "image"))
-            })
-        })
-}
-
 fn shorten(text: &str) -> String {
     if text.chars().count() <= OLD_RESULT_CHARS {
         return text.to_owned();
@@ -840,58 +857,53 @@ fn shorten(text: &str) -> String {
     )
 }
 
-/// What is sent of a conversation: the person's messages and attachments whole, the latest
-/// [`KEEP_SCREENSHOTS`] screenshots, older screenshots as a line of text, older long tool
-/// results cut short, and at most [`MAX_MESSAGES`] messages (the oldest left out, from a
-/// message of the person's so tool calls keep their results). The conversation itself keeps
-/// everything for the window to show.
+/// What is sent of a conversation: the person's messages and attachments whole; the recent
+/// messages whole; before them, tool results cut to [`OLD_RESULT_CHARS`] and screenshots as a
+/// line of text; at most about [`MAX_MESSAGES`] messages (the oldest left out, from a message
+/// of the person's so tool calls keep their results). The boundaries move in steps, so the
+/// compacted part is the same from one request to the next and stays in the provider's cache.
+/// The conversation itself keeps everything for the window to show.
 pub fn compact(messages: &[Value]) -> Vec<Value> {
     let mut start = 0;
     if messages.len() > MAX_MESSAGES {
-        let from = messages.len() - MAX_MESSAGES;
-        // From a message of the person's: after the cut if there is one, else before it.
+        // The cut moves in steps too, and starts at a message of the person's.
+        let from = (messages.len() - MAX_MESSAGES).div_ceil(CHUNK) * CHUNK;
         start = (from..messages.len())
             .find(|&i| from_person(&messages[i]))
             .or_else(|| (0..from).rev().find(|&i| from_person(&messages[i])))
             .unwrap_or(0);
     }
     let kept = &messages[start..];
-    let with_pictures: Vec<usize> = (0..kept.len())
-        .filter(|&i| carries_screenshot(&kept[i]))
-        .collect();
-    let keep_from = with_pictures
-        .len()
-        .checked_sub(KEEP_SCREENSHOTS)
-        .and_then(|k| with_pictures.get(k))
-        .copied()
-        .unwrap_or(0);
-    let recent = kept.len().saturating_sub(RECENT_MESSAGES);
+    // Before `whole`, results are cut short and screenshots left out; from it on, nothing
+    // changes. It moves in steps of CHUNK, so the cut part stays the same between requests.
+    let whole = kept.len().saturating_sub(RECENT_MESSAGES) / CHUNK * CHUNK;
     let mut out: Vec<Value> = kept
         .iter()
         .enumerate()
         .map(|(i, message)| {
             let mut m = message.clone();
-            let old_picture = carries_screenshot(message) && i < keep_from;
-            let old = i < recent && !from_person(message);
+            let old = i < whole && !from_person(message);
+            if !old {
+                return m;
+            }
             // `get_mut`, never `[]` on a mutable value: indexing would add the missing key.
             if let Some(parts) = m.get_mut("content").and_then(Value::as_array_mut) {
                 for part in parts.iter_mut() {
-                    if old_picture && part["type"] == "image_url" {
+                    if part["type"] == "image_url" {
                         *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
                     }
                     if let Some(inner) = part.get_mut("content").and_then(Value::as_array_mut) {
                         for block in inner.iter_mut() {
-                            if old_picture && block["type"] == "image" {
+                            if block["type"] == "image" {
                                 *block = json!({"type": "text", "text": OMITTED_SCREENSHOT});
                             }
-                            if old && let Some(text) = block.get("text").and_then(Value::as_str) {
+                            if let Some(text) = block.get("text").and_then(Value::as_str) {
                                 block["text"] = json!(shorten(text));
                             }
                         }
                     }
                 }
-            } else if old
-                && message["role"] == "tool"
+            } else if message["role"] == "tool"
                 && let Some(text) = message["content"].as_str()
             {
                 m["content"] = json!(shorten(text));
@@ -914,7 +926,7 @@ pub fn compact(messages: &[Value]) -> Vec<Value> {
 
 /// The Messages API request, and whether it needs the fallback beta header.
 pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, bool) {
-    let tools: Vec<Value> = tools()
+    let tools: Vec<Value> = crate::agent_base::assistant_tools()
         .iter()
         .map(|t| json!({"name": t.name, "description": t.description, "input_schema": t.input_schema}))
         .collect();
@@ -938,7 +950,7 @@ pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, boo
 
 /// The chat-completions request.
 pub fn openai_request(settings: &Settings, messages: &[Value]) -> Value {
-    let tools: Vec<Value> = tools()
+    let tools: Vec<Value> = crate::agent_base::assistant_tools()
         .iter()
         .map(|t| {
             json!({"type": "function", "function": {
@@ -1002,6 +1014,19 @@ pub fn describe_error(status: u16, body: &Value) -> String {
 mod compact_tests {
     use super::*;
 
+    /// Whether a message carries a tool's screenshot (in Anthropic's or OpenAI's form).
+    fn carries_screenshot(message: &Value) -> bool {
+        !from_person(message)
+            && message["content"].as_array().is_some_and(|parts| {
+                parts.iter().any(|p| {
+                    p["type"] == "image_url"
+                        || p["content"]
+                            .as_array()
+                            .is_some_and(|c| c.iter().any(|b| b["type"] == "image"))
+                })
+            })
+    }
+
     fn shot(i: usize) -> [Value; 3] {
         [
             json!({"role": "assistant", "content": "", "tool_calls": [{"id": format!("c{i}"), "type": "function",
@@ -1014,7 +1039,7 @@ mod compact_tests {
     }
 
     #[test]
-    fn a_long_session_sends_only_the_latest_screenshots_and_short_old_results() {
+    fn a_long_session_sends_old_parts_short_and_keeps_them_stable() {
         let mut messages = vec![json!({"role": "user", "content": [
             {"type": "text", "text": "Make this"},
             {"type": "image_url", "image_url": {"url": "data:image/png;base64,PHOTO"}}]})];
@@ -1023,20 +1048,31 @@ mod compact_tests {
         }
         let sent = compact(&messages);
         let text = serde_json::to_string(&sent).unwrap();
-        // The person's photo stays; of 20 screenshots, the last two are sent.
+        // The person's photo stays; screenshots before the whole part become a line.
         assert!(text.contains("PHOTO"));
-        assert_eq!(text.matches("base64,AAAA").count(), KEEP_SCREENSHOTS);
-        assert_eq!(
-            text.matches(OMITTED_SCREENSHOT).count(),
-            20 - KEEP_SCREENSHOTS
-        );
-        // Old long results are cut; the latest stays whole.
+        let whole = (messages.len() - RECENT_MESSAGES) / CHUNK * CHUNK;
+        let kept = (0..messages.len())
+            .filter(|&i| i >= whole && carries_screenshot(&messages[i]))
+            .count();
+        assert_eq!(text.matches("base64,AAAA").count(), kept);
+        assert!(text.matches(OMITTED_SCREENSHOT).count() >= 15);
         assert!(text.contains("characters left out"));
         assert_eq!(
             sent[sent.len() - 2]["content"].as_str().unwrap().len(),
             5000
         );
         assert_eq!(sent.len(), messages.len());
+        // From one request to the next the compacted start stays byte for byte the same, so
+        // the provider's cache serves it: only at a step does it change.
+        let mut same = 0;
+        for n in 30..messages.len() {
+            let a = compact(&messages[..n]);
+            let b = compact(&messages[..n + 1]);
+            if a[..] == b[..n] {
+                same += 1;
+            }
+        }
+        assert!(same >= (messages.len() - 30) * 8 / 10, "{same}");
 
         // Past the cap, the oldest are left out from a message of the person's, said so.
         for i in 0..40 {
@@ -1044,7 +1080,7 @@ mod compact_tests {
             messages.extend(shot(100 + i));
         }
         let sent = compact(&messages);
-        assert!(sent.len() <= MAX_MESSAGES);
+        assert!(sent.len() <= MAX_MESSAGES + CHUNK);
         assert!(from_person(&sent[0]));
         assert!(
             sent[0]["content"]
@@ -1052,19 +1088,21 @@ mod compact_tests {
                 .unwrap()
                 .contains("are left out")
         );
-        // Every tool result still follows the call that asked for it.
         for (i, m) in sent.iter().enumerate() {
             if m["role"] == "tool" {
                 assert_eq!(sent[i - 1]["role"], "assistant");
             }
         }
-        // Anthropic's form: screenshots inside tool results.
-        let anthropic: Vec<Value> = (0..5)
+        // Anthropic's form: screenshots inside tool results, the old ones left out.
+        let anthropic: Vec<Value> = (0..30)
             .map(|i| json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": format!("t{i}"),
                 "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "IMG"}}]}]}))
             .collect();
         let text = serde_json::to_string(&compact(&anthropic)).unwrap();
-        assert_eq!(text.matches("\"IMG\"").count(), KEEP_SCREENSHOTS);
+        assert_eq!(
+            text.matches("\"IMG\"").count(),
+            30 - (30 - RECENT_MESSAGES) / CHUNK * CHUNK
+        );
         // Blocks are passed on exactly: nothing is added to them.
         let thinking = vec![json!({"role": "assistant", "content": [
             {"type": "thinking", "thinking": "plan", "signature": "sig"}]})];
@@ -1318,7 +1356,10 @@ mod tests {
         assert_eq!(first["cache_control"]["type"], "ephemeral");
         assert!(first.get("thinking").is_none());
         assert!(first.get("tool_choice").is_none());
-        assert_eq!(first["tools"].as_array().unwrap().len(), tools().len());
+        assert_eq!(
+            first["tools"].as_array().unwrap().len(),
+            crate::agent_base::assistant_tools().len()
+        );
         assert!(first["tools"][0]["input_schema"].is_object());
 
         // The second request carries the assistant's blocks as they came, then one user

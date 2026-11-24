@@ -243,6 +243,21 @@ impl Atelier {
         }
     }
 
+    /// scene_summary: whole the first time in a conversation (or with full: true), then only
+    /// what changed since the last one, which keeps every request of a long job short.
+    pub(super) fn agent_scene_summary(&mut self, ctx: &egui::Context, args: &Value) -> Value {
+        let now = self.scene_summary();
+        let id = egui::Id::new("agent.last_scene_summary");
+        let epoch = fashioncraft::assistant::conversation_epoch();
+        let last: Option<(u64, Value)> = ctx.data(|d| d.get_temp(id));
+        ctx.data_mut(|d| d.insert_temp(id, (epoch, now.clone())));
+        let full = args.get("full").and_then(Value::as_bool) == Some(true);
+        match last {
+            Some((e, before)) if e == epoch && !full => agent_base::scene_diff(&before, &now),
+            _ => now,
+        }
+    }
+
     /// Edits that lay new cloth on the drape need the simulation between steps.
     fn ready(&self) -> Result<(), String> {
         if self.pending {

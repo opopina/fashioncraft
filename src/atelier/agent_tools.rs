@@ -29,7 +29,7 @@ impl Atelier {
     ) -> Result<ToolResult, Pending> {
         let result =
             match name {
-                "scene_summary" => Ok(ToolResult::json(&self.scene_summary())),
+                "scene_summary" => Ok(ToolResult::json(&self.agent_scene_summary(ctx, args))),
                 "piece_detail" => agent_ops::piece_detail(
                     &self.project.template,
                     args.get("piece").and_then(Value::as_str).unwrap_or(""),
@@ -155,13 +155,24 @@ impl Atelier {
                 }
                 let summary = self.scene_summary();
                 let problem = self.simulation_problem();
+                // Every seam's figures would make each simulation long: the count and the open
+                // ones say what matters (scene_summary has the rest).
+                let seams = summary["seams"].as_array().cloned().unwrap_or_default();
+                let open: Vec<Value> = seams
+                    .iter()
+                    .filter(|s| s["closed"] == json!(false) && s["active"] != json!(false))
+                    .map(
+                        |s| json!({"id": s["id"], "a": s["a"], "b": s["b"], "gap_mm": s["gap_mm"]}),
+                    )
+                    .collect();
                 let mut result = ToolResult::json(&json!({
                     "simulated_seconds_of_wall_clock": seconds,
                     "problem": problem,
                     "garment": summary["garment"],
-                    "seams": summary["seams"],
+                    "seams": {"total": seams.len(), "closed": seams.len() - open.len(), "open": open},
                     "warnings": summary["warnings"],
                     "status": self.status,
+                    "next": "check_garment",
                 }));
                 // A paused simulation is a failure the agent must deal with first.
                 result.is_error = problem.is_some();

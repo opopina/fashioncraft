@@ -4,24 +4,12 @@
 use super::agent_hub::Pending;
 use super::*;
 use fashioncraft::agent::{Content, ToolResult};
+use fashioncraft::agent_ops::{self, Live};
 use fashioncraft::authoring::Command;
+use fashioncraft::garment::seam::{BoundaryRef, Side};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-
-/// Menu commands that open a native dialog, which would wait for a person: a file dialog, or
-/// File › New's "save changes?". Agents use save_project, export_garment and draft_garment.
-const DIALOG_PREFIXES: [&str; 10] = [
-    "file.new",
-    "file.open",
-    "file.import",
-    "file.add_",
-    "file.save",
-    "file.python_script",
-    "file.recover",
-    "export.",
-    "animation.export",
-    "file.templates",
-];
 
 /// Marks the agent's screenshot among the window's screenshots.
 struct AgentShot;
@@ -42,10 +30,39 @@ impl Atelier {
         let result =
             match name {
                 "scene_summary" => Ok(ToolResult::json(&self.scene_summary())),
+                "piece_detail" => agent_ops::piece_detail(
+                    &self.project.template,
+                    args.get("piece").and_then(Value::as_str).unwrap_or(""),
+                )
+                .map(|v| ToolResult::json(&v)),
+                "select" => self.agent_select(args).map(|v| ToolResult::json(&v)),
                 "command_list" => Ok(ToolResult::json(
-                    &self.command_list(args.get("query").and_then(Value::as_str).unwrap_or("")),
+                    &self.command_list(
+                        args.get("query").and_then(Value::as_str).unwrap_or(""),
+                        args.get("include_interactive")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                    ),
                 )),
-                "command_run" => self.agent_command(ctx, args.get("key").and_then(Value::as_str)),
+                "command_run" => self.agent_command(ctx, args),
+                "create_piece"
+                | "move_points"
+                | "set_segment_length"
+                | "add_point"
+                | "add_dart"
+                | "add_pleats"
+                | "piece_edit"
+                | "sew"
+                | "seam_edit"
+                | "set_fabric_parameters" => self.agent_plan(name, args),
+                "place_piece" => self.agent_place_piece(args),
+                "set_avatar" => self.agent_avatar(args),
+                "set_pose" => self.agent_pose(args),
+                "grading" => self.agent_grading(args),
+                "render" => match self.agent_render(args) {
+                    Ok(pending) => return Err(pending),
+                    Err(e) => Err(e),
+                },
                 "draft_garment" => {
                     let overrides: std::collections::BTreeMap<String, f64> = args
                         .get("measurements_cm")
@@ -117,7 +134,7 @@ impl Atelier {
     pub(super) fn continue_tool(
         &mut self,
         ctx: &egui::Context,
-        pending: &Pending,
+        pending: &mut Pending,
     ) -> Option<ToolResult> {
         match pending {
             Pending::Simulate { until, seconds } => {
@@ -131,6 +148,8 @@ impl Atelier {
                 Some(ToolResult::json(&json!({
                     "simulated_seconds_of_wall_clock": seconds,
                     "garment": summary["garment"],
+                    "seams": summary["seams"],
+                    "warnings": summary["warnings"],
                     "status": self.status,
                 })))
             }
@@ -161,6 +180,48 @@ impl Atelier {
                     self.screenshot_result(ctx, &image, *whole_window)
                         .unwrap_or_else(ToolResult::error),
                 )
+            }
+            Pending::Render {
+                started,
+                until,
+                path,
+                saved,
+                was_open,
+            } => {
+                let Some(asked) = *saved else {
+                    if Instant::now() < *until {
+                        return None;
+                    }
+                    if !self.render_running() || self.render_samples() == 0 {
+                        // The render may take a while to receive the scene and start.
+                        return (started.elapsed() > *until - *started + Duration::from_secs(30))
+                            .then(|| {
+                                ToolResult::error(
+                                    "The photoreal render did not start: the GPU may not support it",
+                                )
+                            });
+                    }
+                    self.save_render(path.clone());
+                    *saved = Some(Instant::now());
+                    return None;
+                };
+                let written = std::fs::metadata(&*path)
+                    .and_then(|m| m.modified())
+                    .is_ok_and(|t| {
+                        t + Duration::from_secs(1) >= std::time::SystemTime::now() - asked.elapsed()
+                    });
+                if !written {
+                    return (asked.elapsed() > Duration::from_secs(30))
+                        .then(|| ToolResult::error("The render's image was not written"));
+                }
+                let samples = self.render_samples();
+                if !*was_open {
+                    self.authoring.render.open = false;
+                }
+                Some(ToolResult::text(format!(
+                    "Rendered {samples} samples per pixel and saved {}",
+                    path.display()
+                )))
             }
         }
     }
@@ -221,42 +282,62 @@ impl Atelier {
         })
     }
 
-    fn scene_summary(&self) -> Value {
-        let template = &self.project.template;
-        let pieces: Vec<Value> = template
-            .panels
-            .iter()
-            .map(|p| {
-                let t = p.placement.translation;
-                json!({
-                    "id": p.id,
-                    "name": p.name,
-                    "fabric": p.fabric,
-                    "placed_at_cm": [centimetres(t.x), centimetres(t.y), centimetres(t.z)],
-                    "rotation_degrees": [p.placement.rotation_degrees.x.round(), p.placement.rotation_degrees.y.round(), p.placement.rotation_degrees.z.round()],
-                })
-            })
-            .collect();
-        let seams: Vec<Value> = template
-            .seams
-            .iter()
-            .map(|s| {
-                json!({
-                    "id": s.id,
-                    "a": format!("{}.{}", s.a.panel, s.a.edge.as_deref().unwrap_or("?")),
-                    "b": format!("{}.{}", s.b.panel, s.b.edge.as_deref().unwrap_or("?")),
-                })
-            })
-            .collect();
-        let fabrics: Vec<Value> = template
-            .fabrics
-            .iter()
-            .map(|f| {
-                let colour = template.fabric_appearance.get(&f.id).map(|a| a.color_srgb);
-                json!({"id": f.id, "name": f.name, "rgb": colour})
-            })
-            .collect();
+    /// The drape as it stands: seam gaps mean something once the cloth has left its layout.
+    fn live(&self) -> Live<'_> {
         let x = &self.scene.state.x;
+        let laid = &self.scene.garment.initial_state.x;
+        let simulated =
+            x.len() == laid.len() && x.iter().zip(laid).any(|(a, b)| a.distance(*b) > 0.002);
+        Live {
+            garment: &self.scene.garment,
+            x,
+            simulated,
+        }
+    }
+
+    fn selection_json(&self) -> Value {
+        let a = &self.authoring;
+        json!({
+            "pieces": self.selected_panels(),
+            "segment": a.edge.as_ref().map(|e| format!("{}.{}", e.panel, e.edge.as_deref().unwrap_or("?"))),
+            "point": a.anchor.as_ref().map(|(p, k)| json!({"piece": p, "point": k})),
+            "points": a.board.point_selections(),
+            "seam": a.selection.seam,
+        })
+    }
+
+    pub(super) fn scene_summary(&mut self) -> Value {
+        let avatar = if self.project.avatar_removed {
+            json!({"present": false})
+        } else {
+            let body = self.avatar_body_cm().map(|v| {
+                super::avatar_shape_ui::BODY_FIELDS
+                    .iter()
+                    .zip(v)
+                    .map(|(k, v)| ((*k).to_owned(), json!(v)))
+                    .collect::<serde_json::Map<_, _>>()
+            });
+            let surface = &self.scene.collider.surface.vertices;
+            let height = surface
+                .iter()
+                .map(|v| v.y)
+                .fold(f64::NEG_INFINITY, f64::max)
+                - surface.iter().map(|v| v.y).fold(f64::INFINITY, f64::min);
+            json!({
+                "present": true,
+                "file": self.project.avatar_path.file_name().map(|n| n.to_string_lossy()),
+                "height_cm": if height.is_finite() { centimetres(height) } else { 0. },
+                "measurements_cm": body.as_ref().ok(),
+                "measurements_note": body.err(),
+                "posed": self.project.avatar_pose.as_ref().is_some_and(|p| !p.pose.is_empty()),
+                "arrangement_points": self.arrangement_anchor_ids(),
+                "library_presets": fashioncraft::agent::avatar_preset_ids(),
+                "pose_presets": fashioncraft::avatar_rig::PRESETS,
+            })
+        };
+        let template = &self.project.template;
+        let live = self.live();
+        let x = live.x;
         let garment = if x.is_empty() {
             Value::Null
         } else {
@@ -270,68 +351,466 @@ impl Atelier {
                 "lowest_cm": centimetres(low),
                 "highest_cm": centimetres(high),
                 "centre_height_cm": centimetres(sum / x.len() as f64),
+                "draped": live.simulated,
             })
         };
-        let body = &self.scene.collider.surface.vertices;
-        let height = body.iter().map(|v| v.y).fold(f64::NEG_INFINITY, f64::max)
-            - body.iter().map(|v| v.y).fold(f64::INFINITY, f64::min);
+        let mut warnings = agent_ops::warnings(template, Some(&live));
+        if let Some(e) = &self.simulation_error {
+            warnings.push(format!("Simulation: {e}"));
+        }
         json!({
-            "pieces": pieces,
-            "seams": seams,
-            "fabrics": fabrics,
-            "avatar": {
-                "file": self.project.avatar_path.file_name().map(|n| n.to_string_lossy()),
-                "height_cm": if height.is_finite() { centimetres(height) } else { 0. },
-            },
+            "garment_name": template.name,
+            "pieces": agent_ops::describe_pieces(template),
+            "seams": agent_ops::describe_seams(template, Some(&live)),
+            "fabrics": agent_ops::describe_fabrics(template),
+            "avatar": avatar,
+            "sizes": agent_ops::describe_grading(template),
+            "selection": self.selection_json(),
+            "warnings": warnings,
             "garment": garment,
             "simulation_running": self.playing,
             "unsaved_changes": self.document.dirty,
+            "can_undo": self.authoring.history.can_undo(),
             "fabric_presets": fashioncraft::fabrics::PRESETS.iter().map(|p| json!({"id": p.id, "name": p.name})).collect::<Vec<_>>(),
+            "units": "cm; 2D board coordinates: x right, y down",
         })
     }
 
-    fn command_list(&self, query: &str) -> Value {
+    fn command_list(&self, query: &str, include_interactive: bool) -> Value {
+        use commands::AgentUse;
         let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
         let context = self.command_context();
+        let mut hidden = 0;
         let commands: Vec<Value> = commands::REGISTRY
             .iter()
             .filter(|d| {
                 let text = format!("{} {}", d.key, d.label).to_lowercase();
                 words.iter().all(|w| text.contains(w.as_str()))
             })
+            .filter(|d| {
+                let runs = commands::agent_use(d.id) == AgentUse::Runs;
+                hidden += usize::from(!runs && !include_interactive);
+                runs || include_interactive
+            })
             .map(|d| {
-                json!({
+                let usage = commands::agent_use(d.id);
+                let target = commands::agent_target(d.id);
+                let mut entry = json!({
                     "key": d.key,
                     "label": d.label.trim_end_matches('…'),
-                    "available": commands::availability(d.id, context).is_ok(),
-                    "opens_a_dialog": DIALOG_PREFIXES.iter().any(|p| d.key.starts_with(p)),
-                })
+                });
+                if target != commands::AgentTarget::Nothing {
+                    entry["acts_on"] = json!(target.label());
+                }
+                match (usage, commands::availability(d.id, context)) {
+                    (AgentUse::Runs, Ok(())) => entry["available_now"] = json!(true),
+                    (AgentUse::Runs, Err(why)) => {
+                        entry["available_now"] = json!(false);
+                        entry["why_not"] = json!(why.message());
+                    }
+                    (other, _) => {
+                        entry["agent_can_run"] = json!(false);
+                        entry["because"] = json!(usage_text(other));
+                        entry["instead"] = json!(commands::agent_instead(d.id));
+                    }
+                }
+                entry
             })
             .collect();
-        json!({"commands": commands})
+        json!({
+            "commands": commands,
+            "left_out": hidden,
+            "note": if hidden > 0 {
+                "Commands that need the mouse, a window or a file dialog are left out; include_interactive lists them"
+            } else {
+                ""
+            },
+        })
     }
 
-    fn agent_command(
-        &mut self,
-        ctx: &egui::Context,
-        key: Option<&str>,
-    ) -> Result<ToolResult, String> {
-        let key = key.ok_or("command_run needs a key")?;
+    /// Select what an agent named, as clicks would. Returns the selection.
+    fn agent_select(&mut self, args: &Value) -> Result<Value, String> {
+        let template = &self.project.template;
+        if args.get("clear").and_then(Value::as_bool) == Some(true) {
+            let a = &mut self.authoring;
+            a.selected = None;
+            a.selection.panels.clear();
+            a.selection.seam = None;
+            a.edge = None;
+            a.anchor = None;
+            a.board.selection.clear();
+            a.board.selection_panel = None;
+            a.board.point_groups.clear();
+        }
+        if let Some(ids) = args.get("pieces").and_then(Value::as_array) {
+            let ids: Vec<String> = ids
+                .iter()
+                .map(|v| {
+                    agent_ops::find_piece(template, v.as_str().unwrap_or("")).map(|p| p.id.clone())
+                })
+                .collect::<Result<_, _>>()?;
+            self.authoring.selection.panels = ids.iter().cloned().collect();
+            self.authoring.selected = ids.first().cloned();
+        }
+        if let Some(key) = args.get("piece").and_then(Value::as_str) {
+            let panel = agent_ops::find_piece(template, key)?;
+            let id = panel.id.clone();
+            if let Some(segment) = args.get("segment").and_then(Value::as_str) {
+                let polygon = panel.polygon.as_ref();
+                let known = polygon.is_some_and(|q| {
+                    q.edges.iter().any(|e| e == segment) || q.lines.iter().any(|l| l.id == segment)
+                });
+                if !known {
+                    return Err(format!(
+                        "Piece {id} has no segment or internal line '{segment}': see piece_detail"
+                    ));
+                }
+                self.authoring.edge = Some(BoundaryRef {
+                    reversed: false,
+                    panel: id.clone(),
+                    side: Side::Top,
+                    edge: Some(segment.to_owned()),
+                    range: [0., 1.],
+                });
+            }
+            if let Some(k) = args.get("point").and_then(Value::as_u64) {
+                let k = k as usize;
+                let n = panel.polygon.as_ref().map_or(0, |q| q.points.len());
+                if k >= n {
+                    return Err(format!(
+                        "Piece {id} has points 0 to {}",
+                        n.saturating_sub(1)
+                    ));
+                }
+                self.authoring.anchor = Some((id.clone(), k));
+                self.authoring.board.selection_panel = Some(id.clone());
+                self.authoring.board.selection = vec![k];
+            }
+            self.authoring.selected = Some(id.clone());
+            self.authoring.selection.panels = [id].into_iter().collect();
+        }
+        if let Some(seam) = args.get("seam").and_then(Value::as_str) {
+            let spec = template
+                .seams
+                .iter()
+                .find(|s| s.id == seam)
+                .ok_or_else(|| format!("No seam '{seam}': see scene_summary"))?;
+            self.authoring.edge = Some(spec.a.clone());
+            self.authoring.selection.seam = Some(seam.to_owned());
+        }
+        Ok(self.selection_json())
+    }
+
+    /// Whether what a command acts on is selected.
+    fn agent_has(&self, target: commands::AgentTarget) -> bool {
+        use commands::AgentTarget as T;
+        let outline = |e: &BoundaryRef, line: bool| {
+            self.project
+                .template
+                .panels
+                .iter()
+                .find(|p| p.id == e.panel)
+                .and_then(|p| p.polygon.as_ref())
+                .zip(e.edge.as_ref())
+                .is_some_and(|(q, name)| {
+                    if line {
+                        q.lines.iter().any(|l| &l.id == name)
+                    } else {
+                        q.edges.contains(name)
+                    }
+                })
+        };
+        match target {
+            T::Nothing => true,
+            T::Pieces => !self.selected_panels().is_empty(),
+            T::Segment => self
+                .authoring
+                .edge
+                .as_ref()
+                .is_some_and(|e| outline(e, false)),
+            T::Line => self
+                .authoring
+                .edge
+                .as_ref()
+                .is_some_and(|e| outline(e, true)),
+            T::Points => {
+                self.authoring.anchor.is_some()
+                    || self
+                        .authoring
+                        .board
+                        .point_selections()
+                        .values()
+                        .any(|v| !v.is_empty())
+            }
+            T::Seam => self.authoring.selection.seam.is_some(),
+            T::Mesh => false,
+        }
+    }
+
+    fn agent_command(&mut self, ctx: &egui::Context, args: &Value) -> Result<ToolResult, String> {
+        let key = args
+            .get("key")
+            .and_then(Value::as_str)
+            .ok_or("command_run needs a key")?;
         let descriptor = commands::REGISTRY
             .iter()
             .find(|d| d.key == key)
-            .ok_or_else(|| format!("no command '{key}': see command_list"))?;
-        if DIALOG_PREFIXES.iter().any(|p| key.starts_with(p)) {
+            .ok_or_else(|| format!("No command '{key}': see command_list"))?;
+        let usage = commands::agent_use(descriptor.id);
+        if usage != commands::AgentUse::Runs {
+            let label = descriptor.label.trim_end_matches('…');
+            return Err(match commands::agent_instead(descriptor.id) {
+                Some(tool) => format!(
+                    "'{key}' ({label}) {}, so an agent cannot use it. Use {tool} instead.",
+                    usage_text(usage)
+                ),
+                None => format!(
+                    "'{key}' ({label}) {}, so an agent cannot use it. Tell the person to choose \
+                     it from the menu themselves.",
+                    usage_text(usage)
+                ),
+            });
+        }
+        if let Some(target) = args.get("target") {
+            self.agent_select(target)?;
+        }
+        let target = commands::agent_target(descriptor.id);
+        if !self.agent_has(target) {
             return Err(format!(
-                "'{key}' opens a dialog; use save_project, export_garment or draft_garment instead"
+                "'{key}' acts on {}: select it first (the select tool, or command_run's target)",
+                target.label()
             ));
         }
+        let before = self.authoring.history.done().count();
         self.dispatch_command(descriptor.id, ctx)?;
+        let undoable = self.authoring.history.done().count() > before;
         Ok(ToolResult::text(format!(
-            "Ran {key} ({}). {}",
+            "Ran {key} ({}). {}{}",
             descriptor.label.trim_end_matches('…'),
-            self.status
+            self.status,
+            if undoable { " (undoable)" } else { "" }
         )))
+    }
+
+    /// Apply an editing tool's change through the history.
+    fn agent_plan(&mut self, tool: &str, args: &Value) -> Result<ToolResult, String> {
+        let plan = agent_ops::plan(&self.project.template, tool, args)?;
+        let name = plan.history_name.unwrap_or_else(|| plan.command.name());
+        if !self.edit_named(plan.command, name) {
+            return Err(self.status.clone());
+        }
+        Ok(ToolResult::text(plan.done))
+    }
+
+    fn agent_place_piece(&mut self, args: &Value) -> Result<ToolResult, String> {
+        let piece = agent_ops::find_piece(
+            &self.project.template,
+            args.get("piece").and_then(Value::as_str).unwrap_or(""),
+        )?
+        .id
+        .clone();
+        let anchor = args
+            .get("anchor")
+            .and_then(Value::as_str)
+            .ok_or("Name an arrangement point (scene_summary lists them)")?;
+        let clearance = args
+            .get("clearance_cm")
+            .and_then(Value::as_f64)
+            .map(|c| c / 100.);
+        let wrap = args.get("wrap").and_then(Value::as_bool);
+        self.agent_place(&piece, anchor, clearance, wrap)
+            .map(ToolResult::text)
+    }
+
+    fn agent_avatar(&mut self, args: &Value) -> Result<ToolResult, String> {
+        if self.pending {
+            return Err("Wait for the current simulation step to finish, then try again".into());
+        }
+        if let Some(id) = args.get("preset").and_then(Value::as_str) {
+            let preset = fashioncraft::avatar_look::PRESETS
+                .iter()
+                .find(|p| fashioncraft::agent::avatar_preset_id(p.name) == id)
+                .ok_or_else(|| {
+                    format!(
+                        "No avatar preset '{id}'. They are: {}",
+                        fashioncraft::agent::avatar_preset_ids().join(", ")
+                    )
+                })?;
+            let obj = super::avatar_library_ui::write_made_avatar(
+                &self.output,
+                &(preset.body)(),
+                &preset.look,
+            )?;
+            self.install_avatar_file(&obj)?;
+            return Ok(ToolResult::text(format!(
+                "The avatar is now '{}' from the library. The drape was reset: simulate again \
+                 (pieces drafted for the old body may need draft_garment again).",
+                preset.name
+            )));
+        }
+        let overrides: BTreeMap<String, f64> = args
+            .get("measurements_cm")
+            .and_then(Value::as_object)
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, v)| Some((k.clone(), v.as_f64()?)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if overrides.is_empty() {
+            return Err("Give a library preset or measurements_cm".into());
+        }
+        self.agent_reshape_avatar(&overrides).map(ToolResult::text)
+    }
+
+    fn agent_pose(&mut self, args: &Value) -> Result<ToolResult, String> {
+        let name = args.get("pose").and_then(Value::as_str).unwrap_or("");
+        let preset = fashioncraft::avatar_rig::preset(name).ok_or_else(|| {
+            format!(
+                "No pose '{name}'. They are: {}",
+                fashioncraft::avatar_rig::PRESETS.join(", ")
+            )
+        })?;
+        if self.project.avatar_removed {
+            return Err("There is no avatar to pose".into());
+        }
+        let mut pose = self.current_pose()?;
+        pose.pose = preset;
+        if !self.apply_pose(pose) {
+            return Err(self.status.clone());
+        }
+        Ok(ToolResult::text(format!(
+            "Posed '{name}'. The drape restarts from the arrangement: simulate again."
+        )))
+    }
+
+    fn agent_grading(&mut self, args: &Value) -> Result<ToolResult, String> {
+        use super::grading_ui::{Change, edit};
+        use fashioncraft::garment::grading::Target;
+        let text = |key: &str| -> Result<String, String> {
+            args.get(key)
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .ok_or_else(|| format!("'{key}' is missing"))
+        };
+        let group = self
+            .project
+            .template
+            .grading
+            .as_ref()
+            .and_then(|g| g.groups.first())
+            .cloned();
+        let size_id = |name: &str| -> Result<String, String> {
+            let g = group
+                .as_ref()
+                .ok_or("The garment has no sizes yet: create them first")?;
+            g.sizes
+                .iter()
+                .find(|s| s.name.eq_ignore_ascii_case(name) || s.id == name)
+                .map(|s| s.id.clone())
+                .ok_or_else(|| {
+                    let names: Vec<&str> = g.sizes.iter().map(|s| s.name.as_str()).collect();
+                    format!("No size '{name}'. The sizes are: {}", names.join(", "))
+                })
+        };
+        let change = match args.get("action").and_then(Value::as_str).unwrap_or("") {
+            "create" => {
+                if group.is_some() {
+                    return Err("The garment already has sizes: add_size adds more".into());
+                }
+                let sizes: Vec<String> = args
+                    .get("sizes")
+                    .and_then(Value::as_array)
+                    .map(|v| {
+                        v.iter()
+                            .filter_map(|s| Some(s.as_str()?.to_owned()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let base = text("base")?;
+                let at = sizes
+                    .iter()
+                    .position(|s| s.eq_ignore_ascii_case(&base))
+                    .ok_or("The base must be one of the sizes")?;
+                Change::Create(sizes, at)
+            }
+            "add_size" => {
+                let g = group.as_ref().ok_or("Create sizes first")?.id.clone();
+                let name = text("size")?;
+                let after = match args.get("after").and_then(Value::as_str) {
+                    Some(a) => Some(size_id(a)?),
+                    None => None,
+                };
+                edit("Add size", move |grading, _| {
+                    grading.add_size(&g, &name, after.as_deref()).map(|_| ())
+                })
+            }
+            "set_step" => {
+                let panel = agent_ops::find_piece(&self.project.template, &text("piece")?)?
+                    .id
+                    .clone();
+                let segment = text("segment")?;
+                let step = glam::DVec2::new(
+                    args.get("dx_mm").and_then(Value::as_f64).unwrap_or(0.),
+                    args.get("dy_mm").and_then(Value::as_f64).unwrap_or(0.),
+                ) / 1000.;
+                let target = Target::Point {
+                    panel,
+                    edge: segment,
+                };
+                edit("Grade rule", move |grading, _| {
+                    grading.set_step(&target, step)
+                })
+            }
+            "show" => {
+                let g = group.as_ref().ok_or("Create sizes first")?.id.clone();
+                Change::Show(g, size_id(&text("size")?)?)
+            }
+            other => {
+                return Err(format!(
+                    "action '{other}': create, add_size, set_step or show"
+                ));
+            }
+        };
+        let before = serde_json::to_string(&self.project.template.grading).unwrap_or_default();
+        self.apply_grading_change(change);
+        if serde_json::to_string(&self.project.template.grading).unwrap_or_default() == before {
+            return Err(format!("Nothing changed: {}", self.status));
+        }
+        Ok(ToolResult::json(&json!({
+            "done": self.status,
+            "sizes": agent_ops::describe_grading(&self.project.template),
+        })))
+    }
+
+    fn agent_render(&mut self, args: &Value) -> Result<Pending, String> {
+        let name = fashioncraft::agent::plain_name(
+            args.get("name").and_then(Value::as_str).unwrap_or(""),
+        )?;
+        let seconds = args
+            .get("seconds")
+            .and_then(Value::as_f64)
+            .unwrap_or(20.)
+            .clamp(3., 120.);
+        if self.authoring.selection.garment_rect.is_none() {
+            return Err(
+                "The 3D view is not on screen: show it (Window › 3D only or Split view)".into(),
+            );
+        }
+        let dir = fashioncraft::agent::documents_dir();
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let was_open = self.authoring.render.open;
+        if !was_open {
+            self.open_photoreal_render();
+        }
+        let started = Instant::now();
+        Ok(Pending::Render {
+            started,
+            until: started + Duration::from_secs_f64(seconds),
+            path: dir.join(format!("{}.png", name.trim_end_matches(".png"))),
+            saved: None,
+            was_open,
+        })
     }
 
     /// The pieces an agent named, or every piece; unknown ids are an error.
@@ -342,12 +821,8 @@ impl Atelier {
             Some(ids) => ids
                 .iter()
                 .map(|id| {
-                    let id = id.as_str().unwrap_or("");
-                    panels
-                        .iter()
-                        .find(|p| p.id == id)
+                    agent_ops::find_piece(&self.project.template, id.as_str().unwrap_or(""))
                         .map(|p| p.id.clone())
-                        .ok_or_else(|| format!("no piece '{id}': see scene_summary"))
                 })
                 .collect(),
         }
@@ -459,5 +934,16 @@ impl Atelier {
             other => return Err(format!("unknown format {other:?}: obj or glb")),
         };
         Ok(ToolResult::text(format!("Exported {}", path.display())))
+    }
+}
+
+fn usage_text(usage: commands::AgentUse) -> &'static str {
+    use commands::AgentUse as U;
+    match usage {
+        U::Runs => "runs",
+        U::Mouse => "waits for clicks or drags with the mouse",
+        U::Window => "opens a window for a person to fill in",
+        U::Dialog => "opens a file dialog",
+        U::Web => "opens a web page",
     }
 }

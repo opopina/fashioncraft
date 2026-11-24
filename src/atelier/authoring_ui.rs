@@ -945,6 +945,10 @@ impl Atelier {
     }
     pub(super) fn edit(&mut self, command: Command) -> bool {
         let name = command.name();
+        self.edit_named(command, name)
+    }
+    /// [`Self::edit`], named `name` in the history.
+    pub(super) fn edit_named(&mut self, command: Command, name: &'static str) -> bool {
         match authoring::apply(&self.project.template, command) {
             Ok(mut edit) => {
                 // Copies and mirrored copies are named in the interface's language.

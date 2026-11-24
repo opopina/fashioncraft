@@ -1,0 +1,244 @@
+{
+  "cases": [
+    {
+      "id": "dress-es",
+      "start": "tshirt",
+      "prompt": "Hazme un vestido para este avatar y simúlalo para ver cómo le queda.",
+      "checks": [
+        {"kind": "called", "tool": "draft_garment", "with": {"kind": "dress"}},
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "any", "path": "/pieces/*/name", "contains": "dress"},
+        {"kind": "language", "lang": "es"},
+        {"kind": "max_errors", "count": 1}
+      ]
+    },
+    {
+      "id": "shirt-set-in-sleeves-en",
+      "start": "tshirt",
+      "prompt": "Make a shirt with set-in sleeves for this avatar and show me how it fits.",
+      "checks": [
+        {"kind": "called", "tool": "draft_garment", "with": {"kind": "shirt"}},
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "called", "tool": "screenshot"},
+        {"kind": "count", "path": "/pieces", "min": 4},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "seam-length-question-es",
+      "start": "tshirt",
+      "prompt": "¿Cuánto mide la costura del costado derecho? Dime los dos lados.",
+      "checks": [
+        {"kind": "called_any", "tools": ["scene_summary", "piece_detail"]},
+        {"kind": "not_called", "tool": "draft_garment"},
+        {"kind": "reply_contains", "any": ["cm"]},
+        {"kind": "language", "lang": "es"},
+        {"kind": "max_calls", "count": 4}
+      ]
+    },
+    {
+      "id": "lengthen-tshirt-en",
+      "start": "tshirt",
+      "prompt": "Lengthen the T-shirt by 5 cm at the hem, front and back.",
+      "checks": [
+        {"kind": "called_any", "tools": ["move_points", "set_segment_length", "draft_garment"]},
+        {"kind": "changed", "path": "/pieces/0/size_cm/1", "min": 4.5, "max": 5.5},
+        {"kind": "changed", "path": "/pieces/1/size_cm/1", "min": 4.5, "max": 5.5},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "navy-colour-es",
+      "start": "tshirt",
+      "prompt": "Pon la camiseta en azul marino.",
+      "checks": [
+        {"kind": "called", "tool": "set_color"},
+        {"kind": "any", "path": "/fabrics/*/rgb/2", "above": 70},
+        {"kind": "any", "path": "/fabrics/*/rgb/0", "below": 60},
+        {"kind": "not_called", "tool": "draft_garment"},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "denim-en",
+      "start": "trousers",
+      "prompt": "Make these trousers out of denim and let them settle.",
+      "checks": [
+        {"kind": "called", "tool": "set_fabric", "with": {"preset": "denim"}},
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "any", "path": "/fabrics/*/name", "contains": "denim"},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "dart-es",
+      "start": "tshirt",
+      "prompt": "Añade una pinza de 2 cm de ancho y 10 cm de largo en el centro del bajo del delantero.",
+      "checks": [
+        {"kind": "called", "tool": "add_dart", "with": {"segment": "hem"}},
+        {"kind": "changed", "path": "/seams", "min": 1},
+        {"kind": "language", "lang": "es"},
+        {"kind": "max_errors", "count": 1}
+      ]
+    },
+    {
+      "id": "box-pleats-en",
+      "start": "skirt",
+      "prompt": "Add three box pleats, 3 cm deep, along the waist of the front piece.",
+      "checks": [
+        {"kind": "called", "tool": "add_pleats", "with": {"count": 3, "kind": "box"}},
+        {"kind": "any", "path": "/pieces/*/internal_lines/*/id", "contains": ""},
+        {"kind": "language", "lang": "en"},
+        {"kind": "max_errors", "count": 1}
+      ]
+    },
+    {
+      "id": "pocket-es",
+      "start": "tshirt",
+      "prompt": "Crea un bolsillo rectangular de 15 x 17 cm y cóselo por los lados y el fondo al delantero.",
+      "checks": [
+        {"kind": "called", "tool": "create_piece"},
+        {"kind": "called", "tool": "sew"},
+        {"kind": "changed", "path": "/pieces", "min": 1, "max": 1},
+        {"kind": "changed", "path": "/seams", "min": 1},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "looser-fit-en",
+      "start": "tshirt",
+      "prompt": "The T-shirt is too tight. Give it 6 cm more ease around the bust and hip, then check the fit.",
+      "checks": [
+        {"kind": "called_any", "tools": ["draft_garment", "move_points"]},
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "changed", "path": "/pieces/0/size_cm/0", "min": 1},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "library-avatar-es",
+      "start": "dress",
+      "prompt": "Cambia el avatar por el de hombre atlético de la biblioteca.",
+      "checks": [
+        {"kind": "called", "tool": "set_avatar", "with": {"preset": "man-athletic"}},
+        {"kind": "not_called", "tool": "command_run"},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "taller-avatar-en",
+      "start": "tshirt",
+      "prompt": "Make the avatar 8 cm taller, keep everything else.",
+      "checks": [
+        {"kind": "called", "tool": "set_avatar"},
+        {"kind": "changed", "path": "/avatar/height_cm", "min": 6, "max": 10},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "t-pose-es",
+      "start": "tshirt",
+      "prompt": "Pon al avatar en pose de T y vuelve a simular.",
+      "checks": [
+        {"kind": "called", "tool": "set_pose", "with": {"pose": "T-pose"}},
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "sizes-en",
+      "start": "tshirt",
+      "prompt": "Set up the sizes S, M, L and XL, with M as the base size.",
+      "checks": [
+        {"kind": "called", "tool": "grading", "with": {"action": "create"}},
+        {"kind": "count", "path": "/sizes/groups/0/sizes", "min": 4, "max": 4},
+        {"kind": "any", "path": "/sizes/groups/0/base", "equals": "M"},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "size-chart-es",
+      "start": "tshirt",
+      "prompt": "Muéstrame la tabla de medidas por talla.",
+      "checks": [
+        {"kind": "called_any", "tools": ["size_chart", "scene_summary"]},
+        {"kind": "not_called", "tool": "draft_garment"},
+        {"kind": "reply_contains", "any": ["talla"]},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "render-en",
+      "start": "dress",
+      "prompt": "Render a photoreal picture of the dress from the front and save it as look-front.",
+      "checks": [
+        {"kind": "called", "tool": "render", "with": {"name": "look-front"}},
+        {"kind": "called", "tool": "command_run", "with": {"key": "view.front"}},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "export-glb-es",
+      "start": "skirt",
+      "prompt": "Exporta la falda en GLB con el nombre prueba-falda.",
+      "checks": [
+        {"kind": "called", "tool": "export_garment", "with": {"format": "glb", "name": "prueba-falda"}},
+        {"kind": "max_calls", "count": 4},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "import-dxf-honesty-en",
+      "start": "tshirt",
+      "prompt": "Import the DXF pattern in my Downloads folder and sew it.",
+      "checks": [
+        {"kind": "not_called", "tool": "draft_garment"},
+        {"kind": "not_called", "tool": "create_piece"},
+        {"kind": "reply_contains", "any": ["can't", "cannot", "not able", "unable"]},
+        {"kind": "reply_contains", "any": ["File", "Import"]},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "uv-honesty-es",
+      "start": "tshirt",
+      "prompt": "Abre el editor UV y acomoda las islas sin que se solapen.",
+      "checks": [
+        {"kind": "called", "tool": "command_run", "with": {"key": "materials.pack_uv"}},
+        {"kind": "max_errors", "count": 1},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "seams-closed-en",
+      "start": "shirt",
+      "prompt": "Simulate for ten seconds and tell me whether every seam closed.",
+      "checks": [
+        {"kind": "called", "tool": "simulate"},
+        {"kind": "reply_contains", "any": ["seam"]},
+        {"kind": "max_errors", "count": 0},
+        {"kind": "language", "lang": "en"}
+      ]
+    },
+    {
+      "id": "shorter-skirt-es",
+      "start": "skirt",
+      "prompt": "Haz la falda 8 cm más corta.",
+      "checks": [
+        {"kind": "called_any", "tools": ["move_points", "set_segment_length", "draft_garment"]},
+        {"kind": "changed", "path": "/pieces/0/size_cm/1", "min": -9, "max": -7},
+        {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "fabric-weight-en",
+      "start": "dress",
+      "prompt": "Make the dress fabric heavier: 280 g/m² and 0.8 mm thick.",
+      "checks": [
+        {"kind": "called", "tool": "set_fabric_parameters"},
+        {"kind": "any", "path": "/fabrics/*/weight_gsm", "above": 279, "below": 281},
+        {"kind": "language", "lang": "en"}
+      ]
+    }
+  ]
+}

@@ -41,6 +41,13 @@ pub(super) struct AssistantUi {
     show_connection: bool,
     /// Development builds: FASHIONCRAFT_ASSISTANT_SEND was looked at.
     test_message_checked: bool,
+    /// The current conversation's tool calls, what the model wrote and how the last turn
+    /// failed, for the evaluation.
+    pub(super) calls: Vec<fashioncraft::agent_eval::Call>,
+    pub(super) replies: Vec<String>,
+    pub(super) failure: Option<String>,
+    /// FASHIONCRAFT_ASSISTANT_EVAL's run, when it was asked for.
+    pub(super) eval: super::assistant_eval::EvalState,
 }
 
 impl Default for AssistantUi {
@@ -56,6 +63,10 @@ impl Default for AssistantUi {
             key_message: None,
             show_connection: false,
             test_message_checked: false,
+            calls: Vec::new(),
+            replies: Vec::new(),
+            failure: None,
+            eval: Default::default(),
         }
     }
 }
@@ -167,6 +178,24 @@ fn tool_label(name: &str) -> &'static str {
         "screenshot" => "Looking at the 3D view",
         "save_project" => "Saving the project",
         "export_garment" => "Exporting the garment",
+        "piece_detail" => "Reading a piece",
+        "select" => "Selecting",
+        "create_piece" => "Creating a piece",
+        "move_points" => "Moving points",
+        "set_segment_length" => "Setting a length",
+        "add_point" => "Adding a point",
+        "add_dart" => "Adding a dart",
+        "add_pleats" => "Adding pleats",
+        "piece_edit" => "Editing a piece",
+        "sew" => "Sewing segments",
+        "seam_edit" => "Editing a seam",
+        "place_piece" => "Placing a piece on the body",
+        "set_fabric_parameters" => "Setting fabric parameters",
+        "set_avatar" => "Changing the avatar",
+        "set_pose" => "Posing the avatar",
+        "grading" => "Grading sizes",
+        "size_chart" => "Reading the size chart",
+        "render" => "Rendering",
         _ => "Using a tool",
     }
 }
@@ -248,12 +277,18 @@ impl Atelier {
         for update in updates {
             match update {
                 Update::Event(Event::Text(text)) => {
+                    self.assistant.replies.push(text.clone());
                     self.assistant.entries.push(Entry::Model(tidy(&text)))
                 }
                 Update::Event(Event::Notice(text)) => {
                     self.assistant.entries.push(Entry::Notice(text))
                 }
                 Update::Event(Event::ToolStarted { name, arguments }) => {
+                    self.assistant.calls.push(fashioncraft::agent_eval::Call {
+                        name: name.clone(),
+                        arguments: arguments.clone(),
+                        is_error: false,
+                    });
                     let mut detail = arguments.to_string();
                     if detail == "{}" {
                         detail.clear();
@@ -273,6 +308,11 @@ impl Atelier {
                     images,
                     is_error,
                 }) => {
+                    if let Some(call) = self.assistant.calls.last_mut()
+                        && call.name == name
+                    {
+                        call.is_error = is_error;
+                    }
                     let count = self.assistant.entries.len();
                     let shown: Vec<egui::TextureHandle> = images
                         .iter()
@@ -296,6 +336,7 @@ impl Atelier {
                 }
                 Update::Done(result) => {
                     if let Err(e) = result {
+                        self.assistant.failure = Some(e.clone());
                         self.assistant.entries.push(Entry::Problem(e));
                     }
                     self.assistant.worker = None;
@@ -310,6 +351,27 @@ impl Atelier {
         }
     }
 
+    /// Start a new conversation, forgetting the transcript.
+    pub(super) fn assistant_new_conversation(&mut self) {
+        let provider = self.assistant_provider();
+        *self
+            .assistant
+            .conversation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Conversation::new(provider);
+        self.assistant.entries.clear();
+        self.assistant.calls.clear();
+        self.assistant.replies.clear();
+        self.assistant.failure = None;
+    }
+
+    /// Send `text` as if typed in the Assistant's box.
+    pub(super) fn assistant_ask(&mut self, ctx: &egui::Context, text: &str) {
+        self.assistant.open = true;
+        self.assistant.input = text.to_owned();
+        self.assistant_send(ctx);
+    }
+
     fn assistant_send(&mut self, ctx: &egui::Context) {
         let text = self.assistant.input.trim().to_owned();
         if text.is_empty() || self.assistant.worker.is_some() {
@@ -317,6 +379,7 @@ impl Atelier {
         }
         let settings = self.assistant_settings();
         if let Some(missing) = settings.missing() {
+            self.assistant.failure = Some(missing.clone());
             self.assistant.entries.push(Entry::Problem(missing));
             self.assistant.show_connection = true;
             return;

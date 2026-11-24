@@ -292,15 +292,16 @@ fn multi_panel_edits_fail_atomically_and_remove_owned_seams() {
         .is_err()
     );
     assert_eq!(serde_json::to_value(&t).unwrap(), original);
-    assert!(
-        authoring::apply(
-            &t,
-            Command::RemovePanels {
-                panels: t.panels.iter().map(|p| p.id.clone()).collect()
-            }
-        )
-        .is_err()
-    );
+    // Deleting every piece leaves an empty garment, with no seams.
+    let emptied = authoring::apply(
+        &t,
+        Command::RemovePanels {
+            panels: t.panels.iter().map(|p| p.id.clone()).collect(),
+        },
+    )
+    .unwrap();
+    assert!(emptied.template.panels.is_empty() && emptied.template.seams.is_empty());
+    assert!(emptied.garment.mesh.uv.is_empty());
     let source = presets::basic(GarmentKind::Tshirt, 0);
     let source = authoring::apply(
         &source,

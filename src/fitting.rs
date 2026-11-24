@@ -626,6 +626,14 @@ impl FittingScene {
     }
 }
 impl FittingProject {
+    /// An empty project: the avatar and nothing else, for pieces to be drawn, added or
+    /// imported. It compiles to a garment with no cloth, which does not simulate.
+    pub fn empty(avatar_path: PathBuf) -> Self {
+        Self {
+            template: presets::empty(),
+            ..Self::basic(GarmentKind::Tshirt, 0, avatar_path)
+        }
+    }
     pub fn basic(kind: GarmentKind, subdivisions: u32, avatar_path: PathBuf) -> Self {
         Self {
             version: 1,

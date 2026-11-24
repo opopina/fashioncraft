@@ -1016,12 +1016,9 @@ impl GarmentTemplate {
         {
             return Err("Polygon geometry and material pins require template version 2".into());
         }
-        if self.panels.is_empty()
-            || self.panels.len() > 128
-            || self.fabrics.is_empty()
-            || self.seams.len() > 512
-        {
-            return Err("Template needs 1..128 panels, fabrics and at most 512 seams".into());
+        // No panels is an empty project: the avatar alone, with nothing to simulate yet.
+        if self.panels.len() > 128 || self.fabrics.is_empty() || self.seams.len() > 512 {
+            return Err("Template needs at most 128 panels, a fabric and at most 512 seams".into());
         }
         unique_ids(self.panels.iter().map(|p| p.id.as_str()), "panel")?;
         unique_ids(self.fabrics.iter().map(|f| f.id.as_str()), "fabric")?;

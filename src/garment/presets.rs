@@ -24,6 +24,16 @@ impl GarmentKind {
         }
     }
 }
+/// A garment with no pieces yet, the start of an empty project. It keeps the fixtures' fabric,
+/// so the first piece drawn has one to be cut from.
+pub fn empty() -> GarmentTemplate {
+    let mut template = basic(GarmentKind::Tshirt, 0);
+    template.name = "Untitled".into();
+    template.panels.clear();
+    template.seams.clear();
+    template
+}
+
 pub fn basic(kind: GarmentKind, subdivisions: u32) -> GarmentTemplate {
     let (points, edges, sewn, height): (Vec<[f64; 2]>, Vec<&str>, Vec<usize>, f64) = match kind {
         GarmentKind::Tshirt => (

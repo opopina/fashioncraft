@@ -41,6 +41,7 @@ pub enum CommandId {
     InvertSelection,
     ResetSelectedPieces3d,
     NewProject,
+    ShowHome,
     OpenProject,
     SaveProject,
     SaveProjectAs,
@@ -593,6 +594,15 @@ pub const REGISTRY: &[CommandDescriptor] = &[
         NewProject,
         "file.new",
         "New project",
+        Workspace,
+        None,
+        NotUndoable,
+        NativeWorkspace
+    ),
+    entry!(
+        ShowHome,
+        "window.home",
+        "Home screen",
         Workspace,
         None,
         NotUndoable,

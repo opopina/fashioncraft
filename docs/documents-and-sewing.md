@@ -4,7 +4,7 @@ Implementation pass: 16 October 2026. A working alpha slice of SAVE-01, SEW-01 a
 
 ## Documents
 
-File → New project starts one unsewn rectangle with the current avatar. Empty simulation meshes are unsupported. Open, Save and Save As use native file dialogs. Ctrl+O opens, Ctrl+S saves, Ctrl+Shift+S chooses another filename. An asterisk in the title marks unsaved edits or simulation changes. Opening a project clears the previous undo history.
+File → New project starts an empty project: the current avatar and no pieces, which has nothing to simulate or export until the first piece is drawn, added or imported. Deleting the last piece leaves the same empty project. Started without a project, FashionCraft shows the Home screen over an empty project: a new empty project, a template (T-shirt, dress, or a skirt or trousers drafted from the avatar's measurements), Open…, and the recent projects; Window → Home shows it again, and it has a switch to stop showing it at startup. Open, Save and Save As use native file dialogs. Ctrl+O opens, Ctrl+S saves, Ctrl+Shift+S chooses another filename. An asterisk in the title marks unsaved edits or simulation changes. Opening a project clears the previous undo history.
 
 Save stores the pattern model, materials, placements, sewing and the currently displayed accepted simulation state, plus VBD/contact settings. The CLI reuses saved settings unless `--dt` or `--iterations` explicitly overrides them. Placement previews are committed first; unfinished drawing/sewing drafts are not document changes. Export separately writes OBJ, preview SVG and research artifacts to the session output folder.
 

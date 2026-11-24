@@ -27,6 +27,7 @@ desktop = [
     "dep:bytemuck",
     "dep:pollster",
     "dep:rfd",
+    "dep:arboard",
     "dep:ureq",
     "dep:keyring",
     "dep:objc2",
@@ -47,6 +48,8 @@ quick-xml = "=0.41.0"
 svgtypes = "=0.16.1"
 tempfile = "3"
 rfd = { version = "0.17.2", optional = true }
+# The Assistant's paste of pictures and files; already in eframe's tree (egui-winit's clipboard).
+arboard = { version = "3.6", optional = true, default-features = false, features = ["image-data"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive"] }

@@ -12,31 +12,67 @@ pub const ANTHROPIC_VERSION: &str = "2026-10-21";
 /// The beta that lets a declined request be retried on Anthropic's recommended fallback model.
 pub const ANTHROPIC_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
 /// A turn stops after this many rounds of tool calls; the person can say "continue".
-pub const MAX_ROUNDS: usize = 25;
+pub const MAX_ROUNDS: usize = 40;
 const MAX_TOKENS: u32 = 16000;
 
-/// What the model is told about FashionCraft and how to work in it.
+/// What the model is told about FashionCraft and how to work in it. The Assistant sends it as
+/// the system prompt (API and CLI providers alike) and `fashioncraft-cli mcp` gives it to MCP
+/// clients as the server's instructions.
 pub const SYSTEM_PROMPT: &str = "\
-You are the assistant inside FashionCraft, a desktop app for drafting sewing patterns and \
-simulating garments on a 3D avatar. You work in the person's open project through your tools; \
-what you change shows in their window at once.
+You work in FashionCraft, a desktop app for drafting sewing patterns and draping them on a 3D \
+avatar, through its tools. What you change shows in the person's open window at once, and every \
+pattern edit can be undone (command_run edit.undo).
 
-How to work:
-- Look before you act: scene_summary tells you the pieces, seams, fabrics, avatar and where \
-the garment hangs. Measurements and positions are in centimetres.
-- draft_garment replaces the current garment with a new pattern. If scene_summary reports \
-unsaved changes, say that the current garment will be replaced before you do it, or save it \
-first with save_project when the person asked you to keep it.
-- After changing a pattern or fabric, run simulate for a few seconds so the cloth settles, \
-then take a screenshot when how it looks matters, and describe what you see.
-- Fabric presets are indicative starting points, not lab measurements. When the person talks \
-about manufacturing, say the fabric should be calibrated on the real material.
-- You cannot open files or dialogs. save_project and export_garment write to the person's \
-Documents/FashionCraft folder; command_run runs menu commands that need no dialog.
-- If a tool fails, read its message: it says what to change. Do not repeat the same failing \
-call.
+Garment basics
+- A garment is 2D pattern pieces sewn together. A piece's outline is numbered points joined by \
+segments; a seam joins segments of pieces, one to one or several to several (M:N). Sewn sides \
+should be equally long; a longer side needs ease and is gathered or eased in.
+- Grain: the warp runs at the piece's grain angle. Fabric stretches differently along warp, weft \
+and the bias (45 degrees).
+- Ease is width added to a body measurement for fit or style. Seam allowance is the margin outside \
+the sewing line (drafting only). Notches mark matching points. Darts and pleats take in fullness.
+- Lengths are in cm; on the 2D board x goes right and y down. Fabric values are model parameters, \
+not lab measurements of a real cloth.
 
-Keep answers short and practical, and reply in the person's language.";
+How to work
+1. Look: scene_summary (pieces, segments and lengths, seams, fabrics, avatar, selection, \
+warnings); piece_detail before editing a piece.
+2. Plan the steps. Ask only when something essential is missing; otherwise choose sensibly and \
+say what you chose.
+3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
+set_segment_length, add_point, add_dart, add_pleats, piece_edit, sew, seam_edit, place_piece, \
+set_fabric, set_fabric_parameters, set_color, set_avatar, set_pose, grading. command_list shows \
+the menu commands an agent can run; command_run runs one, with target to select first.
+4. Simulate after changing the pattern, fabric, avatar or placement (5 to 15 s). Then check the \
+seams: one that is still open (gap over 6 mm) needs its lengths, placement or ease fixed, and \
+another simulation.
+5. Look with screenshot (turn the view with command_run view.front, view.back, view.avatar_left, \
+view.three_quarter_right) and describe what you actually see.
+6. Report briefly what changed, with the key numbers, and what is left.
+
+Attachments
+- The person can attach pictures (photos, sketches, swatches), PDFs, text, CSV tables and \
+patterns. Pictures and PDFs reach you as they are when your connection reads them; otherwise the \
+message says so: tell the person plainly. A pattern or 3D model comes with FashionCraft's \
+summary (pieces and sizes) and a picture of its pieces; open_attachment opens it in the \
+importer for the person to confirm.
+- To make a garment from a photo or sketch: describe what you see (silhouette, pieces, seams, \
+closures, length, fit, fabric), draft the nearest base with draft_garment, adjust it, simulate, \
+take a screenshot, compare it with the picture and adjust again. Say what you could not match.
+
+Limits and honesty
+- You cannot draw with the mouse, open windows or file dialogs, read files the person did not \
+attach, edit textures or graphics, or animate. Say so plainly and name the menu path the person can use.
+- Drafted bases are simplified blocks (straight armholes and sleeve caps), not production \
+patterns. Fabric presets are indicative; for manufacturing, calibrate on the real fabric \
+(Materials > Measure fabric).
+- Never claim a fit, a closed seam or a look you have not checked with scene_summary, simulate \
+or screenshot. When a tool fails, read its message and change something; never repeat the same \
+failing call.
+- draft_garment and set_avatar replace work: if scene_summary reports unsaved changes, say so \
+first, or save_project when the person wants to keep it.
+
+Reply in the person's language, short and practical.";
 
 /// A model provider the Assistant can talk to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -267,10 +303,25 @@ impl Conversation {
         events: &mut dyn FnMut(Event),
         stop: &dyn Fn() -> bool,
     ) -> Result<(), String> {
+        self.turn_with(settings, text, &[], transport, run_tool, events, stop)
+    }
+
+    /// [`Self::turn`], with files the person attached to the message.
+    #[allow(clippy::too_many_arguments)]
+    pub fn turn_with(
+        &mut self,
+        settings: &Settings,
+        text: &str,
+        attachments: &[crate::attachments::Attachment],
+        transport: &mut dyn Transport,
+        run_tool: &mut dyn FnMut(&str, &Value) -> ToolResult,
+        events: &mut dyn FnMut(Event),
+        stop: &dyn Fn() -> bool,
+    ) -> Result<(), String> {
         if let Some(missing) = settings.missing() {
             return Err(missing);
         }
-        self.push_user_text(text);
+        self.push_user(text, attachments);
         let known: Vec<&str> = tools().iter().map(|t| t.name).collect();
         for _ in 0..MAX_ROUNDS {
             if stop() {
@@ -323,22 +374,27 @@ impl Conversation {
         Ok(())
     }
 
-    /// The person's message. After a stop or a failed request the last message may already be
-    /// theirs: Anthropic's then takes the text too, so turns keep alternating.
-    fn push_user_text(&mut self, text: &str) {
-        let block = json!({"type": "text", "text": text});
-        if self.provider == Provider::Anthropic
-            && let Some(last) = self.messages.last_mut()
-            && last["role"] == "user"
-            && let Some(content) = last["content"].as_array_mut()
-        {
-            content.push(block);
+    /// The person's message and its attachments. After a stop or a failed request the last
+    /// message may already be theirs: Anthropic's then takes these blocks too, so turns keep
+    /// alternating.
+    fn push_user(&mut self, text: &str, attachments: &[crate::attachments::Attachment]) {
+        if self.provider == Provider::Anthropic {
+            let blocks = crate::attachments::anthropic_blocks(text, attachments);
+            if let Some(last) = self.messages.last_mut()
+                && last["role"] == "user"
+                && let Some(content) = last["content"].as_array_mut()
+            {
+                content.extend(blocks);
+                return;
+            }
+            self.messages
+                .push(json!({"role": "user", "content": blocks}));
             return;
         }
-        self.messages.push(match self.provider {
-            Provider::Anthropic => json!({"role": "user", "content": [block]}),
-            _ => json!({"role": "user", "content": text}),
-        });
+        let content =
+            crate::attachments::openai_content(text, attachments, self.provider.sees_images());
+        self.messages
+            .push(json!({"role": "user", "content": content}));
     }
 
     fn anthropic_step(
@@ -798,6 +854,55 @@ mod tests {
         );
         assert_eq!(results[1]["is_error"], false);
         assert_eq!(conversation.messages().len(), 4);
+    }
+
+    #[test]
+    fn attached_pictures_reach_claude_and_openai_compatible_models() {
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([0, 0, 120, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let sketch = crate::attachments::from_bytes("sketch.png", &png);
+        let no_tools = |_: &str, _: &Value| ToolResult::text("");
+        for provider in [
+            Provider::Anthropic,
+            Provider::OpenAi,
+            Provider::ClaudeCli,
+            Provider::Local,
+        ] {
+            let answer = if provider == Provider::Anthropic {
+                json!({"content": [{"type": "text", "text": "A navy dress."}], "stop_reason": "end_turn"})
+            } else {
+                json!({"choices": [{"message": {"role": "assistant", "content": "A navy dress."}, "finish_reason": "stop"}]})
+            };
+            let mut transport = Canned::new(vec![Ok(answer)]);
+            let mut conversation = Conversation::new(provider);
+            let mut s = settings(provider);
+            s.model = "test-model".into();
+            conversation
+                .turn_with(
+                    &s,
+                    "What is this?",
+                    std::slice::from_ref(&sketch),
+                    &mut transport,
+                    &mut { no_tools },
+                    &mut |_| {},
+                    &|| false,
+                )
+                .unwrap();
+            let sent = transport.sent[0].2.to_string();
+            let sees = provider != Provider::Local;
+            assert_eq!(
+                sent.contains(if provider == Provider::Anthropic {
+                    "\"media_type\":\"image/png\""
+                } else {
+                    "data:image/png;base64,"
+                }),
+                sees,
+                "{provider:?}"
+            );
+            assert!(sent.contains("sketch.png") && sent.contains("What is this?"));
+        }
     }
 
     #[test]

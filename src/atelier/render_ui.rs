@@ -100,6 +100,10 @@ impl Atelier {
         Ok(())
     }
 
+    /// Whether the render window's worker runs, so an image can be saved.
+    pub(super) fn render_running(&self) -> bool {
+        self.authoring.render.worker.is_some()
+    }
     /// Write the render's image so far to `path` (a PNG), as Save image does.
     pub(super) fn save_render(&self, path: std::path::PathBuf) {
         if let Some(w) = &self.authoring.render.worker {

@@ -2373,6 +2373,171 @@ impl UnavailableReason {
     }
 }
 
+/// What a command acts on, for agents: they select it first (the select tool, or
+/// command_run's target).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentTarget {
+    Nothing,
+    Pieces,
+    /// An outline segment (a sewn one, for commands about its seam).
+    Segment,
+    /// An internal line of a piece.
+    Line,
+    /// Outline points of a piece.
+    Points,
+    Seam,
+    /// Part of the simulated mesh, picked with the mouse only.
+    Mesh,
+}
+
+/// How a command works, for agents: only `Runs` can be run without a person.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentUse {
+    Runs,
+    /// Starts a tool or a mode that waits for clicks or drags.
+    Mouse,
+    /// Opens a window whose fields and buttons a person uses.
+    Window,
+    /// Opens a native file dialog or the "save changes?" question.
+    Dialog,
+    /// Opens a page in the web browser.
+    Web,
+}
+
+impl AgentTarget {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Nothing => "nothing",
+            Self::Pieces => "pieces",
+            Self::Segment => "a segment",
+            Self::Line => "an internal line",
+            Self::Points => "outline points",
+            Self::Seam => "a seam",
+            Self::Mesh => "part of the mesh",
+        }
+    }
+}
+
+/// What a command needs selected before an agent runs it.
+pub fn agent_target(id: CommandId) -> AgentTarget {
+    use CommandId::*;
+    match id {
+        LockSelectedPieces
+        | ResetSelectedPieces3d
+        | CopyPieces
+        | DeletePieces
+        | DuplicatePiece
+        | DeactivatePieces
+        | DeactivatePiecesWithSeams
+        | ActivatePieces
+        | FreezePieces
+        | UnfreezePieces
+        | StrengthenPieces
+        | SolidifyPieces
+        | FlipPieceNormals
+        | SuperimposeOver
+        | SuperimposeUnder
+        | ArchivePieces
+        | AddDiamondDart
+        | AddInternalRectangle
+        | AddInternalEllipse
+        | ConvertToQuads
+        | ConvertToTriangles
+        | SuperimposeSide
+        | IsolateSelection
+        | ExportObjSelected
+        | AddButton
+        | AddButtonhole
+        | AddGraphic
+        | ToolMove
+        | ToolRotate => AgentTarget::Pieces,
+        UnfoldPiece | SplitSegment | AddZipper | AddTopstitch | Pleats | SinglePleat | Piping
+        | FrayEdge | Puckering | MergeAlongSeam => AgentTarget::Segment,
+        CutAndSew | SlashSpread | ReplaceOutline | ExtendLineEnds | TraceShape | CutAndExtend
+        | AddTape | FreeTopstitch | FoldArrangement | PleatSewing => AgentTarget::Line,
+        SmoothCurve | ToggleGradePoint => AgentTarget::Points,
+        SeamTaping | SeamlineTopstitch | TearSeam | EditTears => AgentTarget::Seam,
+        SubdivideMesh => AgentTarget::Mesh,
+        _ => AgentTarget::Nothing,
+    }
+}
+
+/// Whether an agent can run a command, or it waits for a person's mouse, window or dialog.
+pub fn agent_use(id: CommandId) -> AgentUse {
+    use CommandId::*;
+    match id {
+        ToolEdit | ToolDraw | ToolFreehand | ToolRectangle | ToolEllipse | ToolSector
+        | ToolInternalLine | ToolSew | ToolMove | ToolRotate | ToolGrab | ToolMeasure
+        | ToolInspect | ToolGraphic | AddButton | AddButtonhole | TracePen3d | PinBox
+        | PinLasso | MeasureBodyTape | MeasureBodyHeight | MeasureBodyGirth
+        | MeasureGarmentLine | MeasureGarmentGirth | SelectMeshBrush | SelectMeshBox
+        | SelectMeshLasso | SubdivideMesh | StyleLineEdit | StyleLineMove | StyleLineScale
+        | StyleLineDraw | GraphicOn3dGarment | Steam | EditTexture2d | EditTexture3d
+        | FreeSewing | ChainSegmentSewing | ChainFreeSewing => AgentUse::Mouse,
+        OpenPreferences
+        | OpenTemplates
+        | ToggleLibrary
+        | OpenPose
+        | OpenSceneObjects
+        | OpenAnimation
+        | OpenAvatarEditor
+        | CreateMakeHumanAvatar
+        | OpenAvatarLibrary
+        | DraftTshirt
+        | DraftSkirt
+        | DraftTrousers
+        | ToggleHistory
+        | ToggleAssistant
+        | ToggleObjectBrowser
+        | SimulationProperties
+        | CameraProperties
+        | Pleats
+        | SinglePleat
+        | MeasureFabric
+        | UvEditor
+        | PhotorealRender
+        | GradingTable
+        | PointsOfMeasure
+        | TearSeam
+        | EditTears
+        | AddDiamondDart => AgentUse::Window,
+        NewProject | OpenProject | SaveProject | SaveProjectAs | RecoverSnapshot | ImportAvatar
+        | ImportDxf | ImportDxfAama | ImportSvg | ExportSession | ExportPointCache
+        | ExportObjSequence | CaptureView3d | CaptureVideo | ExportGltf | ExportDxfAama
+        | ExportObj | ExportObjSelected | ExportMdd | ExportMddZUp | ExportUsd | ExportFbx
+        | ExportAlembic | SnapshotPatterns | ImportBvh | ImportPointCache | SaveGarment
+        | AddGarment | SavePoseFile | LoadPoseFile | SaveAvatar | AddGraphic | OpenTrim
+        | AddAvatarObject | RunPythonScript => AgentUse::Dialog,
+        OpenUserManual | OpenWhatsNew => AgentUse::Web,
+        _ => AgentUse::Runs,
+    }
+}
+
+/// The agent tool that does what a command an agent cannot run does, if there is one.
+pub fn agent_instead(id: CommandId) -> Option<&'static str> {
+    use CommandId::*;
+    Some(match id {
+        DraftTshirt | DraftSkirt | DraftTrousers | LoadTshirt | LoadDress => "draft_garment",
+        Pleats | SinglePleat => "add_pleats",
+        AddDiamondDart => "add_dart",
+        PhotorealRender => "render",
+        CaptureView3d => "screenshot or render",
+        OpenAvatarLibrary | OpenAvatarEditor | CreateMakeHumanAvatar => "set_avatar",
+        OpenPose => "set_pose",
+        GradingTable => "grading",
+        PointsOfMeasure => "size_chart",
+        SaveProject | SaveProjectAs => "save_project",
+        ExportObj | ExportGltf => "export_garment",
+        ToolSew | FreeSewing | ChainSegmentSewing | ChainFreeSewing => "sew",
+        ToolDraw | ToolFreehand | ToolRectangle | ToolEllipse | ToolSector => "create_piece",
+        ToolMove | ToolRotate => "place_piece",
+        ToolEdit => "select, move_points or set_segment_length",
+        ToolInternalLine => "add_dart or add_pleats (internal lines cannot be drawn by agents)",
+        MeasureFabric => "set_fabric_parameters",
+        _ => return None,
+    })
+}
+
 pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), UnavailableReason> {
     let descriptor = id.descriptor();
     if !ctx.document_loaded
@@ -2430,4 +2595,29 @@ pub fn availability(id: CommandId, ctx: CapabilityContext) -> Result<(), Unavail
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod agent_tests {
+    use super::*;
+
+    #[test]
+    fn agents_never_run_tools_dialogs_or_windows() {
+        for d in REGISTRY {
+            let runs = agent_use(d.id) == AgentUse::Runs;
+            if d.key.starts_with("tool.")
+                || d.key.starts_with("export.")
+                || d.key.starts_with("file.")
+                || d.key.starts_with("capture.")
+                || d.key.starts_with("help.")
+                || d.label.ends_with('…')
+            {
+                assert!(!runs, "{} must not be offered to agents as runnable", d.key);
+            }
+        }
+        assert_eq!(agent_use(CommandId::ViewBack), AgentUse::Runs);
+        assert_eq!(agent_target(CommandId::SmoothCurve), AgentTarget::Points);
+        assert_eq!(agent_instead(CommandId::Pleats), Some("add_pleats"));
+        assert_eq!(agent_target(CommandId::SeamTaping).label(), "a seam");
+    }
 }

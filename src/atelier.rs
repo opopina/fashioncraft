@@ -372,7 +372,10 @@ pub fn run(
                 // A demo and the smoke tests click the in-window menus.
                 native_menu: (!(smoke || drag_test || perf_test || authoring_test)
                     && demo::window_size().is_none())
-                .then(|| native_menu::NativeMenu::install(&cc.egui_ctx))
+                .then(|| {
+                    native_menu::watch_paste_key();
+                    native_menu::NativeMenu::install(&cc.egui_ctx)
+                })
                 .flatten(),
                 menu_windows: Default::default(),
                 demo_points: Default::default(),

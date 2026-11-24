@@ -353,6 +353,44 @@ pub(super) fn take_paste_key() -> bool {
     PASTE_KEY.swap(false, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Watch every key the app receives for ⌘V, before the menu bar, a text field or the window
+/// handle it, so a picture or files can be pasted into the Assistant however FashionCraft was
+/// started (a .app or the bare binary) and whether or not the menu bar is there. The key goes
+/// on as before: text still pastes into every text field. Once, at start; macOS only.
+#[cfg(target_os = "macos")]
+pub(super) fn watch_paste_key() {
+    use objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags};
+    use std::ptr::NonNull;
+    static WATCHING: std::sync::Once = std::sync::Once::new();
+    WATCHING.call_once(|| {
+        let block = block2::RcBlock::new(|event: NonNull<NSEvent>| -> *mut NSEvent {
+            // SAFETY: AppKit hands the monitor a valid event for the call's duration.
+            let e = unsafe { event.as_ref() };
+            let flags = e.modifierFlags();
+            let others = NSEventModifierFlags::Control | NSEventModifierFlags::Option;
+            // V by its character, or by its key on layouts without a Latin V (kVK_ANSI_V).
+            let v = e
+                .charactersIgnoringModifiers()
+                .is_some_and(|c| c.to_string().eq_ignore_ascii_case("v"))
+                || e.keyCode() == 9;
+            if v && flags.contains(NSEventModifierFlags::Command) && !flags.intersects(others) {
+                PASTE_KEY.store(true, std::sync::atomic::Ordering::Relaxed);
+                tracing::debug!("⌘V seen");
+            }
+            event.as_ptr()
+        });
+        // SAFETY: the handler returns the event it was given, a valid pointer.
+        let monitor = unsafe {
+            NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, &block)
+        };
+        // It watches for as long as the app runs.
+        std::mem::forget(monitor);
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn watch_paste_key() {}
+
 /// Where macOS has no menu bar of its own to use, the in-window bar stays.
 #[cfg(not(target_os = "macos"))]
 pub(super) enum NativeMenu {}

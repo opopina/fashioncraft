@@ -33,6 +33,7 @@ desktop = [
     "dep:objc2",
     "dep:objc2-app-kit",
     "dep:objc2-foundation",
+    "dep:block2",
 ]
 
 [dependencies]
@@ -74,12 +75,15 @@ keyring = { version = "3", optional = true, features = ["windows-native"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", optional = true, features = ["apple-native"] }
 objc2 = { version = "0.6.5", optional = true }
+# The ⌘V watch (src/atelier/native_menu.rs); already in the tree through objc2-app-kit.
+block2 = { version = "0.6.2", optional = true }
 objc2-foundation = { version = "0.3.2", optional = true, default-features = false, features = ["std", "NSString"] }
 objc2-app-kit = { version = "0.3.2", optional = true, default-features = false, features = [
     "std",
     "NSApplication",
     "NSCell",
     "NSEvent",
+    "block2",
     "NSMenu",
     "NSMenuItem",
     "NSResponder",

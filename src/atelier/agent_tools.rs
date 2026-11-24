@@ -386,9 +386,26 @@ impl Atelier {
         if let Some(e) = &self.simulation_error {
             warnings.push(format!("Simulation: {e}"));
         }
+        // Where each piece is now: the middle of its cloth (a placement's position is a corner
+        // of the piece, which says little about where it hangs).
+        let mut pieces = agent_ops::describe_pieces(template);
+        for piece in &mut pieces {
+            if let Some(range) = live
+                .garment
+                .panels
+                .iter()
+                .find(|p| piece["id"] == json!(p.id))
+                .filter(|r| r.vertices.end <= x.len() && !r.vertices.is_empty())
+            {
+                let c = range.vertices.clone().map(|v| x[v]).sum::<glam::DVec3>()
+                    / range.vertices.len() as f64;
+                piece["centre_3d_cm"] =
+                    json!([centimetres(c.x), centimetres(c.y), centimetres(c.z)]);
+            }
+        }
         json!({
             "garment_name": template.name,
-            "pieces": agent_ops::describe_pieces(template),
+            "pieces": pieces,
             "seams": agent_ops::describe_seams(template, Some(&live)),
             "fabrics": agent_ops::describe_fabrics(template),
             "avatar": avatar,

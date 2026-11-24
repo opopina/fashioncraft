@@ -187,3 +187,56 @@ fn a_puffed_sleeve_is_gathered_into_the_armhole() {
     );
     t.compile().unwrap();
 }
+
+#[test]
+fn both_sleeves_sit_on_their_arms_symmetrically() {
+    let body = SurfaceMesh::load_obj(&mannequin()).unwrap();
+    let arms = arms();
+    let mut t = shirt_around(
+        &ShirtMeasurements {
+            arms,
+            ..Default::default()
+        },
+        1,
+        Some(&body.vertices),
+    )
+    .unwrap();
+    for (id, side, armhole) in [
+        ("sleeve-right", "left", "armhole-right"),
+        ("sleeve-left", "right", "armhole-left"),
+    ] {
+        let build = agent_build::set_sleeve(
+            &t,
+            &json!({"sleeve": id, "side": side, "cap": ["cap-right", "cap-left"],
+                    "underarm": ["underarm-right", "underarm-left"],
+                    "armhole": [{"piece": "front", "segment": armhole}, {"piece": "back", "segment": armhole}]}),
+            arms,
+            Some(&body.vertices),
+        )
+        .unwrap();
+        t = agent_build::applied(&t, &build).unwrap();
+    }
+    let g = t.compile().unwrap();
+    let centre = |id: &str| {
+        let r = g.panels.iter().find(|p| p.id == id).unwrap();
+        r.vertices
+            .clone()
+            .map(|v| g.initial_state.x[v])
+            .sum::<DVec3>()
+            / r.vertices.len() as f64
+    };
+    let (a, b) = (centre("sleeve-right"), centre("sleeve-left"));
+    // Mirror images across the body's middle: x opposite, the same height and depth.
+    assert!((a.x + b.x).abs() < 0.02, "x {:.3} and {:.3}", a.x, b.x);
+    assert!(
+        (a.y - b.y).abs() < 0.02 && (a.z - b.z).abs() < 0.02,
+        "{a:?} {b:?}"
+    );
+    // Each on its own arm: beside the shoulder, not in front of or behind the body.
+    for (c, arm) in [(a, arms[0]), (b, arms[1])] {
+        assert!(
+            c.distance(arm[0].lerp(arm[1], 0.5)) < 0.15,
+            "{c:?} far from its arm"
+        );
+    }
+}

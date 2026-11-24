@@ -1090,6 +1090,115 @@ pub fn set_sleeve(
     })
 }
 
+/// A piece's box on the board: its layout origin and its size (turns ignored).
+fn board_box(template: &GarmentTemplate, i: usize) -> (DVec2, DVec2) {
+    let lo = authoring::layout(template, i);
+    (lo, lo + crate::agent_ops::piece_size(&template.panels[i]))
+}
+
+/// Pieces `ids` that overlap another piece on the board move to free space, to the right of
+/// every piece: new pieces from a cut, a copy or a merge, or a drafted garment's pieces, so
+/// none lies on top of another. Board only; the cloth is not touched.
+pub fn spread_on_board(template: &mut GarmentTemplate, ids: &[String]) {
+    let overlaps = |a: (DVec2, DVec2), b: (DVec2, DVec2)| {
+        let gap = 0.005;
+        a.0.x + gap < b.1.x && b.0.x + gap < a.1.x && a.0.y + gap < b.1.y && b.0.y + gap < a.1.y
+    };
+    for id in ids {
+        let Some(i) = template.panels.iter().position(|p| &p.id == id) else {
+            continue;
+        };
+        let mine = board_box(template, i);
+        let crowded =
+            (0..template.panels.len()).any(|j| j != i && overlaps(mine, board_box(template, j)));
+        if crowded {
+            // Freeze every implicit layout first: moving one must not move the others.
+            for k in 0..template.panels.len() {
+                let at = authoring::layout(template, k);
+                template.panels[k].layout_2d.get_or_insert(at);
+            }
+            let others = {
+                let mut t = template.clone();
+                t.panels.remove(i);
+                t
+            };
+            template.panels[i].layout_2d = Some(crate::agent_ops::free_board_spot(&others));
+        }
+    }
+}
+
+/// Names for pieces an edit made (a cut, a copy, a merge) that would share a name with
+/// another piece: a half of a cut piece is named for where it lies on the board against the
+/// other half ("Front (upper)" and "Front (lower)", or left and right); anything else still
+/// shared gets a number. Agents should then rename pieces for what they are.
+pub fn name_new_pieces(before: &GarmentTemplate, after: &mut GarmentTemplate) {
+    let base = |name: &str| -> String {
+        let name = name.trim();
+        match name.rsplit_once(' ') {
+            Some((head, tail)) if tail.chars().all(|c| c.is_ascii_digit()) => head.to_owned(),
+            _ => name.to_owned(),
+        }
+    };
+    let new: Vec<usize> = (0..after.panels.len())
+        .filter(|&i| !before.panels.iter().any(|p| p.id == after.panels[i].id))
+        .collect();
+    for &i in &new {
+        let stem = base(&after.panels[i].name);
+        // The piece it was cut from: an old piece of the same name whose outline changed.
+        let sibling = (0..after.panels.len()).find(|&j| {
+            j != i
+                && base(&after.panels[j].name) == stem
+                && before.panels.iter().any(|p| {
+                    p.id == after.panels[j].id
+                        && serde_json::to_value(&p.polygon).ok()
+                            != serde_json::to_value(&after.panels[j].polygon).ok()
+                })
+        });
+        if let Some(j) = sibling {
+            let centre = |k: usize| {
+                let (lo, hi) = board_box(after, k);
+                (lo + hi) / 2.
+            };
+            let d = centre(i) - centre(j);
+            // y runs down the board.
+            let (mine, theirs) = if d.y.abs() >= d.x.abs() {
+                if d.y > 0. {
+                    ("lower", "upper")
+                } else {
+                    ("upper", "lower")
+                }
+            } else if d.x > 0. {
+                ("right", "left")
+            } else {
+                ("left", "right")
+            };
+            after.panels[i].name = format!("{stem} ({mine})");
+            if base(&after.panels[j].name) == after.panels[j].name.trim()
+                || after.panels[j].name.trim() != stem
+            {
+                after.panels[j].name = format!("{stem} ({theirs})");
+            }
+        }
+    }
+    // Whatever is still shared gets a number.
+    for &i in &new {
+        let taken = |name: &str, panels: &[crate::garment::template::Panel]| {
+            panels
+                .iter()
+                .enumerate()
+                .any(|(k, p)| k != i && p.name.trim() == name)
+        };
+        if taken(after.panels[i].name.trim(), &after.panels) {
+            let stem = base(&after.panels[i].name);
+            let name = (2..)
+                .map(|n| format!("{stem} {n}"))
+                .find(|n| !taken(n, &after.panels))
+                .unwrap_or_default();
+            after.panels[i].name = name;
+        }
+    }
+}
+
 /// Where a host's material point lies on the drape now.
 fn on_drape(garment: &CompiledGarment, x: &[DVec3], panel: &str, uv: DVec2) -> Option<DVec3> {
     let weights = garment.material_point(panel, uv)?;
@@ -1240,6 +1349,35 @@ mod tests {
     }
     fn applied(t: &GarmentTemplate, build: Build) -> GarmentTemplate {
         super::applied(t, &build).unwrap()
+    }
+
+    #[test]
+    fn copies_get_their_own_names_and_their_own_place_on_the_board() {
+        let t = shirt();
+        let id = t.panels[0].id.clone();
+        let name = t.panels[0].name.clone();
+        let mut after = authoring::apply(&t, Command::Duplicate { panel: id.clone() })
+            .unwrap()
+            .template;
+        let copy = after.panels.last().unwrap().id.clone();
+        // A copy given the same name as its original…
+        after.panels.last_mut().unwrap().name = name.clone();
+        after.panels.last_mut().unwrap().layout_2d = authoring::layout(&t, 0).into();
+        name_new_pieces(&t, &mut after);
+        spread_on_board(&mut after, &[copy.clone()]);
+        let c = after.panels.iter().find(|p| p.id == copy).unwrap();
+        assert_ne!(c.name, name, "a name of its own");
+        let i = after.panels.iter().position(|p| p.id == copy).unwrap();
+        let (lo, hi) = board_box(&after, i);
+        for j in 0..after.panels.len() {
+            if j != i {
+                let (a, b) = board_box(&after, j);
+                assert!(
+                    lo.x >= b.x || hi.x <= a.x || lo.y >= b.y || hi.y <= a.y,
+                    "overlaps {j}"
+                );
+            }
+        }
     }
 
     #[test]

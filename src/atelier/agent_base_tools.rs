@@ -308,6 +308,32 @@ impl Atelier {
         }
     }
 
+    /// Pieces lying on top of each other on the board move apart (a drafted garment's front and
+    /// back are drawn in the same place): one undo step, board only.
+    pub(super) fn agent_spread_board(&mut self) {
+        let mut spread = self.project.template.clone();
+        let ids: Vec<String> = spread.panels.iter().map(|p| p.id.clone()).collect();
+        agent_build::spread_on_board(&mut spread, &ids);
+        let commands: Vec<Command> = spread
+            .panels
+            .iter()
+            .enumerate()
+            .filter(|(i, p)| {
+                p.layout_2d != self.project.template.panels[*i].layout_2d
+                    && p.layout_2d
+                        != Some(fashioncraft::authoring::layout(&self.project.template, *i))
+            })
+            .map(|(_, p)| Command::BoardTransform {
+                panel: p.id.clone(),
+                origin: p.layout_2d.unwrap_or_default(),
+                rotation_degrees: p.layout_rotation_degrees,
+            })
+            .collect();
+        if !commands.is_empty() {
+            self.edit_sequence(commands, &[], "Spread on board");
+        }
+    }
+
     /// Edits that lay new cloth on the drape need the simulation between steps.
     fn ready(&self) -> Result<(), String> {
         if self.pending {

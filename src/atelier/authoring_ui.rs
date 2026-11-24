@@ -993,6 +993,22 @@ impl Atelier {
                         p.name = new_name.clone();
                     }
                 }
+                // Pieces a cut, a copy or a merge made get names of their own and free space
+                // on the board.
+                if names.is_empty() {
+                    fashioncraft::agent_build::name_new_pieces(
+                        &self.project.template,
+                        &mut edit.template,
+                    );
+                }
+                let new: Vec<String> = edit
+                    .template
+                    .panels
+                    .iter()
+                    .filter(|p| !self.project.template.panels.iter().any(|o| o.id == p.id))
+                    .map(|p| p.id.clone())
+                    .collect();
+                fashioncraft::agent_build::spread_on_board(&mut edit.template, &new);
                 // Copies and mirrored copies are named in the interface's language.
                 {
                     let before: std::collections::BTreeSet<&str> = self

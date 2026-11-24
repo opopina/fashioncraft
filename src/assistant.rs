@@ -61,7 +61,9 @@ ok or you can explain what is left. If simulate or check_garment says the simula
 paused because cloth starts inside other cloth or the body, deal with that first: undo the \
 change that caused it, move that piece clear or reset the arrangement, then simulate again. \
 Never place a sleeve by moving it in cm: every sleeve goes in with set_sleeve, which sews and \
-places it. Never change the avatar's pose or body unless the person asks for it.
+places it. Never change the avatar's pose or body unless the person asks for it. Give pieces \
+names that say what they are (piece_edit rename), such as front bodice, waistband or skirt \
+front.
 5. Look with camera (a view and screenshot true), check_garment with a view, or screenshot, and \
 describe what you actually see.
 6. Report briefly what changed, with the key numbers, and what is left.

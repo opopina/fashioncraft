@@ -82,8 +82,10 @@ impl Atelier {
                         .and_then(Value::as_bool)
                         .unwrap_or(true);
                     let kind = args.get("kind").and_then(Value::as_str).unwrap_or("");
-                    self.agent_draft(kind, from_avatar, &overrides)
-                        .map(ToolResult::text)
+                    self.agent_draft(kind, from_avatar, &overrides).map(|text| {
+                        self.agent_spread_board();
+                        ToolResult::text(text)
+                    })
                 }
                 "set_fabric" => self.agent_fabric(args),
                 "set_color" => self.agent_color(args),

@@ -595,78 +595,23 @@ impl Atelier {
     }
 
     fn agent_simulation_settings(&mut self, args: &Value) -> Result<ToolResult, String> {
-        let mut changed = Vec::new();
-        if let Some(q) = args.get("quality").and_then(Value::as_str) {
-            let (_, dt, iterations, _) = super::environment_ui::PRESETS
-                .iter()
-                .find(|(n, ..)| n.eq_ignore_ascii_case(q))
-                .ok_or("quality: fast, normal or accurate")?;
-            self.settings.dt = *dt;
-            self.settings.iterations = *iterations;
-            changed.push("quality");
-        }
+        let presets: Vec<(&str, f64, usize)> = super::environment_ui::PRESETS
+            .iter()
+            .map(|(n, dt, it, _)| (*n, *dt, *it))
+            .collect();
+        let body_floor = self
+            .scene
+            .collider
+            .surface
+            .vertices
+            .iter()
+            .map(|v| v.y)
+            .fold(f64::INFINITY, f64::min);
+        let mut changed =
+            agent_base::change_simulation(&mut self.settings, args, &presets, body_floor)?;
         if let Some(b) = args.get("gpu").and_then(Value::as_bool) {
             self.gpu = b;
             changed.push("gpu");
-        }
-        if let Some(n) = args.get("iterations").and_then(Value::as_u64) {
-            self.settings.iterations = (n as usize).clamp(2, 128);
-            changed.push("iterations");
-        }
-        if let Some(v) = number(args, "damping") {
-            self.settings.damping = v.clamp(0., 10.);
-            changed.push("damping");
-        }
-        if let Some(v) = number(args, "friction") {
-            self.settings.friction = v.clamp(0., 1.5);
-            changed.push("friction");
-        }
-        if let Some(v) = number(args, "collision_distance_mm") {
-            self.settings.contact.radius = v.clamp(0.5, 20.) / 1000.;
-            changed.push("collision distance");
-        }
-        if let Some(v) = number(args, "gravity_m_s2") {
-            self.settings.gravity = DVec3::new(0., -v, 0.);
-            changed.push("gravity");
-        }
-        if let Some(speed) = number(args, "wind_m_s") {
-            if speed <= 0. {
-                self.settings.wind = None;
-            } else {
-                let from = number(args, "wind_from_degrees").unwrap_or(0.).to_radians();
-                let velocity = DVec3::new(-from.sin() * speed, 0., -from.cos() * speed);
-                let mut wind = self
-                    .settings
-                    .wind
-                    .clone()
-                    .unwrap_or(fashioncraft::vbd::Wind {
-                        velocity,
-                        drag: 1.2,
-                        density: 1.2,
-                    });
-                wind.velocity = velocity;
-                self.settings.wind = Some(wind);
-            }
-            changed.push("wind");
-        }
-        if let Some(on) = args.get("floor").and_then(Value::as_bool) {
-            self.settings.floor = on
-                .then(|| {
-                    self.scene
-                        .collider
-                        .surface
-                        .vertices
-                        .iter()
-                        .map(|v| v.y)
-                        .fold(f64::INFINITY, f64::min)
-                })
-                .filter(|f| f.is_finite())
-                .or(on.then_some(0.));
-            changed.push("floor");
-        }
-        if let Some(h) = number(args, "floor_height_cm") {
-            self.settings.floor = Some(h / 100.);
-            changed.push("floor height");
         }
         let mut note = String::new();
         if let Some(mm) = number(args, "particle_distance_mm") {
@@ -784,54 +729,9 @@ impl Atelier {
 
     fn agent_avatar_maker(&mut self, args: &Value) -> Result<ToolResult, String> {
         use fashioncraft::avatar_look::{self, LookChoice};
-        use fashioncraft::avatar_maker::{MEASURES, MacroBody};
+        use fashioncraft::avatar_maker::MEASURES;
         let (current, current_look) = self.authoring.avatar_maker.current();
-        let gender = number(args, "gender").unwrap_or(current.gender);
-        let age = number(args, "age_years").unwrap_or(current.age_years);
-        let mut body = match args
-            .get("start")
-            .and_then(Value::as_str)
-            .unwrap_or("typical")
-        {
-            "typical" => MacroBody::typical(gender, age),
-            "current" => current,
-            "random_realistic" => MacroBody::typical(gender, age)
-                .realistic(args.get("seed").and_then(Value::as_u64).unwrap_or(1))?,
-            other => {
-                return Err(format!(
-                    "start '{other}': typical, current or random_realistic"
-                ));
-            }
-        };
-        let set = |v: &mut f64, key: &str| {
-            if let Some(x) = number(args, key) {
-                *v = x;
-            }
-        };
-        set(&mut body.gender, "gender");
-        set(&mut body.age_years, "age_years");
-        set(&mut body.muscle, "muscle");
-        set(&mut body.weight, "weight");
-        set(&mut body.height, "height");
-        set(&mut body.proportions, "proportions");
-        set(&mut body.cupsize, "cupsize");
-        set(&mut body.firmness, "firmness");
-        set(&mut body.african, "african");
-        set(&mut body.asian, "asian");
-        set(&mut body.european, "european");
-        if let Some(measures) = args.get("measures").and_then(Value::as_object) {
-            for (name, value) in measures {
-                let k = MEASURES
-                    .iter()
-                    .position(|(m, _)| m == name)
-                    .ok_or_else(|| {
-                        let names: Vec<&str> = MEASURES.iter().map(|(n, _)| *n).collect();
-                        format!("No measure '{name}'. They are: {}", names.join(", "))
-                    })?;
-                body.measures[k] = value.as_f64().unwrap_or(0.).clamp(-1., 1.);
-            }
-        }
-        body.validate()?;
+        let body = agent_base::macro_body(args, current)?;
         let mut look: LookChoice = current_look;
         if let Some(l) = args.get("look").and_then(Value::as_object) {
             let choose = |key: &str,
@@ -882,7 +782,7 @@ impl Atelier {
             "look": {"skin": look.skin, "eyes": look.eyes, "eyebrows": look.eyebrows,
                      "eyelashes": look.eyelashes, "hair": look.hair, "hair_colour": look.hair_colour},
         });
-        self.authoring.avatar_maker.set(body, look.clone());
+        self.authoring.avatar_maker.set(body, look);
         if args.get("make").and_then(Value::as_bool) != Some(true) {
             return Ok(ToolResult::json(&json!({
                 "settings": settings,
@@ -919,29 +819,7 @@ impl Atelier {
             })));
         }
         self.ready()?;
-        if reset {
-            pose.pose.0.clear();
-        }
-        for (bone, angles) in joints.into_iter().flatten() {
-            if !bones.contains(&bone.as_str())
-                && !fashioncraft::avatar_rig::legacy_bone_names().any(|b| b == bone)
-            {
-                return Err(format!(
-                    "No bone '{bone}': pose_joints with list true names them"
-                ));
-            }
-            let a = triple(Some(angles))
-                .map(|v| v * 100.)
-                .ok_or("Angles are [x, y, z] degrees")?;
-            if a.abs().max_element() > 360. {
-                return Err("Angles are at most 360 degrees".into());
-            }
-            if a == DVec3::ZERO {
-                pose.pose.0.remove(bone);
-            } else {
-                pose.pose.0.insert(bone.clone(), a.to_array());
-            }
-        }
+        agent_base::change_pose(&mut pose.pose, joints, reset, &bones)?;
         let turned = pose.pose.0.clone();
         if !self.apply_pose(pose) {
             return Err(self.status.clone());
@@ -953,18 +831,8 @@ impl Atelier {
     }
 
     fn agent_measure_fabric(&mut self, args: &Value) -> Result<Pending, String> {
-        use fashioncraft::fabric_kit::{self, Measurements};
-        let mut m = Measurements::default();
-        let defaults = serde_json::to_value(&m).map_err(|e| e.to_string())?;
-        let mut given = defaults.as_object().cloned().unwrap_or_default();
-        for (k, v) in args.as_object().into_iter().flatten() {
-            if k != "name" && k != "pieces" {
-                given.insert(k.clone(), v.clone());
-            }
-        }
-        m = serde_json::from_value(Value::Object(given))
-            .map_err(|e| format!("The measurements are wrong: {e}"))?;
-        m.validate()?;
+        use fashioncraft::fabric_kit;
+        let m = agent_base::fabric_measurements(args)?;
         let pieces = match args.get("pieces").and_then(Value::as_array) {
             Some(list) => list
                 .iter()
@@ -1297,9 +1165,9 @@ impl Atelier {
             pressure,
         });
         if let Some(e) = &self.simulation_error {
-            report["problems"]
-                .as_array_mut()
-                .map(|p| p.insert(0, json!(format!("Simulation: {e}"))));
+            if let Some(p) = report["problems"].as_array_mut() {
+                p.insert(0, json!(format!("Simulation: {e}")));
+            }
             report["ok"] = json!(false);
         }
         report

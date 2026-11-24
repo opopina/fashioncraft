@@ -2453,6 +2453,8 @@ pub fn agent_target(id: CommandId) -> AgentTarget {
 }
 
 /// Whether an agent can run a command, or it waits for a person's mouse, window or dialog.
+/// Commands that do not run say in [`agent_instead`] which agent tool does their job, or in
+/// [`agent_reason`] why agents cannot (a test keeps every command covered).
 pub fn agent_use(id: CommandId) -> AgentUse {
     use CommandId::*;
     match id {
@@ -2499,7 +2501,130 @@ pub fn agent_use(id: CommandId) -> AgentUse {
         | AddGarment | SavePoseFile | LoadPoseFile | SaveAvatar | AddGraphic | OpenTrim
         | AddAvatarObject | RunPythonScript => AgentUse::Dialog,
         OpenUserManual | OpenWhatsNew => AgentUse::Web,
-        _ => AgentUse::Runs,
+        // Every other command, listed so that a new one must be classified here (the match
+        // has no catch-all) before it builds.
+        ToggleSimulation
+        | StepSimulation
+        | ResetSimulation
+        | SplitView
+        | GarmentView
+        | PatternView
+        | ToggleInspector
+        | ResetLayout
+        | LoadTshirt
+        | LoadDress
+        | LockSelectedPieces
+        | LockAllPieces
+        | UnlockAllPieces
+        | LockInternalLines
+        | UnlockInternalLines
+        | InvertSelection
+        | ResetSelectedPieces3d
+        | Undo
+        | Redo
+        | ViewFront
+        | ViewBack
+        | ViewAvatarRight
+        | ViewAvatarLeft
+        | ViewTop
+        | ViewBottom
+        | ViewThreeQuarterRight
+        | ViewThreeQuarterLeft
+        | FrameView
+        | ToggleAvatar
+        | ToggleGarment
+        | IsolateSelection
+        | StrainMap
+        | TechnicalView
+        | RandomPieceColours
+        | SelectAllPieces
+        | CopyPieces
+        | PastePieces
+        | DeletePieces
+        | DuplicatePiece
+        | DeactivatePieces
+        | DeactivatePiecesWithSeams
+        | ActivatePieces
+        | FreezePieces
+        | UnfreezePieces
+        | StrengthenPieces
+        | SolidifyPieces
+        | FlipPieceNormals
+        | SuperimposeOver
+        | SuperimposeUnder
+        | FastenButtons
+        | ArchivePieces
+        | CutAndSew
+        | SlashSpread
+        | ReplaceOutline
+        | MergeAlongSeam
+        | UnfoldPiece
+        | ExtendLineEnds
+        | ToggleSkeleton
+        | RestPose
+        | ClearSceneObjects
+        | PlayAnimation
+        | RecordAnimation
+        | DeleteAnimation
+        | ToggleArrangementPoints
+        | AttachPins
+        | DetachPins
+        | AddSpiral
+        | AddInternalRectangle
+        | AddInternalEllipse
+        | CheckSewingLength
+        | AddZipper
+        | AddTopstitch
+        | ToggleSmartGuides
+        | ToggleSnapToGrid
+        | ToggleSnapToPattern
+        | StressMap
+        | ShowPins
+        | ShowTrims
+        | ShowGraphics
+        | HighResolution
+        | LowResolution
+        | StyleTexturedThick
+        | StyleTextured
+        | StylePlain
+        | ShowInternalLines
+        | RefreshTextures
+        | ShowPieceNames
+        | SmoothCurve
+        | SplitSegment
+        | AddTape
+        | SeamTaping
+        | SeamlineTopstitch
+        | FreeTopstitch
+        | AutoSewing
+        | StyleTranslucent
+        | GizmoWorldAxes
+        | GizmoLocalAxes
+        | GizmoScreenAxes
+        | FoldArrangement
+        | SelectAllSeams
+        | ActivateAllSeams
+        | PressureMap
+        | Reset2dArrangement
+        | PleatSewing
+        | Puckering
+        | Piping
+        | FrayEdge
+        | TraceShape
+        | CutAndExtend
+        | ConvertToQuads
+        | ConvertToTriangles
+        | HighQualityView
+        | SuperimposeSide
+        | DeleteAvatar
+        | ReDrape
+        | AutoFit
+        | PackUvIslands
+        | AutomaticUvLayout
+        | ToggleGradePoint
+        | GradingReview
+        | NextSize
+        | PreviousSize => AgentUse::Runs,
     }
 }
 
@@ -2507,23 +2632,82 @@ pub fn agent_use(id: CommandId) -> AgentUse {
 pub fn agent_instead(id: CommandId) -> Option<&'static str> {
     use CommandId::*;
     Some(match id {
-        DraftTshirt | DraftSkirt | DraftTrousers | LoadTshirt | LoadDress => "draft_garment",
+        DraftTshirt | DraftSkirt | DraftTrousers | LoadTshirt | LoadDress | OpenTemplates => {
+            "draft_garment"
+        }
         Pleats | SinglePleat => "add_pleats",
         AddDiamondDart => "add_dart",
-        PhotorealRender => "render",
+        PhotorealRender => "render (render_settings for its settings)",
         CaptureView3d => "screenshot or render",
-        OpenAvatarLibrary | OpenAvatarEditor | CreateMakeHumanAvatar => "set_avatar",
-        OpenPose => "set_pose",
+        OpenAvatarLibrary => "set_avatar",
+        OpenAvatarEditor | CreateMakeHumanAvatar => "avatar_maker or set_avatar",
+        OpenPose => "set_pose or pose_joints",
         GradingTable => "grading",
-        PointsOfMeasure => "size_chart",
+        PointsOfMeasure => "points_of_measure (size_chart reads them)",
         SaveProject | SaveProjectAs => "save_project",
         ExportObj | ExportGltf => "export_garment",
         ToolSew | FreeSewing | ChainSegmentSewing | ChainFreeSewing => "sew",
         ToolDraw | ToolFreehand | ToolRectangle | ToolEllipse | ToolSector => "create_piece",
-        ToolMove | ToolRotate => "place_piece",
-        ToolEdit => "select, move_points or set_segment_length",
-        ToolInternalLine => "add_dart or add_pleats (internal lines cannot be drawn by agents)",
-        MeasureFabric => "set_fabric_parameters",
+        ToolMove | ToolRotate => "transform_piece or place_piece",
+        ToolEdit => "select, move_points, set_segment_length or bend_segment",
+        ToolInternalLine | StyleLineDraw => "add_internal_line",
+        StyleLineEdit | StyleLineMove | StyleLineScale => "style_line",
+        ToolGrab => "grab",
+        PinBox | PinLasso => "pin",
+        TracePen3d => "trace_on_body",
+        AddButton | AddButtonhole => "add_buttons",
+        ToolMeasure | MeasureBodyTape | MeasureBodyHeight | MeasureBodyGirth
+        | MeasureGarmentLine | MeasureGarmentGirth => "measure",
+        ToolInspect | ToggleObjectBrowser => "scene_summary or piece_detail",
+        MeasureFabric => "measure_fabric (set_fabric_parameters to type the values)",
+        SimulationProperties => "simulation_settings",
+        CameraProperties => "camera",
+        TearSeam | EditTears => "edit (SetSeamTears, SetSeamStrength)",
+        Steam => "edit (AddSteam, RemoveSteam)",
+        SelectMeshBrush | SelectMeshBox | SelectMeshLasso | SubdivideMesh => {
+            "edit (SetMeshRefinement)"
+        }
+        EditTexture2d | EditTexture3d => "edit (SetTextureOffset; set_color for colour)",
+        ToggleLibrary => "set_fabric, set_avatar or draft_garment",
+        _ => return None,
+    })
+}
+
+/// Why agents cannot do what a command does, for the commands no agent tool replaces.
+pub fn agent_reason(id: CommandId) -> Option<&'static str> {
+    use CommandId::*;
+    Some(match id {
+        OpenPreferences => "the person's own settings, which agents never change",
+        ToggleHistory => "shows the history panel to the person; edit.undo and edit.redo run",
+        ToggleAssistant => "opens the Assistant panel itself",
+        OpenSceneObjects | AddAvatarObject => {
+            "scene props come from 3D files the person picks in a file dialog"
+        }
+        OpenAnimation | CaptureVideo => {
+            "animation and video are set up on a timeline a person works; not available to \
+             agents yet"
+        }
+        UvEditor => {
+            "UV islands are arranged by hand in the UV editor; materials.pack_uv and materials.automatic_uv_layout run"
+        }
+        ToolGraphic | AddGraphic | GraphicOn3dGarment => {
+            "a graphic is an image file the person picks in a file dialog"
+        }
+        NewProject | OpenProject | RecoverSnapshot => {
+            "replacing the open project asks the person about unsaved work; draft_garment \
+             starts a new garment"
+        }
+        ImportAvatar | ImportDxf | ImportDxfAama | ImportSvg | ImportBvh | ImportPointCache
+        | LoadPoseFile | OpenTrim | AddGarment | RunPythonScript => {
+            "it reads a file the person picks in a file dialog; agents read no files from disk"
+        }
+        ExportSession | ExportPointCache | ExportObjSequence | ExportDxfAama
+        | ExportObjSelected | ExportMdd | ExportMddZUp | ExportUsd | ExportFbx | ExportAlembic
+        | SnapshotPatterns | SaveGarment | SavePoseFile | SaveAvatar => {
+            "it writes where the person picks in a file dialog; export_garment writes OBJ and \
+             GLB and save_project the project into Documents/FashionCraft"
+        }
+        OpenUserManual | OpenWhatsNew => "opens a web page; guide has the basics",
         _ => return None,
     })
 }
@@ -2609,5 +2793,60 @@ mod agent_tests {
         assert_eq!(agent_target(CommandId::SmoothCurve), AgentTarget::Points);
         assert_eq!(agent_instead(CommandId::Pleats), Some("add_pleats"));
         assert_eq!(agent_target(CommandId::SeamTaping).label(), "a seam");
+    }
+
+    /// Every command maps to something an agent can do (command_run, or an agent tool that
+    /// does its job) or to a written reason why not. A new command without one fails here.
+    #[test]
+    fn every_command_is_covered_for_agents() {
+        let tools: Vec<&str> = fashioncraft::agent::tools()
+            .iter()
+            .map(|t| t.name)
+            .collect();
+        let (mut runs, mut by_tool, mut reasoned) = (0, 0, 0);
+        for d in REGISTRY {
+            match agent_use(d.id) {
+                AgentUse::Runs => {
+                    runs += 1;
+                    assert!(
+                        agent_reason(d.id).is_none(),
+                        "{} runs: no reason needed",
+                        d.key
+                    );
+                }
+                _ => match (agent_instead(d.id), agent_reason(d.id)) {
+                    (Some(instead), None) => {
+                        by_tool += 1;
+                        let first = instead.split([' ', ',']).next().unwrap_or("");
+                        assert!(tools.contains(&first), "{}: no agent tool '{first}'", d.key);
+                        for word in instead.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                            if word.contains('_')
+                                && word.chars().all(|c| c.is_lowercase() || c == '_')
+                            {
+                                assert!(tools.contains(&word), "{}: no agent tool '{word}'", d.key);
+                            }
+                        }
+                    }
+                    (None, Some(why)) => {
+                        reasoned += 1;
+                        assert!(why.len() > 20, "{}: say why", d.key);
+                    }
+                    (Some(_), Some(_)) => panic!("{}: a tool or a reason, not both", d.key),
+                    (None, None) => panic!(
+                        "{} ({:?}) is not covered for agents: name the agent tool that does its \
+                         job in agent_instead, or say why agents cannot in agent_reason",
+                        d.key,
+                        agent_use(d.id)
+                    ),
+                },
+            }
+        }
+        assert_eq!(runs + by_tool + reasoned, REGISTRY.len());
+        println!(
+            "agent coverage: {runs} run with command_run, {by_tool} by an agent tool, \
+             {reasoned} with a reason ({} commands)",
+            REGISTRY.len()
+        );
+        assert!(runs + by_tool >= 180, "coverage fell to {}", runs + by_tool);
     }
 }

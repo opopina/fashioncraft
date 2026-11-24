@@ -413,6 +413,9 @@ impl Atelier {
                         entry["agent_can_run"] = json!(false);
                         entry["because"] = json!(usage_text(other));
                         entry["instead"] = json!(commands::agent_instead(d.id));
+                        if let Some(why) = commands::agent_reason(d.id) {
+                            entry["why_not"] = json!(why);
+                        }
                     }
                 }
                 entry
@@ -566,9 +569,10 @@ impl Atelier {
                     usage_text(usage)
                 ),
                 None => format!(
-                    "'{key}' ({label}) {}, so an agent cannot use it. Tell the person to choose \
-                     it from the menu themselves.",
-                    usage_text(usage)
+                    "'{key}' ({label}) {}, so an agent cannot use it ({}). Tell the person to \
+                     choose it from the menu themselves.",
+                    usage_text(usage),
+                    commands::agent_reason(descriptor.id).unwrap_or("no agent tool does it yet")
                 ),
             });
         }

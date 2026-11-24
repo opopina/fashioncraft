@@ -419,6 +419,200 @@ pub fn tools() -> Vec<Tool> {
     ]
 }
 
+fn number(args: &Value, key: &str) -> Option<f64> {
+    args.get(key)
+        .and_then(Value::as_f64)
+        .filter(|v| v.is_finite())
+}
+
+/// `simulation_settings`' changes to the solver's settings (all but the GPU switch and the
+/// particle distance, which the window owns): the names of what changed. `presets` are the
+/// quality presets (name, time step, iterations); `body_floor` the avatar's lowest point.
+pub fn change_simulation(
+    settings: &mut crate::vbd::VbdSettings,
+    args: &Value,
+    presets: &[(&str, f64, usize)],
+    body_floor: f64,
+) -> Result<Vec<&'static str>, String> {
+    let mut changed = Vec::new();
+    if let Some(q) = args.get("quality").and_then(Value::as_str) {
+        let (_, dt, iterations) = presets
+            .iter()
+            .find(|(n, ..)| n.eq_ignore_ascii_case(q))
+            .ok_or("quality: fast, normal or accurate")?;
+        settings.dt = *dt;
+        settings.iterations = *iterations;
+        changed.push("quality");
+    }
+    if let Some(n) = args.get("iterations").and_then(Value::as_u64) {
+        settings.iterations = (n as usize).clamp(2, 128);
+        changed.push("iterations");
+    }
+    if let Some(v) = number(args, "damping") {
+        settings.damping = v.clamp(0., 10.);
+        changed.push("damping");
+    }
+    if let Some(v) = number(args, "friction") {
+        settings.friction = v.clamp(0., 1.5);
+        changed.push("friction");
+    }
+    if let Some(v) = number(args, "collision_distance_mm") {
+        settings.contact.radius = v.clamp(0.5, 20.) / 1000.;
+        changed.push("collision distance");
+    }
+    if let Some(v) = number(args, "gravity_m_s2") {
+        settings.gravity = glam::DVec3::new(0., -v, 0.);
+        changed.push("gravity");
+    }
+    if let Some(speed) = number(args, "wind_m_s") {
+        if speed <= 0. {
+            settings.wind = None;
+        } else {
+            // From 0° = from the front (+z), as the panel's wind direction.
+            let from = number(args, "wind_from_degrees").unwrap_or(0.).to_radians();
+            let velocity = glam::DVec3::new(-from.sin() * speed, 0., -from.cos() * speed);
+            let mut wind = settings.wind.clone().unwrap_or(crate::vbd::Wind {
+                velocity,
+                drag: 1.2,
+                density: 1.2,
+            });
+            wind.velocity = velocity;
+            settings.wind = Some(wind);
+        }
+        changed.push("wind");
+    }
+    if let Some(on) = args.get("floor").and_then(Value::as_bool) {
+        settings.floor = on.then(|| {
+            if body_floor.is_finite() {
+                body_floor
+            } else {
+                0.
+            }
+        });
+        changed.push("floor");
+    }
+    if let Some(h) = number(args, "floor_height_cm") {
+        settings.floor = Some(h / 100.);
+        changed.push("floor height");
+    }
+    Ok(changed)
+}
+
+/// `avatar_maker`'s body: a typical one for the gender and age (or `current`, or a random
+/// realistic one), with the settings and local measures the agent gave, checked.
+pub fn macro_body(
+    args: &Value,
+    current: crate::avatar_maker::MacroBody,
+) -> Result<crate::avatar_maker::MacroBody, String> {
+    use crate::avatar_maker::{MEASURES, MacroBody};
+    let gender = number(args, "gender").unwrap_or(current.gender);
+    let age = number(args, "age_years").unwrap_or(current.age_years);
+    let mut body = match args
+        .get("start")
+        .and_then(Value::as_str)
+        .unwrap_or("typical")
+    {
+        "typical" => MacroBody::typical(gender, age),
+        "current" => current,
+        "random_realistic" => MacroBody::typical(gender, age)
+            .realistic(args.get("seed").and_then(Value::as_u64).unwrap_or(1))?,
+        other => {
+            return Err(format!(
+                "start '{other}': typical, current or random_realistic"
+            ));
+        }
+    };
+    for (key, field) in [
+        ("gender", &mut body.gender),
+        ("age_years", &mut body.age_years),
+        ("muscle", &mut body.muscle),
+        ("weight", &mut body.weight),
+        ("height", &mut body.height),
+        ("proportions", &mut body.proportions),
+        ("cupsize", &mut body.cupsize),
+        ("firmness", &mut body.firmness),
+        ("african", &mut body.african),
+        ("asian", &mut body.asian),
+        ("european", &mut body.european),
+    ] {
+        if let Some(v) = number(args, key) {
+            *field = v;
+        }
+    }
+    if let Some(measures) = args.get("measures").and_then(Value::as_object) {
+        for (name, value) in measures {
+            let k = MEASURES
+                .iter()
+                .position(|(m, _)| m == name)
+                .ok_or_else(|| {
+                    let names: Vec<&str> = MEASURES.iter().map(|(n, _)| *n).collect();
+                    format!("No measure '{name}'. They are: {}", names.join(", "))
+                })?;
+            body.measures[k] = value.as_f64().unwrap_or(0.).clamp(-1., 1.);
+        }
+    }
+    body.validate()?;
+    Ok(body)
+}
+
+/// `pose_joints`' change to a pose: every joint cleared first when `reset`, then each named
+/// bone turned ([x, y, z] degrees; all zero removes it). `bones` are the rig's bone names; the
+/// legacy names work on every rig.
+pub fn change_pose(
+    pose: &mut crate::avatar_rig::Pose,
+    joints: Option<&serde_json::Map<String, Value>>,
+    reset: bool,
+    bones: &[&str],
+) -> Result<(), String> {
+    if reset {
+        pose.0.clear();
+    }
+    for (bone, angles) in joints.into_iter().flatten() {
+        if !bones.contains(&bone.as_str())
+            && !crate::avatar_rig::legacy_bone_names().any(|b| b == bone)
+        {
+            return Err(format!(
+                "No bone '{bone}': pose_joints with list true names them"
+            ));
+        }
+        let a = angles
+            .as_array()
+            .filter(|a| a.len() == 3)
+            .and_then(|a| Some([a[0].as_f64()?, a[1].as_f64()?, a[2].as_f64()?]))
+            .filter(|a| a.iter().all(|v| v.is_finite()))
+            .ok_or("Angles are [x, y, z] degrees")?;
+        if a.iter().any(|v| v.abs() > 360.) {
+            return Err("Angles are at most 360 degrees".into());
+        }
+        if a == [0.; 3] {
+            pose.0.remove(bone);
+        } else {
+            pose.0.insert(bone.clone(), a);
+        }
+    }
+    Ok(())
+}
+
+/// `measure_fabric`'s measurements: the Measure fabric window's defaults for what the agent
+/// left out (strip and gauge sizes), the rest as given, checked.
+pub fn fabric_measurements(args: &Value) -> Result<crate::fabric_kit::Measurements, String> {
+    use crate::fabric_kit::Measurements;
+    let defaults = serde_json::to_value(Measurements::default()).map_err(|e| e.to_string())?;
+    let mut given = defaults.as_object().cloned().unwrap_or_default();
+    for (k, v) in args.as_object().into_iter().flatten() {
+        if k != "name" && k != "pieces" {
+            given.insert(k.clone(), v.clone());
+        }
+    }
+    let m: Measurements = serde_json::from_value(Value::Object(given))
+        .map_err(|e| format!("The measurements are wrong: {e}"))?;
+    m.validate()?;
+    if m.warp.is_empty() && m.weft.is_empty() {
+        return Err("Give the strip test along warp or weft: [{load_g, length_mm}, …]".into());
+    }
+    Ok(m)
+}
+
 /// The base tools that change nothing in the document and need no window state beyond it.
 pub fn answer_without_window(name: &str, args: &Value) -> Option<crate::agent::ToolResult> {
     use crate::agent::ToolResult;
@@ -442,5 +636,101 @@ pub fn answer_without_window(name: &str, args: &Value) -> Option<crate::agent::T
             )))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_base_tool_is_listed_once_with_an_object_schema() {
+        let all = crate::agent::tools();
+        let mut names: Vec<&str> = all.iter().map(|t| t.name).collect();
+        let n = names.len();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), n, "a tool is listed twice");
+        for t in tools() {
+            assert!(names.contains(&t.name));
+            assert_eq!(t.input_schema["type"], "object", "{}", t.name);
+            assert!(t.description.len() > 40, "{}", t.name);
+        }
+        assert!(answer_without_window("guide", &json!({"topic": "darts"})).is_some());
+        let ops = answer_without_window("edit_ops", &json!({"names": ["SetSeamZipper"]})).unwrap();
+        assert!(ops.joined_text().contains("SeamZipper"));
+    }
+
+    #[test]
+    fn simulation_settings_change_only_what_is_given() {
+        let mut s = crate::vbd::VbdSettings::default();
+        let presets = [("Fast", 1. / 60., 8), ("Accurate", 1. / 120., 32)];
+        let before = s.clone();
+        let changed = change_simulation(
+            &mut s,
+            &json!({"quality": "accurate", "friction": 0.5, "wind_m_s": 3, "wind_from_degrees": 90,
+                    "collision_distance_mm": 4, "floor": true}),
+            &presets,
+            -0.01,
+        )
+        .unwrap();
+        assert_eq!(changed.len(), 5);
+        assert_eq!((s.iterations, s.friction), (32, 0.5));
+        assert!((s.dt - 1. / 120.).abs() < 1e-12 && (s.contact.radius - 0.004).abs() < 1e-12);
+        let wind = s.wind.as_ref().unwrap().velocity;
+        assert!(
+            (wind.x + 3.).abs() < 1e-9 && wind.z.abs() < 1e-9,
+            "from the avatar's left"
+        );
+        assert_eq!(s.floor, Some(-0.01));
+        assert_eq!(s.gravity, before.gravity);
+        assert!(change_simulation(&mut s, &json!({"quality": "best"}), &presets, 0.).is_err());
+    }
+
+    #[test]
+    fn the_avatar_maker_takes_settings_and_named_measures() {
+        let current = crate::avatar_maker::MacroBody::default();
+        let body = macro_body(
+            &json!({"gender": 1, "age_years": 40, "muscle": 0.7, "measures": {"waist-circ": 0.5}}),
+            current,
+        )
+        .unwrap();
+        assert_eq!((body.gender, body.age_years, body.muscle), (1., 40., 0.7));
+        let k = crate::avatar_maker::MEASURES
+            .iter()
+            .position(|(n, _)| *n == "waist-circ")
+            .unwrap();
+        assert_eq!(body.measures[k], 0.5);
+        assert!(macro_body(&json!({"measures": {"tail": 1}}), current).is_err());
+        assert!(macro_body(&json!({"age_years": 500}), current).is_err());
+    }
+
+    #[test]
+    fn pose_joints_turn_known_bones_only() {
+        let mut pose = crate::avatar_rig::Pose(Default::default());
+        let joints = json!({"upper_arm.L": [0, 0, -60], "forearm.L": [0, 0, 0]});
+        change_pose(&mut pose, joints.as_object(), false, &[]).unwrap();
+        assert_eq!(pose.0.get("upper_arm.L"), Some(&[0., 0., -60.]));
+        assert!(!pose.0.contains_key("forearm.L"));
+        let bad = json!({"wing": [0, 0, 1]});
+        assert!(change_pose(&mut pose, bad.as_object(), false, &[]).is_err());
+        let wild = json!({"head": [0, 720, 0]});
+        assert!(change_pose(&mut pose, wild.as_object(), false, &[]).is_err());
+        change_pose(&mut pose, None, true, &[]).unwrap();
+        assert!(pose.0.is_empty());
+    }
+
+    #[test]
+    fn measured_fabric_needs_a_strip_test_and_keeps_the_window_defaults() {
+        let m = fabric_measurements(&json!({
+            "gsm": 210, "thickness_mm": 0.45, "name": "Denim", "pieces": [],
+            "warp": [{"load_g": 500, "length_mm": 101.2}, {"load_g": 1000, "length_mm": 102.1}]
+        }))
+        .unwrap();
+        assert_eq!((m.gsm, m.warp.len(), m.gauge_mm), (210., 2, 100.));
+        assert!(fabric_measurements(&json!({"gsm": 210, "thickness_mm": 0.4})).is_err());
+        assert!(
+            fabric_measurements(&json!({"gsm": 210, "thickness_mm": 0.4, "colour": 1})).is_err()
+        );
     }
 }

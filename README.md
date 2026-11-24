@@ -84,8 +84,9 @@ Materials, Avatar, Animation, Render, Display, Settings and Window.
   topstitching.
 - **Avatars:** a library of twelve ready-made bodies with skin, eyes and hair. A body generator from
   gender, age, build and twenty measurements, using MakeHuman's CC0 shapes with the settings of
-  NAVER LABS Europe's Anny. Avatar import from OBJ, glTF, FBX, USD and Alembic; an avatar editor,
-  tape and girth measures, an automatic skeleton, poses and BVH motion.
+  NAVER LABS Europe's [Anny](https://github.com/naver/anny), and Anny's 104-bone skeleton with
+  hand-painted skin weights. Avatar import from OBJ, glTF, FBX, USD and Alembic, with an automatic
+  skeleton; an avatar editor, tape and girth measures, poses and BVH motion.
 - **Animation and export:** record takes on the GPU or the CPU, with the cloth following a walking
   body; export OBJ, glTF/GLB, FBX, Alembic, USD/USDZ, PC2 and MDD point caches and OBJ sequences;
   capture video of the 3D view.
@@ -166,8 +167,9 @@ copyright notice is kept in [LICENSE](LICENSE); [CONTRIBUTORS.md](CONTRIBUTORS.m
 involved. Some authoring and camera tools were adapted from FireflyTheReal / julienfoss's fork
 ([notes](docs/firefly-integration.md)).
 
-The bundled bodies, skins, eyes and hair are MakeHuman's CC0 assets; the body settings follow
-NAVER LABS Europe's Anny (Apache 2.0). These, the fonts and other third-party material are listed in
+The bundled bodies, skins, eyes, hair and skin weights are MakeHuman's CC0 assets; the body settings
+and the compact skeleton follow NAVER LABS Europe's [Anny](https://github.com/naver/anny) (Apache
+2.0). These, the fonts and other third-party material are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The icon is documented in the
 [artwork record](assets/branding/README.md).
 

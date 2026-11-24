@@ -159,8 +159,8 @@ pub fn tools() -> Vec<Tool> {
             "add_detail",
             "Make a garment detail exactly from a few numbers, cut, sewn and laid on the drape \
              in one undo step: patch_pocket (piece, width_cm, height_cm, centre_cm on the \
-             piece; stitched on three sides), band_collar (segments: the neckline's segments \
-             in order around the neck; height_cm), placket (piece, segment, width_cm). \
+             piece; stitched on three sides), band_collar (segments: the neckline's segments, \
+             any order, the first where the collar starts; height_cm), placket (piece, segment, width_cm). \
              guide('details') has typical sizes.",
             object(
                 json!({

@@ -264,14 +264,18 @@ impl Atelier {
         if !self.edit_named(build.command, build.history_name) {
             return Err(self.status.clone());
         }
-        let mut done = build.done;
         if let Some(lay) = &build.lay
             && let Err(e) = self.lay_new_piece(lay)
         {
-            done.push_str(&format!(
-                ". It could not start on the drape ({e}): it starts where pieces are laid out"
+            // Left where new pieces are laid out, it would be dragged through the garment when
+            // simulated: take the change back instead.
+            self.undo_edit(false);
+            return Err(format!(
+                "The new piece could not start on the garment ({e}), so nothing was changed. \
+                 Simulate first so the garment is draped, or change the numbers, and try again"
             ));
         }
+        let done = build.done;
         Ok(ToolResult::text(done))
     }
 
@@ -1094,14 +1098,25 @@ impl Atelier {
                     .iter()
                     .map(|t| t.vertices)
                     .collect();
-                let cloth = measure3d::girth(&self.scene.state.x, &triangles, axis)
-                    .map(|c| (measure3d::path_length(&c.points, c.closed), c.closed));
+                // Pieces whose cut lies within the body's widest reach there (and a hand more)
+                // count; sleeves on arms further out do not.
+                let reach = (!self.project.avatar_removed && !surface.vertices.is_empty())
+                    .then(|| measure3d::girth(&surface.vertices, &surface.triangles, axis))
+                    .flatten()
+                    .map(|c| {
+                        c.points
+                            .iter()
+                            .map(|p| DVec2::new(p.x - axis.x, p.z - axis.z).length())
+                            .fold(0f64, f64::max)
+                    })
+                    .map_or(0.4, |r| r * 1.6 + 0.05);
+                let cloth =
+                    agent_check::garment_girth(&self.scene.state.x, &triangles, axis, reach);
                 Ok(ToolResult::json(&json!({
                     "height_cm": cm(h),
                     "body_cm": body.map(cm),
-                    "garment_cm": cloth.map(|(l, _)| cm(l)),
-                    "garment_closed_around": cloth.map(|(_, c)| c),
-                    "ease_cm": body.zip(cloth).map(|(b, (g, _))| cm(g - b)),
+                    "garment_cm": cloth.map(cm),
+                    "ease_cm": body.zip(cloth).map(|(b, g)| cm(g - b)),
                     "note": "Measured on the drape as it is now; simulate first for a fit reading",
                 })))
             }

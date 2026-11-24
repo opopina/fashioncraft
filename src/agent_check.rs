@@ -16,6 +16,9 @@ pub const STRAIN_LIMIT: f64 = 0.08;
 /// Pressure on the body beyond which a garment feels tight, Pa (compression wear sits at 2–4
 /// kPa; everyday clothes under 1 kPa).
 pub const PRESSURE_LIMIT_PA: f64 = 2000.;
+/// A strained or tight spot is a problem when it covers at least this share of its piece, %
+/// (or passes twice its limit); smaller ones are listed apart as small spots.
+pub const SPOT_SHARE_PERCENT: f64 = 1.;
 /// Cloth further inside the body than this, metres, is a problem rather than contact.
 pub const INSIDE_LIMIT_M: f64 = 0.003;
 /// The drape has settled when its fastest point moves slower than this, m/s…
@@ -130,7 +133,7 @@ fn hot_spots(
             spots.push(json!({
                 "piece": range.id,
                 "worst": unit(value),
-                "share_of_piece_over_limit_percent": (over_area / area.max(1e-12) * 100.).round(),
+                "share_of_piece_over_limit_percent": (over_area / area.max(1e-12) * 1000.).round() / 10.,
                 "where": at,
             }));
         }
@@ -216,7 +219,25 @@ pub fn check(input: &Input) -> Value {
     } else {
         Vec::new()
     };
+    // A single strained triangle at a seam's corner is how a seam pulls on cloth; a strained
+    // area, or a very strained spot, is a fit problem.
+    let significant = |s: &Value, limit: f64| {
+        s["share_of_piece_over_limit_percent"]
+            .as_f64()
+            .unwrap_or(0.)
+            >= SPOT_SHARE_PERCENT
+            || s["worst"].as_f64().unwrap_or(0.) >= 2. * limit
+    };
+    let mut small_spots = Vec::new();
     for s in &strained {
+        if !significant(s, STRAIN_LIMIT * 100.) {
+            small_spots.push(format!(
+                "strain {} % at {}",
+                s["worst"],
+                where_text(&s["where"])
+            ));
+            continue;
+        }
         problems.push(format!(
             "Strained {} %: {} ({} % of the piece over {} %)",
             s["worst"],
@@ -234,6 +255,10 @@ pub fn check(input: &Input) -> Value {
         _ => Vec::new(),
     };
     for s in &pressed {
+        if !significant(s, PRESSURE_LIMIT_PA / 1000.) {
+            small_spots.push(format!("{} kPa at {}", s["worst"], where_text(&s["where"])));
+            continue;
+        }
         problems.push(format!(
             "Tight: {} kPa on the body at {}",
             s["worst"],
@@ -307,6 +332,7 @@ pub fn check(input: &Input) -> Value {
         "seams": {"total": seams.len(), "open": open},
         "strain_over_limit": strained,
         "strain_limit_percent": STRAIN_LIMIT * 100.,
+        "small_spots": small_spots,
         "pressure_over_limit": pressed,
         "pressure_limit_kpa": PRESSURE_LIMIT_PA / 1000.,
         "pressure_measured": input.pressure.is_some(),
@@ -320,9 +346,78 @@ pub fn check(input: &Input) -> Value {
     })
 }
 
+/// A garment's girth at the height of `at`, as a tape around it reads it: the cuts through
+/// every piece there whose middle lies within `reach` (horizontally) of `at`, so sleeves on
+/// arms further out stay out, closed with the shortest loop around them all (their convex
+/// hull). None when the plane misses the garment.
+pub fn garment_girth(x: &[DVec3], triangles: &[[usize; 3]], at: DVec3, reach: f64) -> Option<f64> {
+    let flat = |p: DVec3| DVec2::new(p.x - at.x, p.z - at.z);
+    let mut points: Vec<DVec2> = Vec::new();
+    for cut in crate::measure3d::level_cuts(x, triangles, at.y) {
+        if cut.points.is_empty() {
+            continue;
+        }
+        let middle = cut.points.iter().map(|p| flat(*p)).sum::<DVec2>() / cut.points.len() as f64;
+        if middle.length() <= reach {
+            points.extend(cut.points.iter().map(|p| flat(*p)));
+        }
+    }
+    if points.len() < 3 {
+        return None;
+    }
+    // Monotone chain convex hull.
+    points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    let cross = |o: DVec2, a: DVec2, b: DVec2| (a - o).perp_dot(b - o);
+    let mut hull: Vec<DVec2> = Vec::new();
+    for pass in 0..2 {
+        let start = hull.len();
+        let iter: Box<dyn Iterator<Item = &DVec2>> = if pass == 0 {
+            Box::new(points.iter())
+        } else {
+            Box::new(points.iter().rev())
+        };
+        for &p in iter {
+            while hull.len() >= start + 2
+                && cross(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0.
+            {
+                hull.pop();
+            }
+            hull.push(p);
+        }
+        hull.pop();
+    }
+    Some(
+        (0..hull.len())
+            .map(|i| hull[i].distance(hull[(i + 1) % hull.len()]))
+            .sum(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_garment_girth_closes_around_pieces_cut_apart() {
+        // Four separate flat pieces, one per side of a 20 cm square tube around the y axis,
+        // and a sleeve-like piece far out to the side.
+        let mut x = Vec::new();
+        let mut triangles = Vec::new();
+        let mut quad = |a: DVec3, b: DVec3| {
+            let k = x.len();
+            x.extend([a, b, b + DVec3::Y, a + DVec3::Y]);
+            triangles.push([k, k + 1, k + 2]);
+            triangles.push([k, k + 2, k + 3]);
+        };
+        let c = [(-0.1, -0.1), (0.1, -0.1), (0.1, 0.1), (-0.1, 0.1)];
+        for i in 0..4 {
+            let (a, b) = (c[i], c[(i + 1) % 4]);
+            quad(DVec3::new(a.0, 0., a.1), DVec3::new(b.0, 0., b.1));
+        }
+        quad(DVec3::new(0.6, 0., -0.05), DVec3::new(0.6, 0., 0.05));
+        let girth = garment_girth(&x, &triangles, DVec3::new(0., 0.5, 0.), 0.3).unwrap();
+        assert!((girth - 0.8).abs() < 1e-6, "{girth}");
+    }
 
     #[test]
     fn a_laid_out_garment_is_not_judged_and_an_open_seam_is_found() {

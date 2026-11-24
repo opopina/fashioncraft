@@ -161,14 +161,15 @@ fn add_rectangle(
     name: &str,
     fabric: &str,
 ) -> Result<(GarmentTemplate, String), String> {
+    let at = crate::agent_ops::free_board_spot(template);
     let mut t = authoring::apply(
         template,
         Command::Polygon {
             points: vec![
-                DVec2::ZERO,
-                DVec2::new(w, 0.),
-                DVec2::new(w, h),
-                DVec2::new(0., h),
+                at,
+                at + DVec2::new(w, 0.),
+                at + DVec2::new(w, h),
+                at + DVec2::new(0., h),
             ],
             tangents: vec![],
             meshing: meshing(template),
@@ -567,13 +568,77 @@ fn patch_pocket(template: &GarmentTemplate, args: &Value) -> Result<Build, Strin
 }
 
 /// The segments an agent named, in order, each turned to continue the one before.
+/// Outline points that are one point of the garment: the same point, or the ends of whole
+/// one-to-one seams sewn together (a shoulder seam joins the front's and the back's neck
+/// corners). Each point maps to a representative.
+fn sewn_points(
+    template: &GarmentTemplate,
+) -> std::collections::BTreeMap<(String, usize), (String, usize)> {
+    use std::collections::BTreeMap;
+    let mut parent: BTreeMap<(String, usize), (String, usize)> = BTreeMap::new();
+    fn find(
+        parent: &mut BTreeMap<(String, usize), (String, usize)>,
+        p: (String, usize),
+    ) -> (String, usize) {
+        let mut root = p.clone();
+        while let Some(up) = parent.get(&root).filter(|u| **u != root) {
+            root = up.clone();
+        }
+        if root != p {
+            parent.insert(p, root.clone());
+        }
+        root
+    }
+    let ends = |r: &BoundaryRef| -> Option<[(String, usize); 2]> {
+        let panel = template.panels.iter().find(|p| p.id == r.panel)?;
+        let (i, ..) = segment(panel, r.edge.as_deref()?).ok()?;
+        let n = panel.polygon.as_ref()?.points.len();
+        let whole = r.range[0] <= 1e-6 && r.range[1] >= 1. - 1e-6;
+        whole.then(|| [(r.panel.clone(), i), (r.panel.clone(), (i + 1) % n)])
+    };
+    for seam in template
+        .seams
+        .iter()
+        .filter(|s| s.a_tail.is_empty() && s.b_tail.is_empty())
+    {
+        let (Some([a0, a1]), Some([b0, b1])) = (ends(&seam.a), ends(&seam.b)) else {
+            continue;
+        };
+        let pairs = if seam.reverse_b {
+            [(a0, b1), (a1, b0)]
+        } else {
+            [(a0, b0), (a1, b1)]
+        };
+        for (x, y) in pairs {
+            let (rx, ry) = (find(&mut parent, x), find(&mut parent, y));
+            if rx != ry {
+                parent.insert(rx, ry);
+            }
+        }
+    }
+    let keys: Vec<(String, usize)> = parent.keys().cloned().collect();
+    keys.into_iter()
+        .map(|k| {
+            let root = find(&mut parent, k.clone());
+            (k, root)
+        })
+        .collect()
+}
+
+/// The segments an agent named, put in order along the edge from the first one, each turned
+/// to continue the one before. Segments follow each other where they share a point of the
+/// garment (the same corner, or corners a seam joins); failing that, the nearest in 3D.
 fn segment_chain(template: &GarmentTemplate, args: &Value) -> Result<Vec<BoundaryRef>, String> {
     let list = args
         .get("segments")
         .and_then(Value::as_array)
         .filter(|l| !l.is_empty())
-        .ok_or("segments: [{piece, segment}, …] in order along the edge")?;
-    let mut ends: Vec<(BoundaryRef, DVec3, DVec3)> = Vec::new();
+        .ok_or("segments: [{piece, segment}, …], the first where the collar starts")?;
+    let sewn = sewn_points(template);
+    let identity = |p: (String, usize)| sewn.get(&p).cloned().unwrap_or(p);
+    // Each segment: its reference, its end points as garment points, and in 3D.
+    type End = ((String, usize), DVec3);
+    let mut segments: Vec<(BoundaryRef, End, End)> = Vec::new();
     for s in list {
         let panel = find_piece(
             template,
@@ -583,7 +648,8 @@ fn segment_chain(template: &GarmentTemplate, args: &Value) -> Result<Vec<Boundar
             .get("segment")
             .and_then(Value::as_str)
             .ok_or("Each segment needs piece and segment")?;
-        let (_, a, b) = segment(panel, edge)?;
+        let (i, a, b) = segment(panel, edge)?;
+        let n = panel.polygon.as_ref().map_or(1, |q| q.points.len());
         let world = |q: DVec2| {
             let mut local = DVec3::new(q.x, -q.y, 0.);
             if let Some(wrap) = template.panel_wraps.get(&panel.id) {
@@ -591,43 +657,44 @@ fn segment_chain(template: &GarmentTemplate, args: &Value) -> Result<Vec<Boundar
             }
             panel.placement.transform(local)
         };
-        ends.push((whole(&panel.id, edge, false), world(a), world(b)));
+        segments.push((
+            whole(&panel.id, edge, false),
+            (identity((panel.id.clone(), i)), world(a)),
+            (identity((panel.id.clone(), (i + 1) % n)), world(b)),
+        ));
     }
-    // Turn each so that it starts where the one before ends (the first one so that it ends
-    // nearest the second).
-    let n = ends.len();
-    for i in 0..n {
-        let next_start = if i + 1 < n {
-            Some(ends[i + 1].1.min_by_distance(ends[i + 1].2, ends[i].2))
+    // How well a segment end continues from a chain end: sharing a garment point beats any
+    // distance.
+    let gap = |from: &End, to: &End| {
+        if from.0 == to.0 {
+            -1.
         } else {
-            None
-        };
-        let flip = if i == 0 {
-            next_start.is_some_and(|p| ends[0].1.distance(p) < ends[0].2.distance(p))
-        } else {
-            let end = if ends[i - 1].0.reversed {
-                ends[i - 1].1
-            } else {
-                ends[i - 1].2
-            };
-            ends[i].2.distance(end) < ends[i].1.distance(end)
-        };
-        ends[i].0.reversed = flip;
-    }
-    Ok(ends.into_iter().map(|(r, ..)| r).collect())
-}
-
-trait Nearest {
-    fn min_by_distance(self, other: Self, to: Self) -> Self;
-}
-impl Nearest for DVec3 {
-    fn min_by_distance(self, other: Self, to: Self) -> Self {
-        if self.distance(to) <= other.distance(to) {
-            self
-        } else {
-            other
+            from.1.distance(to.1)
         }
+    };
+    let mut rest = segments.split_off(1);
+    let (mut first, a, b) = segments.remove(0);
+    let best = |end: &End, rest: &[(BoundaryRef, End, End)]| {
+        rest.iter()
+            .map(|(_, x, y)| gap(end, x).min(gap(end, y)))
+            .fold(f64::INFINITY, f64::min)
+    };
+    first.reversed = !rest.is_empty() && best(&a, &rest) < best(&b, &rest);
+    let mut end = if first.reversed { a } else { b };
+    let mut chain = vec![first];
+    while !rest.is_empty() {
+        let k = (0..rest.len())
+            .min_by(|&i, &j| {
+                let d = |k: usize| gap(&end, &rest[k].1).min(gap(&end, &rest[k].2));
+                d(i).total_cmp(&d(j))
+            })
+            .unwrap_or(0);
+        let (mut r, x, y) = rest.remove(k);
+        r.reversed = gap(&end, &y) < gap(&end, &x);
+        end = if r.reversed { x } else { y };
+        chain.push(r);
     }
+    Ok(chain)
 }
 
 fn chain_length(template: &GarmentTemplate, chain: &[BoundaryRef]) -> f64 {
@@ -872,6 +939,9 @@ pub fn lay(
         } => {
             let runs = chain_runs(garment, x, chain, starts);
             let total: f64 = runs.iter().map(|(_, r)| r).sum();
+            // Keep the ends a little apart: round a closed neckline they would start on top of
+            // each other. The seam closes the gap while simulating.
+            let margin = (2. * clearance).min(total * 0.02);
             let length = vertices
                 .iter()
                 .map(|v| garment.mesh.uv[*v].x)
@@ -881,7 +951,7 @@ pub fn lay(
                 .iter()
                 .map(|v| {
                     let uv = garment.mesh.uv[*v];
-                    let p = on_chain(&runs, uv.x / length * total);
+                    let p = on_chain(&runs, margin + uv.x / length * (total - 2. * margin));
                     let mut out = p - axis;
                     out.y = 0.;
                     let out = out.normalize_or_zero();
@@ -945,6 +1015,26 @@ mod tests {
         let after = applied(&t, build);
         assert_eq!(after.panels.len(), t.panels.len() + 1);
         assert_eq!(after.seams.len(), t.seams.len() + 1);
+        // Two new pieces never start in the same place.
+        let again = add_detail(
+            &after,
+            &json!({"kind": "patch_pocket", "piece": front.id, "width_cm": 10, "height_cm": 10,
+                    "centre_cm": [centre.x, centre.y + 20.]}),
+        )
+        .unwrap();
+        let twice = applied(&after, again);
+        let [p1, p2] = [
+            &twice.panels[twice.panels.len() - 2],
+            &twice.panels[twice.panels.len() - 1],
+        ];
+        assert!(p1.placement.translation.distance(p2.placement.translation) > 0.05);
+        assert_ne!(p1.layout_2d, p2.layout_2d);
+        // Both sides measure the same: no "unequal seam" warning for the stitching line.
+        let warnings = crate::agent_ops::warnings(&after, None);
+        assert!(
+            !warnings.iter().any(|w| w.contains("without ease")),
+            "{warnings:?}"
+        );
         let garment = after.compile().unwrap();
         let mut x = garment.initial_state.x.clone();
         let axis = DVec3::ZERO;
@@ -1002,6 +1092,57 @@ mod tests {
         }
         let gap = seam.max_gap(&x);
         assert!(gap < 0.02, "collar seam starts {gap} m apart");
+    }
+
+    #[test]
+    fn a_neckline_given_in_any_order_is_followed_around_the_neck() {
+        let t = crate::garment::presets::shirt(&Default::default(), 1).unwrap();
+        let seg = |p: &str, e: &str| json!({"piece": p, "segment": e});
+        let args = json!({"segments": [
+            seg("front", "neck-bottom"), seg("front", "neck-left"), seg("back", "neck-left"),
+            seg("back", "neck-bottom"), seg("back", "neck-right"), seg("front", "neck-right"),
+        ]});
+        let chain = segment_chain(&t, &args).unwrap();
+        let names: Vec<String> = chain
+            .iter()
+            .map(|r| format!("{}.{}", r.panel, r.edge.as_deref().unwrap_or("")))
+            .collect();
+        // From the front's bottom along one side, over the shoulder, round the back, and back
+        // over the other shoulder.
+        assert_eq!(names[0], "front.neck-bottom");
+        assert!(names[1].starts_with("front.neck-"), "{names:?}");
+        assert!(names[2].starts_with("back."), "{names:?}");
+        assert_eq!(names[3], "back.neck-bottom", "{names:?}");
+        assert!(names[4].starts_with("back."), "{names:?}");
+        assert!(names[5].starts_with("front.neck-"), "{names:?}");
+        assert_ne!(names[1], names[5]);
+    }
+
+    #[test]
+    fn a_collar_round_the_whole_neckline_starts_clear_of_itself() {
+        let t = crate::garment::presets::shirt(&Default::default(), 1).unwrap();
+        let seg = |p: &str, e: &str| json!({"piece": p, "segment": e});
+        let build = add_detail(
+            &t,
+            &json!({"kind": "band_collar", "height_cm": 3.5, "segments": [
+                seg("front", "neck-bottom"), seg("front", "neck-left"), seg("back", "neck-left"),
+                seg("back", "neck-bottom"), seg("back", "neck-right"), seg("front", "neck-right"),
+            ]}),
+        )
+        .unwrap();
+        let spec = build.lay.clone().unwrap();
+        let after = applied(&t, build);
+        let garment = after.compile().unwrap();
+        let mut state = garment.initial_state.clone();
+        let x = state.x.clone();
+        for (v, p) in lay(&garment, &x, &spec, 0.008, DVec3::new(0., 1.2, 0.)) {
+            state.x[v] = p;
+        }
+        if let Err(e) =
+            crate::vbd::VbdSolver::new(std::sync::Arc::new(garment.clone()), None, &state)
+        {
+            panic!("the collar does not start clear: {e}");
+        }
     }
 
     #[test]

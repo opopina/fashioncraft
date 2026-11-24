@@ -144,7 +144,7 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
         "add_detail makes them exactly, sewn and laid on the drape: patch_pocket (piece, \
          width_cm, height_cm, centre_cm on the piece; stitched on three sides, open at the \
          top; a shirt pocket is about 11–13 × 13–15 cm, a jeans back pocket 13–15 × 14–16 cm), \
-         band_collar (the neckline's segments in order and height_cm, 2.5–4 cm for a band; it \
+         band_collar (the neckline's segments, the first where it starts, and height_cm, 2.5–4 cm for a band; it \
          is as long as the neckline), placket (piece, segment and width_cm, 2.5–3.5 cm on a \
          shirt front). Then add_buttons for buttons and buttonholes (shirt buttons 1–1.2 cm, \
          7–9 cm apart).",

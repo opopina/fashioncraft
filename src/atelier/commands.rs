@@ -2691,6 +2691,7 @@ pub fn agent_reason(id: CommandId) -> Option<&'static str> {
         OpenPreferences => "the person's own settings, which agents never change",
         ToggleHistory => "shows the history panel to the person; edit.undo and edit.redo run",
         ToggleAssistant => "opens the Assistant panel itself",
+        ShowHome => "the start screen is for the person; agents start a garment with draft_garment",
         OpenSceneObjects | AddAvatarObject => {
             "scene props come from 3D files the person picks in a file dialog"
         }

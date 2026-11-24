@@ -1364,7 +1364,7 @@ mod tests {
         after.panels.last_mut().unwrap().name = name.clone();
         after.panels.last_mut().unwrap().layout_2d = authoring::layout(&t, 0).into();
         name_new_pieces(&t, &mut after);
-        spread_on_board(&mut after, &[copy.clone()]);
+        spread_on_board(&mut after, std::slice::from_ref(&copy));
         let c = after.panels.iter().find(|p| p.id == copy).unwrap();
         assert_ne!(c.name, name, "a name of its own");
         let i = after.panels.iter().position(|p| p.id == copy).unwrap();

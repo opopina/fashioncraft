@@ -27,6 +27,10 @@ use std::sync::{
 
 /// Widest a screenshot shows in the transcript, points.
 const PICTURE_WIDTH: f32 = 300.;
+/// Height of the row of attachments under the message (it scrolls sideways).
+const CHIPS_HEIGHT: f32 = 40.;
+/// Tallest the message field grows before it scrolls.
+const INPUT_MAX_HEIGHT: f32 = 120.;
 
 pub(super) struct AssistantUi {
     pub(super) open: bool,
@@ -334,37 +338,50 @@ impl Atelier {
     fn assistant_chips(&mut self, ui: &mut egui::Ui) {
         let lang = self.prefs.language;
         let mut remove = None;
-        ui.horizontal_wrapped(|ui| {
-            for (k, a) in self.assistant.pending.iter().enumerate() {
-                let unreadable = matches!(a.payload, attachments::Payload::Unreadable { .. });
-                egui::Frame::new()
-                    .fill(ui.visuals().widgets.inactive.bg_fill)
-                    .corner_radius(6.)
-                    .inner_margin(egui::Margin::symmetric(6, 3))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            if let Some(texture) = self.assistant.thumbs.get(&a.name) {
-                                ui.add(egui::Image::new(texture).max_height(28.).max_width(40.));
-                            }
-                            let name: String = a.name.chars().take(28).collect();
-                            let text = egui::RichText::new(name).small();
-                            let label = ui.label(if unreadable {
-                                text.color(ui.visuals().warn_fg_color)
-                            } else {
-                                text
+        // One row of fixed height that scrolls sideways: attachments never make the window
+        // taller.
+        egui::ScrollArea::horizontal()
+            .id_salt("assistant.chips")
+            .max_height(CHIPS_HEIGHT)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for (k, a) in self.assistant.pending.iter().enumerate() {
+                        let unreadable =
+                            matches!(a.payload, attachments::Payload::Unreadable { .. });
+                        egui::Frame::new()
+                            .fill(ui.visuals().widgets.inactive.bg_fill)
+                            .corner_radius(6.)
+                            .inner_margin(egui::Margin::symmetric(6, 3))
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    if let Some(texture) = self.assistant.thumbs.get(&a.name) {
+                                        ui.add(
+                                            egui::Image::new(texture)
+                                                .max_height(28.)
+                                                .max_width(40.),
+                                        );
+                                    }
+                                    let name: String = a.name.chars().take(28).collect();
+                                    let text = egui::RichText::new(name).small();
+                                    let label = ui.label(if unreadable {
+                                        text.color(ui.visuals().warn_fg_color)
+                                    } else {
+                                        text
+                                    });
+                                    label.on_hover_text(a.describe());
+                                    if ui
+                                        .small_button("×")
+                                        .on_hover_text(i18n::tr(lang, "Remove"))
+                                        .clicked()
+                                    {
+                                        remove = Some(k);
+                                    }
+                                });
                             });
-                            label.on_hover_text(a.describe());
-                            if ui
-                                .small_button("×")
-                                .on_hover_text(i18n::tr(lang, "Remove"))
-                                .clicked()
-                            {
-                                remove = Some(k);
-                            }
-                        });
-                    });
-            }
-        });
+                    }
+                })
+            });
         if let Some(k) = remove {
             let gone = self.assistant.pending.remove(k);
             self.assistant.thumbs.remove(&gone.name);
@@ -873,7 +890,13 @@ impl Atelier {
                         });
                 }
                 ui.add_space(4.);
-                let input_height = 112.;
+                // The message box's height as last drawn (with its attachments), so the
+                // conversation above takes exactly the rest and the window never grows.
+                let input_height_id = egui::Id::new("assistant.input_height");
+                let input_height = ui
+                    .ctx()
+                    .data(|d| d.get_temp::<f32>(input_height_id))
+                    .unwrap_or(112.);
                 egui::ScrollArea::vertical()
                     .stick_to_bottom(true)
                     .auto_shrink([false, false])
@@ -924,6 +947,7 @@ impl Atelier {
                             });
                         }
                     });
+                let below_top = ui.cursor().top();
                 ui.add_space(6.);
                 // The message field and its send button share one rounded box, as chat apps
                 // draw it. Enter sends; Shift+Enter starts a new line.
@@ -935,7 +959,7 @@ impl Atelier {
                 } else {
                     ui.visuals().widgets.noninteractive.bg_stroke
                 };
-                egui::Frame::new()
+                let input_box = egui::Frame::new()
                     .fill(ui.visuals().extreme_bg_color)
                     .stroke(stroke)
                     .corner_radius(10.)
@@ -951,16 +975,27 @@ impl Atelier {
                             self.assistant_chips(ui);
                         }
                         if let Some(note) = &self.assistant.attach_note {
-                            ui.label(egui::RichText::new(note).small().weak());
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(note).small().weak())
+                                    .truncate(),
+                            );
                         }
-                        let field = ui.add(
-                            egui::TextEdit::multiline(&mut self.assistant.input)
-                                .id(input_id)
-                                .frame(egui::Frame::NONE)
-                                .hint_text(tr("Message the assistant (Enter sends)"))
-                                .desired_rows(2)
-                                .desired_width(f32::INFINITY),
-                        );
+                        // A long message scrolls inside the box instead of growing it.
+                        let field = egui::ScrollArea::vertical()
+                            .id_salt("assistant.input_scroll")
+                            .max_height(INPUT_MAX_HEIGHT)
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut self.assistant.input)
+                                        .id(input_id)
+                                        .frame(egui::Frame::NONE)
+                                        .hint_text(tr("Message the assistant (Enter sends)"))
+                                        .desired_rows(2)
+                                        .desired_width(f32::INFINITY),
+                                )
+                            })
+                            .inner;
                         super::demo::mark(ui.ctx(), "assistant.input", field.rect);
                         ui.horizontal(|ui| {
                             let attach = ui
@@ -1031,6 +1066,12 @@ impl Atelier {
                         .small()
                         .weak(),
                 );
+                let _ = input_box;
+                let used = ui.cursor().top() - below_top;
+                if (used - input_height).abs() > 0.5 {
+                    ui.ctx().data_mut(|d| d.insert_temp(input_height_id, used));
+                    ui.ctx().request_repaint();
+                }
             });
         self.assistant.open &= open;
     }

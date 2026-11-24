@@ -343,6 +343,16 @@ impl super::Atelier {
 #[cfg(target_os = "macos")]
 pub(super) use appkit::NativeMenu;
 
+/// ⌘V was pressed. The menu sees every ⌘ key before the window does, and egui hears nothing of
+/// a paste whose clipboard holds no text (a picture, or files copied in the Finder), so the
+/// Assistant learns of it here.
+static PASTE_KEY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether ⌘V was pressed since the last call (macOS only; elsewhere always false).
+pub(super) fn take_paste_key() -> bool {
+    PASTE_KEY.swap(false, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Where macOS has no menu bar of its own to use, the in-window bar stays.
 #[cfg(not(target_os = "macos"))]
 pub(super) enum NativeMenu {}
@@ -398,6 +408,12 @@ mod appkit {
                     // SAFETY: NSMenu's own method, with the event it was given.
                     unsafe { msg_send![super(self), performKeyEquivalent: event] }
                 } else {
+                    let v = event
+                        .charactersIgnoringModifiers()
+                        .is_some_and(|c| c.to_string().eq_ignore_ascii_case("v"));
+                    if v && event.modifierFlags().contains(NSEventModifierFlags::Command) {
+                        super::PASTE_KEY.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
                     false
                 }
             }

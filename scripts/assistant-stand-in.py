@@ -9,7 +9,8 @@ FashionCraft sends.
     ANTHROPIC_API_KEY=test-key FASHIONCRAFT_ASSISTANT_SEND="Draft a denim skirt" \
         cargo run --bin fashioncraft
 
-FASHIONCRAFT_ASSISTANT_SEND sends a first message on its own in development builds only. With
+FASHIONCRAFT_ASSISTANT_SEND sends a first message on its own in development builds only, with
+the files FASHIONCRAFT_ASSISTANT_ATTACH lists (separated by ;) attached. With
 "provider": "openai" and "model": "any", the /chat/completions answer colours the garment red.
 Restart the stand-in for each run: it counts requests."""
 import json, sys
@@ -42,7 +43,7 @@ class H(BaseHTTPRequestHandler):
               "beta": self.headers.get("anthropic-beta") == "server-side-fallback-2026-07-01",
               "fallbacks": body.get("fallbacks") == "default",
               "effort": body.get("output_config") == {"effort": "medium"},
-              "tools": len(body["tools"]) == 10,
+              "tools": len(body["tools"]) >= 20,
               "alternates": all(m["role"] == ("user" if k % 2 == 0 else "assistant") for k, m in enumerate(msgs)),
             }
             if i > 0:
@@ -51,6 +52,10 @@ class H(BaseHTTPRequestHandler):
                 checks["results"] = all(r["type"] == "tool_result" for r in results)
                 note(f"anthropic {i} results:", [(r["tool_use_id"], r["is_error"], [c["type"] for c in r["content"]], (r["content"][0].get("text") or "")[:120]) for r in results])
             note(f"anthropic {i} checks:", checks)
+            # What the person's first message carried: attached pictures and PDFs are blocks of
+            # their own, other files text before the message.
+            first = msgs[0]["content"]
+            note(f"anthropic {i} first message:", [(b["type"], b.get("source", {}).get("media_type"), len(b.get("source", {}).get("data", "")), (b.get("text") or "")[:60]) for b in first])
             if i < len(ANTHROPIC):
                 content = ANTHROPIC[i]
                 stop = "tool_use" if any(b["type"] == "tool_use" for b in content) else "end_turn"
@@ -60,6 +65,9 @@ class H(BaseHTTPRequestHandler):
         elif self.path.endswith("/chat/completions"):
             i = state["openai"]; state["openai"] += 1
             note(f"openai {i} auth={self.headers.get('authorization')} roles={[m['role'] for m in body['messages']]}")
+            first = body["messages"][1]["content"]
+            if isinstance(first, list):
+                note(f"openai {i} first message:", [(p["type"], (p.get("image_url") or {}).get("url", "")[:30], len((p.get("image_url") or {}).get("url", "")), (p.get("text") or "")[:60]) for p in first])
             if i == 0:
                 msg = {"role":"assistant","content":None,"tool_calls":[{"id":"c1","type":"function","function":{"name":"set_color","arguments":"{\"rgb\":[200,30,40]}"}}]}
                 self.reply(200, {"choices":[{"message":msg,"finish_reason":"tool_calls"}]})

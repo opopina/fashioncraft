@@ -1370,6 +1370,22 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Saving the project" => "Guardando el proyecto",
         "Exporting the garment" => "Exportando la prenda",
         "Using a tool" => "Usando una herramienta",
+        "Opening an attached file" => "Abriendo un archivo adjunto",
+        "Look at the attached files." => "Mira los archivos adjuntos.",
+        "Drop the files here to attach them" => "Suelta aquí los archivos para adjuntarlos",
+        "Attach…" => "Adjuntar…",
+        "Pictures, PDFs, text, CSV tables and DXF or SVG patterns. You can also drop files here or paste a picture with Cmd+V." => {
+            "Imágenes, PDF, texto, tablas CSV y patrones DXF o SVG. También puedes soltar archivos aquí o pegar una imagen con Cmd+V."
+        }
+        "Attach files" => "Adjuntar archivos",
+        "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
+        "All files" => "Todos los archivos",
+        "Attach the picture or files on the clipboard" => {
+            "Adjuntar la imagen o los archivos del portapapeles"
+        }
+        "The clipboard holds no picture or file." => {
+            "El portapapeles no tiene ninguna imagen ni archivo."
+        }
         "Reading a piece" => "Leyendo una pieza",
         "Selecting" => "Seleccionando",
         "Creating a piece" => "Creando una pieza",

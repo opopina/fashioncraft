@@ -322,6 +322,49 @@ impl Atelier {
             None => {}
         }
     }
+    /// Open the importer that reads `path` with the file already chosen, as if the person had
+    /// picked it in the importer's dialog: they review it and confirm, as one undoable step.
+    /// Returns which importer opened.
+    pub(super) fn open_importer_with(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::Path,
+    ) -> Result<&'static str, String> {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match fashioncraft::attachments::kind_of(&path.to_string_lossy()) {
+            fashioncraft::attachments::Kind::Pattern if ext == "svg" => {
+                self.open_svg_import();
+                self.document.svg_import.choose(path);
+                Ok("the SVG pattern importer")
+            }
+            fashioncraft::attachments::Kind::Pattern => {
+                let apparel = fashioncraft::garment::dxf_aama::load(path)
+                    .is_ok_and(|text| fashioncraft::garment::dxf_aama::is_apparel(&text));
+                if apparel {
+                    self.open_dxf_aama_import();
+                    self.document.dxf_aama.import.choose(path);
+                    Ok("the DXF-AAMA/ASTM importer")
+                } else {
+                    self.open_pattern_import();
+                    self.document.pattern_import.choose(path);
+                    Ok("the DXF importer")
+                }
+            }
+            fashioncraft::attachments::Kind::Model => {
+                self.open_avatar_import(ctx);
+                self.choose_avatar(path);
+                Ok("the avatar importer")
+            }
+            other => Err(format!(
+                "FashionCraft has no importer an agent can open for a {}",
+                other.label()
+            )),
+        }
+    }
     /// Put an avatar file in the open importer, as if picked in its dialog.
     pub(super) fn choose_avatar(&mut self, path: &std::path::Path) {
         self.document.avatar_import.choose(path);

@@ -56,6 +56,7 @@ impl Atelier {
                 | "seam_edit"
                 | "set_fabric_parameters" => self.agent_plan(name, args),
                 "place_piece" => self.agent_place_piece(args),
+                "open_attachment" => self.agent_open_attachment(ctx, args),
                 "set_avatar" => self.agent_avatar(args),
                 "set_pose" => self.agent_pose(args),
                 "grading" => self.agent_grading(args),
@@ -600,6 +601,37 @@ impl Atelier {
             return Err(self.status.clone());
         }
         Ok(ToolResult::text(plan.done))
+    }
+
+    fn agent_open_attachment(
+        &mut self,
+        ctx: &egui::Context,
+        args: &Value,
+    ) -> Result<ToolResult, String> {
+        let name = args.get("name").and_then(Value::as_str).unwrap_or("");
+        let attachment = self
+            .assistant
+            .sent
+            .iter()
+            .find(|a| a.name == name)
+            .ok_or_else(|| {
+                let names: Vec<&str> = self
+                    .assistant
+                    .sent
+                    .iter()
+                    .map(|a| a.name.as_str())
+                    .collect();
+                format!("No attached file '{name}'. Attached: {}", names.join(", "))
+            })?;
+        let path = attachment.path.clone().ok_or(
+            "This file was pasted, not opened from disk: ask the person to attach the file itself",
+        )?;
+        let importer = self.open_importer_with(ctx, &path)?;
+        Ok(ToolResult::text(format!(
+            "Opened {importer} with {name}. The person now checks it (scale, pieces) and presses \
+             its import button; nothing changes until they do, and it can be undone. Tell them \
+             so, and continue once they have imported it."
+        )))
     }
 
     fn agent_place_piece(&mut self, args: &Value) -> Result<ToolResult, String> {

@@ -454,6 +454,17 @@ pub fn tools() -> Vec<Tool> {
             true,
         ),
         tool(
+            "open_attachment",
+            "Open a pattern (DXF, DXF-AAMA/ASTM, SVG) or 3D model the person attached in \
+             FashionCraft's own importer, with the file already chosen. The person reviews the \
+             scale and pieces and confirms; the import is then one undoable step.",
+            object(
+                json!({"name": {"type": "string", "description": "The attached file's name."}}),
+                &["name"],
+            ),
+            true,
+        ),
+        tool(
             "set_fabric",
             "Give pieces a fabric preset: its weight, thickness, stretch and bending \
              (indicative values, not calibrated on a real fabric).",

@@ -50,9 +50,19 @@ another simulation.
 view.three_quarter_right) and describe what you actually see.
 6. Report briefly what changed, with the key numbers, and what is left.
 
+Attachments
+- The person can attach pictures (photos, sketches, swatches), PDFs, text, CSV tables and \
+patterns. Pictures and PDFs reach you as they are when your connection reads them; otherwise the \
+message says so: tell the person plainly. A pattern or 3D model comes with FashionCraft's \
+summary (pieces and sizes) and a picture of its pieces; open_attachment opens it in the \
+importer for the person to confirm.
+- To make a garment from a photo or sketch: describe what you see (silhouette, pieces, seams, \
+closures, length, fit, fabric), draft the nearest base with draft_garment, adjust it, simulate, \
+take a screenshot, compare it with the picture and adjust again. Say what you could not match.
+
 Limits and honesty
-- You cannot draw with the mouse, open windows or file dialogs, import or open files, edit \
-textures or graphics, or animate. Say so plainly and name the menu path the person can use.
+- You cannot draw with the mouse, open windows or file dialogs, read files the person did not \
+attach, edit textures or graphics, or animate. Say so plainly and name the menu path the person can use.
 - Drafted bases are simplified blocks (straight armholes and sleeve caps), not production \
 patterns. Fabric presets are indicative; for manufacturing, calibrate on the real fabric \
 (Materials > Measure fabric).
@@ -293,10 +303,25 @@ impl Conversation {
         events: &mut dyn FnMut(Event),
         stop: &dyn Fn() -> bool,
     ) -> Result<(), String> {
+        self.turn_with(settings, text, &[], transport, run_tool, events, stop)
+    }
+
+    /// [`Self::turn`], with files the person attached to the message.
+    #[allow(clippy::too_many_arguments)]
+    pub fn turn_with(
+        &mut self,
+        settings: &Settings,
+        text: &str,
+        attachments: &[crate::attachments::Attachment],
+        transport: &mut dyn Transport,
+        run_tool: &mut dyn FnMut(&str, &Value) -> ToolResult,
+        events: &mut dyn FnMut(Event),
+        stop: &dyn Fn() -> bool,
+    ) -> Result<(), String> {
         if let Some(missing) = settings.missing() {
             return Err(missing);
         }
-        self.push_user_text(text);
+        self.push_user(text, attachments);
         let known: Vec<&str> = tools().iter().map(|t| t.name).collect();
         for _ in 0..MAX_ROUNDS {
             if stop() {
@@ -349,22 +374,27 @@ impl Conversation {
         Ok(())
     }
 
-    /// The person's message. After a stop or a failed request the last message may already be
-    /// theirs: Anthropic's then takes the text too, so turns keep alternating.
-    fn push_user_text(&mut self, text: &str) {
-        let block = json!({"type": "text", "text": text});
-        if self.provider == Provider::Anthropic
-            && let Some(last) = self.messages.last_mut()
-            && last["role"] == "user"
-            && let Some(content) = last["content"].as_array_mut()
-        {
-            content.push(block);
+    /// The person's message and its attachments. After a stop or a failed request the last
+    /// message may already be theirs: Anthropic's then takes these blocks too, so turns keep
+    /// alternating.
+    fn push_user(&mut self, text: &str, attachments: &[crate::attachments::Attachment]) {
+        if self.provider == Provider::Anthropic {
+            let blocks = crate::attachments::anthropic_blocks(text, attachments);
+            if let Some(last) = self.messages.last_mut()
+                && last["role"] == "user"
+                && let Some(content) = last["content"].as_array_mut()
+            {
+                content.extend(blocks);
+                return;
+            }
+            self.messages
+                .push(json!({"role": "user", "content": blocks}));
             return;
         }
-        self.messages.push(match self.provider {
-            Provider::Anthropic => json!({"role": "user", "content": [block]}),
-            _ => json!({"role": "user", "content": text}),
-        });
+        let content =
+            crate::attachments::openai_content(text, attachments, self.provider.sees_images());
+        self.messages
+            .push(json!({"role": "user", "content": content}));
     }
 
     fn anthropic_step(
@@ -824,6 +854,55 @@ mod tests {
         );
         assert_eq!(results[1]["is_error"], false);
         assert_eq!(conversation.messages().len(), 4);
+    }
+
+    #[test]
+    fn attached_pictures_reach_claude_and_openai_compatible_models() {
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([0, 0, 120, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let sketch = crate::attachments::from_bytes("sketch.png", &png);
+        let no_tools = |_: &str, _: &Value| ToolResult::text("");
+        for provider in [
+            Provider::Anthropic,
+            Provider::OpenAi,
+            Provider::ClaudeCli,
+            Provider::Local,
+        ] {
+            let answer = if provider == Provider::Anthropic {
+                json!({"content": [{"type": "text", "text": "A navy dress."}], "stop_reason": "end_turn"})
+            } else {
+                json!({"choices": [{"message": {"role": "assistant", "content": "A navy dress."}, "finish_reason": "stop"}]})
+            };
+            let mut transport = Canned::new(vec![Ok(answer)]);
+            let mut conversation = Conversation::new(provider);
+            let mut s = settings(provider);
+            s.model = "test-model".into();
+            conversation
+                .turn_with(
+                    &s,
+                    "What is this?",
+                    std::slice::from_ref(&sketch),
+                    &mut transport,
+                    &mut { no_tools },
+                    &mut |_| {},
+                    &|| false,
+                )
+                .unwrap();
+            let sent = transport.sent[0].2.to_string();
+            let sees = provider != Provider::Local;
+            assert_eq!(
+                sent.contains(if provider == Provider::Anthropic {
+                    "\"media_type\":\"image/png\""
+                } else {
+                    "data:image/png;base64,"
+                }),
+                sees,
+                "{provider:?}"
+            );
+            assert!(sent.contains("sketch.png") && sent.contains("What is this?"));
+        }
     }
 
     #[test]

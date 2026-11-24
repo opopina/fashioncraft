@@ -72,6 +72,23 @@ after the current step. **New chat** starts a fresh conversation. Some requests 
 - "Set up sizes S, M, L and XL with M as the base and show me the size chart."
 - "Save this as summer-tee and export it as GLB."
 
+**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V in the
+message box with a picture or files on the clipboard (on Windows and Linux, the **Paste** button
+does this for a picture). Each file shows as a chip above the message; hover it to see what was
+read, × takes it off. What the model receives:
+
+| File | The model gets |
+|---|---|
+| Picture (PNG, JPEG, BMP, TGA, HDR) | The picture, as PNG, at most 1568 px a side. Claude, ChatGPT, Gemini and the four CLIs see it; a local model is told it was attached but cannot see it, and says so. |
+| PDF | Claude (API key) reads it whole. Other connections are told a PDF was attached that they cannot read, and ask for its pages as pictures or its text. |
+| Text, Markdown, JSON, CSV/TSV table | Its text, at most 40,000 characters. |
+| DXF, DXF-AAMA/ASTM, SVG pattern | FashionCraft reads it: the number of pieces, each one's size and perimeter, and a picture of the pieces with a 10 cm bar. `open_attachment` opens it in FashionCraft's importer, where the person checks the scale and imports it (undoable). |
+| 3D model (OBJ, FBX, glTF, USD, Alembic…) | A note on how FashionCraft opens it; `open_attachment` opens the avatar importer. |
+| BVH, PC2, MDD, `.fcfabric`, projects | A note on where FashionCraft opens it. |
+| Video, audio, Word, Excel, HEIC, WebP | Not read yet: the model is told so and tells the person (attach screenshots, PDF, CSV or PNG instead). |
+
+Attachments go to the provider you chose, like your messages.
+
 With Claude, FashionCraft opts into Anthropic's server-side fallback (`fallbacks: "default"`). If
 the model declines a request, Anthropic retries it on its recommended fallback model, and the chat
 says so.
@@ -154,6 +171,7 @@ goes away.
 | `sew` | Sews segments 1:1 or M:N, whole or a stretch, with or without ease. Unless told, it sews the way that does not twist the seam, judged from where the pieces are placed. |
 | `seam_edit` | Removes a seam, or allows or forbids ease on it. |
 | `place_piece` | Places a piece on an arrangement point of the avatar (wrapped or flat, at a clearance), after checking it starts clear of the body. |
+| `open_attachment` | Opens a pattern or 3D model the person attached in FashionCraft's importer, for the person to check and confirm. |
 
 **Fabric, avatar, sizes**
 
@@ -194,6 +212,7 @@ them on the real fabric before manufacturing.
 | `src/agent.rs` | The tools, the connection file and the MCP server |
 | `src/agent_ops.rs` | What the tools read from a garment and the authoring commands their edits become, testable without a window |
 | `src/agent_eval.rs` | The evaluation's checks and report |
+| `src/attachments.rs` | Reads attached files into what a model takes |
 | `evals/assistant/cases.json` | The evaluation's requests, in Spanish and English |
 | `src/bin/fashioncraft-cli.rs` | `fashioncraft-cli` |
 | `src/assistant.rs` | The Assistant's protocol for Claude and OpenAI-compatible APIs, and its tool loop |

@@ -177,13 +177,14 @@ pub(super) fn wait(
         }
         if let Some(status) = child.try_wait()? {
             if !status.success() {
-                let offset = errors.metadata()?.len().saturating_sub(1500);
+                let offset = errors.metadata()?.len().saturating_sub(6000);
                 errors.seek(SeekFrom::Start(offset))?;
                 let mut tail = Vec::new();
                 errors.read_to_end(&mut tail)?;
-                return Err(io::Error::other(format!(
-                    "{name} exited with {status}. Check the CLI login and connection. {}",
-                    String::from_utf8_lossy(&tail)
+                return Err(io::Error::other(failure(
+                    name,
+                    &status.to_string(),
+                    &String::from_utf8_lossy(&tail),
                 )));
             }
             break;
@@ -192,4 +193,101 @@ pub(super) fn wait(
     }
 
     Ok(())
+}
+
+/// What a CLI that failed said, without its own chatter ("Reading prompt from stdin…", empty
+/// lines): its last lines, at most about 600 characters. The login hint only when nothing
+/// better came out.
+pub(super) fn failure(name: &str, status: &str, stderr: &str) -> String {
+    let noise = |line: &str| {
+        let l = line.trim();
+        l.is_empty()
+            || l.starts_with("Reading prompt from stdin")
+            || l.starts_with("Reading additional input from stdin")
+            || l == "--------"
+    };
+    let lines: Vec<&str> = stderr.lines().filter(|l| !noise(l)).collect();
+    let mut said = String::new();
+    for line in lines.iter().rev().take(8).rev() {
+        said.push_str(line.trim());
+        said.push('\n');
+    }
+    let said = said.trim();
+    let said: String = if said.chars().count() > 600 {
+        let all: Vec<char> = said.chars().collect();
+        format!("…{}", all[all.len() - 600..].iter().collect::<String>())
+    } else {
+        said.to_owned()
+    };
+    if said.is_empty() {
+        format!("{name} exited with {status} and said nothing. Check the CLI login and connection.")
+    } else {
+        format!("{name} exited with {status}: {said}")
+    }
+}
+
+/// The error messages in a CLI's JSON event stream (one JSON object per line), such as
+/// Codex's `{"type":"error","message":…}` or `{"type":"turn.failed","error":{…}}`.
+pub(super) fn json_errors(output: &mut File) -> Option<String> {
+    output.rewind().ok()?;
+    let mut text = String::new();
+    output.read_to_string(&mut text).ok()?;
+    let mut found: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let Ok(event) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        let kind = event["type"].as_str().unwrap_or_default();
+        if !(kind.contains("error") || kind.contains("failed")) {
+            continue;
+        }
+        let message = event["message"]
+            .as_str()
+            .or_else(|| event["error"]["message"].as_str())
+            .or_else(|| event["error"].as_str());
+        if let Some(m) = message
+            && !found.iter().any(|f| f == m)
+        {
+            found.push(m.to_owned());
+        }
+    }
+    (!found.is_empty()).then(|| found.join(" · "))
+}
+
+#[cfg(test)]
+mod failure_tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_cli_says_what_it_said_not_its_chatter() {
+        let said = failure(
+            "Codex",
+            "exit status: 1",
+            "Reading prompt from stdin...\n\nERROR: stream disconnected: request too large\n",
+        );
+        assert_eq!(
+            said,
+            "Codex exited with exit status: 1: ERROR: stream disconnected: request too large"
+        );
+        assert!(
+            failure("Codex", "exit status: 1", "Reading prompt from stdin...\n").contains("login")
+        );
+        let mut out = tempfile::tempfile().unwrap();
+        use std::io::Write;
+        writeln!(out, r#"{{"type":"thread.started"}}"#).unwrap();
+        writeln!(
+            out,
+            r#"{{"type":"error","message":"context window exceeded"}}"#
+        )
+        .unwrap();
+        writeln!(
+            out,
+            r#"{{"type":"turn.failed","error":{{"message":"context window exceeded"}}}}"#
+        )
+        .unwrap();
+        assert_eq!(
+            json_errors(&mut out).as_deref(),
+            Some("context window exceeded")
+        );
+    }
 }

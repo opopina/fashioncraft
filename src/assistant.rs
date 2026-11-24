@@ -614,6 +614,133 @@ fn current_claude(model: &str) -> bool {
         .any(|prefix| model.starts_with(prefix))
 }
 
+/// Screenshots kept whole in what is sent: the latest ones. Older ones become a line of text,
+/// so a long session does not resend every picture it ever took.
+pub const KEEP_SCREENSHOTS: usize = 2;
+/// Tool results older than the last few messages are cut to this many characters.
+pub const OLD_RESULT_CHARS: usize = 2000;
+/// At most this many messages are sent; older ones are left out from the start.
+pub const MAX_MESSAGES: usize = 80;
+/// How many of the latest messages keep their tool results whole.
+const RECENT_MESSAGES: usize = 8;
+
+const OMITTED_SCREENSHOT: &str =
+    "(An earlier screenshot, left out to keep the conversation short.)";
+
+/// Whether a message is the person's own (not tool results, not a screenshot passed on).
+fn from_person(message: &Value) -> bool {
+    if message["role"] != "user" {
+        return false;
+    }
+    match &message["content"] {
+        Value::String(_) => true,
+        Value::Array(parts) => !parts.iter().any(|p| {
+            p["type"] == "tool_result"
+                || (p["type"] == "text" && p["text"] == "The screenshot tool's picture:")
+        }),
+        _ => false,
+    }
+}
+
+/// Whether a message carries a tool's screenshot (in Anthropic's or OpenAI's form).
+fn carries_screenshot(message: &Value) -> bool {
+    !from_person(message)
+        && message["content"].as_array().is_some_and(|parts| {
+            parts.iter().any(|p| {
+                p["type"] == "image_url"
+                    || p["content"]
+                        .as_array()
+                        .is_some_and(|c| c.iter().any(|b| b["type"] == "image"))
+            })
+        })
+}
+
+fn shorten(text: &str) -> String {
+    if text.chars().count() <= OLD_RESULT_CHARS {
+        return text.to_owned();
+    }
+    let head: String = text.chars().take(OLD_RESULT_CHARS * 3 / 4).collect();
+    let tail: String = {
+        let rest: Vec<char> = text.chars().collect();
+        rest[rest.len() - OLD_RESULT_CHARS / 4..].iter().collect()
+    };
+    format!(
+        "{head}\n… ({} characters left out of this earlier result) …\n{tail}",
+        text.chars().count() - OLD_RESULT_CHARS
+    )
+}
+
+/// What is sent of a conversation: the person's messages and attachments whole, the latest
+/// [`KEEP_SCREENSHOTS`] screenshots, older screenshots as a line of text, older long tool
+/// results cut short, and at most [`MAX_MESSAGES`] messages (the oldest left out, from a
+/// message of the person's so tool calls keep their results). The conversation itself keeps
+/// everything for the window to show.
+pub fn compact(messages: &[Value]) -> Vec<Value> {
+    let mut start = 0;
+    if messages.len() > MAX_MESSAGES {
+        let from = messages.len() - MAX_MESSAGES;
+        // From a message of the person's: after the cut if there is one, else before it.
+        start = (from..messages.len())
+            .find(|&i| from_person(&messages[i]))
+            .or_else(|| (0..from).rev().find(|&i| from_person(&messages[i])))
+            .unwrap_or(0);
+    }
+    let kept = &messages[start..];
+    let with_pictures: Vec<usize> = (0..kept.len())
+        .filter(|&i| carries_screenshot(&kept[i]))
+        .collect();
+    let keep_from = with_pictures
+        .len()
+        .checked_sub(KEEP_SCREENSHOTS)
+        .and_then(|k| with_pictures.get(k))
+        .copied()
+        .unwrap_or(0);
+    let recent = kept.len().saturating_sub(RECENT_MESSAGES);
+    let mut out: Vec<Value> = kept
+        .iter()
+        .enumerate()
+        .map(|(i, message)| {
+            let mut m = message.clone();
+            let old_picture = carries_screenshot(message) && i < keep_from;
+            let old = i < recent && !from_person(message);
+            if let Some(parts) = m["content"].as_array_mut() {
+                for part in parts.iter_mut() {
+                    if old_picture && part["type"] == "image_url" {
+                        *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
+                    }
+                    if let Some(inner) = part["content"].as_array_mut() {
+                        for block in inner.iter_mut() {
+                            if old_picture && block["type"] == "image" {
+                                *block = json!({"type": "text", "text": OMITTED_SCREENSHOT});
+                            }
+                            if old && let Some(text) = block["text"].as_str() {
+                                block["text"] = json!(shorten(text));
+                            }
+                        }
+                    }
+                }
+            } else if old
+                && message["role"] == "tool"
+                && let Some(text) = message["content"].as_str()
+            {
+                m["content"] = json!(shorten(text));
+            }
+            m
+        })
+        .collect();
+    if start > 0
+        && let Some(first) = out.first_mut()
+    {
+        let note = format!("(The first {start} messages of this conversation are left out.)");
+        match &mut first["content"] {
+            Value::String(text) => *text = format!("{note}\n{text}"),
+            Value::Array(parts) => parts.insert(0, json!({"type": "text", "text": note})),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// The Messages API request, and whether it needs the fallback beta header.
 pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, bool) {
     let tools: Vec<Value> = tools()
@@ -626,7 +753,7 @@ pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, boo
         "max_tokens": MAX_TOKENS,
         "system": SYSTEM_PROMPT,
         "tools": tools,
-        "messages": messages,
+        "messages": compact(messages),
         // Caches the system prompt, the tools and the conversation so far between rounds.
         "cache_control": {"type": "ephemeral"},
     });
@@ -649,7 +776,7 @@ pub fn openai_request(settings: &Settings, messages: &[Value]) -> Value {
         })
         .collect();
     let mut all = vec![json!({"role": "system", "content": SYSTEM_PROMPT})];
-    all.extend(messages.iter().cloned());
+    all.extend(compact(messages));
     json!({"model": settings.model(), "messages": all, "tools": tools})
 }
 
@@ -698,6 +825,76 @@ pub fn describe_error(status: u16, body: &Value) -> String {
         _ => "",
     };
     format!("HTTP {status}: {message}.{hint}")
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::*;
+
+    fn shot(i: usize) -> [Value; 3] {
+        [
+            json!({"role": "assistant", "content": "", "tool_calls": [{"id": format!("c{i}"), "type": "function",
+                "function": {"name": "screenshot", "arguments": "{}"}}]}),
+            json!({"role": "tool", "tool_call_id": format!("c{i}"), "content": "x".repeat(5000)}),
+            json!({"role": "user", "content": [
+                {"type": "text", "text": "The screenshot tool's picture:"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]}),
+        ]
+    }
+
+    #[test]
+    fn a_long_session_sends_only_the_latest_screenshots_and_short_old_results() {
+        let mut messages = vec![json!({"role": "user", "content": [
+            {"type": "text", "text": "Make this"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,PHOTO"}}]})];
+        for i in 0..20 {
+            messages.extend(shot(i));
+        }
+        let sent = compact(&messages);
+        let text = serde_json::to_string(&sent).unwrap();
+        // The person's photo stays; of 20 screenshots, the last two are sent.
+        assert!(text.contains("PHOTO"));
+        assert_eq!(text.matches("base64,AAAA").count(), KEEP_SCREENSHOTS);
+        assert_eq!(
+            text.matches(OMITTED_SCREENSHOT).count(),
+            20 - KEEP_SCREENSHOTS
+        );
+        // Old long results are cut; the latest stays whole.
+        assert!(text.contains("characters left out"));
+        assert_eq!(
+            sent[sent.len() - 2]["content"].as_str().unwrap().len(),
+            5000
+        );
+        assert_eq!(sent.len(), messages.len());
+
+        // Past the cap, the oldest are left out from a message of the person's, said so.
+        for i in 0..40 {
+            messages.push(json!({"role": "user", "content": format!("again {i}")}));
+            messages.extend(shot(100 + i));
+        }
+        let sent = compact(&messages);
+        assert!(sent.len() <= MAX_MESSAGES);
+        assert!(from_person(&sent[0]));
+        assert!(
+            sent[0]["content"]
+                .as_str()
+                .unwrap()
+                .contains("are left out")
+        );
+        // Every tool result still follows the call that asked for it.
+        for (i, m) in sent.iter().enumerate() {
+            if m["role"] == "tool" {
+                assert_eq!(sent[i - 1]["role"], "assistant");
+            }
+        }
+        // Anthropic's form: screenshots inside tool results.
+        let anthropic: Vec<Value> = (0..5)
+            .map(|i| json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": format!("t{i}"),
+                "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "IMG"}}]}]}))
+            .collect();
+        let text = serde_json::to_string(&compact(&anthropic)).unwrap();
+        assert_eq!(text.matches("\"IMG\"").count(), KEEP_SCREENSHOTS);
+    }
 }
 
 #[cfg(test)]

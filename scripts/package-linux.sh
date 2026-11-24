@@ -3,10 +3,12 @@
 #   dist/fashioncraft-<version>-linux-<arch>.tar.gz    bin/fashioncraft and share/ (assets, menu
 #                                                       entry, icons), to unpack into a prefix
 #   dist/fashioncraft-<version>-linux-<arch>.AppImage  when APPIMAGETOOL names appimagetool
-# Names follow the ArtCraft launcher's `<app>-<version>-<os>-<arch>.<ext>`. The program finds its
-# assets in ../share/fashioncraft/assets beside bin/.
+# Names follow the ArtCraft launcher's `<app>-<version>-<os>-<arch>.<ext>`. The AppImage catalog
+# (appimage.github.io) warns that an AppImage's name need not say "linux"; the launcher needs it,
+# so it stays. The program finds its assets in ../share/fashioncraft/assets beside bin/.
 #
-# Needs Rust and Python 3 with Pillow.
+# Needs Rust and Python 3 with Pillow; the AppImage also readelf, patchelf, and the libraries
+# listed below installed (scripts/appimage-libraries.py copies them in).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -64,6 +66,18 @@ if [ -n "${APPIMAGETOOL:-}" ]; then
     cp -R "$root/bin" "$root/share" "$appdir/usr/"
     cp "$root/share/applications/$app_id.desktop" "$appdir/"
     cp "$root/share/icons/hicolor/256x256/apps/$app_id.png" "$appdir/$app_id.png"
+    # winit and wgpu open these with dlopen at run time, so appimagetool never sees them, and a
+    # system without them closes the program at start ("Library libxkbcommon-x11.so could not be
+    # loaded": the catalog's first test, on Ubuntu 22.04 with X11 but no xkbcommon-x11). winit's
+    # X11 window: xkbcommon, xkbcommon-x11, Xcursor, Xi (libX11, libX11-xcb and libxcb come from
+    # the system); Wayland: xkbcommon, and wayland-egl for wgpu's OpenGL. scripts/check-appimage.sh
+    # starts the AppImage on systems without them.
+    python3 scripts/appimage-libraries.py "$appdir/usr/lib" \
+        "$appdir/usr/bin/fashioncraft" "$appdir/usr/bin/fashioncraft-cli" -- \
+        libxkbcommon.so.0 libxkbcommon-x11.so.0 libXcursor.so.1 libXi.so.6 libwayland-egl.so.1
+    # patchelf rewrote the programs' RUNPATH: they must still run.
+    "$appdir/usr/bin/fashioncraft" --version
+    "$appdir/usr/bin/fashioncraft-cli" --version
     cat > "$appdir/AppRun" <<'APPRUN'
 #!/bin/sh
 here=$(dirname "$(readlink -f "$0")")

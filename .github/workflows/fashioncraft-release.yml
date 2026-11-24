@@ -4,16 +4,33 @@ name: FashionCraft release
 # (AppImage and .tar.gz) and puts the files, with their
 # SHA256SUMS.txt, on a draft GitHub Release for the tag. File names follow the ArtCraft launcher's
 # `<app>-<version>-<os>-<arch>[-portable].<ext>`; the tag is `v<version>` from Cargo.toml.
+# Pull requests that touch the program or its Linux packaging build only the Linux files and
+# start the AppImage (the appimage-* jobs), so a fix to the AppImage is proven before a release.
 on:
   push:
     tags: ['v*']
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/package-linux.sh'
+      - 'scripts/appimage-libraries.py'
+      - 'scripts/check-appimage.sh'
+      - '.github/workflows/fashioncraft-release.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
   macos:
+    if: github.event_name != 'pull_request'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -39,6 +56,7 @@ jobs:
           path: dist/*.dmg
 
   windows:
+    if: github.event_name != 'pull_request'
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -79,13 +97,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # The second line: what scripts/appimage-libraries.py copies into the AppImage (the program
+      # opens them at run time) and its tools.
       - name: Install the desktop link dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
             libxrandr-dev libxi-dev libgl1-mesa-dev libasound2-dev \
-            libssl-dev pkg-config libfuse2 python3-pil
+            libssl-dev pkg-config libfuse2 python3-pil \
+            libxkbcommon-x11-0 libxcursor1 libxi6 libwayland-egl1 patchelf binutils
       - name: Fetch appimagetool
         run: |
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
@@ -101,8 +122,74 @@ jobs:
             dist/*.tar.gz
             dist/*.AppImage
 
+  # The AppImage catalog (appimage.github.io) lists FashionCraft only while its test starts the
+  # AppImage: on GitHub's Ubuntu 22.04 image, under Xvfb with Mesa's software OpenGL, with no
+  # network (firejail --net=none). This job does the same; scripts/check-appimage.sh fails if the
+  # program exits, shows no window, or reports a missing library. The screenshot is kept.
+  appimage-catalog:
+    needs: linux
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist
+      - name: What the catalog's test installs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth x11-utils x11-apps imagemagick libgl1-mesa-dri libgl1-mesa-dev mesa-utils \
+            libosmesa6 libfuse2
+      # A network namespace of its own (only `lo`, down); the program runs as the normal user.
+      - name: Start the AppImage without network
+        run: |
+          sudo unshare --net -- runuser -u "$USER" -- env APPIMAGE_EXTRACT_AND_RUN=1 \
+            xvfb-run -a -s '-screen 0 1280x1024x24' \
+            sh scripts/check-appimage.sh dist/fashioncraft-*.AppImage 30 appimage-screen.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appimage-screen
+          path: appimage-screen.png
+          if-no-files-found: ignore
+
+  # The same start on a bare Ubuntu 22.04 that has only an X server and Mesa: none of the X11 and
+  # Wayland helper libraries the AppImage carries, so a library that is not bundled shows here even
+  # where GitHub's image or the catalog's happen to have it.
+  appimage-bare:
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist
+      - name: A bare Ubuntu 22.04 with an X server and Mesa only
+        run: |
+          docker run --name bare ubuntu:22.04 sh -ec '
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              xvfb xauth x11-utils libegl1 libegl-mesa0 libgl1-mesa-dri
+            for package in libxkbcommon0 libxkbcommon-x11-0 libxcb-xkb1 libxcursor1 libwayland-egl1; do
+              if dpkg -s "$package" >/dev/null 2>&1; then
+                echo "Removing $package: the AppImage must bring it"
+                dpkg --remove --force-depends "$package"
+              fi
+            done'
+          docker commit bare bare-x11
+      - name: Start the AppImage there, without network
+        run: |
+          docker run --rm --network none -v "$PWD:/w" -w /w -e APPIMAGE_EXTRACT_AND_RUN=1 bare-x11 \
+            xvfb-run -a -s '-screen 0 1280x1024x24' \
+            sh scripts/check-appimage.sh dist/fashioncraft-*.AppImage 30
+
   release:
-    needs: [macos, windows, linux]
+    if: github.event_name != 'pull_request'
+    needs: [macos, windows, linux, appimage-catalog, appimage-bare]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -123,10 +210,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --draft --title "FashionCraft $GITHUB_REF_NAME" \
-            --notes "FashionCraft $GITHUB_REF_NAME" dist/*
+            --notes "FashionCraft $GITHUB_REF_NAME" dist/fashioncraft-* dist/SHA256SUMS.txt
       - name: Keep the files of a manual run
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
           name: fashioncraft-release
-          path: dist/*
+          path: |
+            dist/fashioncraft-*
+            dist/SHA256SUMS.txt

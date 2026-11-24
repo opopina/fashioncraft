@@ -85,8 +85,10 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
          sleeve's sides; the cap's front half goes to the front armhole and the back half to \
          the back.\n\
          In FashionCraft: draft_garment shirt makes front, back and two set-in sleeves with \
-         each cap half eased into the armhole it faces. To sew one yourself: sew the cap's \
-         halves to the armholes with ease true, then the underarm. Raise the cap by moving its \
+         each cap half eased into the armhole it faces. For a sleeve you made (a puffed \
+         sleeve is a set-in sleeve with a longer, gathered cap), set_sleeve sews its cap to \
+         the armholes, closes the underarm and wraps it round the arm: never move a sleeve \
+         into place by hand. Raise the cap by moving its \
          top point (move_points) or bend_segment to round it. docs/garment-drafting (shirt).",
     ),
     (

@@ -94,7 +94,14 @@ impl Atelier {
                         self.invoke_command(commands::CommandId::ToggleSimulation, ctx);
                     }
                     if !self.playing {
-                        Err(format!("The simulation did not start: {}", self.status))
+                        Err(match self.simulation_problem() {
+                            Some(problem) => format!(
+                                "The simulation did not start: {}. {}",
+                                problem["error"].as_str().unwrap_or(&self.status),
+                                problem["what_to_do"].as_str().unwrap_or("")
+                            ),
+                            None => format!("The simulation did not start: {}", self.status),
+                        })
                     } else {
                         return Err(Pending::Simulate {
                             until: Instant::now() + Duration::from_secs_f64(seconds),
@@ -147,13 +154,18 @@ impl Atelier {
                     self.invoke_command(commands::CommandId::ToggleSimulation, ctx);
                 }
                 let summary = self.scene_summary();
-                Some(ToolResult::json(&json!({
+                let problem = self.simulation_problem();
+                let mut result = ToolResult::json(&json!({
                     "simulated_seconds_of_wall_clock": seconds,
+                    "problem": problem,
                     "garment": summary["garment"],
                     "seams": summary["seams"],
                     "warnings": summary["warnings"],
                     "status": self.status,
-                })))
+                }));
+                // A paused simulation is a failure the agent must deal with first.
+                result.is_error = problem.is_some();
+                Some(result)
             }
             Pending::Screenshot {
                 asked,

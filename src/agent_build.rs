@@ -17,7 +17,7 @@ use crate::garment::{
     trims::{Trim, TrimKind},
 };
 use glam::{DQuat, DVec2, DVec3};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// A change ready to apply, what to say once it is done, and where a new piece starts in 3D.
 pub struct Build {
@@ -838,6 +838,255 @@ fn placket(template: &GarmentTemplate, args: &Value) -> Result<Build, String> {
             offset: a,
             along,
         }),
+    })
+}
+
+/// Where a material point of a piece starts in 3D: its placement, after its wrap.
+fn arranged(template: &GarmentTemplate, panel: &str, q: DVec2) -> Option<DVec3> {
+    let p = template.panels.iter().find(|p| p.id == panel)?;
+    let mut local = DVec3::new(q.x, -q.y, 0.);
+    if let Some(wrap) = template.panel_wraps.get(panel) {
+        local = wrap.bend(local);
+    }
+    Some(p.placement.transform(local))
+}
+
+/// Where a chain of segments starts and ends in 3D, each segment in its chain direction.
+fn chain_ends(template: &GarmentTemplate, chain: &[BoundaryRef]) -> Option<[DVec3; 2]> {
+    let ends = |r: &BoundaryRef| -> Option<[DVec3; 2]> {
+        let panel = template.panels.iter().find(|p| p.id == r.panel)?;
+        let (_, a, b) = segment(panel, r.edge.as_deref()?).ok()?;
+        let (a, b) = if r.reversed { (b, a) } else { (a, b) };
+        Some([
+            arranged(template, &r.panel, a)?,
+            arranged(template, &r.panel, b)?,
+        ])
+    };
+    Some([ends(chain.first()?)?[0], ends(chain.last()?)?[1]])
+}
+
+/// Whether side b must run the other way for its ends to meet side a's nearer ends.
+fn crossed(template: &GarmentTemplate, a: &[BoundaryRef], b: &[BoundaryRef]) -> bool {
+    match (chain_ends(template, a), chain_ends(template, b)) {
+        (Some([a0, a1]), Some([b0, b1])) => {
+            a0.distance(b0) + a1.distance(b1) > a0.distance(b1) + a1.distance(b0)
+        }
+        _ => false,
+    }
+}
+
+fn names(list: Option<&Value>, what: &str) -> Result<Vec<String>, String> {
+    let list = list
+        .and_then(Value::as_array)
+        .filter(|l| !l.is_empty())
+        .ok_or_else(|| format!("'{what}' is missing"))?;
+    list.iter()
+        .map(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| format!("'{what}' lists segment names"))
+        })
+        .collect()
+}
+
+/// A sleeve set into its armhole, as draft_garment's shirt does it: wrapped round the avatar's
+/// arm just below the shoulder (clear of `body`), its cap sewn to the front and back armholes
+/// with ease (gathered when much longer: a puffed sleeve) and its underarm seam closed. Seams
+/// already on those segments are replaced. `arms` are the avatar's shoulder and elbow joints,
+/// the +x arm (the avatar's left) first.
+pub fn set_sleeve(
+    template: &GarmentTemplate,
+    args: &Value,
+    arms: [[DVec3; 2]; 2],
+    body: Option<&[DVec3]>,
+) -> Result<Build, String> {
+    let sleeve = find_piece(template, text(args, "sleeve")?)?;
+    let polygon = sleeve
+        .polygon
+        .as_ref()
+        .ok_or("The sleeve has no editable outline")?;
+    let k = match text(args, "side")? {
+        "left" => 0,
+        "right" => 1,
+        other => return Err(format!("side '{other}': the avatar's left or right")),
+    };
+    let cap = names(args.get("cap"), "cap")?;
+    let underarm = match args.get("underarm") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(names(Some(v), "underarm")?),
+    };
+    if underarm.as_ref().is_some_and(|u| u.len() != 2) {
+        return Err("underarm names the sleeve's two side segments".into());
+    }
+    for name in cap.iter().chain(underarm.iter().flatten()) {
+        segment(sleeve, name)?;
+    }
+    let ease = args.get("ease").and_then(Value::as_bool).unwrap_or(true);
+    let (lo, hi) = polygon.points.iter().fold(
+        (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
+        |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+    );
+    let size = hi - lo;
+    // On the arm: placement and wrap for an outline from (0, 0), moved to where this one lies.
+    let (mut placement, mut wrap) =
+        crate::garment::presets::sleeve_on_arm(arms[k], k == 0, size.x, size.y, body)?;
+    placement.translation -= placement.rotation() * DVec3::new(lo.x, -lo.y, 0.);
+    wrap.axis_x_m += lo.x;
+
+    let mut steps = Steps::new(template);
+    // Seams already on the sleeve's cap and underarm, or on the armholes, give way.
+    let armhole_args = json!({"segments": args.get("armhole").cloned().unwrap_or(Value::Null)});
+    let armhole_refs: Vec<(String, String)> = args
+        .get("armhole")
+        .and_then(Value::as_array)
+        .filter(|l| !l.is_empty())
+        .ok_or("'armhole' is missing: [{piece, segment}, …] the bodice's armhole on that side")?
+        .iter()
+        .map(|s| {
+            let piece = find_piece(
+                template,
+                s.get("piece").and_then(Value::as_str).unwrap_or(""),
+            )?;
+            let edge = s.get("segment").and_then(Value::as_str).unwrap_or("");
+            segment(piece, edge)?;
+            Ok((piece.id.clone(), edge.to_owned()))
+        })
+        .collect::<Result<_, String>>()?;
+    let replaced: Vec<String> = template
+        .seams
+        .iter()
+        .filter(|s| {
+            s.references().any(|r| {
+                let edge = r.edge.as_deref().unwrap_or("");
+                (r.panel == sleeve.id
+                    && (cap.iter().any(|c| c == edge)
+                        || underarm.iter().flatten().any(|u| u == edge)))
+                    || armhole_refs.iter().any(|(p, e)| *p == r.panel && e == edge)
+            })
+        })
+        .map(|s| s.id.clone())
+        .collect();
+    if !replaced.is_empty() {
+        steps.push(Command::RemoveSeams {
+            seams: replaced.clone(),
+        })?;
+    }
+    steps.push(Command::Arrange {
+        panel: sleeve.id.clone(),
+        placement,
+        wrap: Some(wrap),
+    })?;
+    let placed = steps.template.clone();
+    let cap_args = json!({"segments": cap.iter().map(|c| json!({"piece": sleeve.id, "segment": c})).collect::<Vec<_>>()});
+    let cap_chain = segment_chain(&placed, &cap_args)?;
+    let hole_chain = segment_chain(&placed, &armhole_args)?;
+    let mut sewn = Vec::new();
+    if cap_chain.len() == 2 && hole_chain.len() == 2 {
+        // Each cap half to the armhole it faces, so the cap's top meets the shoulder.
+        let middle = |r: &BoundaryRef| {
+            chain_ends(&placed, std::slice::from_ref(r)).map(|[a, b]| (a + b) / 2.)
+        };
+        let straight = match (
+            middle(&cap_chain[0]),
+            middle(&cap_chain[1]),
+            middle(&hole_chain[0]),
+            middle(&hole_chain[1]),
+        ) {
+            (Some(c0), Some(c1), Some(h0), Some(h1)) => {
+                c0.distance(h0) + c1.distance(h1) <= c0.distance(h1) + c1.distance(h0)
+            }
+            _ => true,
+        };
+        let pairs = if straight {
+            [(0, 0), (1, 1)]
+        } else {
+            [(0, 1), (1, 0)]
+        };
+        // The cap's top meets the armhole's shoulder end. Pieces are drawn upright (y down the
+        // body), so each is the segment's higher end on the board: exact, unlike distances
+        // between pieces that still start apart.
+        let higher_first = |r: &BoundaryRef| -> Option<bool> {
+            let panel = placed.panels.iter().find(|p| p.id == r.panel)?;
+            let (_, a, b) = segment(panel, r.edge.as_deref()?).ok()?;
+            Some(a.y < b.y)
+        };
+        for (c, h) in pairs {
+            let (a, b) = (cap_chain[c].clone(), hole_chain[h].clone());
+            let reverse = match (higher_first(&a), higher_first(&b)) {
+                (Some(t), Some(s)) => t != s,
+                _ => crossed(&placed, std::slice::from_ref(&a), std::slice::from_ref(&b)),
+            };
+            sewn.push(format!(
+                "{}.{} ↔ {}.{}",
+                a.panel,
+                a.edge.clone().unwrap_or_default(),
+                b.panel,
+                b.edge.clone().unwrap_or_default()
+            ));
+            steps.push(Command::Sew {
+                a: BoundaryRef {
+                    reversed: false,
+                    ..a
+                },
+                b: BoundaryRef {
+                    reversed: false,
+                    ..b
+                },
+                reverse,
+                ease,
+            })?;
+        }
+    } else {
+        let reverse = crossed(&placed, &cap_chain, &hole_chain);
+        sewn.push(format!(
+            "cap ({}) ↔ armhole ({})",
+            cap.join(" + "),
+            armhole_refs
+                .iter()
+                .map(|(p, e)| format!("{p}.{e}"))
+                .collect::<Vec<_>>()
+                .join(" + ")
+        ));
+        steps.push(Command::SewChain {
+            seam: None,
+            a: cap_chain,
+            b: hole_chain,
+            reverse,
+            ease,
+        })?;
+    }
+    if let Some([u0, u1]) = underarm.as_deref() {
+        // Their ends at the cap (the top of the outline) meet.
+        let top_first = |name: &str| -> Result<bool, String> {
+            let (_, a, b) = segment(sleeve, name)?;
+            Ok(a.y <= b.y)
+        };
+        let reverse = top_first(u0)? != top_first(u1)?;
+        sewn.push(format!("underarm {u0} ↔ {u1}"));
+        steps.push(Command::Sew {
+            a: whole(&sleeve.id, u0, false),
+            b: whole(&sleeve.id, u1, false),
+            reverse,
+            ease: false,
+        })?;
+    }
+    Ok(Build {
+        commands: steps.commands,
+        names: vec![],
+        done: format!(
+            "Sleeve {} set into the {} armhole: {}{}. It starts wrapped round the arm below the \
+             shoulder. Simulate, then check_garment",
+            sleeve.id,
+            if k == 0 { "left" } else { "right" },
+            sewn.join("; "),
+            if replaced.is_empty() {
+                String::new()
+            } else {
+                format!(" (replacing seams {})", replaced.join(", "))
+            }
+        ),
+        history_name: "Set sleeve",
+        lay: None,
     })
 }
 

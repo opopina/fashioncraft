@@ -1007,7 +1007,7 @@ impl Atelier {
 
     /// The measurements of the current avatar a shirt with set-in sleeves should fit,
     /// centimetres, and its arms' shoulder and elbow joints (+x side first), metres.
-    fn avatar_blouse_values(&self) -> Result<([f64; 9], [[glam::DVec3; 2]; 2]), String> {
+    pub(super) fn avatar_blouse_values(&self) -> Result<([f64; 9], [[glam::DVec3; 2]; 2]), String> {
         let measured = measure(&self.project.avatar_path)?;
         let joints = self.avatar_joints()?;
         let joint = |id: &str| {

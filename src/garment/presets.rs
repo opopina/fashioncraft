@@ -913,12 +913,86 @@ pub fn shirt(m: &ShirtMeasurements, subdivisions: u32) -> Result<GarmentTemplate
 
 /// [`shirt`], with each sleeve started clear of `body` (the avatar's vertices, as posed) when
 /// it is known. Without it the sleeves start where they clear the 1.75 m mannequin.
+/// Where a sleeve `width` wide and `length` long starts around an arm (`arm`: its shoulder and
+/// elbow joints; `plus_x`: the arm on the +x side): wrapped into a tube whose axis runs down
+/// the arm just below the shoulder, the cap's middle up and away from the body, the
+/// underarm towards it, as close to the shoulder and as narrow as `body` allows (searched in
+/// steps when a body is given). The sleeve's outline lies in x 0..`width`, y 0..`length`,
+/// cap at the top.
+pub fn sleeve_on_arm(
+    arm: [DVec3; 2],
+    plus_x: bool,
+    width: f64,
+    length: f64,
+    body: Option<&[DVec3]>,
+) -> Result<(Placement, super::template::PanelWrap), String> {
+    use super::template::PanelWrap;
+    let radius = (width / 2. / SLEEVE_WRAP_DEGREES.to_radians()).max(SLEEVE_RADIUS_M);
+    let wrapped = |radius: f64| PanelWrap {
+        axis_x_m: width / 2.,
+        radius_m: radius,
+        max_angle_degrees: (width / 2. / radius).to_degrees().min(SLEEVE_WRAP_DEGREES),
+        half_width_m: None,
+    };
+    let [joint, elbow] = arm;
+    let down = (elbow - joint).normalize();
+    // The cap's top faces up and away from the body, the underarm towards it.
+    let outward = DVec3::new(if plus_x { 1. } else { -1. }, 0., 0.);
+    let up = (outward - down * outward.dot(down)).normalize_or(DVec3::Y);
+    let up = if up.y < 0. { -up } else { up };
+    let x_axis = (-down).cross(up);
+    let rotation = glam::DQuat::from_mat3(&glam::DMat3::from_cols(x_axis, -down, up));
+    let (rx, ry, rz) = rotation.to_euler(glam::EulerRot::XYZ);
+    let placement = Placement {
+        translation: DVec3::ZERO,
+        rotation_degrees: DVec3::new(rx, ry, rz) * (180. / std::f64::consts::PI),
+    };
+    // The wrap's axis, at the cap's level, lies on the arm below the joint: as close to the
+    // shoulder as the body allows, the tube as narrow as it allows.
+    let place = |start: f64, growth: f64| {
+        let wrap = wrapped(radius * growth);
+        let on_axis = placement.transform(DVec3::new(width / 2., 0., -wrap.radius_m));
+        let placement = Placement {
+            translation: joint + down * start - on_axis,
+            ..placement.clone()
+        };
+        (placement, wrap)
+    };
+    let clearance = |(placement, wrap): &(Placement, PanelWrap)| -> f64 {
+        let Some(body) = body else {
+            return f64::INFINITY;
+        };
+        let mut nearest = f64::INFINITY;
+        for i in 0..=8 {
+            for j in 0..=8 {
+                let (u, v) = (width * f64::from(i) / 8., length * f64::from(j) / 8.);
+                let p = placement.transform(wrap.bend(DVec3::new(u, -v, 0.)));
+                nearest = body
+                    .iter()
+                    .map(|b| b.distance_squared(p))
+                    .fold(nearest, f64::min);
+            }
+        }
+        nearest.sqrt()
+    };
+    let candidates = SLEEVE_STARTS_M
+        .iter()
+        .flat_map(|s| SLEEVE_GROWTH.iter().map(move |g| (*s, *g)));
+    if body.is_some() {
+        candidates
+            .map(|(s, g)| place(s, g))
+            .find(|c| clearance(c) >= SLEEVE_CLEARANCE_M)
+            .ok_or_else(|| "The sleeves cannot start clear of this avatar's arms".to_owned())
+    } else {
+        Ok(place(SLEEVE_STARTS_M[0], SLEEVE_GROWTH[2]))
+    }
+}
+
 pub fn shirt_around(
     m: &ShirtMeasurements,
     subdivisions: u32,
     body: Option<&[DVec3]>,
 ) -> Result<GarmentTemplate, String> {
-    use super::template::PanelWrap;
     m.validate()?;
     let chest = (m.bust_m + m.ease_m) / 4.;
     let hip = ((m.hip_m + m.ease_m) / 4.).max(chest);
@@ -970,13 +1044,6 @@ pub fn shirt_around(
             .clone()
             .ok_or("no bodice outline")?
     };
-    let radius = (width / 2. / SLEEVE_WRAP_DEGREES.to_radians()).max(SLEEVE_RADIUS_M);
-    let wrapped = |radius: f64| PanelWrap {
-        axis_x_m: width / 2.,
-        radius_m: radius,
-        max_angle_degrees: (width / 2. / radius).to_degrees().min(SLEEVE_WRAP_DEGREES),
-        half_width_m: None,
-    };
     let seam = |id: String, a: (&str, &str), b: (&str, &str), reverse: bool, ease: bool| {
         let side = |(panel, edge): (&str, &str)| BoundaryRef {
             reversed: false,
@@ -998,58 +1065,7 @@ pub fn shirt_around(
         }
     };
     for (k, side) in ["right", "left"].into_iter().enumerate() {
-        let [joint, elbow] = m.arms[k];
-        let down = (elbow - joint).normalize();
-        // The cap's top faces up and away from the body, the underarm towards it.
-        let outward = DVec3::new(if k == 0 { 1. } else { -1. }, 0., 0.);
-        let up = (outward - down * outward.dot(down)).normalize_or(DVec3::Y);
-        let up = if up.y < 0. { -up } else { up };
-        let x_axis = (-down).cross(up);
-        let rotation = glam::DQuat::from_mat3(&glam::DMat3::from_cols(x_axis, -down, up));
-        let (rx, ry, rz) = rotation.to_euler(glam::EulerRot::XYZ);
-        let placement = Placement {
-            translation: DVec3::ZERO,
-            rotation_degrees: DVec3::new(rx, ry, rz) * (180. / std::f64::consts::PI),
-        };
-        // The wrap's axis, at the cap's level, lies on the arm below the joint: as close to
-        // the shoulder as the body allows, the tube as narrow as it allows.
-        let place = |start: f64, growth: f64| {
-            let wrap = wrapped(radius * growth);
-            let on_axis = placement.transform(DVec3::new(width / 2., 0., -wrap.radius_m));
-            let placement = Placement {
-                translation: joint + down * start - on_axis,
-                ..placement.clone()
-            };
-            (placement, wrap)
-        };
-        let clearance = |(placement, wrap): &(Placement, PanelWrap)| -> f64 {
-            let Some(body) = body else {
-                return f64::INFINITY;
-            };
-            let mut nearest = f64::INFINITY;
-            for i in 0..=8 {
-                for j in 0..=8 {
-                    let (u, v) = (width * f64::from(i) / 8., m.sleeve_m * f64::from(j) / 8.);
-                    let p = placement.transform(wrap.bend(DVec3::new(u, -v, 0.)));
-                    nearest = body
-                        .iter()
-                        .map(|b| b.distance_squared(p))
-                        .fold(nearest, f64::min);
-                }
-            }
-            nearest.sqrt()
-        };
-        let candidates = SLEEVE_STARTS_M
-            .iter()
-            .flat_map(|s| SLEEVE_GROWTH.iter().map(move |g| (*s, *g)));
-        let (placement, wrap) = if body.is_some() {
-            candidates
-                .map(|(s, g)| place(s, g))
-                .find(|c| clearance(c) >= SLEEVE_CLEARANCE_M)
-                .ok_or("The sleeves cannot start clear of this avatar's arms")?
-        } else {
-            place(SLEEVE_STARTS_M[0], SLEEVE_GROWTH[2])
-        };
+        let (placement, wrap) = sleeve_on_arm(m.arms[k], k == 0, width, m.sleeve_m, body)?;
         let id = format!("sleeve-{side}");
         // Which half of the cap faces the front decides which armhole it is sewn to.
         let world = |u: f64, v: f64| placement.transform(wrap.bend(DVec3::new(u, -v, 0.)));

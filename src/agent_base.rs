@@ -177,6 +177,30 @@ pub fn tools() -> Vec<Tool> {
             true,
         ),
         tool(
+            "set_sleeve",
+            "Set a sleeve into its armhole exactly, as draft_garment's shirt does: the cap sewn \
+             to the front and back armholes with ease (gathered when much longer: a puffed \
+             sleeve), the underarm seam closed, and the sleeve wrapped round the avatar's arm \
+             just below the shoulder, clear of the body. Seams already on those segments are \
+             replaced. Never move a sleeve into place by hand. The sleeve's outline has its cap \
+             at the top and its hem at the bottom; side is the avatar's own left or right.",
+            object(
+                json!({
+                    "sleeve": piece,
+                    "side": {"type": "string", "enum": ["left", "right"]},
+                    "cap": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 4,
+                        "description": "The sleeve's cap segments: two halves meeting at the top, or one."},
+                    "underarm": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2,
+                        "description": "The sleeve's two side segments, sewn into a tube."},
+                    "armhole": {"type": "array", "items": object(json!({"piece": {"type": "string"}, "segment": {"type": "string"}}), &["piece", "segment"]),
+                        "minItems": 1, "maxItems": 4, "description": "The bodice's armhole segments on that side (front and back)."},
+                    "ease": {"type": "boolean", "description": "Allow the cap to be longer (default true)."}
+                }),
+                &["sleeve", "side", "cap", "armhole"],
+            ),
+            true,
+        ),
+        tool(
             "pin",
             "Pin cloth where it is now, as the pin tool does: add pins on a piece around \
              at_cm (its own cm coordinates) within radius_cm, remove them there, remove_all, \

@@ -86,6 +86,15 @@ impl Atelier {
                     .and_then(|b| self.apply_build(b))
             }),
             "style_line" => self.agent_style_line(args),
+            "set_sleeve" => self.ready().and_then(|()| {
+                if self.project.avatar_removed {
+                    return Err("A sleeve is set on the avatar's arm: there is no avatar".into());
+                }
+                let (_, arms) = self.avatar_blouse_values()?;
+                let body = self.scene.collider.surface.vertices.clone();
+                agent_build::set_sleeve(&self.project.template, args, arms, Some(&body))
+                    .and_then(|b| self.apply_build(b))
+            }),
             "pin" => self.agent_pin(args),
             "grab" => match self.agent_grab(args) {
                 Ok(pending) => return Err(pending),
@@ -250,11 +259,19 @@ impl Atelier {
             .ok_or("edit needs op (edit_ops lists them)")?;
         let fields = args.get("fields").cloned().unwrap_or(Value::Null);
         let command = agent_edit::parse(op, &fields)?;
+        let clear_before = self.start_problem().is_none();
         if !self.edit(command) {
             return Err(format!("{op} was refused: {}", self.status));
         }
+        let warning = match self.start_problem() {
+            Some(problem) if clear_before => format!(
+                " Warning: cloth now starts inside other cloth or the body ({problem}); the \
+                 simulation will not run until that is fixed (command_run edit.undo undoes it)."
+            ),
+            _ => String::new(),
+        };
         Ok(ToolResult::text(format!(
-            "{op} applied (undoable). {}",
+            "{op} applied (undoable). {}{warning}",
             self.status
         )))
     }
@@ -271,6 +288,7 @@ impl Atelier {
                 build.commands.clone(),
             )
         });
+        let clear_before = self.start_problem().is_none();
         if !self.edit_sequence(build.commands, &build.names, build.history_name) {
             return Err(self.status.clone());
         }
@@ -284,6 +302,16 @@ impl Atelier {
                 "The new piece could not start on the garment ({e}), so nothing was changed. \
                  Add details before simulating (right after draft_garment), or reset the drape \
                  with command_run simulation.reset, add it, then simulate"
+            ));
+        }
+        // A change must not leave cloth starting inside other cloth or the body: the simulation
+        // would refuse to run.
+        if clear_before && let Some(problem) = self.start_problem() {
+            self.undo_edit(false);
+            return Err(format!(
+                "That change would make cloth start inside other cloth or the body ({problem}), \
+                 so it was undone. Place the piece clear instead (place_piece on an arrangement \
+                 point; a sleeve with set_sleeve), or move it less"
             ));
         }
         let done = build.done;
@@ -356,6 +384,37 @@ impl Atelier {
             }
         }
         Err(self.name_faces(&last))
+    }
+
+    /// Whether the cloth can start simulating from where it is now: None, or why not (with
+    /// the pieces named).
+    pub(super) fn start_problem(&self) -> Option<String> {
+        fashioncraft::vbd::VbdSolver::new(
+            self.scene.garment.clone(),
+            Some(&self.scene.collider.surface),
+            &self.scene.state,
+        )
+        .err()
+        .map(|e| self.name_faces(&e))
+    }
+
+    /// When the simulation stopped on an error (cloth starting inside other cloth or the body):
+    /// the error with the pieces named, and what to do.
+    pub(super) fn simulation_problem(&self) -> Option<Value> {
+        let error = self.simulation_error.as_ref()?;
+        let inside = error.contains("intersection") || error.contains("touching");
+        Some(json!({
+            "simulation_paused": true,
+            "error": self.name_faces(error),
+            "what_to_do": if inside {
+                "Cloth starts inside other cloth or the body, so the simulation cannot run. Undo \
+                 the change that caused it (command_run edit.undo), or move that piece clear \
+                 (place_piece on an arrangement point; a sleeve with set_sleeve), or lay \
+                 everything out again (command_run simulation.reset). Then simulate."
+            } else {
+                "Read the error, change what caused it, then simulate again."
+            },
+        }))
     }
 
     /// The solver's "faces A and B" with the piece (or the avatar) each belongs to.
@@ -1266,11 +1325,20 @@ impl Atelier {
             body,
             pressure,
         });
-        if let Some(e) = &self.simulation_error {
+        if let Some(problem) = self.simulation_problem() {
             if let Some(p) = report["problems"].as_array_mut() {
-                p.insert(0, json!(format!("Simulation: {e}")));
+                p.retain(|w| !w.as_str().is_some_and(|w| w.starts_with("Simulation: ")));
+                p.insert(
+                    0,
+                    json!(format!(
+                        "The simulation is paused: {}. {}",
+                        problem["error"].as_str().unwrap_or(""),
+                        problem["what_to_do"].as_str().unwrap_or("")
+                    )),
+                );
             }
             report["ok"] = json!(false);
+            report["simulation_paused"] = json!(true);
         }
         report
     }

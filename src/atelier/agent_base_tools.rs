@@ -17,6 +17,8 @@ struct BaseShot;
 
 /// A base tool that finishes over later frames.
 pub(super) enum BasePending {
+    /// The avatar moves into a new pose while the cloth simulates along, until done.
+    Pose { started: Instant },
     /// The cloth is pulled until `until`, then let go.
     Grab { until: Instant, seconds: f64 },
     /// The fabric fit runs on its own thread.
@@ -86,6 +88,29 @@ impl Atelier {
                     .and_then(|b| self.apply_build(b))
             }),
             "style_line" => self.agent_style_line(args),
+            "set_pose" => {
+                let name = args.get("pose").and_then(Value::as_str).unwrap_or("");
+                match fashioncraft::avatar_rig::preset(name) {
+                    None => Err(format!(
+                        "No pose '{name}'. They are: {}",
+                        fashioncraft::avatar_rig::PRESETS.join(", ")
+                    )),
+                    Some(preset) => match self.current_pose() {
+                        Err(e) => Err(e),
+                        Ok(mut pose) => {
+                            pose.pose = preset;
+                            match self.agent_apply_pose(pose) {
+                                Ok(Some(pending)) => return Err(pending),
+                                Ok(None) => Ok(ToolResult::text(format!(
+                                    "Posed '{name}'. The drape restarts from the arrangement: \
+                                     simulate again."
+                                ))),
+                                Err(e) => Err(e),
+                            }
+                        }
+                    },
+                }
+            }
             "set_sleeve" => self.ready().and_then(|()| {
                 if self.project.avatar_removed {
                     return Err("A sleeve is set on the avatar's arm: there is no avatar".into());
@@ -144,6 +169,31 @@ impl Atelier {
         pending: &mut BasePending,
     ) -> Option<ToolResult> {
         match pending {
+            BasePending::Pose { started } => {
+                let moving = self.authoring.pose.transition_running();
+                if moving && started.elapsed() < Duration::from_secs(180) {
+                    ctx.request_repaint();
+                    return None;
+                }
+                if self.playing {
+                    self.invoke_command(commands::CommandId::ToggleSimulation, ctx);
+                }
+                let mut text = if moving {
+                    "The avatar is still moving into the pose after 3 minutes; it goes on when you \
+                     simulate."
+                        .to_owned()
+                } else {
+                    "Posed: the avatar moved into the pose gradually and the drape followed it."
+                        .to_owned()
+                };
+                if let Some(problem) = self.blocker() {
+                    text.push_str(&format!(
+                        " But cloth now starts inside other cloth or the body ({problem}): move \
+                         that piece clear or reset the arrangement before anything else."
+                    ));
+                }
+                Some(ToolResult::text(text))
+            }
             BasePending::Grab { until, seconds } => {
                 if Instant::now() < *until && self.playing && self.grab.is_some() {
                     ctx.request_repaint();
@@ -274,19 +324,13 @@ impl Atelier {
             .ok_or("edit needs op (edit_ops lists them)")?;
         let fields = args.get("fields").cloned().unwrap_or(Value::Null);
         let command = agent_edit::parse(op, &fields)?;
-        let clear_before = self.start_problem().is_none();
+        let clear_before = self.blocker().is_none();
         if !self.edit(command) {
             return Err(format!("{op} was refused: {}", self.status));
         }
-        let warning = match self.start_problem() {
-            Some(problem) if clear_before => format!(
-                " Warning: cloth now starts inside other cloth or the body ({problem}); the \
-                 simulation will not run until that is fixed (command_run edit.undo undoes it)."
-            ),
-            _ => String::new(),
-        };
+        self.guard_change(clear_before, true)?;
         Ok(ToolResult::text(format!(
-            "{op} applied (undoable). {}{warning}",
+            "{op} applied (undoable). {}",
             self.status
         )))
     }
@@ -303,7 +347,7 @@ impl Atelier {
                 build.commands.clone(),
             )
         });
-        let clear_before = self.start_problem().is_none();
+        let clear_before = self.blocker().is_none();
         if !self.edit_sequence(build.commands, &build.names, build.history_name) {
             return Err(self.status.clone());
         }
@@ -399,6 +443,124 @@ impl Atelier {
             }
         }
         Err(self.name_faces(&last))
+    }
+
+    /// [`Self::start_problem`], kept for as long as nothing has changed (the check builds a
+    /// solver).
+    pub(super) fn blocker(&mut self) -> Option<String> {
+        let key = (
+            self.generation,
+            self.authoring.history.done().count(),
+            self.scene.state.x.len(),
+        );
+        if let Some((k, known)) = &self.agent.blocker
+            && *k == key
+        {
+            return known.clone();
+        }
+        let found = self.start_problem();
+        self.agent.blocker = Some((key, found.clone()));
+        found
+    }
+
+    /// After a change: if it left cloth starting inside other cloth or the body where it did
+    /// not before, it is taken back (when it is on Undo) and refused with the pieces named.
+    pub(super) fn guard_change(
+        &mut self,
+        clear_before: bool,
+        undoable: bool,
+    ) -> Result<(), String> {
+        if !clear_before {
+            return Ok(());
+        }
+        let Some(problem) = self.blocker() else {
+            return Ok(());
+        };
+        if undoable {
+            self.undo_edit(false);
+            return Err(format!(
+                "That change would make cloth start inside other cloth or the body ({problem}), \
+                 so it was undone. Place the piece clear instead (place_piece on an arrangement \
+                 point; a sleeve with set_sleeve), or change less"
+            ));
+        }
+        Err(format!(
+            "That change left cloth starting inside other cloth or the body ({problem}). Clear \
+             it before anything else: move that piece clear (place_piece, transform_piece) or \
+             lay everything out again (command_run simulation.reset)"
+        ))
+    }
+
+    /// Tools that build on the garment wait while cloth starts inside cloth: clearing that comes
+    /// first. Looking, undoing, moving pieces and resetting stay open.
+    pub(super) fn refuse_while_blocked(&mut self, name: &str) -> Option<String> {
+        const BUILD: &[&str] = &[
+            "create_piece",
+            "move_points",
+            "set_segment_length",
+            "add_point",
+            "add_dart",
+            "add_pleats",
+            "sew",
+            "add_detail",
+            "add_buttons",
+            "add_internal_line",
+            "bend_segment",
+            "style_line",
+            "pin",
+            "grab",
+            "trace_on_body",
+            "set_fabric",
+            "set_fabric_parameters",
+            "set_color",
+            "measure_fabric",
+            "grading",
+            "points_of_measure",
+            "render",
+            "export_garment",
+        ];
+        if !BUILD.contains(&name) {
+            return None;
+        }
+        let problem = self.blocker()?;
+        Some(format!(
+            "Not now: cloth starts inside other cloth or the body ({problem}), so the simulation \
+             cannot run. Clear that first: command_run edit.undo, move that piece clear \
+             (place_piece, transform_piece, set_sleeve) or command_run simulation.reset; then \
+             go on."
+        ))
+    }
+
+    /// A new pose, as an agent asks: with the cloth draped, the avatar moves into it gradually
+    /// while the cloth simulates along (Pending); otherwise at once, taken back if the cloth
+    /// would start inside the body.
+    pub(super) fn agent_apply_pose(
+        &mut self,
+        pose: fashioncraft::fitting::AvatarPose,
+    ) -> Result<Option<Pending>, String> {
+        self.ready()?;
+        if self.live().simulated {
+            if !self.begin_pose_transition(pose) {
+                return Err(self.status.clone());
+            }
+            return Ok(Some(Pending::Base(BasePending::Pose {
+                started: Instant::now(),
+            })));
+        }
+        let before = self.current_pose()?;
+        let clear_before = self.blocker().is_none();
+        if !self.apply_pose(pose) {
+            return Err(self.status.clone());
+        }
+        if clear_before && let Some(problem) = self.blocker() {
+            self.apply_pose(before);
+            return Err(format!(
+                "That pose would make cloth start inside the body ({problem}), so the avatar \
+                 was put back. Simulate the garment first: then the avatar moves into a new pose \
+                 gradually and the cloth follows."
+            ));
+        }
+        Ok(None)
     }
 
     /// Whether the cloth can start simulating from where it is now: None, or why not (with
@@ -986,8 +1148,12 @@ impl Atelier {
         self.ready()?;
         agent_base::change_pose(&mut pose.pose, joints, reset, &bones)?;
         let turned = pose.pose.0.clone();
-        if !self.apply_pose(pose) {
-            return Err(self.status.clone());
+        if self.agent_apply_pose(pose)?.is_some() {
+            return Ok(ToolResult::json(&json!({
+                "turned": turned,
+                "note": "The avatar is moving into the pose gradually while the cloth follows; \
+                         simulate to let it finish.",
+            })));
         }
         Ok(ToolResult::json(&json!({
             "turned": turned,

@@ -92,6 +92,9 @@ pub(super) struct AgentHub {
     sender: mpsc::Sender<Job>,
     receiver: mpsc::Receiver<Job>,
     pub(super) running: Option<(Job, Pending)>,
+    /// Whether cloth starts inside cloth, for the state it was worked out for (generation,
+    /// undo steps, cloth points): the solver's check, kept between calls.
+    pub(super) blocker: Option<((u64, usize, usize), Option<String>)>,
     server: Option<Server>,
     output: PathBuf,
 }
@@ -109,6 +112,7 @@ impl AgentHub {
             sender,
             receiver,
             running: None,
+            blocker: None,
             server: None,
             output,
         }

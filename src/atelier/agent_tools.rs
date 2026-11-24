@@ -27,6 +27,10 @@ impl Atelier {
         name: &str,
         args: &Value,
     ) -> Result<ToolResult, Pending> {
+        // While cloth starts inside cloth the simulation cannot run: clearing that comes first.
+        if let Some(refusal) = self.refuse_while_blocked(name) {
+            return Ok(ToolResult::error(refusal));
+        }
         let result =
             match name {
                 "scene_summary" => Ok(ToolResult::json(&self.agent_scene_summary(ctx, args))),
@@ -58,7 +62,6 @@ impl Atelier {
                 "place_piece" => self.agent_place_piece(args),
                 "open_attachment" => self.agent_open_attachment(ctx, args),
                 "set_avatar" => self.agent_avatar(args),
-                "set_pose" => self.agent_pose(args),
                 "grading" => self.agent_grading(args),
                 "render" => match self.agent_render(args) {
                     Ok(pending) => return Err(pending),
@@ -611,8 +614,10 @@ impl Atelier {
             ));
         }
         let before = self.authoring.history.done().count();
+        let clear_before = self.blocker().is_none();
         self.dispatch_command(descriptor.id, ctx)?;
         let undoable = self.authoring.history.done().count() > before;
+        self.guard_change(clear_before, undoable)?;
         Ok(ToolResult::text(format!(
             "Ran {key} ({}). {}{}",
             descriptor.label.trim_end_matches('…'),
@@ -625,9 +630,11 @@ impl Atelier {
     fn agent_plan(&mut self, tool: &str, args: &Value) -> Result<ToolResult, String> {
         let plan = agent_ops::plan(&self.project.template, tool, args)?;
         let name = plan.history_name.unwrap_or_else(|| plan.command.name());
+        let clear_before = self.blocker().is_none();
         if !self.edit_named(plan.command, name) {
             return Err(self.status.clone());
         }
+        self.guard_change(clear_before, true)?;
         Ok(ToolResult::text(plan.done))
     }
 
@@ -678,8 +685,12 @@ impl Atelier {
             .and_then(Value::as_f64)
             .map(|c| c / 100.);
         let wrap = args.get("wrap").and_then(Value::as_bool);
-        self.agent_place(&piece, anchor, clearance, wrap)
-            .map(ToolResult::text)
+        let clear_before = self.blocker().is_none();
+        let before = self.authoring.history.done().count();
+        let done = self.agent_place(&piece, anchor, clearance, wrap)?;
+        let undoable = self.authoring.history.done().count() > before;
+        self.guard_change(clear_before, undoable)?;
+        Ok(ToolResult::text(done))
     }
 
     fn agent_avatar(&mut self, args: &Value) -> Result<ToolResult, String> {
@@ -721,27 +732,6 @@ impl Atelier {
             return Err("Give a library preset or measurements_cm".into());
         }
         self.agent_reshape_avatar(&overrides).map(ToolResult::text)
-    }
-
-    fn agent_pose(&mut self, args: &Value) -> Result<ToolResult, String> {
-        let name = args.get("pose").and_then(Value::as_str).unwrap_or("");
-        let preset = fashioncraft::avatar_rig::preset(name).ok_or_else(|| {
-            format!(
-                "No pose '{name}'. They are: {}",
-                fashioncraft::avatar_rig::PRESETS.join(", ")
-            )
-        })?;
-        if self.project.avatar_removed {
-            return Err("There is no avatar to pose".into());
-        }
-        let mut pose = self.current_pose()?;
-        pose.pose = preset;
-        if !self.apply_pose(pose) {
-            return Err(self.status.clone());
-        }
-        Ok(ToolResult::text(format!(
-            "Posed '{name}'. The drape restarts from the arrangement: simulate again."
-        )))
     }
 
     fn agent_grading(&mut self, args: &Value) -> Result<ToolResult, String> {

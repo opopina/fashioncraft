@@ -60,7 +60,8 @@ still moving, each with where it is. Fix what it reports, simulate and check aga
 ok or you can explain what is left. If simulate or check_garment says the simulation is \
 paused because cloth starts inside other cloth or the body, deal with that first: undo the \
 change that caused it, move that piece clear or reset the arrangement, then simulate again. \
-Never place a sleeve by moving it in cm: set_sleeve sews and places it.
+Never place a sleeve by moving it in cm: every sleeve goes in with set_sleeve, which sews and \
+places it. Never change the avatar's pose or body unless the person asks for it.
 5. Look with camera (a view and screenshot true), check_garment with a view, or screenshot, and \
 describe what you actually see.
 6. Report briefly what changed, with the key numbers, and what is left.

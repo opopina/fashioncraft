@@ -2490,6 +2490,7 @@ pub fn agent_use(id: CommandId) -> AgentUse {
         | DraftTrousers
         | ToggleHistory
         | ToggleAssistant
+        | ShowHome
         | ToggleObjectBrowser
         | SimulationProperties
         | CameraProperties

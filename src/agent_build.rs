@@ -44,6 +44,9 @@ pub enum Lay {
     Up {
         piece: String,
         chain: Vec<BoundaryRef>,
+        /// Where each segment of the chain starts on its piece (material coordinates), so its
+        /// cloth points can be put in the segment's own direction.
+        starts: Vec<DVec2>,
         height: f64,
     },
 }
@@ -686,6 +689,17 @@ fn band_collar(template: &GarmentTemplate, args: &Value) -> Result<Build, String
         history_name: "Band collar",
         lay: Some(Lay::Up {
             piece: collar,
+            starts: chain
+                .iter()
+                .map(|r| {
+                    template
+                        .panels
+                        .iter()
+                        .find(|p| p.id == r.panel)
+                        .and_then(|p| segment(p, r.edge.as_deref()?).ok())
+                        .map_or(DVec2::ZERO, |(_, a, _)| a)
+                })
+                .collect(),
             chain,
             height,
         }),
@@ -748,51 +762,65 @@ fn on_drape(garment: &CompiledGarment, x: &[DVec3], panel: &str, uv: DVec2) -> O
     Some(weights.iter().map(|(v, w)| x[*v] * *w).sum())
 }
 
-/// The polyline of a chain's boundary points on the drape, in chain order.
-fn chain_points(garment: &CompiledGarment, x: &[DVec3], chain: &[BoundaryRef]) -> Vec<DVec3> {
-    let mut points: Vec<DVec3> = Vec::new();
-    for r in chain {
-        let Some(range) = garment.panels.iter().find(|p| p.id == r.panel) else {
-            continue;
-        };
-        let Some(vertices) = r.edge.as_ref().and_then(|e| range.boundaries.get(e)) else {
-            continue;
-        };
-        let mut run: Vec<DVec3> = vertices.iter().map(|v| x[*v]).collect();
-        // The compiled boundary may run either way: keep the order the chain asks for.
-        if let Some(&last) = points.last()
-            && run.len() > 1
-            && run[run.len() - 1].distance(last) < run[0].distance(last)
-        {
-            run.reverse();
-        } else if points.is_empty() && r.reversed {
-            run.reverse();
-        }
-        points.extend(run);
-    }
-    points
+/// Each segment of a chain on the drape, in chain order: its cloth points and its length at
+/// rest (along the material).
+fn chain_runs(
+    garment: &CompiledGarment,
+    x: &[DVec3],
+    chain: &[BoundaryRef],
+    starts: &[DVec2],
+) -> Vec<(Vec<DVec3>, f64)> {
+    let uv = &garment.mesh.uv;
+    chain
+        .iter()
+        .zip(starts)
+        .filter_map(|(r, start)| {
+            let range = garment.panels.iter().find(|p| p.id == r.panel)?;
+            let mut run = range.boundaries.get(r.edge.as_ref()?)?.clone();
+            // The compiled boundary may run either way: first its segment's own direction,
+            // then the chain's.
+            if run.len() > 1
+                && uv[run[run.len() - 1]].distance(*start) < uv[run[0]].distance(*start)
+            {
+                run.reverse();
+            }
+            if r.reversed {
+                run.reverse();
+            }
+            let rest = run.windows(2).map(|w| uv[w[0]].distance(uv[w[1]])).sum();
+            Some((run.iter().map(|v| x[*v]).collect(), rest))
+        })
+        .collect()
 }
 
-/// The point `s` metres along a polyline, and its direction there.
-fn along(points: &[DVec3], s: f64) -> (DVec3, DVec3) {
-    let mut left = s.max(0.);
+/// The point at share `t` (0 to 1) of a polyline's length.
+fn at_share(points: &[DVec3], t: f64) -> DVec3 {
+    let total: f64 = points.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let mut left = t.clamp(0., 1.) * total;
     for w in points.windows(2) {
         let d = w[0].distance(w[1]);
-        if left <= d || d == 0. {
-            let t = if d > 0. { left / d } else { 0. };
-            return (w[0].lerp(w[1], t), (w[1] - w[0]).normalize_or_zero());
+        if left <= d {
+            return if d > 0. {
+                w[0].lerp(w[1], left / d)
+            } else {
+                w[0]
+            };
         }
         left -= d;
     }
-    let n = points.len();
-    match n {
-        0 => (DVec3::ZERO, DVec3::X),
-        1 => (points[0], DVec3::X),
-        _ => (
-            points[n - 1],
-            (points[n - 1] - points[n - 2]).normalize_or_zero(),
-        ),
+    points.last().copied().unwrap_or(DVec3::ZERO)
+}
+
+/// The point of a chain at `s` metres of rest length from its start.
+fn on_chain(runs: &[(Vec<DVec3>, f64)], s: f64) -> DVec3 {
+    let mut left = s.max(0.);
+    for (k, (run, rest)) in runs.iter().enumerate() {
+        if left <= *rest || k + 1 == runs.len() {
+            return at_share(run, if *rest > 0. { left / rest } else { 0. });
+        }
+        left -= rest;
     }
+    DVec3::ZERO
 }
 
 /// Where each point of the new piece starts, on the drape as it is: `(vertex, position)`.
@@ -836,13 +864,24 @@ pub fn lay(
             );
             vertices.into_iter().zip(laid).collect()
         }
-        Lay::Up { chain, height, .. } => {
-            let line = chain_points(garment, x, chain);
+        Lay::Up {
+            chain,
+            starts,
+            height,
+            ..
+        } => {
+            let runs = chain_runs(garment, x, chain, starts);
+            let total: f64 = runs.iter().map(|(_, r)| r).sum();
+            let length = vertices
+                .iter()
+                .map(|v| garment.mesh.uv[*v].x)
+                .fold(0f64, f64::max)
+                .max(1e-9);
             vertices
                 .iter()
                 .map(|v| {
                     let uv = garment.mesh.uv[*v];
-                    let (p, _) = along(&line, uv.x);
+                    let p = on_chain(&runs, uv.x / length * total);
                     let mut out = p - axis;
                     out.y = 0.;
                     let out = out.normalize_or_zero();
@@ -921,39 +960,82 @@ mod tests {
     #[test]
     fn a_band_collar_is_as_long_as_the_neckline_it_is_sewn_to() {
         let t = shirt();
-        // The two top segments of front and back stand in for a neckline.
-        let segments: Vec<Value> = t
-            .panels
+        // The front's neckline: three segments in a row (given in any direction).
+        let front = &t.panels[0];
+        let neck = ["neck-right", "neck-bottom", "neck-left"];
+        let segments: Vec<Value> = neck
             .iter()
-            .take(2)
-            .map(|p| json!({"piece": p.id, "segment": p.polygon.as_ref().unwrap().edges[0]}))
+            .map(|e| json!({"piece": front.id, "segment": e}))
             .collect();
         let build = add_detail(
             &t,
-            &json!({"kind": "band_collar", "segments": segments, "height_cm": 4}),
+            &json!({"kind": "band_collar", "segments": segments.clone(), "height_cm": 4}),
         )
         .unwrap();
         assert!(matches!(build.lay, Some(Lay::Up { .. })));
         let after = applied(&t, build);
         let collar = after.panels.last().unwrap();
-        let expected: f64 = t
-            .panels
+        let q = front.polygon.as_ref().unwrap();
+        let expected: f64 = neck
             .iter()
-            .take(2)
-            .map(|p| {
-                let q = p.polygon.as_ref().unwrap();
-                authoring::edge_length(q, &q.edges[0]).unwrap()
-            })
+            .map(|e| authoring::edge_length(q, e).unwrap())
             .sum();
         let size = crate::agent_ops::piece_size(collar);
         assert!((size.x - expected).abs() < 1e-6 && (size.y - 0.04).abs() < 1e-6);
-        let compiled = after.compile().unwrap();
-        assert!(
-            compiled
-                .seams
-                .iter()
-                .any(|s| s.id == after.seams.last().unwrap().id)
-        );
+        let garment = after.compile().unwrap();
+        let seam = garment
+            .seams
+            .iter()
+            .find(|s| s.id == after.seams.last().unwrap().id)
+            .unwrap();
+        // Laid standing on the neckline, the collar's bottom starts on it, end to end.
+        let lay_spec = add_detail(
+            &t,
+            &json!({"kind": "band_collar", "segments": segments, "height_cm": 4}),
+        )
+        .unwrap()
+        .lay
+        .unwrap();
+        let mut x = garment.initial_state.x.clone();
+        for (v, p) in lay(&garment, &x.clone(), &lay_spec, 0.004, DVec3::ZERO) {
+            x[v] = p;
+        }
+        let gap = seam.max_gap(&x);
+        assert!(gap < 0.02, "collar seam starts {gap} m apart");
+    }
+
+    #[test]
+    fn a_placket_lies_along_its_segment() {
+        let t = shirt();
+        let front = &t.panels[0];
+        let polygon = front.polygon.as_ref().unwrap();
+        // An unsewn segment of the front.
+        let edge = polygon
+            .edges
+            .iter()
+            .find(|e| {
+                !t.seams.iter().any(|s| {
+                    s.references()
+                        .any(|r| r.panel == front.id && r.edge.as_deref() == Some(e.as_str()))
+                })
+            })
+            .cloned()
+            .expect("an unsewn segment");
+        let build = add_detail(
+            &t,
+            &json!({"kind": "placket", "piece": front.id, "segment": edge, "width_cm": 3}),
+        )
+        .unwrap();
+        let lay_spec = build.lay.clone().unwrap();
+        let after = applied(&t, build);
+        let garment = after.compile().unwrap();
+        let mut x = garment.initial_state.x.clone();
+        for (v, p) in lay(&garment, &x.clone(), &lay_spec, 0.004, DVec3::ZERO) {
+            x[v] = p;
+        }
+        let seam = garment.seams.last().unwrap();
+        let gap = seam.max_gap(&x);
+        assert!(gap < 0.02, "placket seam starts {gap} m apart");
     }
 
     #[test]

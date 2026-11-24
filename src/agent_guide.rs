@@ -147,7 +147,9 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
          band_collar (the neckline's segments, the first where it starts, and height_cm, 2.5–4 cm for a band; it \
          is as long as the neckline), placket (piece, segment and width_cm, 2.5–3.5 cm on a \
          shirt front). Then add_buttons for buttons and buttonholes (shirt buttons 1–1.2 cm, \
-         7–9 cm apart).",
+         7–9 cm apart). Add details right after drafting, before simulating: a piece that \
+         gets a new stitching line is laid out again, so on a draped garment the detail is \
+         refused (reset the drape with simulation.reset first).",
     ),
     (
         "grading",

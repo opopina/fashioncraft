@@ -6,7 +6,8 @@
 //!
 //! Like `agent_ops`, everything here reads the document alone and returns the command that
 //! makes the change, so it can be tested without a window. Several changes that belong
-//! together become one undo step (the final document, applied as one `RunScript`).
+//! together become one undo step: the window applies the list of commands one after another
+//! and records them as one change, so pieces keep their drape.
 use crate::agent_ops::{cm, find_piece};
 use crate::authoring::{self, Command};
 use crate::garment::{
@@ -20,7 +21,10 @@ use serde_json::Value;
 
 /// A change ready to apply, what to say once it is done, and where a new piece starts in 3D.
 pub struct Build {
-    pub command: Command,
+    /// The edits, in order; the window records them as one undo step.
+    pub commands: Vec<Command>,
+    /// New pieces' names (id, name), given as they are installed.
+    pub names: Vec<(String, String)>,
     pub done: String,
     pub history_name: &'static str,
     /// The new piece and how to lay it on the drape, when the change adds one.
@@ -126,11 +130,55 @@ fn whole(panel: &str, edge: &str, reversed: bool) -> BoundaryRef {
     }
 }
 
-/// Applies `commands` one after another to a copy of `template`; the result is one step.
-fn chain(template: &GarmentTemplate, commands: Vec<Command>) -> Result<GarmentTemplate, String> {
-    let mut t = template.clone();
+/// Edits applied one after another to a copy of the document, to check each and to learn
+/// the ids they make; the window then applies the same list as one undo step.
+struct Steps {
+    template: GarmentTemplate,
+    commands: Vec<Command>,
+}
+
+impl Steps {
+    fn new(template: &GarmentTemplate) -> Self {
+        Self {
+            template: template.clone(),
+            commands: Vec::new(),
+        }
+    }
+    fn push(&mut self, command: Command) -> Result<&GarmentTemplate, String> {
+        self.template = authoring::apply(&self.template, command.clone())?.template;
+        self.commands.push(command);
+        Ok(&self.template)
+    }
+}
+
+/// The edit a list of commands makes, applied one after another (as the window records
+/// them), with `reset_simulation` set when any of them resets it.
+pub fn compose(
+    template: &GarmentTemplate,
+    commands: &[Command],
+) -> Result<authoring::Edit, String> {
+    let mut edit: Option<authoring::Edit> = None;
     for c in commands {
-        t = authoring::apply(&t, c)?.template;
+        let base = edit.as_ref().map_or(template, |e| &e.template);
+        let mut next = authoring::apply(base, c.clone())?;
+        if let Some(previous) = &edit {
+            next.reset_simulation |= previous.reset_simulation;
+        }
+        edit = Some(next);
+    }
+    edit.ok_or_else(|| "Nothing to change".into())
+}
+
+/// The template a build's edits make (its new pieces named), for tests and checks.
+pub fn applied(template: &GarmentTemplate, build: &Build) -> Result<GarmentTemplate, String> {
+    let mut t = template.clone();
+    for c in &build.commands {
+        t = authoring::apply(&t, c.clone())?.template;
+    }
+    for (id, name) in &build.names {
+        if let Some(p) = t.panels.iter_mut().find(|p| &p.id == id) {
+            p.name = name.clone();
+        }
     }
     Ok(t)
 }
@@ -152,37 +200,24 @@ fn meshing(template: &GarmentTemplate) -> crate::garment::meshing::MeshingSettin
         .unwrap_or_default()
 }
 
-/// A rectangle `w` × `h` (edge_1 top, edge_2 right, edge_3 bottom, edge_4 left), named, of
-/// `fabric`, added to a copy of `template`. Returns the copy and the new piece's id.
-fn add_rectangle(
-    template: &GarmentTemplate,
-    w: f64,
-    h: f64,
-    name: &str,
-    fabric: &str,
-) -> Result<(GarmentTemplate, String), String> {
-    let at = crate::agent_ops::free_board_spot(template);
-    let mut t = authoring::apply(
-        template,
-        Command::Polygon {
-            points: vec![
-                at,
-                at + DVec2::new(w, 0.),
-                at + DVec2::new(w, h),
-                at + DVec2::new(0., h),
-            ],
-            tangents: vec![],
-            meshing: meshing(template),
-            fabric: fabric.to_owned(),
-            replace: false,
-        },
-    )?
-    .template;
-    let id = new_piece(template, &t)?;
-    if let Some(p) = t.panels.iter_mut().find(|p| p.id == id) {
-        p.name = name.to_owned();
-    }
-    Ok((t, id))
+/// Adds a rectangle `w` × `h` (edge_1 top, edge_2 right, edge_3 bottom, edge_4 left) of
+/// `fabric` to the steps, beside the other pieces. Returns the new piece's id.
+fn add_rectangle(steps: &mut Steps, w: f64, h: f64, fabric: &str) -> Result<String, String> {
+    let before = steps.template.clone();
+    let at = crate::agent_ops::free_board_spot(&before);
+    let after = steps.push(Command::Polygon {
+        points: vec![
+            at,
+            at + DVec2::new(w, 0.),
+            at + DVec2::new(w, h),
+            at + DVec2::new(0., h),
+        ],
+        tangents: vec![],
+        meshing: meshing(&before),
+        fabric: fabric.to_owned(),
+        replace: false,
+    })?;
+    new_piece(&before, after)
 }
 
 /// Bend a segment so its middle moves `bulge_cm` outward (negative: inward), as dragging it
@@ -205,11 +240,12 @@ pub fn bend_segment(template: &GarmentTemplate, args: &Value) -> Result<Build, S
     let d = (b - a) / length.max(1e-9);
     let outward = DVec2::new(d.y, -d.x);
     Ok(Build {
-        command: Command::StyleLine {
+        commands: vec![Command::StyleLine {
             moves: vec![],
             bends: vec![(panel.id.clone(), name.to_owned(), outward * bulge * 4. / 3.)],
             scales: vec![],
-        },
+        }],
+        names: vec![],
         done: format!(
             "Bent {}.{name}: its middle moved {:.1} cm {}. Seams along it take up the length \
              difference",
@@ -245,7 +281,7 @@ pub fn internal_line(template: &GarmentTemplate, args: &Value) -> Result<Build, 
         tangents: vec![DVec2::ZERO; points.len()],
         points: points.clone(),
     };
-    let after = authoring::apply(template, command)?.template;
+    let after = authoring::apply(template, command.clone())?.template;
     let id = after
         .panels
         .iter()
@@ -255,9 +291,8 @@ pub fn internal_line(template: &GarmentTemplate, args: &Value) -> Result<Build, 
         .map(|l| l.id.clone())
         .unwrap_or_default();
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(after),
-        },
+        commands: vec![command],
+        names: vec![],
         done: format!(
             "Internal line {id} on {} through {} points; sew to it, fold it (edit SetLineFold) \
              or cut along it (command_run pattern.cut_and_sew)",
@@ -294,13 +329,13 @@ pub fn buttons(template: &GarmentTemplate, args: &Value) -> Result<Build, String
         .get("vertical")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let mut t = template.clone();
+    let mut steps = Steps::new(template);
     let mut ids = Vec::new();
     for k in 0..count {
         let c = start + step * k as f64;
         let id = (1..)
             .map(|n| format!("trim_{n}"))
-            .find(|id| !t.trims.iter().any(|x| &x.id == id))
+            .find(|id| !steps.template.trims.iter().any(|x| &x.id == id))
             .unwrap_or_default();
         let half = if vertical {
             DVec2::new(0., size / 2.)
@@ -319,23 +354,18 @@ pub fn buttons(template: &GarmentTemplate, args: &Value) -> Result<Build, String
                 diameter_m: size,
             }
         };
-        t = authoring::apply(
-            &t,
-            Command::SetTrim {
-                trim: Trim {
-                    id: id.clone(),
-                    panel_id: panel.id.clone(),
-                    kind,
-                },
+        steps.push(Command::SetTrim {
+            trim: Trim {
+                id: id.clone(),
+                panel_id: panel.id.clone(),
+                kind,
             },
-        )?
-        .template;
+        })?;
         ids.push(id);
     }
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(t),
-        },
+        commands: steps.commands,
+        names: vec![],
         done: format!(
             "{count} {} on {} ({}), {:.1} cm{}. command_run trim.fasten buttons them to \
              the nearest buttonholes",
@@ -379,7 +409,7 @@ pub fn move_on_board(template: &GarmentTemplate, args: &Value) -> Result<Build, 
     if delta == DVec2::ZERO && turn == 0. {
         return Err("Give move_cm [dx, dy] and/or rotate_degrees".into());
     }
-    let commands = ids
+    let commands: Vec<Command> = ids
         .iter()
         .map(|id| {
             let i = template
@@ -394,10 +424,13 @@ pub fn move_on_board(template: &GarmentTemplate, args: &Value) -> Result<Build, 
             }
         })
         .collect();
+    let mut steps = Steps::new(template);
+    for c in commands {
+        steps.push(c)?;
+    }
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(chain(template, commands)?),
-        },
+        commands: steps.commands,
+        names: vec![],
         done: format!(
             "Moved {} on the board by ({:.1}, {:.1}) cm{}",
             ids.join(", "),
@@ -433,12 +466,13 @@ pub fn move_in_3d(template: &GarmentTemplate, args: &Value, pivot: DVec3) -> Res
         return Err("A move of more than 3 m is surely a mistake".into());
     }
     Ok(Build {
-        command: Command::PlaceGroup {
+        commands: vec![Command::PlaceGroup {
             panels: ids.clone(),
             pivot,
             translation,
             rotation: DQuat::from_axis_angle(axis, degrees.to_radians()),
-        },
+        }],
+        names: vec![],
         done: format!(
             "Moved {} in 3D by ({:.1}, {:.1}, {:.1}) cm{}. The drape restarts from there: \
              simulate",
@@ -506,19 +540,16 @@ fn patch_pocket(template: &GarmentTemplate, args: &Value) -> Result<Build, Strin
         .and_then(Value::as_str)
         .unwrap_or("Pocket")
         .to_owned();
-    let (t, pocket) = add_rectangle(template, w, h, &name, &host.fabric)?;
+    let mut steps = Steps::new(template);
+    let pocket = add_rectangle(&mut steps, w, h, &host.fabric)?;
     // Where it is stitched on the piece: left side, bottom and right side, top left open.
     let lines_before: Vec<String> = polygon.lines.iter().map(|l| l.id.clone()).collect();
-    let t = authoring::apply(
-        &t,
-        Command::InternalLine {
+    let line = steps
+        .push(Command::InternalLine {
             panel: host.id.clone(),
             points: corners.to_vec(),
             tangents: vec![DVec2::ZERO; 4],
-        },
-    )?
-    .template;
-    let line = t
+        })?
         .panels
         .iter()
         .find(|p| p.id == host.id)
@@ -528,25 +559,20 @@ fn patch_pocket(template: &GarmentTemplate, args: &Value) -> Result<Build, Strin
         .ok_or("The stitching line was not made")?;
     // The pocket's right, bottom and left run top right → bottom right → bottom left → top
     // left, the stitching line the other way round.
-    let t = authoring::apply(
-        &t,
-        Command::SewChain {
-            seam: None,
-            a: vec![
-                whole(&pocket, "edge_2", false),
-                whole(&pocket, "edge_3", false),
-                whole(&pocket, "edge_4", false),
-            ],
-            b: vec![whole(&host.id, &line, false)],
-            reverse: true,
-            ease: false,
-        },
-    )?
-    .template;
+    steps.push(Command::SewChain {
+        seam: None,
+        a: vec![
+            whole(&pocket, "edge_2", false),
+            whole(&pocket, "edge_3", false),
+            whole(&pocket, "edge_4", false),
+        ],
+        b: vec![whole(&host.id, &line, false)],
+        reverse: true,
+        ease: false,
+    })?;
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(t),
-        },
+        commands: steps.commands,
+        names: vec![(pocket.clone(), name)],
         done: format!(
             "Patch pocket {pocket} ({:.1} × {:.1} cm) on {} centred at ({:.1}, {:.1}) cm, \
              stitched on three sides along {line}, open at the top. It starts on the piece as \
@@ -725,23 +751,19 @@ fn band_collar(template: &GarmentTemplate, args: &Value) -> Result<Build, String
         .and_then(Value::as_str)
         .unwrap_or("Collar")
         .to_owned();
-    let (t, collar) = add_rectangle(template, length, height, &name, &fabric)?;
+    let mut steps = Steps::new(template);
+    let collar = add_rectangle(&mut steps, length, height, &fabric)?;
     // The collar's bottom runs right to left; the neckline chain left to right.
-    let t = authoring::apply(
-        &t,
-        Command::SewChain {
-            seam: None,
-            a: vec![whole(&collar, "edge_3", false)],
-            b: chain.clone(),
-            reverse: true,
-            ease: false,
-        },
-    )?
-    .template;
+    steps.push(Command::SewChain {
+        seam: None,
+        a: vec![whole(&collar, "edge_3", false)],
+        b: chain.clone(),
+        reverse: true,
+        ease: false,
+    })?;
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(t),
-        },
+        commands: steps.commands,
+        names: vec![(collar.clone(), name)],
         done: format!(
             "Band collar {collar}: {:.1} cm long (the neckline's length) and {:.1} cm tall, \
              sewn along {}; it starts standing on the neckline. Simulate, then check_garment",
@@ -787,25 +809,21 @@ fn placket(template: &GarmentTemplate, args: &Value) -> Result<Build, String> {
         .and_then(Value::as_str)
         .unwrap_or("Placket")
         .to_owned();
-    let (t, strip) = add_rectangle(template, length, width, &name, &host.fabric)?;
-    let t = authoring::apply(
-        &t,
-        Command::Sew {
-            a: whole(&strip, "edge_1", false),
-            b: whole(&host.id, edge, false),
-            reverse: false,
-            ease: false,
-        },
-    )?
-    .template;
+    let mut steps = Steps::new(template);
+    let strip = add_rectangle(&mut steps, length, width, &host.fabric)?;
+    steps.push(Command::Sew {
+        a: whole(&strip, "edge_1", false),
+        b: whole(&host.id, edge, false),
+        reverse: false,
+        ease: false,
+    })?;
     // The strip lies on the piece along the segment, its top edge on it: its x runs along
     // the segment and its y into the piece (a quarter turn on, the outline turning
     // counterclockwise).
     let along = (b - a).normalize_or_zero();
     Ok(Build {
-        command: Command::RunScript {
-            template: Box::new(t),
-        },
+        commands: steps.commands,
+        names: vec![(strip.clone(), name)],
         done: format!(
             "Placket {strip}: {:.1} × {:.1} cm, sewn to {}.{edge} and lying on the piece along \
              it. Add buttons with add_buttons; simulate, then check_garment",
@@ -972,7 +990,7 @@ mod tests {
         tshirt(&TshirtMeasurements::default(), 1).unwrap()
     }
     fn applied(t: &GarmentTemplate, build: Build) -> GarmentTemplate {
-        authoring::apply(t, build.command).unwrap().template
+        super::applied(t, &build).unwrap()
     }
 
     #[test]
@@ -1045,6 +1063,14 @@ mod tests {
         let seam = garment.seams.last().unwrap();
         let gap = seam.max_gap(&x);
         assert!(gap < 0.02, "pocket seam starts {gap} m apart");
+        // And it starts clear of the piece it lies on.
+        let mut state = garment.initial_state.clone();
+        state.x = x.clone();
+        if let Err(e) =
+            crate::vbd::VbdSolver::new(std::sync::Arc::new(garment.clone()), None, &state)
+        {
+            panic!("the pocket does not start clear: {e}");
+        }
     }
 
     #[test]

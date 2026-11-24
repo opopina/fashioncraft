@@ -50,7 +50,7 @@ pub enum SpreadSide {
 
 /// Every edit. Agents send one through the generic `edit` tool as `{"Sew": {fields}}` (see
 /// `crate::agent_edit`). Lengths are metres unless a field's name says otherwise.
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub enum Command {
     ConstructPoint {

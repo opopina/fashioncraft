@@ -261,18 +261,29 @@ impl Atelier {
 
     /// Applies a built change through the history, then lays a new piece on the drape.
     fn apply_build(&mut self, build: Build) -> Result<ToolResult, String> {
-        if !self.edit_named(build.command, build.history_name) {
+        // The drape before the change: a new piece is laid on it, not on whatever the window
+        // falls back to when the piece's default spot is in the way.
+        let before = build.lay.as_ref().map(|_| {
+            (
+                self.project.template.clone(),
+                self.scene.garment.clone(),
+                self.scene.state.clone(),
+                build.commands.clone(),
+            )
+        });
+        if !self.edit_sequence(build.commands, &build.names, build.history_name) {
             return Err(self.status.clone());
         }
-        if let Some(lay) = &build.lay
-            && let Err(e) = self.lay_new_piece(lay)
+        if let (Some(lay), Some(before)) = (&build.lay, before)
+            && let Err(e) = self.lay_new_piece(lay, before)
         {
             // Left where new pieces are laid out, it would be dragged through the garment when
             // simulated: take the change back instead.
             self.undo_edit(false);
             return Err(format!(
                 "The new piece could not start on the garment ({e}), so nothing was changed. \
-                 Simulate first so the garment is draped, or change the numbers, and try again"
+                 Add details before simulating (right after draft_garment), or reset the drape \
+                 with command_run simulation.reset, add it, then simulate"
             ));
         }
         let done = build.done;
@@ -289,35 +300,111 @@ impl Atelier {
         }
     }
 
-    fn lay_new_piece(&mut self, lay: &Lay) -> Result<(), String> {
-        let clearance = self.settings.contact.radius * 2. + 0.002;
-        let placed = agent_build::lay(
-            &self.scene.garment,
-            &self.scene.state.x,
-            lay,
-            clearance,
-            self.body_axis(),
-        );
-        if placed.is_empty() {
-            return Err("nothing to lay".into());
-        }
-        self.playing = false;
-        let mut candidate = self.scene.state.clone();
-        for (v, p) in placed {
-            if v < candidate.x.len() {
-                candidate.x[v] = p;
-                candidate.v[v] = DVec3::ZERO;
+    fn lay_new_piece(
+        &mut self,
+        lay: &Lay,
+        (template, garment, state, commands): (
+            fashioncraft::garment::GarmentTemplate,
+            std::sync::Arc<fashioncraft::garment::CompiledGarment>,
+            fashioncraft::model::State,
+            Vec<Command>,
+        ),
+    ) -> Result<(), String> {
+        let body = self.scene.collider.surface.clone();
+        // Every other piece where it was draped (as far as the change allows).
+        let start = agent_build::compose(&template, &commands)
+            .map(|edit| edit.state_keeping_drape(&garment, &state))
+            .ok()
+            .filter(|s| s.x.len() == self.scene.state.x.len())
+            .unwrap_or_else(|| self.scene.state.clone());
+        let base = self.settings.contact.radius * 2. + 0.002;
+        let mut last = String::new();
+        // Off the cloth by the contact distance, or further where the drape curves or folds.
+        for clearance in [base, 2. * base, 4. * base] {
+            let placed = agent_build::lay(
+                &self.scene.garment,
+                &start.x,
+                lay,
+                clearance,
+                self.body_axis(),
+            );
+            if placed.is_empty() {
+                return Err("nothing to lay".into());
+            }
+            let mut candidate = start.clone();
+            for (v, p) in placed {
+                if v < candidate.x.len() {
+                    candidate.x[v] = p;
+                    candidate.v[v] = DVec3::ZERO;
+                }
+            }
+            match fashioncraft::vbd::VbdSolver::new(
+                self.scene.garment.clone(),
+                Some(&body),
+                &candidate,
+            ) {
+                Ok(_) => {
+                    self.playing = false;
+                    self.scene.state = candidate;
+                    self.issue.invalidate();
+                    self.generation += 1;
+                    self.metrics = None;
+                    self.grab = None;
+                    return Ok(());
+                }
+                Err(e) => last = e,
             }
         }
-        let body = self.scene.collider.surface.clone();
-        fashioncraft::vbd::VbdSolver::new(self.scene.garment.clone(), Some(&body), &candidate)
-            .map_err(|e| e.to_string())?;
-        self.scene.state = candidate;
-        self.issue.invalidate();
-        self.generation += 1;
-        self.metrics = None;
-        self.grab = None;
-        Ok(())
+        Err(self.name_faces(&last))
+    }
+
+    /// The solver's "faces A and B" with the piece (or the avatar) each belongs to.
+    fn name_faces(&self, message: &str) -> String {
+        let garment = &self.scene.garment;
+        let owner = |face: usize| {
+            garment
+                .panels
+                .iter()
+                .find(|p| p.triangles.contains(&face))
+                .map_or_else(|| "the avatar".to_owned(), |p| p.id.clone())
+        };
+        let faces: Vec<usize> = message
+            .split(|c: char| !c.is_ascii_digit())
+            .filter_map(|w| w.parse().ok())
+            .collect();
+        let x = &self.scene.state.x;
+        let at = |face: usize| {
+            garment
+                .mesh
+                .triangles
+                .get(face)
+                .map(|t| {
+                    let c = t.vertices.iter().map(|v| x[*v]).sum::<DVec3>() / 3.;
+                    let uv = t
+                        .vertices
+                        .iter()
+                        .map(|v| garment.mesh.uv[*v])
+                        .sum::<DVec2>()
+                        / 3.;
+                    format!(
+                        " (at ({:.1}, {:.1}) cm on the piece, {:.0} cm up)",
+                        uv.x * 100.,
+                        uv.y * 100.,
+                        c.y * 100.
+                    )
+                })
+                .unwrap_or_default()
+        };
+        match faces[..] {
+            [a, b, ..] => format!(
+                "{message}: {}{} touches {}{}",
+                owner(a),
+                at(a),
+                owner(b),
+                at(b)
+            ),
+            _ => message.to_owned(),
+        }
     }
 
     fn agent_transform(&mut self, args: &Value) -> Result<ToolResult, String> {

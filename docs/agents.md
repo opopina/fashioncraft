@@ -195,7 +195,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `style_line` | The 3D view's style-line tool: bends, moves or stretches a segment by a 3D move in cm, across the seams it is sewn into. |
 | `add_internal_line` | An internal line through points in cm. |
 | `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
-| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the drape as it is, in one undo step. |
+| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
 | `pin` | Pins cloth around a point of a piece, removes or moves pins. |
 | `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
 | `trace_on_body` | The 3D pen: a closed line through points on the body becomes a piece laid there. |

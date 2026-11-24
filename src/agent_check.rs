@@ -36,6 +36,81 @@ pub struct Input<'a> {
     /// Pressure the cloth puts on the body, by triangle, Pa (the window works it out with the
     /// 3D view's smoothed normals). None leaves pressure out.
     pub pressure: Option<Vec<f64>>,
+    /// The avatar's height, bust, waist, hip, arm and inseam, cm, for the pattern's sanity
+    /// checks.
+    pub body_cm: Option<[f64; 6]>,
+}
+
+/// Pattern choices that rarely make sense, found by the segments' names (drafted pieces and
+/// pieces named like them): a bodice side seam so short the armhole runs to the waist, an
+/// armhole far deeper or shallower than the body, a neckline that drops very low. Sizes scale
+/// with the avatar's height (168 cm when unknown).
+pub fn pattern_checks(template: &GarmentTemplate, body_cm: Option<[f64; 6]>) -> Vec<String> {
+    let scale = body_cm.map_or(1., |b| (b[0] / 168.).clamp(0.5, 1.5));
+    let mut out = Vec::new();
+    for panel in &template.panels {
+        let Some(polygon) = panel.polygon.as_ref() else {
+            continue;
+        };
+        let n = polygon.points.len();
+        let ends = |e: &str| {
+            let i = polygon.edges.iter().position(|x| x == e)?;
+            Some((polygon.points[i], polygon.points[(i + 1) % n]))
+        };
+        let has_armhole = polygon.edges.iter().any(|e| e.contains("armhole"));
+        for e in &polygon.edges {
+            let Some((a, b)) = ends(e) else { continue };
+            let length = crate::authoring::edge_length(polygon, e).unwrap_or(a.distance(b));
+            if has_armhole && e.contains("side") && length < 0.08 * scale {
+                out.push(format!(
+                    "Pattern: the side seam {}.{e} is only {:.1} cm, so the armhole runs almost to \
+                     the waist; a bodice's side seam is usually {:.0}–{:.0} cm",
+                    panel.id,
+                    length * 100.,
+                    15. * scale,
+                    22. * scale
+                ));
+            }
+            if e.contains("armhole") {
+                let depth = (a.y - b.y).abs();
+                let (low, high) = (0.12 * scale, 0.30 * scale);
+                if depth > high || depth < low {
+                    out.push(format!(
+                        "Pattern: the armhole {}.{e} is {:.1} cm deep; for this body it is usually \
+                         {:.0}–{:.0} cm",
+                        panel.id,
+                        depth * 100.,
+                        17. * scale,
+                        24. * scale
+                    ));
+                }
+            }
+        }
+        // The neckline's drop: from the top of the piece to the neckline's lowest point.
+        let top = polygon
+            .points
+            .iter()
+            .map(|p| p.y)
+            .fold(f64::INFINITY, f64::min);
+        let neck_low = polygon
+            .edges
+            .iter()
+            .filter(|e| e.contains("neck"))
+            .filter_map(|e| ends(e))
+            .flat_map(|(a, b)| [a.y, b.y])
+            .fold(f64::NEG_INFINITY, f64::max);
+        if neck_low.is_finite() && neck_low - top > 0.22 * scale {
+            out.push(format!(
+                "Pattern: the neckline of {} drops {:.0} cm from the shoulder; a deep V is about \
+                 {:.0}–{:.0} cm. Check that it is meant",
+                panel.id,
+                (neck_low - top) * 100.,
+                12. * scale,
+                18. * scale
+            ));
+        }
+    }
+    out
 }
 
 /// Where a point of the cloth is: its piece, the part of the piece, the nearest segment and
@@ -318,6 +393,8 @@ pub fn check(input: &Input) -> Value {
         ));
     }
 
+    problems.extend(pattern_checks(input.template, input.body_cm));
+
     // What the document itself says is wrong, beyond what is above.
     for w in agent_ops::warnings(input.template, Some(&input.live)) {
         if !w.contains("open") && !problems.contains(&w) {
@@ -439,6 +516,7 @@ mod tests {
             v: &v,
             body: None,
             pressure: None,
+            body_cm: None,
         });
         assert_eq!(report["ok"], json!(false));
         assert!(
@@ -469,6 +547,7 @@ mod tests {
             v: &v,
             body: None,
             pressure: Some(vec![3000.; garment.mesh.triangles.len()]),
+            body_cm: None,
         });
         let problems: Vec<&str> = report["problems"]
             .as_array()
@@ -495,5 +574,31 @@ mod tests {
         assert_eq!(report["settling"]["settled"], json!(false));
         let spot = &report["strain_over_limit"][0]["where"];
         assert!(spot["piece"].is_string() && spot["near"]["segment"].is_string());
+    }
+
+    #[test]
+    fn odd_pattern_choices_are_pointed_out() {
+        let shirt = crate::garment::presets::shirt(&Default::default(), 1).unwrap();
+        // A drafted shirt passes.
+        assert_eq!(
+            pattern_checks(&shirt, Some([168., 88., 70., 96., 60., 78.])),
+            Vec::<String>::new()
+        );
+        let dress = crate::garment::presets::dress(&Default::default(), 1).unwrap();
+        assert_eq!(pattern_checks(&dress, None), Vec::<String>::new());
+        // Its front's side seam cut to 2.5 cm and its neckline scooped 25 cm do not.
+        let mut odd = shirt.clone();
+        let front = odd.panels.iter_mut().find(|p| p.id == "front").unwrap();
+        let q = front.polygon.as_mut().unwrap();
+        let side = q.edges.iter().position(|e| e == "side-right").unwrap();
+        let n = q.points.len();
+        let (a, b) = (q.points[side], q.points[(side + 1) % n]);
+        q.points[(side + 1) % n] = a + (b - a).normalize() * 0.025;
+        let neck = q.edges.iter().position(|e| e == "neck-bottom").unwrap();
+        q.points[neck].y += 0.25;
+        q.points[(neck + 1) % n].y += 0.25;
+        let found = pattern_checks(&odd, None);
+        assert!(found.iter().any(|f| f.contains("side seam")), "{found:?}");
+        assert!(found.iter().any(|f| f.contains("neckline")), "{found:?}");
     }
 }

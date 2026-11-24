@@ -1524,6 +1524,11 @@ impl Atelier {
 
     pub(super) fn garment_check(&mut self) -> Value {
         let pressure = self.pressure_by_triangle();
+        let body_cm = if self.project.avatar_removed {
+            None
+        } else {
+            self.avatar_body_cm().ok()
+        };
         let body = (!self.project.avatar_removed).then_some(&*self.scene.collider);
         let mut report = agent_check::check(&agent_check::Input {
             template: &self.project.template,
@@ -1531,6 +1536,7 @@ impl Atelier {
             v: &self.scene.state.v,
             body,
             pressure,
+            body_cm,
         });
         if let Some(problem) = self.simulation_problem() {
             if let Some(p) = report["problems"].as_array_mut() {

@@ -617,6 +617,9 @@ pub fn tools() -> Vec<Tool> {
             false,
         ),
     ]
+    .into_iter()
+    .chain(crate::agent_base::tools())
+    .collect()
 }
 
 /// Standard base64 with padding, for images in tool results.

@@ -571,7 +571,7 @@ impl Atelier {
     }
 
     /// Move the pins at `vertices` by `translation` as one validated undo step.
-    fn apply_pin_move(&mut self, vertices: &[usize], translation: DVec3) {
+    pub(super) fn apply_pin_move(&mut self, vertices: &[usize], translation: DVec3) {
         let ui_lang = self.prefs.language;
         if self.pending {
             self.status = i18n::tr(

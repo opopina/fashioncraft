@@ -189,7 +189,7 @@ pub fn describe(query: &str, names: &[String]) -> Value {
     json!({
         "units": "These are FashionCraft's own edit commands: lengths in metres unless a field's \
                   name says mm, degrees, percent or a fraction; 2D positions [x, y] in metres in \
-                  the piece's material frame (x right, y up); 3D [x, y, z] metres, y up.",
+                  the piece's own frame, as piece_detail gives them in cm (x right, y down); 3D [x, y, z] metres, y up.",
         "ops": matching.iter().map(|op| {
             let mut entry = json!({"op": op.name, "does": first_sentence(&op.doc)});
             if full {

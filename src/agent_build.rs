@@ -333,7 +333,7 @@ pub fn buttons(template: &GarmentTemplate, args: &Value) -> Result<Build, String
             template: Box::new(t),
         },
         done: format!(
-            "{count} {} on {} ({}), {:.1} cm{}. command_run buttons.fasten buttons them to \
+            "{count} {} on {} ({}), {:.1} cm{}. command_run trim.fasten buttons them to \
              the nearest buttonholes",
             if hole { "buttonhole(s)" } else { "button(s)" },
             panel.id,

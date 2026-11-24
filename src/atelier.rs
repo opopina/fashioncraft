@@ -10,6 +10,8 @@ use fashioncraft::{
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 #[path = "atelier/activation_ui.rs"]
 mod activation_ui;
+#[path = "atelier/agent_base_tools.rs"]
+mod agent_base_tools;
 #[path = "atelier/agent_hub.rs"]
 mod agent_hub;
 #[path = "atelier/agent_tools.rs"]

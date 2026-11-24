@@ -125,7 +125,7 @@ impl Atelier {
                 "size_chart" => Ok(ToolResult::json(&self.size_chart())),
                 "save_project" => self.agent_save(ctx, args),
                 "export_garment" => self.agent_export(ctx, args),
-                other => Err(format!("unknown tool '{other}'")),
+                other => return self.begin_base_tool(ctx, other, args),
             };
         Ok(result.unwrap_or_else(ToolResult::error))
     }
@@ -137,6 +137,7 @@ impl Atelier {
         pending: &mut Pending,
     ) -> Option<ToolResult> {
         match pending {
+            Pending::Base(base) => self.continue_base_tool(ctx, base),
             Pending::Simulate { until, seconds } => {
                 if Instant::now() < *until && self.playing {
                     return None;
@@ -226,7 +227,7 @@ impl Atelier {
         }
     }
 
-    fn screenshot_result(
+    pub(super) fn screenshot_result(
         &self,
         ctx: &egui::Context,
         image: &egui::ColorImage,
@@ -283,7 +284,7 @@ impl Atelier {
     }
 
     /// The drape as it stands: seam gaps mean something once the cloth has left its layout.
-    fn live(&self) -> Live<'_> {
+    pub(super) fn live(&self) -> Live<'_> {
         let x = &self.scene.state.x;
         let laid = &self.scene.garment.initial_state.x;
         let simulated =

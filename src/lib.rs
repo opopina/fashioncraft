@@ -2,10 +2,12 @@
 pub mod abc_export;
 pub mod abc_import;
 pub mod agent;
+pub mod agent_base;
 pub mod agent_build;
 pub mod agent_check;
 pub mod agent_edit;
 pub mod agent_eval;
+pub mod agent_guide;
 pub mod agent_ops;
 pub mod assistant;
 pub mod authoring;

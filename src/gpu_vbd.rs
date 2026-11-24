@@ -166,6 +166,21 @@ impl Term {
     }
 }
 impl GpuVbd {
+    /// Whether `device` can run the solver's kernels: compute shaders, eight storage buffers in
+    /// one stage, 64-wide workgroups. eframe asks OpenGL adapters for WebGL 2's limits, which
+    /// have no storage buffers, and `new` panics on such a device (found by the AppImage check:
+    /// Xvfb with Mesa's software OpenGL).
+    pub fn supported(adapter: &wgpu::Adapter, device: &wgpu::Device) -> bool {
+        let limits = device.limits();
+        adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            && limits.max_storage_buffers_per_shader_stage >= 8
+            && limits.max_compute_invocations_per_workgroup >= 64
+            && limits.max_compute_workgroup_size_x >= 64
+    }
+
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
         let entries: Vec<_> = (0..9)
             .map(|i| wgpu::BindGroupLayoutEntry {

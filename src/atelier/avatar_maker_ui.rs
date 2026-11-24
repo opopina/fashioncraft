@@ -40,6 +40,11 @@ impl Default for AvatarMakerUi {
 }
 
 impl AvatarMakerUi {
+    /// The settings and look the maker holds now.
+    pub(super) fn current(&self) -> (MacroBody, LookChoice) {
+        (self.body, self.look)
+    }
+
     /// Start from `body` and `look` (a preset of the library).
     pub(super) fn set(&mut self, body: MacroBody, look: LookChoice) {
         self.body = body;

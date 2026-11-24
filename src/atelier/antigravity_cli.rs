@@ -170,7 +170,9 @@ impl Cli<'_> {
             }
             return Err(error);
         }
-        cli_process::response(&result(&mut output)?, body)
+        let mut answer = cli_process::response(&result(&mut output)?, body)?;
+        cli_process::attach_usage(&mut answer, &mut output);
+        Ok(answer)
     }
 }
 
@@ -255,6 +257,7 @@ echo "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"structured_outp
             model: String::new(),
             base_url: String::new(),
             api_key: String::new(),
+            pause_every: 0,
         };
         let mut conversation = Conversation::new(settings.provider);
         let mut calls = Vec::new();

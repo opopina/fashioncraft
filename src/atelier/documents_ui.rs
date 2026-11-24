@@ -322,6 +322,49 @@ impl Atelier {
             None => {}
         }
     }
+    /// Open the importer that reads `path` with the file already chosen, as if the person had
+    /// picked it in the importer's dialog: they review it and confirm, as one undoable step.
+    /// Returns which importer opened.
+    pub(super) fn open_importer_with(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::Path,
+    ) -> Result<&'static str, String> {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match fashioncraft::attachments::kind_of(&path.to_string_lossy()) {
+            fashioncraft::attachments::Kind::Pattern if ext == "svg" => {
+                self.open_svg_import();
+                self.document.svg_import.choose(path);
+                Ok("the SVG pattern importer")
+            }
+            fashioncraft::attachments::Kind::Pattern => {
+                let apparel = fashioncraft::garment::dxf_aama::load(path)
+                    .is_ok_and(|text| fashioncraft::garment::dxf_aama::is_apparel(&text));
+                if apparel {
+                    self.open_dxf_aama_import();
+                    self.document.dxf_aama.import.choose(path);
+                    Ok("the DXF-AAMA/ASTM importer")
+                } else {
+                    self.open_pattern_import();
+                    self.document.pattern_import.choose(path);
+                    Ok("the DXF importer")
+                }
+            }
+            fashioncraft::attachments::Kind::Model => {
+                self.open_avatar_import(ctx);
+                self.choose_avatar(path);
+                Ok("the avatar importer")
+            }
+            other => Err(format!(
+                "FashionCraft has no importer an agent can open for a {}",
+                other.label()
+            )),
+        }
+    }
     /// Put an avatar file in the open importer, as if picked in its dialog.
     pub(super) fn choose_avatar(&mut self, path: &std::path::Path) {
         self.document.avatar_import.choose(path);
@@ -356,40 +399,59 @@ impl Atelier {
             }
             Some(Action::Cancel) => self.document.avatar_import = Default::default(),
             Some(Action::Confirm) => {
-                if let Some(candidate) = &self.document.avatar_import.candidate {
-                    match candidate.prepare(&self.project, self.settings.clone()) {
-                        Ok(prepared) => {
-                            let source = self.redrape_source();
-                            self.remove_recovery();
-                            install_avatar(
-                                prepared,
-                                &mut self.project,
-                                &mut self.scene,
-                                &mut self.authoring,
-                                &mut self.document,
-                                &mut self.generation,
-                            );
-                            self.authoring.board.snap_mm = self.prefs.snap_mm;
-                            self.authoring.redrape_from = source;
-                            self.playing = false;
-                            self.pending = false;
-                            self.grab = None;
-                            self.drag_plane = None;
-                            self.issue.invalidate();
-                            self.metrics = None;
-                            self.simulation_error = None;
-                            self.status = i18n::tr(
-                                self.prefs.language,
-                                "Avatar replaced · drape reset · Re-drape brings the drape from the previous avatar",
-                            )
-                            .into();
-                        }
-                        Err(error) => self.document.avatar_import.error = Some(error),
-                    }
+                if let Err(error) = self.install_avatar_candidate() {
+                    self.document.avatar_import.error = Some(error);
                 }
             }
             None => {}
         }
+    }
+    /// Replace the avatar with the one chosen in the import confirmation, as its Confirm
+    /// button does; agents call it after choosing a file themselves.
+    pub(super) fn install_avatar_candidate(&mut self) -> Result<(), String> {
+        self.install_avatar_checked()
+    }
+    /// Choose `path` as the avatar to install and install it, without the confirmation.
+    pub(super) fn install_avatar_file(&mut self, path: &std::path::Path) -> Result<(), String> {
+        self.document.avatar_import.choose(path);
+        if let Some(e) = self.document.avatar_import.error.take() {
+            return Err(e);
+        }
+        self.install_avatar_checked()
+    }
+    fn install_avatar_checked(&mut self) -> Result<(), String> {
+        let candidate = self
+            .document
+            .avatar_import
+            .candidate
+            .as_ref()
+            .ok_or("No avatar chosen")?;
+        let prepared = candidate.prepare(&self.project, self.settings.clone())?;
+        let source = self.redrape_source();
+        self.remove_recovery();
+        install_avatar(
+            prepared,
+            &mut self.project,
+            &mut self.scene,
+            &mut self.authoring,
+            &mut self.document,
+            &mut self.generation,
+        );
+        self.authoring.board.snap_mm = self.prefs.snap_mm;
+        self.authoring.redrape_from = source;
+        self.playing = false;
+        self.pending = false;
+        self.grab = None;
+        self.drag_plane = None;
+        self.issue.invalidate();
+        self.metrics = None;
+        self.simulation_error = None;
+        self.status = i18n::tr(
+            self.prefs.language,
+            "Avatar replaced · drape reset · Re-drape brings the drape from the previous avatar",
+        )
+        .into();
+        Ok(())
     }
     pub(super) fn template_browser_open(&self) -> bool {
         self.document.browser.open

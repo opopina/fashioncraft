@@ -665,6 +665,27 @@ impl Atelier {
 const SHIRT_FIELDS: [&str; 8] = [
     "bust", "hip", "ease", "length", "shoulder", "sleeve", "cuff", "top",
 ];
+const DRESS_FIELDS: [&str; 8] = [
+    "bust",
+    "hip",
+    "ease",
+    "length",
+    "shoulder",
+    "hip_depth",
+    "flare",
+    "top",
+];
+const BLOUSE_FIELDS: [&str; 9] = [
+    "bust",
+    "hip",
+    "ease",
+    "length",
+    "shoulder",
+    "upper_arm",
+    "sleeve",
+    "cuff",
+    "top",
+];
 const SKIRT_FIELDS: [&str; 7] = [
     "waist",
     "hip",
@@ -804,6 +825,86 @@ impl Atelier {
                 self.authoring.trousers_draft.values = v;
                 (template, listed(&TROUSERS_FIELDS, &v))
             }
+            "dress" => {
+                let base = if from_avatar {
+                    self.avatar_dress_values()?
+                } else {
+                    let m = presets::DressMeasurements::default();
+                    [
+                        m.bust_m,
+                        m.hip_m,
+                        m.ease_m,
+                        m.length_m,
+                        m.shoulder_m,
+                        m.hip_depth_m,
+                        m.flare_m,
+                        m.top_m,
+                    ]
+                    .map(|x| (x * 1000.).round() / 10.)
+                };
+                let v = with_overrides(base, &DRESS_FIELDS, overrides)?;
+                let m = v.map(|x| x / 100.);
+                let template = presets::dress(
+                    &presets::DressMeasurements {
+                        bust_m: m[0],
+                        hip_m: m[1],
+                        ease_m: m[2],
+                        length_m: m[3],
+                        shoulder_m: m[4],
+                        hip_depth_m: m[5],
+                        flare_m: m[6],
+                        top_m: m[7],
+                    },
+                    2,
+                )
+                .map_err(|e| format!("{e} (cm: {})", listed(&DRESS_FIELDS, &v)))?;
+                (template, listed(&DRESS_FIELDS, &v))
+            }
+            "shirt" => {
+                let defaults = presets::ShirtMeasurements::default();
+                let (base, arms) = if from_avatar {
+                    self.avatar_blouse_values()?
+                } else {
+                    let m = defaults;
+                    (
+                        [
+                            m.bust_m,
+                            m.hip_m,
+                            m.ease_m,
+                            m.length_m,
+                            m.shoulder_m,
+                            m.upper_arm_m,
+                            m.sleeve_m,
+                            m.cuff_m,
+                            m.top_m,
+                        ]
+                        .map(|x| (x * 1000.).round() / 10.),
+                        m.arms,
+                    )
+                };
+                let v = with_overrides(base, &BLOUSE_FIELDS, overrides)?;
+                let m = v.map(|x| x / 100.);
+                // Each sleeve starts clear of the avatar's arm, as it stands now.
+                let body = &self.scene.collider.surface.vertices;
+                let template = presets::shirt_around(
+                    &presets::ShirtMeasurements {
+                        bust_m: m[0],
+                        hip_m: m[1],
+                        ease_m: m[2],
+                        length_m: m[3],
+                        shoulder_m: m[4],
+                        upper_arm_m: m[5],
+                        sleeve_m: m[6],
+                        cuff_m: m[7],
+                        top_m: m[8],
+                        arms,
+                    },
+                    2,
+                    (!self.project.avatar_removed).then_some(body.as_slice()),
+                )
+                .map_err(|e| format!("{e} (cm: {})", listed(&BLOUSE_FIELDS, &v)))?;
+                (template, listed(&BLOUSE_FIELDS, &v))
+            }
             other => return Err(format!("unknown garment kind '{other}'")),
         };
         let mut project =
@@ -816,9 +917,126 @@ impl Atelier {
         }
         let garment = match kind {
             "tshirt" => "a t-shirt",
+            "shirt" => "a shirt with set-in sleeves",
+            "dress" => "a dress",
             "skirt" => "a skirt",
             _ => "trousers",
         };
-        Ok(format!("Drafted {garment} (cm): {used}"))
+        let mut report = format!("Drafted {garment} (cm): {used}");
+        // A piece that starts inside the body would be pushed out violently: say so.
+        if let Err(e) = fashioncraft::avatar::diagnostics::check_vbd_initialization(
+            self.scene.garment.clone(),
+            &self.scene.collider.surface,
+            &self.scene.state,
+        ) {
+            report.push_str(&format!(". Warning: it starts touching the body ({e})"));
+        }
+        Ok(report)
+    }
+}
+
+/// The avatar's own body measurements by name, centimetres, as the avatar editor lists them.
+pub(super) const BODY_FIELDS: [&str; 6] = ["height", "bust", "waist", "hip", "arm", "inseam"];
+
+impl Atelier {
+    /// The avatar's height, bust, waist, hip, arm length and inseam, centimetres, measured
+    /// once per avatar file.
+    pub(super) fn avatar_body_cm(&mut self) -> Result<[f64; 6], String> {
+        let path = self.project.avatar_path.clone();
+        let state = &mut self.authoring.avatar_shape;
+        if state.measured.as_ref().map(|(p, _)| p) != Some(&path) {
+            let measured = measure(&path);
+            state.target = measured.as_ref().ok().map(|m| centimetres(&m.now));
+            state.measured = Some((path, measured));
+        }
+        match &state.measured {
+            Some((_, Ok(m))) => Ok(centimetres(&m.now)),
+            Some((_, Err(e))) => Err(e.clone()),
+            None => Err("The avatar is not measured".into()),
+        }
+    }
+
+    /// Reshape the avatar to `overrides` (centimetres, by [`BODY_FIELDS`] name; the rest stay)
+    /// and put it in place of the current one, as the avatar editor and its confirmation do.
+    pub(super) fn agent_reshape_avatar(
+        &mut self,
+        overrides: &BTreeMap<String, f64>,
+    ) -> Result<String, String> {
+        let now = self.avatar_body_cm()?;
+        let target = with_overrides(now, &BODY_FIELDS, overrides)?;
+        self.authoring.avatar_shape.target = Some(target);
+        self.make_shaped_avatar()?;
+        self.install_avatar_candidate()?;
+        Ok(format!(
+            "Avatar reshaped (cm): {}. The drape was reset: simulate again.",
+            listed(&BODY_FIELDS, &target)
+        ))
+    }
+
+    /// The avatar's joints by name, metres.
+    fn avatar_joints(&self) -> Result<BTreeMap<String, glam::DVec3>, String> {
+        Ok(measure(&self.project.avatar_path)?.joints)
+    }
+
+    /// The measurements of the current avatar a dress should fit, centimetres.
+    fn avatar_dress_values(&self) -> Result<[f64; 8], String> {
+        let measured = measure(&self.project.avatar_path)?;
+        let joint = |id: &str| {
+            measured
+                .joints
+                .get(id)
+                .copied()
+                .ok_or_else(|| format!("The avatar lacks the joint {id}"))
+        };
+        let (l, r) = (joint("joint-l-shoulder")?, joint("joint-r-shoulder")?);
+        let now = measured.now;
+        let scale = now.height_m / 1.75;
+        let d = fashioncraft::garment::presets::DressMeasurements::default();
+        let v = [
+            now.bust_m,
+            now.hip_m,
+            d.ease_m,
+            d.length_m * scale,
+            l.distance(r) + 0.03,
+            d.hip_depth_m * scale,
+            d.flare_m,
+            l.y.max(r.y) + 0.09,
+        ];
+        Ok(v.map(|x| (x * 1000.).round() / 10.))
+    }
+
+    /// The measurements of the current avatar a shirt with set-in sleeves should fit,
+    /// centimetres, and its arms' shoulder and elbow joints (+x side first), metres.
+    pub(super) fn avatar_blouse_values(&self) -> Result<([f64; 9], [[glam::DVec3; 2]; 2]), String> {
+        let measured = measure(&self.project.avatar_path)?;
+        let joints = self.avatar_joints()?;
+        let joint = |id: &str| {
+            joints
+                .get(id)
+                .copied()
+                .ok_or_else(|| format!("The avatar lacks the joint {id}"))
+        };
+        let mut arms = [
+            [joint("joint-l-shoulder")?, joint("joint-l-elbow")?],
+            [joint("joint-r-shoulder")?, joint("joint-r-elbow")?],
+        ];
+        if arms[0][0].x < arms[1][0].x {
+            arms.swap(0, 1);
+        }
+        let now = measured.now;
+        let s = fashioncraft::garment::presets::ShirtMeasurements::default();
+        let scale = now.height_m / 1.75;
+        let v = [
+            now.bust_m,
+            now.hip_m,
+            s.ease_m,
+            s.length_m * scale,
+            arms[0][0].distance(arms[1][0]) + 0.05,
+            s.upper_arm_m * now.bust_m / 0.88,
+            s.sleeve_m * scale,
+            s.cuff_m * now.bust_m / 0.88,
+            arms[0][0].y.max(arms[1][0].y) + 0.09,
+        ];
+        Ok((v.map(|x| (x * 1000.).round() / 10.), arms))
     }
 }

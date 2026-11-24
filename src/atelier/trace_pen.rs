@@ -157,6 +157,16 @@ impl Atelier {
         }
     }
 
+    /// The 3D pen through avatar vertices `points`, closed at once (agents, `trace_on_body`).
+    pub(super) fn trace_through(&mut self, points: Vec<usize>) {
+        self.authoring.trace_pen = Some(TracePen {
+            points,
+            chain: Vec::new(),
+        });
+        self.finish_trace_pen();
+        self.authoring.trace_pen = None;
+    }
+
     /// Close the line: the enclosed part of the body becomes a new piece, laid on the body.
     fn finish_trace_pen(&mut self) {
         let ui_lang = self.prefs.language;

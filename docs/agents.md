@@ -7,9 +7,11 @@ AI can work in FashionCraft in two ways:
 - **MCP**: AI apps that speak the Model Context Protocol work in FashionCraft from outside. These
   include Claude Desktop, Claude Code, Cursor, LM Studio and ArtCraft's AI gateway.
 
-Both use the same ten tools, listed [below](#the-tools). The tools work in the open window, where
-you see every change as it happens, and Undo takes any of them back. They save and export only
-into your `Documents/FashionCraft` folder, and they never open file dialogs.
+Both use the same tools, listed [below](#the-tools), and the same instructions (`SYSTEM_PROMPT` in
+`src/assistant.rs`, which the MCP server also sends as its instructions). The tools work in the
+open window, where you see every change as it happens. Every pattern edit goes through the same
+undoable commands as the menus, so Edit › Undo takes it back. The tools save, export and render
+only into your `Documents/FashionCraft` folder, and they never open file dialogs.
 
 ## The Assistant
 
@@ -62,11 +64,78 @@ stay off.
 
 **Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
 model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
-after the current step. **New chat** starts a fresh conversation. Some requests to try:
+after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
+Cmd+V while the message box has focus, or with **Paste**.
+
+**How long a job runs.** The Assistant works until the job is done: there is no limit on its
+steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
+5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
+**Connection › Review › Pause every N steps** (off by default): it stops after that many steps and
+**Continue** goes on with everything so far.
+
+**Usage.** Beside the provider's name the panel shows what this conversation has used, kept in
+memory only: new input, output and cached input tokens (12.4k in · 3.1k out · 40k cached), the
+money for API keys (≈, from published prices in `PRICES` in `src/assistant.rs`, which lists
+Claude's models; other models show tokens without money until their prices are added) and a small
+ring. The ring shows the plan's usage limit where the provider reports it, and otherwise how full
+the model's context window is (its tooltip says which):
+
+| Provider | Tokens | Money | Ring |
+|---|---|---|---|
+| Claude, API key | Each response's `usage` | Price table | Context window |
+| ChatGPT / Gemini / local, API | Each response's `usage` | Price table (where listed) | Context window (where listed) |
+| Claude Code CLI | `usage` in its `result` | Its `total_cost_usd` (API-equivalent; a subscription is not billed per token) | None reported |
+| Codex CLI | `usage` in `turn.completed` | None | The plan limit, when an event carries `rate_limits` (`used_percent`, `window_minutes`) |
+| Gemini CLI | `stats.models.*.tokens` | None | None reported |
+| Antigravity CLI | What it prints, if any | None | Its `used_percent`, if it prints one |
+
+**Long sessions.** Each request declares a short list of common tools; `more_tools` lists the
+others and gives their inputs, and `use_tool` runs one (MCP clients see every tool). After the
+first `scene_summary`, the next ones give only what changed. The person's messages and
+attachments go whole; the recent messages go whole; before them, tool results are cut short and
+screenshots become a line of text, in steps of ten messages so that part stays the same from one
+request to the next and the provider's prompt cache serves it; at most about 80 messages are sent.
+On a replayed 33-step dress job this took the input from about 751k to 427k tokens (the last
+request from 36k to 18k). When a CLI fails, the chat shows the error it gave.
+
+**Copying and logs.** All text in the chat can be selected and copied, and the copy icon at the
+top copies the whole conversation. Each conversation is also written, as it happens, to
+`assistant-logs/conversation-<time>.jsonl` in FashionCraft's session folder (on macOS
+`~/Library/Application Support/FashionCraft/session/`): the messages, every tool call with its
+arguments and result, usage and failures, without picture bytes, so a run can be looked at
+afterwards.
+
+**Rules the Assistant keeps.** It never changes the avatar's pose or body unless asked; with a
+draped garment, a pose moves the avatar into place gradually and the cloth follows. Every change
+is checked: one that would make cloth start inside other cloth or the body is undone, and while
+such a state stands, tools that build on the garment wait until it is cleared. Pieces a cut, a
+copy or a merge makes get names of their own and free space on the board, and the Assistant
+names pieces for what they are.
+
+Some requests to try:
 
 - "Draft a denim skirt for this avatar, simulate it and show me how it falls."
-- "Make the t-shirt 5 cm longer with short sleeves, in red jersey."
+- "Make a shirt with set-in sleeves, then add a 15 × 17 cm pocket to the front."
+- "Add a 2 cm dart at the middle of the front hem and check that every seam closes."
+- "Set up sizes S, M, L and XL with M as the base and show me the size chart."
 - "Save this as summer-tee and export it as GLB."
+
+**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V in the
+message box with a picture or files on the clipboard (on Windows and Linux, the **Paste** button
+does this for a picture). Each file shows as a chip above the message; hover it to see what was
+read, × takes it off. What the model receives:
+
+| File | The model gets |
+|---|---|
+| Picture (PNG, JPEG, BMP, TGA, HDR) | The picture, as PNG, at most 1568 px a side. Claude, ChatGPT, Gemini and the four CLIs see it; a local model is told it was attached but cannot see it, and says so. |
+| PDF | Claude (API key) reads it whole. Other connections are told a PDF was attached that they cannot read, and ask for its pages as pictures or its text. |
+| Text, Markdown, JSON, CSV/TSV table | Its text, at most 40,000 characters. |
+| DXF, DXF-AAMA/ASTM, SVG pattern | FashionCraft reads it: the number of pieces, each one's size and perimeter, and a picture of the pieces with a 10 cm bar. `open_attachment` opens it in FashionCraft's importer, where the person checks the scale and imports it (undoable). |
+| 3D model (OBJ, FBX, glTF, USD, Alembic…) | A note on how FashionCraft opens it; `open_attachment` opens the avatar importer. |
+| BVH, PC2, MDD, `.fcfabric`, projects | A note on where FashionCraft opens it. |
+| Video, audio, Word, Excel, HEIC, WebP | Not read yet: the model is told so and tells the person (attach screenshots, PDF, CSV or PNG instead). |
+
+Attachments go to the provider you chose, like your messages.
 
 With Claude, FashionCraft opts into Anthropic's server-side fallback (`fallbacks: "default"`). If
 the model declines a request, Anthropic retries it on its recommended fallback model, and the chat
@@ -118,38 +187,174 @@ goes away.
 
 ## The tools
 
+**Looking**
+
 | Tool | What it does |
 |---|---|
-| `scene_summary` | Lists the pieces, seams, fabrics and avatar, where the garment hangs (cm), and whether there are unsaved changes. |
-| `command_list` | Searches FashionCraft's menu commands. |
-| `command_run` | Runs a menu command that opens no dialog. |
-| `draft_garment` | Drafts a t-shirt, skirt or trousers from the avatar's or the window's measurements, with overrides in cm. It replaces the current garment. |
-| `set_fabric` | Applies a fabric preset (cotton, jersey, wool, denim, leather, silk, linen, nylon, stretch) to some pieces or all of them. |
-| `set_color` | Colours some fabrics or all of them. |
-| `simulate` | Runs the simulation for 0.5 to 60 seconds, then reports where the garment hangs. |
-| `screenshot` | Returns a PNG of the 3D view, or of the whole window. |
+| `scene_summary` | Every piece (size, segments with ids, lengths and the side they face, internal lines, placement), every seam (the length of each side, and after a simulation its gap in mm and whether it closed), the fabrics with their physical parameters, the avatar's measurements, pose and arrangement points, the sizes, the current selection, warnings (unequal seams, open seams, missed target lengths, pieces sewn to nothing), and the simulation state. |
+| `piece_detail` | One piece in full: numbered outline points (cm, x right, y down), each segment's end points, length, curve, target length, seam allowance, notches and seams, its internal lines and placement. |
+| `size_chart` | The sizes and every point of measure in every size. |
+| `screenshot` | A PNG of the 3D view, or of the whole window. |
+
+**Selecting and menu commands**
+
+| Tool | What it does |
+|---|---|
+| `select` | Selects pieces, a segment or internal line, an outline point or a seam, as a click would. |
+| `command_list` | The menu commands an agent can run, with what each acts on and whether it can run now. Commands that wait for the mouse or open a window, a file dialog or a web page are left out unless asked for, and then say which agent tool does the job instead. |
+| `command_run` | Runs one menu command, optionally selecting its `target` first. It refuses commands an agent cannot use, and commands whose selection is missing, with a message that says what to do. |
+
+**Pattern**
+
+| Tool | What it does |
+|---|---|
+| `draft_garment` | Replaces the garment with a base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. It warns when a piece starts touching the body. |
+| `create_piece` | A new piece from a rectangle or an outline of points, named. |
+| `move_points` | Moves outline points by an offset in cm. |
+| `set_segment_length` | Makes a straight segment a given length, keeping its start, end or middle. |
+| `add_point` | Splits an unsewn segment. |
+| `add_dart` | An edge dart cut and sewn into a straight unsewn segment, or a diamond dart inside the piece. |
+| `add_pleats` | Knife, box or inverted box pleats along a segment, tacked or not. |
+| `piece_edit` | Renames, duplicates, mirrors (a linked copy), deletes a piece, sets its grain or a segment's seam allowance. |
+| `sew` | Sews segments 1:1 or M:N, whole or a stretch, with or without ease. Unless told, it sews the way that does not twist the seam, judged from where the pieces are placed. |
+| `seam_edit` | Removes a seam, or allows or forbids ease on it. |
+| `place_piece` | Places a piece on an arrangement point of the avatar (wrapped or flat, at a clearance), after checking it starts clear of the body. |
+| `open_attachment` | Opens a pattern or 3D model the person attached in FashionCraft's importer, for the person to check and confirm. |
+
+**Fabric, avatar, sizes**
+
+| Tool | What it does |
+|---|---|
+| `set_fabric` | Applies a fabric preset (cotton, jersey, wool, denim, leather, silk, linen, nylon, stretch). |
+| `set_fabric_parameters` | Weight, thickness, stretch along warp and weft, shear, bending and friction of one fabric. |
+| `set_color` | Colours fabrics. |
+| `set_avatar` | A body from the avatar library, or the current one reshaped to new measurements. The drape is reset; this is not on the Undo history, as in the menus. |
+| `set_pose` | A pose preset: Rest, Arms down, T-pose, Arms forward, Step. |
+| `grading` | Creates sizes, adds a size, grows an outline point by an equal step per size, shows a size in 3D. |
+
+**Result**
+
+| Tool | What it does |
+|---|---|
+| `simulate` | Runs the simulation for 0.5 to 60 seconds, then reports every seam's gap and the warnings. |
+| `render` | A photoreal path-traced picture of the 3D view, saved to `Documents/FashionCraft/<name>.png`. Uses the GPU. |
 | `save_project` | Saves the project to `Documents/FashionCraft/<name>.json`. |
 | `export_garment` | Exports the garment to `Documents/FashionCraft/<name>.obj` or `.glb`. |
 
+**Any edit, by name**
+
+| Tool | What it does |
+|---|---|
+| `edit_ops` | FashionCraft's own edit commands (over 100: every undoable change to a pattern) with their fields as JSON Schema, filtered by words or asked for by name. |
+| `edit` | Runs one of them with its fields. It is the raw editing layer (metres), checked by the same code as the menus before it is applied, and undoable. |
+
+The schemas come from the Rust source of `authoring::Command` and the types its fields use, so a
+new command or field shows up by itself; a test builds a value from every schema and checks that
+the command accepts it. Four commands are not offered, each with its reason (`edit_ops` lists them).
+
+**Mouse tools in centimetres, and exact engines**
+
+| Tool | What it does |
+|---|---|
+| `transform_piece` | Moves or turns pieces on the 2D board, or in 3D about their centre (world cm: x to the avatar's left, y up, z to its front). |
+| `bend_segment` | Curves a segment so its middle moves a given number of cm outward or inward. |
+| `style_line` | The 3D view's style-line tool: bends, moves or stretches a segment by a 3D move in cm, across the seams it is sewn into. |
+| `add_internal_line` | An internal line through points in cm. |
+| `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
+| `set_sleeve` | Sets a sleeve into its armhole as draft_garment's shirt does: the cap sewn to the front and back armholes with ease (a puffed sleeve is gathered), the underarm closed, and the sleeve wrapped round the avatar's arm below the shoulder, clear of the body. Agents never place a sleeve by moving it. On the stock mannequin the armholes close to under 8 mm (`tests/set_sleeve.rs`). |
+| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
+| `pin` | Pins cloth around a point of a piece, removes or moves pins. |
+| `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
+| `trace_on_body` | The 3D pen: a closed line through points on the body becomes a piece laid there. |
+
+**Windows as tools**
+
+| Tool | Window |
+|---|---|
+| `simulation_settings` | Simulation properties: quality, GPU, iterations, damping, friction, collision distance, gravity, wind, floor, particle distance. |
+| `camera` | Camera properties and the View menu; with `screenshot` it returns a picture of the view. |
+| `render_settings` | The photoreal render's settings and the 3D view's style. |
+| `avatar_maker` | Create avatar (MakeHuman · Anny): settings, local measures and look. |
+| `pose_joints` | The pose editor's joints, in degrees. |
+| `measure_fabric` | Measure fabric: fits a fabric's parameters to tests on the real cloth and gives it to pieces. |
+| `points_of_measure` | Points of measure of the size chart. |
+| `measure` | The tape tools: body and garment girth at a height and the ease between them, or the distance between two outline points. |
+
+**Checking and knowing**
+
+| Tool | What it does |
+|---|---|
+| `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. |
+| `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
+
 `fashioncraft-cli tools` prints the tools with their input schemas.
 
-The fabric presets are indicative starting points, not laboratory measurements. Calibrate them on
-the real fabric before manufacturing.
+**Cloth that starts inside cloth.** A change that would make cloth start inside other cloth or
+the body is undone and refused, with the pieces named. If the simulation still pauses on such an
+intersection, `simulate` and `check_garment` say so first, name the pieces and where, and tell the
+agent to undo, move the piece clear or reset the arrangement.
+
+**Every menu command is covered.** Each command in the registry either runs with `command_run`,
+is done by an agent tool (`agent_instead` in `src/atelier/commands.rs`), or has a written reason
+why agents cannot do it (`agent_reason`), which `command_list` and `command_run` pass on. A test
+fails when a command has none, and `agent_use` has no catch-all, so a new command must be
+classified before it builds. Of 225 commands, 122 run, 63 are done by an agent tool and 40 have a
+reason: file dialogs (agents read and write only `Documents/FashionCraft`), the person's own
+settings, image graphics, UV islands by hand, and animation.
+
+**What agents cannot do yet, and why.** Drawing freehand, file dialogs (import, open, export
+formats other than OBJ and GLB), placing image graphics, arranging UV islands by hand and
+animation. Agents are told so and point the person to the menu. The drafted bases are simplified
+blocks: straight armholes and sleeve caps; collars, plackets and pockets come from `add_detail`.
+The fabric presets are indicative starting points, not laboratory measurements: calibrate them on
+the real fabric (`measure_fabric`) before manufacturing.
 
 ## For developers
 
 | File | Role |
 |---|---|
 | `src/agent.rs` | The tools, the connection file and the MCP server |
+| `src/agent_ops.rs` | What the tools read from a garment and the authoring commands their edits become, testable without a window |
+| `src/agent_base.rs` | The base tools' descriptions, and the form tools' logic that needs no window |
+| `src/agent_edit.rs` | The generic edit: `authoring::Command` from JSON, schemas derived from its source |
+| `src/agent_build.rs` | Exact engines: details, bends, buttons, lines, moves, and laying new pieces on the drape |
+| `src/agent_check.rs` | `check_garment`'s signals and problems |
+| `src/agent_guide.rs` | `guide`'s topics |
+| `src/agent_eval.rs` | The evaluation's checks and report |
+| `src/attachments.rs` | Reads attached files into what a model takes |
+| `evals/assistant/cases.json` | The evaluation's requests, in Spanish and English |
 | `src/bin/fashioncraft-cli.rs` | `fashioncraft-cli` |
 | `src/assistant.rs` | The Assistant's protocol for Claude and OpenAI-compatible APIs, and its tool loop |
 | `src/atelier/agent_hub.rs` | The window's queue for tool calls and the loopback server |
 | `src/atelier/agent_tools.rs` | The tools, run in the window |
+| `src/atelier/agent_base_tools.rs` | The base tools, run in the window |
 | `src/atelier/assistant_ui.rs` | The Assistant window and its HTTPS transport |
 | `src/atelier/assistant_keys.rs` | API key storage |
+| `src/atelier/assistant_eval.rs` | Runs the evaluation in the window |
+| `src/atelier/commands.rs` | `agent_use`, `agent_target`, `agent_instead`: what each menu command needs from an agent |
 
 `tests/agent.rs` and the tests in `src/assistant.rs` run without a network. They feed canned
-answers to the tool loop and to the MCP server.
+answers to the tool loop and to the MCP server. The tests in `src/agent_ops.rs` apply every
+editing tool to a drafted garment through `authoring::apply` and check the result; the ones in
+`src/agent_eval.rs` check the scorer and that every case names real tools.
+
+### Evaluating the Assistant
+
+`evals/assistant/cases.json` holds typical requests, about half in Spanish, each with checks: the
+tools a good answer calls (with which arguments), what the garment's summary shows afterwards or
+how it changed, the reply's language and words, and limits on failed calls. A FashionCraft window
+runs them against the model chosen in Settings › Assistant:
+
+```sh
+HOME=/tmp/fc-eval FASHIONCRAFT_ASSISTANT_EVAL=evals/assistant/cases.json \
+  FASHIONCRAFT_ASSISTANT_EVAL_OUT=/tmp/fc-eval/report ./target/release/fashioncraft
+```
+
+Each case starts from its garment drafted on the avatar the window opened with, sends its request
+as if typed in the Assistant, waits for the turn to end and scores it. `report.md` lists every case
+and every failed check, `report.json` keeps the transcripts. `FASHIONCRAFT_ASSISTANT_EVAL_ONLY=dress,seam`
+runs only the cases whose ids contain those words. A run spends the provider's usage (about 20
+conversations), so run it in a copy with its own `HOME`, never in a window with unsaved work.
 
 To see the Assistant at work without an API key, run `scripts/assistant-stand-in.py`, a local
 stand-in for both APIs; its header says how.

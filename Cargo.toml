@@ -27,11 +27,13 @@ desktop = [
     "dep:bytemuck",
     "dep:pollster",
     "dep:rfd",
+    "dep:arboard",
     "dep:ureq",
     "dep:keyring",
     "dep:objc2",
     "dep:objc2-app-kit",
     "dep:objc2-foundation",
+    "dep:block2",
 ]
 
 [dependencies]
@@ -47,6 +49,8 @@ quick-xml = "=0.41.0"
 svgtypes = "=0.16.1"
 tempfile = "3"
 rfd = { version = "0.17.2", optional = true }
+# The Assistant's paste of pictures and files; already in eframe's tree (egui-winit's clipboard).
+arboard = { version = "3.6", optional = true, default-features = false, features = ["image-data"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive"] }
@@ -71,12 +75,15 @@ keyring = { version = "3", optional = true, features = ["windows-native"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", optional = true, features = ["apple-native"] }
 objc2 = { version = "0.6.5", optional = true }
+# The ⌘V watch (src/atelier/native_menu.rs); already in the tree through objc2-app-kit.
+block2 = { version = "0.6.2", optional = true }
 objc2-foundation = { version = "0.3.2", optional = true, default-features = false, features = ["std", "NSString"] }
 objc2-app-kit = { version = "0.3.2", optional = true, default-features = false, features = [
     "std",
     "NSApplication",
     "NSCell",
     "NSEvent",
+    "block2",
     "NSMenu",
     "NSMenuItem",
     "NSResponder",

@@ -3371,15 +3371,27 @@ impl Atelier {
                 if display.names {
                     // Lift the name clear of the top segment's length label.
                     let lift = if display.lengths { -14. } else { 0. };
+                    let name = if locked {
+                        format!("{} · locked", panel.name)
+                    } else {
+                        panel.name.clone()
+                    };
+                    // A name wider than its piece would run over its neighbours' names: it is
+                    // cut to the piece's width on screen (the chosen piece shows it whole).
+                    let span = point(DVec2::new(panel.pattern.width, 0.))
+                        .distance(point(DVec2::ZERO))
+                        .max(48.);
+                    let font = egui::FontId::proportional(11.);
+                    let name = if selected {
+                        name
+                    } else {
+                        fit_label(&painter, name, &font, span)
+                    };
                     painter.text(
                         point(DVec2::new(panel.pattern.width * 0.5, -0.035)) + Vec2::new(0., lift),
                         egui::Align2::CENTER_BOTTOM,
-                        if locked {
-                            format!("{} · locked", panel.name)
-                        } else {
-                            panel.name.clone()
-                        },
-                        egui::FontId::proportional(11.),
+                        name,
+                        font,
                         // Small and quiet, dark enough for the light board: the pieces are
                         // what matters. The chosen one's name takes FashionCraft's colour.
                         if selected {
@@ -3973,6 +3985,31 @@ impl Atelier {
 /// Board navigation is presentation-only math: these tests need no window, and
 /// they pin the invariant that rotating or zooming the board never changes a
 /// material coordinate.
+/// `text` cut with an ellipsis to fit `width` points in `font`.
+fn fit_label(painter: &egui::Painter, text: String, font: &egui::FontId, width: f32) -> String {
+    let measure = |t: &str| {
+        painter
+            .layout_no_wrap(t.to_owned(), font.clone(), Color32::WHITE)
+            .size()
+            .x
+    };
+    if measure(&text) <= width {
+        return text;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let candidate: String = chars[..mid].iter().collect::<String>() + "…";
+        if measure(&candidate) <= width {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    chars[..lo].iter().collect::<String>().trim_end().to_owned() + "…"
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

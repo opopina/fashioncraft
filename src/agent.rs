@@ -155,9 +155,28 @@ pub struct Tool {
     pub name: &'static str,
     pub description: &'static str,
     pub input_schema: Value,
-    /// Whether it changes the document (undoable) rather than only reading it.
+    /// Whether it changes the project (the garment, the avatar, the sizes) rather than only
+    /// reading it or writing a file.
     pub changes_document: bool,
 }
+
+/// The avatar library's presets as an agent names them: "Woman · medium" is woman-medium.
+pub fn avatar_preset_ids() -> Vec<String> {
+    crate::avatar_look::PRESETS
+        .iter()
+        .map(|p| avatar_preset_id(p.name))
+        .collect()
+}
+pub fn avatar_preset_id(name: &str) -> String {
+    name.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// The garment bases draft_garment knows.
+pub const GARMENT_KINDS: [&str; 5] = ["tshirt", "shirt", "dress", "skirt", "trousers"];
 
 /// Every tool, in the order clients list them.
 pub fn tools() -> Vec<Tool> {
@@ -165,153 +184,454 @@ pub fn tools() -> Vec<Tool> {
     let pieces = json!({
         "type": "array",
         "items": {"type": "string"},
-        "description": "Piece ids from scene_summary. Leave out for every piece."
+        "description": "Piece ids (or names) from scene_summary. Leave out for every piece."
     });
+    let piece =
+        json!({"type": "string", "description": "A piece id (or name) from scene_summary."});
+    let segment = json!({"type": "string", "description": "A segment id of that piece, from scene_summary or piece_detail."});
+    let stretch = json!({
+        "type": "object",
+        "properties": {
+            "piece": {"type": "string"},
+            "segment": {"type": "string"},
+            "from_cm": {"type": "number", "description": "Sew only from here, cm from the segment's start."},
+            "to_cm": {"type": "number", "description": "…to here."}
+        },
+        "required": ["piece", "segment"],
+        "additionalProperties": false
+    });
+    let side = json!({
+        "type": "array",
+        "items": stretch,
+        "minItems": 1,
+        "description": "One segment, or several in order for M:N sewing."
+    });
+    let object = |properties: Value, required: &[&str]| json!({"type": "object", "properties": properties, "required": required, "additionalProperties": false});
+    let tool = |name, description, input_schema, changes_document| Tool {
+        name,
+        description,
+        input_schema,
+        changes_document,
+    };
     vec![
-        Tool {
-            name: "scene_summary",
-            description: "Describe what is open in FashionCraft: the pieces (id, name, size in cm, \
-                where they are placed), the seams, the fabrics and colours, the avatar, and \
-                whether the simulation is running. Call it first, and after changes.",
-            input_schema: json!({"type": "object", "properties": {}, "additionalProperties": false}),
-            changes_document: false,
-        },
-        Tool {
-            name: "command_list",
-            description: "List FashionCraft's menu commands (key, label, whether it can run \
-                now). Filter with a few words, such as 'view', 'sewing' or 'export'.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"query": {"type": "string", "description": "Words to filter by."}},
-                "additionalProperties": false
-            }),
-            changes_document: false,
-        },
-        Tool {
-            name: "command_run",
-            description: "Run one menu command by its key from command_list, as if chosen from \
-                the menu (for example 'view.back', 'edit.undo', 'display.arrangement_points'). \
-                Commands that open a dialog are refused: use save_project, export_garment or \
-                draft_garment.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"key": {"type": "string"}},
-                "required": ["key"],
-                "additionalProperties": false
-            }),
-            changes_document: true,
-        },
-        Tool {
-            name: "draft_garment",
-            description: "Replace the garment with one drafted from measurements: a T-shirt, a \
-                skirt or trousers, sewn and placed around the avatar. With from_avatar the \
-                measurements come from the avatar; measurements_cm overrides any of them \
-                (T-shirt: bust, hip, ease, length, shoulder, sleeve, cuff; skirt and trousers: \
-                waist, hip, length and the rest that draft_garment reports back).",
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": ["tshirt", "skirt", "trousers"]},
+        tool(
+            "scene_summary",
+            "Read the open project: every piece (id, name, size, segments with ids, lengths and \
+             which side they face, internal lines, placement), every seam (both sides' lengths, \
+             and after a simulation its gap and whether it closed), fabrics with their physical \
+             parameters, the avatar's measurements and pose, sizes and grading, the current \
+             selection, warnings and the simulation state. Call it first and after changes; \
+             after the first call it gives only what changed (full: true for everything).",
+            object(json!({"full": {"type": "boolean"}}), &[]),
+            false,
+        ),
+        tool(
+            "piece_detail",
+            "One piece in full: its numbered outline points (x right, y down, cm), each segment \
+             with its end points, length, curve, target length, seam allowance, notches and \
+             seams, its internal lines and its placement. Use it before editing a piece.",
+            object(json!({"piece": piece}), &["piece"]),
+            false,
+        ),
+        tool(
+            "select",
+            "Select in the window, as a click would: pieces, one segment, one outline point or \
+             one seam (clear to select nothing). Menu commands act on the selection.",
+            object(
+                json!({
+                    "pieces": pieces,
+                    "piece": piece,
+                    "segment": {"type": "string", "description": "A segment or internal line of `piece`."},
+                    "point": {"type": "integer", "description": "An outline point index of `piece`."},
+                    "seam": {"type": "string"},
+                    "clear": {"type": "boolean"}
+                }),
+                &[],
+            ),
+            false,
+        ),
+        tool(
+            "command_list",
+            "List FashionCraft's menu commands an agent can run: key, label, what selection it \
+             needs and whether it can run now. Commands that need the mouse or open a window or \
+             file dialog are left out unless include_interactive is true. Filter with a few \
+             words, such as 'view', 'sewing' or 'pleat'.",
+            object(
+                json!({
+                    "query": {"type": "string", "description": "Words to filter by."},
+                    "include_interactive": {"type": "boolean"}
+                }),
+                &[],
+            ),
+            false,
+        ),
+        tool(
+            "command_run",
+            "Run one menu command by its key from command_list (for example 'view.back', \
+             'edit.undo', 'sewing.auto', 'pattern.smooth_curve'). Give `target` to select first, \
+             with the same fields as select. Commands that need the mouse or open a window or \
+             dialog are refused with what to use instead.",
+            object(
+                json!({
+                    "key": {"type": "string"},
+                    "target": {"type": "object", "description": "What to select first: pieces, piece, segment, point or seam."}
+                }),
+                &["key"],
+            ),
+            true,
+        ),
+        tool(
+            "draft_garment",
+            "Replace the garment with a base drafted from measurements, sewn and placed around \
+             the avatar: tshirt (kimono sleeves), shirt (set-in sleeves), dress (sleeveless \
+             A-line), skirt or trousers. With from_avatar (default) the measurements come from \
+             the avatar; measurements_cm overrides any of them and the reply lists them all. \
+             Unsaved work is replaced: save_project first if it matters.",
+            object(
+                json!({
+                    "kind": {"type": "string", "enum": GARMENT_KINDS},
                     "from_avatar": {"type": "boolean", "description": "Measure the avatar first (default true)."},
                     "measurements_cm": {
                         "type": "object",
                         "additionalProperties": {"type": "number"},
-                        "description": "Measurements in centimetres, by name."
+                        "description": "Measurements in centimetres, by the names draft_garment reports."
                     }
-                },
-                "required": ["kind"],
-                "additionalProperties": false
-            }),
-            changes_document: true,
-        },
-        Tool {
-            name: "set_fabric",
-            description: "Give pieces a fabric preset: its weight, thickness, stretch and \
-                bending (indicative values, not calibrated on a real fabric).",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"preset": {"type": "string", "enum": fabric_ids}, "pieces": pieces},
-                "required": ["preset"],
-                "additionalProperties": false
-            }),
-            changes_document: true,
-        },
-        Tool {
-            name: "set_color",
-            description: "Colour the fabric of pieces, as sRGB 0-255.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {
+                }),
+                &["kind"],
+            ),
+            true,
+        ),
+        tool(
+            "create_piece",
+            "Add a new piece from a rectangle or an outline of points (x right, y down, cm). It \
+             appears beside the garment; then place_piece and sew it. Segments are named \
+             edge_1, edge_2… in point order (a rectangle: edge_1 top, edge_2 right, edge_3 \
+             bottom, edge_4 left).",
+            object(
+                json!({
+                    "name": {"type": "string"},
+                    "rectangle_cm": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "[width, height]"},
+                    "points_cm": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 3, "maxItems": 64},
+                    "fabric": {"type": "string", "description": "A fabric id; the first piece's by default."}
+                }),
+                &[],
+            ),
+            true,
+        ),
+        tool(
+            "move_points",
+            "Move outline points of a piece by an offset in cm (x right, y down on the board). \
+             Point indexes come from piece_detail. A sewn segment must keep the length of the \
+             segment it is sewn to unless its seam allows ease.",
+            object(
+                json!({
+                    "piece": piece,
+                    "points": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 1},
+                    "dx_cm": {"type": "number"},
+                    "dy_cm": {"type": "number"}
+                }),
+                &["piece", "points"],
+            ),
+            true,
+        ),
+        tool(
+            "set_segment_length",
+            "Make a straight segment exactly this long, keeping its start, end or middle in \
+             place (start by default).",
+            object(
+                json!({
+                    "piece": piece,
+                    "segment": segment,
+                    "length_cm": {"type": "number", "minimum": 0.1},
+                    "keep": {"type": "string", "enum": ["start", "end", "middle"]}
+                }),
+                &["piece", "segment", "length_cm"],
+            ),
+            true,
+        ),
+        tool(
+            "add_point",
+            "Add an outline point on an unsewn segment, splitting it in two (at its middle \
+             unless at_cm, measured from the segment's start).",
+            object(
+                json!({"piece": piece, "segment": segment, "at_cm": {"type": "number"}}),
+                &["piece", "segment"],
+            ),
+            true,
+        ),
+        tool(
+            "add_dart",
+            "Add a dart. With a segment: an edge dart cut into that straight, unsewn segment and \
+             sewn shut, width_cm wide at the edge (centred at at_cm, the middle by default) and \
+             depth_cm long into the piece. Without a segment: a diamond dart inside the piece, \
+             centred at centre_cm [x, y], width_cm wide and depth_cm tall.",
+            object(
+                json!({
+                    "piece": piece,
+                    "segment": segment,
+                    "at_cm": {"type": "number"},
+                    "centre_cm": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                    "width_cm": {"type": "number"},
+                    "depth_cm": {"type": "number"}
+                }),
+                &["piece", "width_cm", "depth_cm"],
+            ),
+            true,
+        ),
+        tool(
+            "add_pleats",
+            "Fold pleats along a segment: count pleats depth_cm deep, knife, box or inverted \
+             box, tacked shut at the edge unless tack is false.",
+            object(
+                json!({
+                    "piece": piece,
+                    "segment": segment,
+                    "count": {"type": "integer", "minimum": 1, "maximum": 40},
+                    "depth_cm": {"type": "number"},
+                    "kind": {"type": "string", "enum": ["knife", "box", "inverted_box"]},
+                    "tack": {"type": "boolean"}
+                }),
+                &["piece", "segment", "depth_cm"],
+            ),
+            true,
+        ),
+        tool(
+            "piece_edit",
+            "Change a piece: rename it, duplicate it, make a mirrored copy linked to it (the \
+             other side of a symmetric pair), delete it with its seams, set its grain angle, or \
+             set the seam allowance of one segment (drafting only, not simulated).",
+            object(
+                json!({
+                    "piece": piece,
+                    "operation": {"type": "string", "enum": ["rename", "duplicate", "mirror_copy", "delete", "set_grain", "set_seam_allowance"]},
+                    "name": {"type": "string"},
+                    "degrees": {"type": "number"},
+                    "segment": segment,
+                    "width_cm": {"type": "number"}
+                }),
+                &["piece", "operation"],
+            ),
+            true,
+        ),
+        tool(
+            "sew",
+            "Sew side a to side b. Each side is one segment or several in order (M:N), whole or \
+             a stretch (from_cm/to_cm). Unless reverse is given, the ends that are nearer where \
+             the pieces are placed meet, so the seam does not twist. Sides of different lengths \
+             need ease: true (gathering or easing).",
+            object(
+                json!({"a": side, "b": side, "reverse": {"type": "boolean"}, "ease": {"type": "boolean"}}),
+                &["a", "b"],
+            ),
+            true,
+        ),
+        tool(
+            "seam_edit",
+            "Remove a seam, or allow or forbid ease on it (unequal side lengths).",
+            object(
+                json!({
+                    "seam": {"type": "string"},
+                    "operation": {"type": "string", "enum": ["remove", "allow_ease", "forbid_ease"]}
+                }),
+                &["seam", "operation"],
+            ),
+            true,
+        ),
+        tool(
+            "place_piece",
+            "Place a piece on the avatar at an arrangement point (scene_summary lists them, \
+             such as torso-middle-front or upper-arm-left-outer), clearance_cm from the skin, \
+             wrapped around the body unless wrap is false. It is checked to start clear of the \
+             body. Simulate afterwards.",
+            object(
+                json!({
+                    "piece": piece,
+                    "anchor": {"type": "string"},
+                    "clearance_cm": {"type": "number", "minimum": 0, "maximum": 60},
+                    "wrap": {"type": "boolean"}
+                }),
+                &["piece", "anchor"],
+            ),
+            true,
+        ),
+        tool(
+            "open_attachment",
+            "Open a pattern (DXF, DXF-AAMA/ASTM, SVG) or 3D model the person attached in \
+             FashionCraft's own importer, with the file already chosen. The person reviews the \
+             scale and pieces and confirms; the import is then one undoable step.",
+            object(
+                json!({"name": {"type": "string", "description": "The attached file's name."}}),
+                &["name"],
+            ),
+            true,
+        ),
+        tool(
+            "set_fabric",
+            "Give pieces a fabric preset: its weight, thickness, stretch and bending \
+             (indicative values, not calibrated on a real fabric).",
+            object(
+                json!({"preset": {"type": "string", "enum": fabric_ids}, "pieces": pieces}),
+                &["preset"],
+            ),
+            true,
+        ),
+        tool(
+            "set_fabric_parameters",
+            "Change the physical parameters of one fabric (named, or the one a piece is cut \
+             from); every piece of that fabric changes. Weight g/m², thickness mm, stretch in % \
+             under 5 N on a 5 cm strip along warp or weft, shear N/m, bending N·m, friction.",
+            object(
+                json!({
+                    "fabric": {"type": "string"},
+                    "piece": piece,
+                    "weight_gsm": {"type": "number"},
+                    "thickness_mm": {"type": "number"},
+                    "stretch_warp_percent": {"type": "number"},
+                    "stretch_weft_percent": {"type": "number"},
+                    "shear_n_per_m": {"type": "number"},
+                    "bending_warp_n_m": {"type": "number"},
+                    "bending_weft_n_m": {"type": "number"},
+                    "friction": {"type": "number"}
+                }),
+                &[],
+            ),
+            true,
+        ),
+        tool(
+            "set_color",
+            "Colour the fabric of pieces, as sRGB 0-255. Every piece of the same fabric changes.",
+            object(
+                json!({
                     "rgb": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 255}, "minItems": 3, "maxItems": 3},
                     "pieces": pieces
-                },
-                "required": ["rgb"],
-                "additionalProperties": false
-            }),
-            changes_document: true,
-        },
-        Tool {
-            name: "simulate",
-            description: "Run the cloth simulation for some seconds of wall-clock time, so the \
-                garment drapes on the avatar, then pause it. Reports how far it got.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"seconds": {"type": "number", "minimum": 0.5, "maximum": 60}},
-                "required": ["seconds"],
-                "additionalProperties": false
-            }),
-            changes_document: true,
-        },
-        Tool {
-            name: "screenshot",
-            description: "A PNG picture of the 3D view as it is now, to look at the garment; \
-                or of the whole window, panels included.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"area": {"type": "string", "enum": ["view", "window"],
-                    "description": "The 3D view (the default) or the whole window."}},
-                "additionalProperties": false
-            }),
-            changes_document: false,
-        },
-        Tool {
-            name: "size_chart",
-            description: "The garment's sizes and points of measure: each size group (its sizes \
-                smallest first, the base size the pattern is drawn in, the size shown in 3D) and \
-                every point of measure in every size, in mm, with its difference from the base \
-                and its tolerance. Show another size in 3D with command_run \
-                'grading.next_size' or 'grading.previous_size'.",
-            input_schema: json!({"type": "object", "properties": {}, "additionalProperties": false}),
-            changes_document: false,
-        },
-        Tool {
-            name: "save_project",
-            description: "Save the project as <name>.json in Documents/FashionCraft (the folder \
-                is made if needed). Reports the path.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {"name": {"type": "string", "description": "A file name without folders."}},
-                "required": ["name"],
-                "additionalProperties": false
-            }),
-            changes_document: false,
-        },
-        Tool {
-            name: "export_garment",
-            description: "Export the draped garment for other 3D tools into Documents/FashionCraft: \
-                obj (with its materials) or glb (glTF binary). Reports the path.",
-            input_schema: json!({
-                "type": "object",
-                "properties": {
+                }),
+                &["rgb"],
+            ),
+            true,
+        ),
+        tool(
+            "set_avatar",
+            "Replace the avatar: a body from the avatar library, or the current body reshaped to \
+             measurements in cm (height, bust, waist, hip, arm, inseam; the rest stay). The \
+             drape is reset: simulate again. Not undoable with edit.undo.",
+            object(
+                json!({
+                    "preset": {"type": "string", "enum": avatar_preset_ids()},
+                    "measurements_cm": {
+                        "type": "object",
+                        "properties": {
+                            "height": {"type": "number"}, "bust": {"type": "number"},
+                            "waist": {"type": "number"}, "hip": {"type": "number"},
+                            "arm": {"type": "number"}, "inseam": {"type": "number"}
+                        },
+                        "additionalProperties": false
+                    }
+                }),
+                &[],
+            ),
+            true,
+        ),
+        tool(
+            "set_pose",
+            "Pose the avatar with a preset; the garment follows when simulated.",
+            object(
+                json!({"pose": {"type": "string", "enum": crate::avatar_rig::PRESETS}}),
+                &["pose"],
+            ),
+            true,
+        ),
+        tool(
+            "grading",
+            "Sizes: create a size range from the base the pattern is drawn in, add a size, grow \
+             an outline point by an equal step between sizes (dx/dy mm per size, x right, y \
+             down; the point is the start of `segment`), or show a size in 3D. size_chart \
+             reports every point of measure in every size.",
+            object(
+                json!({
+                    "action": {"type": "string", "enum": ["create", "add_size", "set_step", "show"]},
+                    "sizes": {"type": "array", "items": {"type": "string"}, "description": "create: smallest to largest."},
+                    "base": {"type": "string", "description": "create: the size the pattern is drawn in."},
+                    "size": {"type": "string", "description": "add_size: its name; show: which."},
+                    "after": {"type": "string", "description": "add_size: the size it follows (the largest by default)."},
+                    "piece": piece,
+                    "segment": segment,
+                    "dx_mm": {"type": "number"},
+                    "dy_mm": {"type": "number"}
+                }),
+                &["action"],
+            ),
+            true,
+        ),
+        tool(
+            "size_chart",
+            "The garment's sizes and points of measure: each size group (its sizes \
+             smallest first, the base size, the size shown in 3D) and every point of measure in \
+             every size, in mm, with its difference from the base and its tolerance.",
+            object(json!({}), &[]),
+            false,
+        ),
+        tool(
+            "simulate",
+            "Run the cloth simulation for some seconds of wall-clock time, so the garment drapes \
+             on the avatar, then pause it. Reports each seam's gap and what still looks wrong.",
+            object(
+                json!({"seconds": {"type": "number", "minimum": 0.5, "maximum": 60}}),
+                &["seconds"],
+            ),
+            true,
+        ),
+        tool(
+            "screenshot",
+            "A PNG picture of the 3D view as it is now, to look at the garment; or of the whole \
+             window, panels included. Turn the view first with command_run 'view.front', \
+             'view.back', 'view.avatar_left'…",
+            object(
+                json!({"area": {"type": "string", "enum": ["view", "window"],
+                    "description": "The 3D view (the default) or the whole window."}}),
+                &[],
+            ),
+            false,
+        ),
+        tool(
+            "render",
+            "A photoreal, path-traced picture of the 3D view, saved as <name>.png in \
+             Documents/FashionCraft. It refines for up to `seconds` (default 20). Uses the GPU.",
+            object(
+                json!({
+                    "name": {"type": "string", "description": "A file name without folders or extension."},
+                    "seconds": {"type": "number", "minimum": 3, "maximum": 120}
+                }),
+                &["name"],
+            ),
+            false,
+        ),
+        tool(
+            "save_project",
+            "Save the project as <name>.json in Documents/FashionCraft (the folder is made if \
+             needed). Reports the path.",
+            object(
+                json!({"name": {"type": "string", "description": "A file name without folders."}}),
+                &["name"],
+            ),
+            false,
+        ),
+        tool(
+            "export_garment",
+            "Export the draped garment for other 3D tools into Documents/FashionCraft: obj \
+             (with its materials) or glb (glTF binary). Reports the path.",
+            object(
+                json!({
                     "format": {"type": "string", "enum": ["obj", "glb"]},
                     "name": {"type": "string", "description": "A file name without folders or extension."}
-                },
-                "required": ["format", "name"],
-                "additionalProperties": false
-            }),
-            changes_document: false,
-        },
+                }),
+                &["format", "name"],
+            ),
+            false,
+        ),
     ]
+    .into_iter()
+    .chain(crate::agent_base::tools())
+    .collect()
 }
 
 /// Standard base64 with padding, for images in tool results.
@@ -478,8 +798,7 @@ pub fn handle_mcp(message: &Value, app: &mut dyn AppLink) -> Option<Value> {
                 "protocolVersion": version,
                 "capabilities": {"tools": {"listChanged": false}},
                 "serverInfo": {"name": "fashioncraft", "version": env!("CARGO_PKG_VERSION")},
-                "instructions": "FashionCraft designs garments: 2D sewing patterns sewn and \
-                    draped on an avatar in 3D. Start with scene_summary. Lengths are in cm."
+                "instructions": crate::assistant::SYSTEM_PROMPT
             }))
         }
         "ping" => Ok(json!({})),

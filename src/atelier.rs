@@ -10,6 +10,8 @@ use fashioncraft::{
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 #[path = "atelier/activation_ui.rs"]
 mod activation_ui;
+#[path = "atelier/agent_base_tools.rs"]
+mod agent_base_tools;
 #[path = "atelier/agent_hub.rs"]
 mod agent_hub;
 #[path = "atelier/agent_tools.rs"]
@@ -22,6 +24,8 @@ mod animation_ui;
 mod arrange_ui;
 #[path = "atelier/arrangement_ui.rs"]
 mod arrangement_ui;
+#[path = "atelier/assistant_eval.rs"]
+mod assistant_eval;
 #[path = "atelier/assistant_keys.rs"]
 mod assistant_keys;
 #[path = "atelier/assistant_ui.rs"]
@@ -374,7 +378,10 @@ pub fn run(
                 // A demo and the smoke tests click the in-window menus.
                 native_menu: (!(smoke || drag_test || perf_test || authoring_test)
                     && demo::window_size().is_none())
-                .then(|| native_menu::NativeMenu::install(&cc.egui_ctx))
+                .then(|| {
+                    native_menu::watch_paste_key();
+                    native_menu::NativeMenu::install(&cc.egui_ctx)
+                })
                 .flatten(),
                 menu_windows: Default::default(),
                 demo_points: Default::default(),
@@ -1591,6 +1598,7 @@ impl eframe::App for Atelier {
     /// no frames then), so an AI agent's calls are answered either way.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drive_agent(ctx);
+        self.drive_assistant_eval(ctx);
         // `ui` steps the simulation; a hidden window still steps one an agent asked for.
         let hidden = ctx.input(|i| i.viewport().visible() == Some(false));
         if hidden

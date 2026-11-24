@@ -11,7 +11,7 @@ use i_overlay::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Primitive {
     Rectangle,
     Ellipse,
@@ -23,7 +23,7 @@ pub enum MirrorAxis {
     X,
     Y,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum BooleanOp {
     Union,
     Difference,

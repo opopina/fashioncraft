@@ -1373,6 +1373,68 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Saving the project" => "Guardando el proyecto",
         "Exporting the garment" => "Exportando la prenda",
         "Using a tool" => "Usando una herramienta",
+        "Opening an attached file" => "Abriendo un archivo adjunto",
+        "Look at the attached files." => "Mira los archivos adjuntos.",
+        "Drop the files here to attach them" => "Suelta aquí los archivos para adjuntarlos",
+        "Attach…" => "Adjuntar…",
+        "Pictures, PDFs, text, CSV tables and DXF or SVG patterns. You can also drop files here or paste a picture with Cmd+V." => {
+            "Imágenes, PDF, texto, tablas CSV y patrones DXF o SVG. También puedes soltar archivos aquí o pegar una imagen con Cmd+V."
+        }
+        "Attach files" => "Adjuntar archivos",
+        "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
+        "All files" => "Todos los archivos",
+        "Attach the picture or files on the clipboard" => {
+            "Adjuntar la imagen o los archivos del portapapeles"
+        }
+        "The clipboard holds no picture or file." => {
+            "El portapapeles no tiene ninguna imagen ni archivo."
+        }
+        "Paused for your review after" => "En pausa para que revises, tras",
+        "steps." => "pasos.",
+        "Continue" => "Continuar",
+        "Continue." => "Continúa.",
+        "Go on from where it paused, with everything so far" => {
+            "Seguir desde donde se pausó, con todo lo hecho hasta ahora"
+        }
+        "Review" => "Revisión",
+        "Pause every" => "Pausar cada",
+        " steps" => " pasos",
+        "Stop after this many steps so you can look before it goes on (off: it works until the job is done)" => {
+            "Parar tras estos pasos para que mires antes de seguir (apagado: trabaja hasta terminar)"
+        }
+        "in" => "entrada",
+        "out" => "salida",
+        "cached" => "en caché",
+        "This conversation's tokens, as the provider reported them: new input, output and input read from its cache. Money is estimated from published prices, where they are known (≈)." => {
+            "Tokens de esta conversación según el proveedor: entrada nueva, salida y entrada leída de su caché. El dinero se estima con los precios publicados, donde se conocen (≈)."
+        }
+        "of the usage limit used, as the provider reports it" => {
+            "del límite de uso consumido, según el proveedor"
+        }
+        "Context:" => "Contexto:",
+        "how full the model's context window is; not the plan's limit, which this provider does not report" => {
+            "cuánto ocupa la ventana de contexto del modelo; no es el límite del plan, que este proveedor no informa"
+        }
+        "Copy conversation" => "Copiar la conversación",
+        "Conversation copied" => "Conversación copiada",
+        "Reading a piece" => "Leyendo una pieza",
+        "Selecting" => "Seleccionando",
+        "Creating a piece" => "Creando una pieza",
+        "Moving points" => "Moviendo puntos",
+        "Setting a length" => "Ajustando una longitud",
+        "Adding a point" => "Añadiendo un punto",
+        "Adding a dart" => "Añadiendo una pinza",
+        "Adding pleats" => "Añadiendo pliegues",
+        "Editing a piece" => "Editando una pieza",
+        "Sewing segments" => "Cosiendo segmentos",
+        "Editing a seam" => "Editando una costura",
+        "Placing a piece on the body" => "Colocando una pieza en el cuerpo",
+        "Setting fabric parameters" => "Ajustando los parámetros de la tela",
+        "Changing the avatar" => "Cambiando el avatar",
+        "Posing the avatar" => "Posando el avatar",
+        "Grading sizes" => "Escalando tallas",
+        "Reading the size chart" => "Leyendo la tabla de tallas",
+        "Rendering" => "Renderizando",
         "The Assistant (Window › Assistant) works in this window with Claude, ChatGPT, Gemini or a local model; set its connection in its own window." => {
             "El Asistente (Ventana › Asistente) trabaja en esta ventana con Claude, ChatGPT, Gemini o un modelo local; su conexión se configura en su propia ventana."
         }

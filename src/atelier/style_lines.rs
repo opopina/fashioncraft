@@ -25,7 +25,7 @@ pub(super) enum StyleMode {
 
 /// An outline edge picked on the cloth.
 #[derive(Clone, Debug)]
-struct EdgePick {
+pub(super) struct EdgePick {
     panel: String,
     edge: String,
     /// Where on the cloth it was picked, and the material point there.
@@ -127,7 +127,7 @@ fn edge_pick(
 }
 
 /// The pick of `edge` of `panel` at share `t` of its length.
-fn edge_pick_at(
+pub(super) fn edge_pick_at(
     garment: &CompiledGarment,
     x: &[DVec3],
     panel: &str,
@@ -159,7 +159,7 @@ fn edge_pick_at(
 
 /// The edges sewn along the whole of the picked one by a one-to-one seam, picked at the
 /// matching point: the same style line seen from the piece on its other side.
-fn seam_partners(
+pub(super) fn seam_partners(
     template: &GarmentTemplate,
     garment: &CompiledGarment,
     x: &[DVec3],
@@ -195,7 +195,7 @@ fn seam_partners(
 /// The pattern change a style-line drag makes when the cloth at `picks[0]` is pulled by `w`:
 /// on the picked edge, and the same change on each partner edge across a seam, each by the
 /// material amount the pull is in its own piece.
-fn style_command(
+pub(super) fn style_command(
     template: &GarmentTemplate,
     mode: StyleMode,
     picks: &[EdgePick],

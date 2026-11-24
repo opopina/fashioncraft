@@ -74,12 +74,27 @@ pub(super) enum Pending {
     Simulate { until: Instant, seconds: f64 },
     /// A screenshot was asked for; it arrives as an input event.
     Screenshot { asked: Instant, whole_window: bool },
+    /// The photoreal render refines until `until`, then its image is saved to `path`.
+    Render {
+        started: Instant,
+        until: Instant,
+        path: std::path::PathBuf,
+        /// When the save was asked for.
+        saved: Option<Instant>,
+        /// The render window was open before; otherwise it closes again.
+        was_open: bool,
+    },
+    /// One of the base tools (`agent_base_tools`).
+    Base(super::agent_base_tools::BasePending),
 }
 
 pub(super) struct AgentHub {
     sender: mpsc::Sender<Job>,
     receiver: mpsc::Receiver<Job>,
     pub(super) running: Option<(Job, Pending)>,
+    /// Whether cloth starts inside cloth, for the state it was worked out for (generation,
+    /// undo steps, cloth points): the solver's check, kept between calls.
+    pub(super) blocker: Option<((u64, usize, usize), Option<String>)>,
     server: Option<Server>,
     output: PathBuf,
 }
@@ -97,6 +112,7 @@ impl AgentHub {
             sender,
             receiver,
             running: None,
+            blocker: None,
             server: None,
             output,
         }
@@ -253,8 +269,8 @@ impl Atelier {
             self.prefs.ai.agents_allowed = false;
             self.status = format!("AI agents could not start: {e}");
         }
-        if let Some((job, pending)) = self.agent.running.take() {
-            match self.continue_tool(ctx, &pending) {
+        if let Some((job, mut pending)) = self.agent.running.take() {
+            match self.continue_tool(ctx, &mut pending) {
                 Some(result) => {
                     let _ = job.reply.send(result);
                 }

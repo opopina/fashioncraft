@@ -21,13 +21,13 @@ mod topology;
 use crate::garment::shapes::{BooleanOp, MirrorAxis, Primitive};
 
 /// A contour corner is the start of a named outgoing boundary, never a mesh index.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 pub struct ConstructionRef {
     pub panel: String,
     pub edge: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub enum PointConstruction {
     Project,
     /// Signed distance from the reference boundary's start along its infinite line.
@@ -40,7 +40,7 @@ pub enum PointConstruction {
 
 /// Which part of a slashed piece turns to open the wedge, looking along the slash line from its
 /// first point to its second.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 pub enum SpreadSide {
     Left,
     #[default]
@@ -48,6 +48,10 @@ pub enum SpreadSide {
     Both,
 }
 
+/// Every edit. Agents send one through the generic `edit` tool as `{"Sew": {fields}}` (see
+/// `crate::agent_edit`). Lengths are metres unless a field's name says otherwise.
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum Command {
     ConstructPoint {
         target: ConstructionRef,
@@ -382,8 +386,10 @@ pub enum Command {
     /// Replace the UV layout used by exports and the baked atlas (island placements by piece
     /// id; empty puts every piece back to the automatic layout). Looks only, never the editor's
     /// view. One undo step, named `name`.
+    #[serde(skip)]
     SetUvLayout {
         layout: std::collections::BTreeMap<String, crate::garment::uv_layout::UvPlacement>,
+        #[serde(skip)]
         name: &'static str,
     },
     /// Mesh `panels` as quads (an even grid of squares along each piece's grain inside) or as

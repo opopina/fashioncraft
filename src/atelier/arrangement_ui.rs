@@ -485,3 +485,63 @@ impl Atelier {
         ))
     }
 }
+
+impl Atelier {
+    /// The current avatar's arrangement points, by id.
+    pub(super) fn arrangement_anchor_ids(&mut self) -> Vec<String> {
+        self.arrangement_sidecar()
+            .map(|s| s.set.anchors.iter().map(|a| a.id.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// Place a piece on an arrangement point for an agent, as Arrange on body › Place does:
+    /// the anchor's own clearance and wrap unless given, checked to start clear of the body.
+    pub(super) fn agent_place(
+        &mut self,
+        panel: &str,
+        anchor: &str,
+        clearance_m: Option<f64>,
+        wrap: Option<bool>,
+    ) -> Result<String, String> {
+        let sidecar = self.arrangement_sidecar().ok_or(
+            "This avatar has no arrangement points (none ship with it and its shape does not \
+             allow estimating them)",
+        )?;
+        let chosen = sidecar
+            .set
+            .anchors
+            .iter()
+            .find(|a| a.id == anchor)
+            .cloned()
+            .ok_or_else(|| {
+                let ids: Vec<&str> = sidecar.set.anchors.iter().map(|a| a.id.as_str()).collect();
+                format!(
+                    "No arrangement point '{anchor}'. They are: {}",
+                    ids.join(", ")
+                )
+            })?;
+        let piece = self
+            .project
+            .template
+            .panels
+            .iter()
+            .find(|p| p.id == panel)
+            .cloned()
+            .ok_or_else(|| format!("No piece '{panel}'"))?;
+        let clearance = clearance_m.unwrap_or(chosen.clearance_m);
+        let wrap = wrap.unwrap_or(chosen.wrap);
+        let state = &mut self.authoring.arrangement;
+        state.anchor = Some(chosen.id.clone());
+        state.clearance_mm = clearance * 1000.;
+        state.wrap = wrap;
+        let candidates = arrangements(
+            &sidecar,
+            anchor,
+            &piece,
+            clearance,
+            wrap.then_some(chosen.max_wrap_degrees),
+            &self.scene.collider.surface,
+        );
+        self.place_on_anchor(panel, &chosen.label, candidates)
+    }
+}

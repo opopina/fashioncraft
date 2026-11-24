@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::fs::{self, File};
 use std::io::{self, Seek, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::atomic::AtomicBool;
 
 pub(super) struct Cli<'a>(pub &'a AtomicBool);
@@ -106,11 +106,22 @@ impl Cli<'_> {
         }
         let input = prompt(dir.path(), body, &mut command)?;
         let mut errors = tempfile::tempfile()?;
-        let mut child = command.arg("-").stdin(input).stdout(Stdio::null())
+        // Its JSON events go to a file: when it fails, that is where it says why.
+        let mut events = tempfile::tempfile()?;
+        let mut child = command.arg("-").stdin(input).stdout(events.try_clone()?)
             .stderr(errors.try_clone()?).spawn().map_err(|e| io::Error::other(format!("Could not start Codex CLI: {e}. Install Codex CLI or set FASHIONCRAFT_CODEX to its executable.")))?;
-        super::cli_process::wait(&mut child, &mut errors, self.0, "Codex")?;
+        if let Err(error) = super::cli_process::wait(&mut child, &mut errors, self.0, "Codex") {
+            return Err(match super::cli_process::json_errors(&mut events) {
+                Some(said) if !error.to_string().contains(&said) => {
+                    io::Error::other(format!("{error} ({said})"))
+                }
+                _ => error,
+            });
+        }
         let reply: Value = serde_json::from_slice(&fs::read(answer)?)?;
-        super::cli_process::response(&reply, body)
+        let mut answer = super::cli_process::response(&reply, body)?;
+        super::cli_process::attach_usage(&mut answer, &mut events);
+        Ok(answer)
     }
 }
 
@@ -153,6 +164,7 @@ fi
             model: String::new(),
             base_url: String::new(),
             api_key: String::new(),
+            pause_every: 0,
         };
         let mut conversation = Conversation::new(settings.provider);
         let mut calls = Vec::new();

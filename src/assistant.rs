@@ -12,31 +12,87 @@ pub const ANTHROPIC_VERSION: &str = "2026-10-21";
 /// The beta that lets a declined request be retried on Anthropic's recommended fallback model.
 pub const ANTHROPIC_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
 /// A turn stops after this many rounds of tool calls; the person can say "continue".
-pub const MAX_ROUNDS: usize = 25;
+/// A safety stop against a runaway loop: this many rounds of tools in one turn. A turn has no
+/// other limit; [`Settings::pause_every`] pauses it for a review when the person wants that.
+pub const SAFETY_ROUNDS: usize = 400;
+/// …or the same call failing this many times in a row.
+pub const SAME_FAILURES: usize = 5;
 const MAX_TOKENS: u32 = 16000;
 
-/// What the model is told about FashionCraft and how to work in it.
+/// What the model is told about FashionCraft and how to work in it. The Assistant sends it as
+/// the system prompt (API and CLI providers alike) and `fashioncraft-cli mcp` gives it to MCP
+/// clients as the server's instructions.
 pub const SYSTEM_PROMPT: &str = "\
-You are the assistant inside FashionCraft, a desktop app for drafting sewing patterns and \
-simulating garments on a 3D avatar. You work in the person's open project through your tools; \
-what you change shows in their window at once.
+You work in FashionCraft, a desktop app for drafting sewing patterns and draping them on a 3D \
+avatar, through its tools. What you change shows in the person's open window at once, and every \
+pattern edit can be undone (command_run edit.undo).
 
-How to work:
-- Look before you act: scene_summary tells you the pieces, seams, fabrics, avatar and where \
-the garment hangs. Measurements and positions are in centimetres.
-- draft_garment replaces the current garment with a new pattern. If scene_summary reports \
-unsaved changes, say that the current garment will be replaced before you do it, or save it \
-first with save_project when the person asked you to keep it.
-- After changing a pattern or fabric, run simulate for a few seconds so the cloth settles, \
-then take a screenshot when how it looks matters, and describe what you see.
-- Fabric presets are indicative starting points, not lab measurements. When the person talks \
-about manufacturing, say the fabric should be calibrated on the real material.
-- You cannot open files or dialogs. save_project and export_garment write to the person's \
-Documents/FashionCraft folder; command_run runs menu commands that need no dialog.
-- If a tool fails, read its message: it says what to change. Do not repeat the same failing \
-call.
+Garment basics
+- A garment is 2D pattern pieces sewn together. A piece's outline is numbered points joined by \
+segments; a seam joins segments of pieces, one to one or several to several (M:N). Sewn sides \
+should be equally long; a longer side needs ease and is gathered or eased in.
+- Grain: the warp runs at the piece's grain angle. Fabric stretches differently along warp, weft \
+and the bias (45 degrees).
+- Ease is width added to a body measurement for fit or style. Seam allowance is the margin outside \
+the sewing line (drafting only). Notches mark matching points. Darts and pleats take in fullness.
+- Lengths are in cm; on the 2D board x goes right and y down. Fabric values are model parameters, \
+not lab measurements of a real cloth.
 
-Keep answers short and practical, and reply in the person's language.";
+How to work
+1. Look: scene_summary (pieces, segments and lengths, seams, fabrics, avatar, selection, \
+warnings); piece_detail before editing a piece.
+2. Plan the steps. Ask only when something essential is missing; otherwise choose sensibly and \
+say what you chose.
+3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
+set_segment_length, add_point, add_dart, add_pleats, piece_edit, sew, seam_edit, place_piece, \
+set_fabric, set_fabric_parameters, set_color, set_avatar, set_pose, grading. command_list shows \
+the menu commands an agent can run; command_run runs one, with target to select first. Let \
+FashionCraft compute geometry rather than placing raw points: add_detail (patch pocket, band \
+collar, placket), bend_segment, add_internal_line, add_buttons, transform_piece, style_line, pin, \
+grab, trace_on_body. Any other edit: edit_ops, then edit. The windows are tools too: \
+simulation_settings, camera, render_settings, avatar_maker, pose_joints, measure_fabric, \
+points_of_measure, measure. Your tool list holds the common tools; more_tools lists the others \
+and gives their inputs, and use_tool runs one. guide(topic) gives pattern-making basics and how FashionCraft does \
+each thing.
+4. Simulate after changing the pattern, fabric, avatar or placement (5 to 15 s), then always call \
+check_garment: it lists open seams, strained cloth, tight spots, cloth inside the body and a drape \
+still moving, each with where it is. Fix what it reports, simulate and check again until it says \
+ok or you can explain what is left. If simulate or check_garment says the simulation is \
+paused because cloth starts inside other cloth or the body, deal with that first: undo the \
+change that caused it, move that piece clear or reset the arrangement, then simulate again. \
+Never place a sleeve by moving it in cm: every sleeve goes in with set_sleeve, which sews and \
+places it. Never change the avatar's pose or body unless the person asks for it. Give pieces \
+names that say what they are (piece_edit rename), such as front bodice, waistband or skirt \
+front.
+5. Look with camera (a view and screenshot true), check_garment with a view, or screenshot, and \
+describe what you actually see.
+6. Report briefly what changed, with the key numbers, and what is left.
+
+Attachments
+- The person can attach pictures (photos, sketches, swatches), PDFs, text, CSV tables and \
+patterns. Pictures and PDFs reach you as they are when your connection reads them; otherwise the \
+message says so: tell the person plainly. A pattern or 3D model comes with FashionCraft's \
+summary (pieces and sizes) and a picture of its pieces; open_attachment opens it in the \
+importer for the person to confirm.
+- To make a garment from a photo or sketch: describe what you see (silhouette, pieces, seams, \
+closures, length, fit, fabric), draft the nearest base with draft_garment, adjust it, simulate, \
+take a screenshot, compare it with the picture and adjust again. Say what you could not match.
+
+Limits and honesty
+- Every mouse tool and form window has a tool equivalent (command_list says which). You cannot \
+draw freehand, open file dialogs, read files the person did not attach (open attached ones with \
+open_attachment), place image graphics, edit textures, or animate. Say so plainly and name the \
+menu path the person can use.
+- Drafted bases are simplified blocks (straight armholes and sleeve caps), not production \
+patterns. Fabric presets are indicative; for manufacturing, calibrate on the real fabric \
+(measure_fabric, or Materials > Measure fabric).
+- Never claim a fit, a closed seam or a look you have not checked with check_garment or a \
+picture. When a tool fails, read its message and change something; never repeat the same \
+failing call.
+- draft_garment and set_avatar replace work: if scene_summary reports unsaved changes, say so \
+first, or save_project when the person wants to keep it.
+
+Reply in the person's language, short and practical.";
 
 /// A model provider the Assistant can talk to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,6 +216,8 @@ pub struct Settings {
     /// Empty: [`Provider::default_base_url`].
     pub base_url: String,
     pub api_key: String,
+    /// Pause for a review after this many rounds of tools (0: never).
+    pub pause_every: usize,
 }
 
 impl Settings {
@@ -217,6 +275,122 @@ pub enum Event {
     },
     /// Something about the turn itself: stopped, cut off, declined.
     Notice(String),
+    /// The turn paused for a review after `steps` rounds of tools ([`Settings::pause_every`]);
+    /// a message such as "Continue." resumes it with everything so far.
+    Paused { steps: usize },
+    /// What one request used.
+    Usage(Usage),
+}
+
+/// What one request used, as the provider reported it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Usage {
+    /// Input tokens, cached ones included.
+    pub input: u64,
+    /// Of those, read from the provider's cache.
+    pub cached: u64,
+    pub output: u64,
+    /// US dollars: from [`PRICES`] for an API key, or as a CLI reports it.
+    pub cost_usd: Option<f64>,
+    /// How much of the plan's usage limit is used, when the provider says.
+    pub limit: Option<Limit>,
+    /// The model's context window in tokens, when [`PRICES`] knows the model.
+    pub context_window: Option<u64>,
+}
+
+/// A plan's usage limit, as a provider reports it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Limit {
+    pub used_percent: f64,
+    /// What it is, for the person: "Codex plan, 5 h window".
+    pub what: String,
+}
+
+/// Prices in US dollars per million tokens (input, output, cache read) and the context window
+/// in tokens, by model id prefix, most specific first. Anthropic's published API rates
+/// (2026-11-03); cache writes cost 1.25 × input. Models not listed show tokens without money:
+/// add them here.
+pub const PRICES: &[(&str, f64, f64, f64, u64)] = &[
+    ("claude-fable-5-2", 8., 40., 0.2, 1_000_000),
+    ("claude-mythos-5-2", 8., 40., 0.2, 1_000_000),
+    ("claude-fable-5-1", 10., 50., 1., 1_000_000),
+    ("claude-fable-5", 10., 50., 1., 1_000_000),
+    ("claude-opus-5-5", 4., 20., 0.2, 1_000_000),
+    ("claude-opus-5", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-8", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-7", 5., 25., 0.5, 1_000_000),
+    ("claude-opus-4-6", 5., 25., 0.5, 1_000_000),
+    ("claude-sonnet-5-5", 2., 10., 0.1, 1_000_000),
+    ("claude-sonnet-5", 2., 10., 0.2, 1_000_000),
+    ("claude-sonnet-4-6", 3., 15., 0.3, 1_000_000),
+    ("claude-haiku-5-5", 0.1, 0.5, 0.01, 1_000_000),
+    ("claude-haiku-4-5", 1., 5., 0.1, 200_000),
+];
+
+/// What a request used, from the provider's answer: Anthropic's `usage`, the OpenAI-style
+/// `usage` (which the CLIs' answers are given too), and what a CLI adds (`x_cost_usd`,
+/// `x_rate_limit`).
+pub fn usage_of(provider: Provider, model: &str, answer: &Value) -> Option<Usage> {
+    let u = &answer["usage"];
+    if !u.is_object() && answer.get("x_cost_usd").is_none() && answer.get("x_rate_limit").is_none()
+    {
+        return None;
+    }
+    let n = |v: &Value| v.as_u64().unwrap_or(0);
+    let (input, cached, written, output) = if provider == Provider::Anthropic {
+        let (read, write) = (
+            n(&u["cache_read_input_tokens"]),
+            n(&u["cache_creation_input_tokens"]),
+        );
+        (
+            n(&u["input_tokens"]) + read + write,
+            read,
+            write,
+            n(&u["output_tokens"]),
+        )
+    } else {
+        (
+            n(&u["prompt_tokens"]),
+            n(&u["prompt_tokens_details"]["cached_tokens"]),
+            0,
+            n(&u["completion_tokens"]),
+        )
+    };
+    let price = PRICES.iter().find(|p| model.starts_with(p.0));
+    let cost_usd = if provider.is_cli() || provider == Provider::Local {
+        answer["x_cost_usd"].as_f64()
+    } else {
+        price.map(|(_, i, o, r, _)| {
+            let plain = input.saturating_sub(cached + written) as f64;
+            (plain * i + written as f64 * i * 1.25 + cached as f64 * r + output as f64 * o) / 1e6
+        })
+    };
+    let limit = answer["x_rate_limit"]["used_percent"]
+        .as_f64()
+        .map(|used_percent| Limit {
+            used_percent,
+            what: answer["x_rate_limit"]["what"]
+                .as_str()
+                .unwrap_or("plan limit")
+                .to_owned(),
+        });
+    Some(Usage {
+        input,
+        cached,
+        output,
+        cost_usd,
+        limit,
+        context_window: price.map(|p| p.4),
+    })
+}
+
+/// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
+pub fn short_count(n: u64) -> String {
+    match n {
+        0..1_000 => n.to_string(),
+        1_000..1_000_000 => format!("{:.1}k", n as f64 / 1e3),
+        _ => format!("{:.1}M", n as f64 / 1e6),
+    }
 }
 
 /// One tool call the model asked for.
@@ -226,6 +400,15 @@ struct Call {
     name: String,
     /// The arguments, or why they could not be read.
     arguments: Result<Value, String>,
+}
+
+/// Counts conversations, so what a tool remembers between calls (such as the last scene
+/// summary) starts afresh with a new one.
+static CONVERSATION_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Which conversation this is (see [`Conversation::new`]).
+pub fn conversation_epoch() -> u64 {
+    CONVERSATION_EPOCH.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// A conversation with one provider, in that provider's own message format: Anthropic's
@@ -238,6 +421,7 @@ pub struct Conversation {
 
 impl Conversation {
     pub fn new(provider: Provider) -> Self {
+        CONVERSATION_EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
             provider,
             messages: Vec::new(),
@@ -254,7 +438,7 @@ impl Conversation {
     }
 
     /// Sends the person's `text` and lets the model work until it answers, `stop` turns true,
-    /// or [`MAX_ROUNDS`] rounds of tools have run. `run_tool` runs one tool in the window.
+    /// or a safety stop or the optional pause (see [`SAFETY_ROUNDS`]) ends it. `run_tool` runs one tool in the window.
     ///
     /// The conversation stays valid whatever happens: a failed request adds nothing, and a
     /// stop answers every call the model asked for.
@@ -267,14 +451,45 @@ impl Conversation {
         events: &mut dyn FnMut(Event),
         stop: &dyn Fn() -> bool,
     ) -> Result<(), String> {
+        self.turn_with(settings, text, &[], transport, run_tool, events, stop)
+    }
+
+    /// [`Self::turn`], with files the person attached to the message.
+    #[allow(clippy::too_many_arguments)]
+    pub fn turn_with(
+        &mut self,
+        settings: &Settings,
+        text: &str,
+        attachments: &[crate::attachments::Attachment],
+        transport: &mut dyn Transport,
+        run_tool: &mut dyn FnMut(&str, &Value) -> ToolResult,
+        events: &mut dyn FnMut(Event),
+        stop: &dyn Fn() -> bool,
+    ) -> Result<(), String> {
         if let Some(missing) = settings.missing() {
             return Err(missing);
         }
-        self.push_user_text(text);
-        let known: Vec<&str> = tools().iter().map(|t| t.name).collect();
-        for _ in 0..MAX_ROUNDS {
+        self.push_user(text, attachments);
+        let all = tools();
+        let known: Vec<&str> = all
+            .iter()
+            .map(|t| t.name)
+            .chain(["more_tools", "use_tool"])
+            .collect();
+        let mut rounds = 0usize;
+        // The last call that failed, and how many times in a row it has.
+        let mut failing: Option<(String, String)> = None;
+        let mut failures = 0usize;
+        loop {
             if stop() {
                 events(Event::Notice("Stopped.".into()));
+                return Ok(());
+            }
+            if rounds >= SAFETY_ROUNDS {
+                events(Event::Notice(format!(
+                    "Stopped after {SAFETY_ROUNDS} rounds of tools in one turn: a safety stop \
+                     against a loop that never ends. Say \"continue\" to go on."
+                )));
                 return Ok(());
             }
             let calls = match self.provider {
@@ -291,54 +506,99 @@ impl Conversation {
                 } else {
                     match &call.arguments {
                         Err(e) => ToolResult::error(e.clone()),
-                        Ok(_) if !known.contains(&call.name.as_str()) => {
-                            ToolResult::error(format!("There is no tool called '{}'", call.name))
-                        }
                         Ok(arguments) => {
-                            events(Event::ToolStarted {
-                                name: call.name.clone(),
-                                arguments: arguments.clone(),
-                            });
-                            let result = run_tool(&call.name, arguments);
-                            events(Event::ToolFinished {
-                                name: call.name.clone(),
-                                text: result.joined_text(),
-                                images: images(&result),
-                                is_error: result.is_error,
-                            });
-                            result
+                            // use_tool runs a tool outside the short catalogue.
+                            let (name, arguments) = if call.name == "use_tool" {
+                                (
+                                    arguments["name"].as_str().unwrap_or_default().to_owned(),
+                                    arguments.get("arguments").cloned().unwrap_or(json!({})),
+                                )
+                            } else {
+                                (call.name.clone(), arguments.clone())
+                            };
+                            if !known.contains(&name.as_str()) || name == "use_tool" {
+                                ToolResult::error(format!(
+                                    "There is no tool called '{name}': more_tools lists them"
+                                ))
+                            } else {
+                                events(Event::ToolStarted {
+                                    name: name.clone(),
+                                    arguments: arguments.clone(),
+                                });
+                                let result = run_tool(&name, &arguments);
+                                events(Event::ToolFinished {
+                                    name,
+                                    text: result.joined_text(),
+                                    images: images(&result),
+                                    is_error: result.is_error,
+                                });
+                                result
+                            }
                         }
                     }
                 };
+                // The same call failing again and again is a loop, not progress.
+                if result.is_error {
+                    let key = (
+                        call.name.clone(),
+                        call.arguments
+                            .as_ref()
+                            .map(Value::to_string)
+                            .unwrap_or_default(),
+                    );
+                    if failing.as_ref() == Some(&key) {
+                        failures += 1;
+                    } else {
+                        failing = Some(key);
+                        failures = 1;
+                    }
+                } else {
+                    failing = None;
+                    failures = 0;
+                }
                 results.push((call, result));
             }
             match self.provider {
                 Provider::Anthropic => self.push_anthropic_results(results),
                 _ => self.push_openai_results(results),
             }
+            if failures >= SAME_FAILURES {
+                let name = failing.map(|(n, _)| n).unwrap_or_default();
+                events(Event::Notice(format!(
+                    "Stopped: the same {name} call failed {SAME_FAILURES} times in a row. \
+                     Something must change before trying again."
+                )));
+                return Ok(());
+            }
+            rounds += 1;
+            if settings.pause_every > 0 && rounds.is_multiple_of(settings.pause_every) {
+                events(Event::Paused { steps: rounds });
+                return Ok(());
+            }
         }
-        events(Event::Notice(format!(
-            "Paused after {MAX_ROUNDS} rounds of tools: say \"continue\" to go on."
-        )));
-        Ok(())
     }
 
-    /// The person's message. After a stop or a failed request the last message may already be
-    /// theirs: Anthropic's then takes the text too, so turns keep alternating.
-    fn push_user_text(&mut self, text: &str) {
-        let block = json!({"type": "text", "text": text});
-        if self.provider == Provider::Anthropic
-            && let Some(last) = self.messages.last_mut()
-            && last["role"] == "user"
-            && let Some(content) = last["content"].as_array_mut()
-        {
-            content.push(block);
+    /// The person's message and its attachments. After a stop or a failed request the last
+    /// message may already be theirs: Anthropic's then takes these blocks too, so turns keep
+    /// alternating.
+    fn push_user(&mut self, text: &str, attachments: &[crate::attachments::Attachment]) {
+        if self.provider == Provider::Anthropic {
+            let blocks = crate::attachments::anthropic_blocks(text, attachments);
+            if let Some(last) = self.messages.last_mut()
+                && last["role"] == "user"
+                && let Some(content) = last["content"].as_array_mut()
+            {
+                content.extend(blocks);
+                return;
+            }
+            self.messages
+                .push(json!({"role": "user", "content": blocks}));
             return;
         }
-        self.messages.push(match self.provider {
-            Provider::Anthropic => json!({"role": "user", "content": [block]}),
-            _ => json!({"role": "user", "content": text}),
-        });
+        let content =
+            crate::attachments::openai_content(text, attachments, self.provider.sees_images());
+        self.messages
+            .push(json!({"role": "user", "content": content}));
     }
 
     fn anthropic_step(
@@ -357,6 +617,9 @@ impl Conversation {
         }
         let url = format!("{}/messages", settings.base_url());
         let answer = transport.post(&url, &headers, &body)?;
+        if let Some(usage) = usage_of(self.provider, settings.model(), &answer) {
+            events(Event::Usage(usage));
+        }
         let content = answer["content"]
             .as_array()
             .ok_or_else(|| format!("Unexpected answer from {url}"))?;
@@ -448,6 +711,9 @@ impl Conversation {
         }
         let url = format!("{}/chat/completions", settings.base_url());
         let answer = transport.post(&url, &headers, &body)?;
+        if let Some(usage) = usage_of(self.provider, settings.model(), &answer) {
+            events(Event::Usage(usage));
+        }
         let choice = &answer["choices"][0];
         let message = &choice["message"];
         if !message.is_object() {
@@ -549,9 +815,121 @@ fn current_claude(model: &str) -> bool {
         .any(|prefix| model.starts_with(prefix))
 }
 
+/// Tool results before the recent part of the conversation are cut to this many characters,
+/// and their screenshots become a line of text.
+pub const OLD_RESULT_CHARS: usize = 600;
+/// At most about this many messages are sent; older ones are left out from the start.
+pub const MAX_MESSAGES: usize = 80;
+/// At least this many of the latest messages are sent whole…
+const RECENT_MESSAGES: usize = 8;
+/// …and where the whole part starts moves in steps of this many messages, so what comes before
+/// stays byte for byte the same from one request to the next and the provider's prompt cache
+/// serves it.
+const CHUNK: usize = 10;
+
+const OMITTED_SCREENSHOT: &str =
+    "(An earlier screenshot, left out to keep the conversation short.)";
+
+/// Whether a message is the person's own (not tool results, not a screenshot passed on).
+fn from_person(message: &Value) -> bool {
+    if message["role"] != "user" {
+        return false;
+    }
+    match &message["content"] {
+        Value::String(_) => true,
+        Value::Array(parts) => !parts.iter().any(|p| {
+            p["type"] == "tool_result"
+                || (p["type"] == "text" && p["text"] == "The screenshot tool's picture:")
+        }),
+        _ => false,
+    }
+}
+
+fn shorten(text: &str) -> String {
+    if text.chars().count() <= OLD_RESULT_CHARS {
+        return text.to_owned();
+    }
+    let head: String = text.chars().take(OLD_RESULT_CHARS * 3 / 4).collect();
+    let tail: String = {
+        let rest: Vec<char> = text.chars().collect();
+        rest[rest.len() - OLD_RESULT_CHARS / 4..].iter().collect()
+    };
+    format!(
+        "{head}\n… ({} characters left out of this earlier result) …\n{tail}",
+        text.chars().count() - OLD_RESULT_CHARS
+    )
+}
+
+/// What is sent of a conversation: the person's messages and attachments whole; the recent
+/// messages whole; before them, tool results cut to [`OLD_RESULT_CHARS`] and screenshots as a
+/// line of text; at most about [`MAX_MESSAGES`] messages (the oldest left out, from a message
+/// of the person's so tool calls keep their results). The boundaries move in steps, so the
+/// compacted part is the same from one request to the next and stays in the provider's cache.
+/// The conversation itself keeps everything for the window to show.
+pub fn compact(messages: &[Value]) -> Vec<Value> {
+    let mut start = 0;
+    if messages.len() > MAX_MESSAGES {
+        // The cut moves in steps too, and starts at a message of the person's.
+        let from = (messages.len() - MAX_MESSAGES).div_ceil(CHUNK) * CHUNK;
+        start = (from..messages.len())
+            .find(|&i| from_person(&messages[i]))
+            .or_else(|| (0..from).rev().find(|&i| from_person(&messages[i])))
+            .unwrap_or(0);
+    }
+    let kept = &messages[start..];
+    // Before `whole`, results are cut short and screenshots left out; from it on, nothing
+    // changes. It moves in steps of CHUNK, so the cut part stays the same between requests.
+    let whole = kept.len().saturating_sub(RECENT_MESSAGES) / CHUNK * CHUNK;
+    let mut out: Vec<Value> = kept
+        .iter()
+        .enumerate()
+        .map(|(i, message)| {
+            let mut m = message.clone();
+            let old = i < whole && !from_person(message);
+            if !old {
+                return m;
+            }
+            // `get_mut`, never `[]` on a mutable value: indexing would add the missing key.
+            if let Some(parts) = m.get_mut("content").and_then(Value::as_array_mut) {
+                for part in parts.iter_mut() {
+                    if part["type"] == "image_url" {
+                        *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
+                    }
+                    if let Some(inner) = part.get_mut("content").and_then(Value::as_array_mut) {
+                        for block in inner.iter_mut() {
+                            if block["type"] == "image" {
+                                *block = json!({"type": "text", "text": OMITTED_SCREENSHOT});
+                            }
+                            if let Some(text) = block.get("text").and_then(Value::as_str) {
+                                block["text"] = json!(shorten(text));
+                            }
+                        }
+                    }
+                }
+            } else if message["role"] == "tool"
+                && let Some(text) = message["content"].as_str()
+            {
+                m["content"] = json!(shorten(text));
+            }
+            m
+        })
+        .collect();
+    if start > 0
+        && let Some(first) = out.first_mut()
+    {
+        let note = format!("(The first {start} messages of this conversation are left out.)");
+        match &mut first["content"] {
+            Value::String(text) => *text = format!("{note}\n{text}"),
+            Value::Array(parts) => parts.insert(0, json!({"type": "text", "text": note})),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// The Messages API request, and whether it needs the fallback beta header.
 pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, bool) {
-    let tools: Vec<Value> = tools()
+    let tools: Vec<Value> = crate::agent_base::assistant_tools()
         .iter()
         .map(|t| json!({"name": t.name, "description": t.description, "input_schema": t.input_schema}))
         .collect();
@@ -561,7 +939,7 @@ pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, boo
         "max_tokens": MAX_TOKENS,
         "system": SYSTEM_PROMPT,
         "tools": tools,
-        "messages": messages,
+        "messages": compact(messages),
         // Caches the system prompt, the tools and the conversation so far between rounds.
         "cache_control": {"type": "ephemeral"},
     });
@@ -575,7 +953,7 @@ pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, boo
 
 /// The chat-completions request.
 pub fn openai_request(settings: &Settings, messages: &[Value]) -> Value {
-    let tools: Vec<Value> = tools()
+    let tools: Vec<Value> = crate::agent_base::assistant_tools()
         .iter()
         .map(|t| {
             json!({"type": "function", "function": {
@@ -584,7 +962,7 @@ pub fn openai_request(settings: &Settings, messages: &[Value]) -> Value {
         })
         .collect();
     let mut all = vec![json!({"role": "system", "content": SYSTEM_PROMPT})];
-    all.extend(messages.iter().cloned());
+    all.extend(compact(messages));
     json!({"model": settings.model(), "messages": all, "tools": tools})
 }
 
@@ -633,6 +1011,106 @@ pub fn describe_error(status: u16, body: &Value) -> String {
         _ => "",
     };
     format!("HTTP {status}: {message}.{hint}")
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::*;
+
+    /// Whether a message carries a tool's screenshot (in Anthropic's or OpenAI's form).
+    fn carries_screenshot(message: &Value) -> bool {
+        !from_person(message)
+            && message["content"].as_array().is_some_and(|parts| {
+                parts.iter().any(|p| {
+                    p["type"] == "image_url"
+                        || p["content"]
+                            .as_array()
+                            .is_some_and(|c| c.iter().any(|b| b["type"] == "image"))
+                })
+            })
+    }
+
+    fn shot(i: usize) -> [Value; 3] {
+        [
+            json!({"role": "assistant", "content": "", "tool_calls": [{"id": format!("c{i}"), "type": "function",
+                "function": {"name": "screenshot", "arguments": "{}"}}]}),
+            json!({"role": "tool", "tool_call_id": format!("c{i}"), "content": "x".repeat(5000)}),
+            json!({"role": "user", "content": [
+                {"type": "text", "text": "The screenshot tool's picture:"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]}),
+        ]
+    }
+
+    #[test]
+    fn a_long_session_sends_old_parts_short_and_keeps_them_stable() {
+        let mut messages = vec![json!({"role": "user", "content": [
+            {"type": "text", "text": "Make this"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,PHOTO"}}]})];
+        for i in 0..20 {
+            messages.extend(shot(i));
+        }
+        let sent = compact(&messages);
+        let text = serde_json::to_string(&sent).unwrap();
+        // The person's photo stays; screenshots before the whole part become a line.
+        assert!(text.contains("PHOTO"));
+        let whole = (messages.len() - RECENT_MESSAGES) / CHUNK * CHUNK;
+        let kept = (0..messages.len())
+            .filter(|&i| i >= whole && carries_screenshot(&messages[i]))
+            .count();
+        assert_eq!(text.matches("base64,AAAA").count(), kept);
+        assert!(text.matches(OMITTED_SCREENSHOT).count() >= 15);
+        assert!(text.contains("characters left out"));
+        assert_eq!(
+            sent[sent.len() - 2]["content"].as_str().unwrap().len(),
+            5000
+        );
+        assert_eq!(sent.len(), messages.len());
+        // From one request to the next the compacted start stays byte for byte the same, so
+        // the provider's cache serves it: only at a step does it change.
+        let mut same = 0;
+        for n in 30..messages.len() {
+            let a = compact(&messages[..n]);
+            let b = compact(&messages[..n + 1]);
+            if a[..] == b[..n] {
+                same += 1;
+            }
+        }
+        assert!(same >= (messages.len() - 30) * 8 / 10, "{same}");
+
+        // Past the cap, the oldest are left out from a message of the person's, said so.
+        for i in 0..40 {
+            messages.push(json!({"role": "user", "content": format!("again {i}")}));
+            messages.extend(shot(100 + i));
+        }
+        let sent = compact(&messages);
+        assert!(sent.len() <= MAX_MESSAGES + CHUNK);
+        assert!(from_person(&sent[0]));
+        assert!(
+            sent[0]["content"]
+                .as_str()
+                .unwrap()
+                .contains("are left out")
+        );
+        for (i, m) in sent.iter().enumerate() {
+            if m["role"] == "tool" {
+                assert_eq!(sent[i - 1]["role"], "assistant");
+            }
+        }
+        // Anthropic's form: screenshots inside tool results, the old ones left out.
+        let anthropic: Vec<Value> = (0..30)
+            .map(|i| json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": format!("t{i}"),
+                "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "IMG"}}]}]}))
+            .collect();
+        let text = serde_json::to_string(&compact(&anthropic)).unwrap();
+        assert_eq!(
+            text.matches("\"IMG\"").count(),
+            30 - (30 - RECENT_MESSAGES) / CHUNK * CHUNK
+        );
+        // Blocks are passed on exactly: nothing is added to them.
+        let thinking = vec![json!({"role": "assistant", "content": [
+            {"type": "thinking", "thinking": "plan", "signature": "sig"}]})];
+        assert_eq!(compact(&thinking), thinking);
+    }
 }
 
 #[cfg(test)]
@@ -685,6 +1163,7 @@ mod tests {
             model: String::new(),
             base_url: String::new(),
             api_key: "test-key".into(),
+            pause_every: 0,
         }
     }
 
@@ -723,6 +1202,105 @@ mod tests {
             &|| false,
         );
         (result, events, ran)
+    }
+
+    fn calls(n: usize, tool: &str) -> Vec<Result<Value, String>> {
+        (0..n)
+            .map(|k| {
+                Ok(json!({
+                    "content": [{"type": "tool_use", "id": format!("t{k}"), "name": tool, "input": {}}],
+                    "stop_reason": "tool_use",
+                    "usage": {"input_tokens": 1000, "cache_read_input_tokens": 9000, "output_tokens": 100}
+                }))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_long_job_runs_on_unless_a_pause_is_asked_for() {
+        // 60 rounds of tools: more than the old cap of 40, and the job finishes.
+        let mut answers = calls(60, "scene_summary");
+        answers.push(Ok(
+            json!({"content": [{"type": "text", "text": "Done."}], "stop_reason": "end_turn"}),
+        ));
+        let mut transport = Canned::new(answers);
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let (result, events, ran) = run(
+            &mut conversation,
+            &settings(Provider::Anthropic),
+            &mut transport,
+            "do it",
+        );
+        assert!(result.is_ok());
+        assert_eq!(ran.len(), 60);
+        assert!(events.contains(&Event::Text("Done.".into())));
+        // Every request reported its usage.
+        let used: Vec<&Usage> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Usage(u) => Some(u),
+                _ => None,
+            })
+            .collect();
+        // (The last answer reported none.)
+        assert_eq!(used.len(), 60);
+
+        // With a pause every 25 steps it stops after 25, and goes on when asked.
+        let mut transport = Canned::new(calls(30, "scene_summary"));
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let paused = Settings {
+            pause_every: 25,
+            ..settings(Provider::Anthropic)
+        };
+        let (result, events, ran) = run(&mut conversation, &paused, &mut transport, "do it");
+        assert!(result.is_ok());
+        assert_eq!(ran.len(), 25);
+        assert_eq!(events.last(), Some(&Event::Paused { steps: 25 }));
+    }
+
+    #[test]
+    fn the_same_failing_call_stops_the_turn() {
+        let mut transport = Canned::new(calls(20, "no_such_tool"));
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let (result, events, _) = run(
+            &mut conversation,
+            &settings(Provider::Anthropic),
+            &mut transport,
+            "do it",
+        );
+        assert!(result.is_ok());
+        let stopped = events.iter().any(|e| {
+            matches!(e, Event::Notice(t) if t.contains(&format!("failed {SAME_FAILURES} times")))
+        });
+        assert!(stopped, "{events:?}");
+        assert_eq!(transport.sent.len(), SAME_FAILURES);
+    }
+
+    #[test]
+    fn usage_is_read_and_priced_where_the_price_is_known() {
+        let answer = json!({"usage": {"input_tokens": 1000, "cache_read_input_tokens": 9000,
+            "cache_creation_input_tokens": 0, "output_tokens": 500}});
+        let u = usage_of(Provider::Anthropic, "claude-opus-5-5", &answer).unwrap();
+        assert_eq!((u.input, u.cached, u.output), (10_000, 9_000, 500));
+        // 1000 × $4 + 9000 × $0.20 + 500 × $20, per million.
+        assert!((u.cost_usd.unwrap() - 0.0158).abs() < 1e-9);
+        assert_eq!(u.context_window, Some(1_000_000));
+        // An unknown model: tokens, no money. A CLI: its own figures.
+        let openai = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}});
+        assert_eq!(
+            usage_of(Provider::OpenAi, "some-model", &openai)
+                .unwrap()
+                .cost_usd,
+            None
+        );
+        let cli = json!({"usage": {"prompt_tokens": 50, "completion_tokens": 5}, "x_cost_usd": 0.01,
+            "x_rate_limit": {"used_percent": 40.0, "what": "plan limit, 5 h window"}});
+        let u = usage_of(Provider::ClaudeCli, "", &cli).unwrap();
+        assert_eq!(u.cost_usd, Some(0.01));
+        assert_eq!(u.limit.unwrap().used_percent, 40.);
+        assert_eq!(short_count(950), "950");
+        assert_eq!(short_count(12_400), "12.4k");
+        assert_eq!(short_count(3_100_000), "3.1M");
     }
 
     #[test]
@@ -781,7 +1359,10 @@ mod tests {
         assert_eq!(first["cache_control"]["type"], "ephemeral");
         assert!(first.get("thinking").is_none());
         assert!(first.get("tool_choice").is_none());
-        assert_eq!(first["tools"].as_array().unwrap().len(), tools().len());
+        assert_eq!(
+            first["tools"].as_array().unwrap().len(),
+            crate::agent_base::assistant_tools().len()
+        );
         assert!(first["tools"][0]["input_schema"].is_object());
 
         // The second request carries the assistant's blocks as they came, then one user
@@ -798,6 +1379,55 @@ mod tests {
         );
         assert_eq!(results[1]["is_error"], false);
         assert_eq!(conversation.messages().len(), 4);
+    }
+
+    #[test]
+    fn attached_pictures_reach_claude_and_openai_compatible_models() {
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([0, 0, 120, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let sketch = crate::attachments::from_bytes("sketch.png", &png);
+        let no_tools = |_: &str, _: &Value| ToolResult::text("");
+        for provider in [
+            Provider::Anthropic,
+            Provider::OpenAi,
+            Provider::ClaudeCli,
+            Provider::Local,
+        ] {
+            let answer = if provider == Provider::Anthropic {
+                json!({"content": [{"type": "text", "text": "A navy dress."}], "stop_reason": "end_turn"})
+            } else {
+                json!({"choices": [{"message": {"role": "assistant", "content": "A navy dress."}, "finish_reason": "stop"}]})
+            };
+            let mut transport = Canned::new(vec![Ok(answer)]);
+            let mut conversation = Conversation::new(provider);
+            let mut s = settings(provider);
+            s.model = "test-model".into();
+            conversation
+                .turn_with(
+                    &s,
+                    "What is this?",
+                    std::slice::from_ref(&sketch),
+                    &mut transport,
+                    &mut { no_tools },
+                    &mut |_| {},
+                    &|| false,
+                )
+                .unwrap();
+            let sent = transport.sent[0].2.to_string();
+            let sees = provider != Provider::Local;
+            assert_eq!(
+                sent.contains(if provider == Provider::Anthropic {
+                    "\"media_type\":\"image/png\""
+                } else {
+                    "data:image/png;base64,"
+                }),
+                sees,
+                "{provider:?}"
+            );
+            assert!(sent.contains("sketch.png") && sent.contains("What is this?"));
+        }
     }
 
     #[test]
@@ -927,6 +1557,7 @@ mod tests {
             model: "qwen".into(),
             base_url: "http://127.0.0.1:1234/v1/".into(),
             api_key: String::new(),
+            pause_every: 0,
         };
         run(&mut conversation, &s, &mut transport, "hi").0.unwrap();
         assert_eq!(
@@ -1037,6 +1668,7 @@ mod tests {
                     model: String::new(),
                     base_url: String::new(),
                     api_key: String::new(),
+                    pause_every: 0,
                 };
                 assert!(!p.needs_key());
                 assert_eq!(s.missing(), None);

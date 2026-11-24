@@ -96,6 +96,8 @@ mod grading_ui;
 mod graphics_ui;
 #[path = "atelier/history_ui.rs"]
 mod history_ui;
+#[path = "atelier/home.rs"]
+mod home;
 #[path = "atelier/i18n.rs"]
 mod i18n;
 #[path = "atelier/icons.rs"]
@@ -231,6 +233,8 @@ pub struct DocumentFiles {
     pub output: PathBuf,
     pub source: Option<PathBuf>,
     pub modified: bool,
+    /// Open the Home screen over the document, unless the preferences say not to.
+    pub home: bool,
 }
 pub fn run(
     project: FittingProject,
@@ -345,7 +349,11 @@ pub fn run(
                 .find_map(|p| p.polygon.as_ref())
                 .map(|p| p.meshing_settings())
                 .unwrap_or_default();
+            let home = home::HomeUi::new(
+                files.home && prefs.home_at_startup && demo::window_size().is_none(),
+            );
             Ok(Box::new(Atelier {
+                home,
                 document: documents_ui::DocumentUi::new(&output, files.source, files.modified),
                 issue: Default::default(),
                 quick: Default::default(),
@@ -470,6 +478,8 @@ struct Atelier {
     issue: issue_ui::IssueUi,
     quick: quick_actions::QuickActions,
     document: documents_ui::DocumentUi,
+    /// Window › Home, and the card FashionCraft starts with.
+    home: home::HomeUi,
     authoring: AuthoringUi,
     /// Loaded from `output/preferences.json` before the first frame and saved
     /// after a preference edit or workspace drag is complete.
@@ -546,7 +556,8 @@ impl Atelier {
     /// availability from an earlier frame.
     fn command_context(&self) -> commands::CapabilityContext {
         commands::CapabilityContext {
-            document_loaded: !self.project.template.panels.is_empty(),
+            // An empty project is a document too: pieces are drawn and saved in it.
+            document_loaded: true,
             selected_panel: self.authoring.selected.as_ref().is_some_and(|id| {
                 self.project
                     .template
@@ -627,6 +638,30 @@ impl Atelier {
                     "Avatar deleted · the cloth hangs on its own; import an avatar to bring one back"
                         .into();
             }
+            Id::ToggleSimulation | Id::StepSimulation
+                if !self.playing && self.scene.garment.mesh.uv.is_empty() =>
+            {
+                return Err(i18n::tr(self.prefs.language, home::NOTHING_TO_SIMULATE).into());
+            }
+            Id::ExportSession
+            | Id::ExportPointCache
+            | Id::ExportObjSequence
+            | Id::ExportGltf
+            | Id::ExportDxfAama
+            | Id::ExportObj
+            | Id::ExportObjSelected
+            | Id::ExportMdd
+            | Id::ExportMddZUp
+            | Id::ExportUsd
+            | Id::ExportFbx
+            | Id::ExportAlembic
+            | Id::SnapshotPatterns
+            | Id::SaveGarment
+                if self.project.template.panels.is_empty() =>
+            {
+                return Err(i18n::tr(self.prefs.language, home::NOTHING_TO_EXPORT).into());
+            }
+            Id::ShowHome => self.home.open = true,
             Id::ToggleSimulation => {
                 if self.authoring.animation.recording() {
                     return Err("Recording · stop it from the timeline first".into());
@@ -1333,6 +1368,16 @@ impl Atelier {
         }
     }
     fn submit(&mut self, ctx: &egui::Context, once: bool) -> bool {
+        // An empty project has nothing to simulate: the worker is not asked to build a solver.
+        if self.scene.garment.mesh.uv.is_empty() {
+            self.pending = false;
+            if self.playing || once {
+                self.playing = false;
+                self.status = i18n::tr(self.prefs.language, home::NOTHING_TO_SIMULATE).into();
+                return false;
+            }
+            return true;
+        }
         let scene = FittingScene {
             garment: self.scene.garment.clone(),
             collider: self.scene.collider.clone(),
@@ -2006,6 +2051,7 @@ impl eframe::App for Atelier {
                 }
             });
         self.drive_media3d(&ctx);
+        self.home_window(&ctx);
         self.prefs_dirty |= self.prefs != previous_preferences;
         if self.prefs_dirty && !ctx.input(|i| i.pointer.any_down()) {
             if !self.prefs_kept

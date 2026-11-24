@@ -1,5 +1,6 @@
-//! FashionCraft, as an installed app starts it: the studio, opened on the bundled mannequin
-//! with a T-shirt, or on a project passed to it (a double-clicked file). Its work (session files,
+//! FashionCraft, as an installed app starts it: the studio, opened on an empty project (the
+//! bundled mannequin alone) under the Home screen, or on a project passed to it (a
+//! double-clicked file). A scripted demo (`FASHIONCRAFT_DEMO`) starts on the T-shirt. Its work (session files,
 //! preferences, recovery) goes to the user's data folder. `cloth-fit` stays the tool for headless
 //! runs and checks.
 //!
@@ -103,7 +104,7 @@ fn usage() -> String {
     format!(
         "FashionCraft {}\n\n\
          Usage: fashioncraft [PROJECT]\n\n\
-         Opens the studio on PROJECT, or on the mannequin with a T-shirt when none is given.\n\n\
+         Opens the studio on PROJECT, or on the Home screen when none is given.\n\n\
          Options:\n  \
          -h, --help     Print this help\n  \
          -V, --version  Print the version",
@@ -155,10 +156,15 @@ fn start(source: Option<PathBuf>) -> Result<(), String> {
         Some(path) => return Err(unreadable(&path, &output)),
         None => None,
     };
+    // A demo's script starts from the T-shirt; anyone else from an empty project, with the
+    // Home screen over it to pick what to begin with.
+    let demo = std::env::var_os("FASHIONCRAFT_DEMO").is_some();
     let mut project = match &source {
         Some(path) => FittingProject::load(path)?,
-        None => FittingProject::basic(GarmentKind::Tshirt, 2, assets.join(MANNEQUIN)),
+        None if demo => FittingProject::basic(GarmentKind::Tshirt, 2, assets.join(MANNEQUIN)),
+        None => FittingProject::empty(assets.join(MANNEQUIN)),
     };
+    let home = source.is_none() && !demo;
     project.simulation.get_or_insert_with(|| VbdSettings {
         dt: 1. / 60.,
         ..Default::default()
@@ -171,6 +177,7 @@ fn start(source: Option<PathBuf>) -> Result<(), String> {
             output,
             source,
             modified: false,
+            home,
         },
         false,
         false,

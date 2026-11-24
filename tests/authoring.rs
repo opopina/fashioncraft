@@ -76,11 +76,21 @@ fn invalid_edit_is_atomic_and_does_not_enter_history() {
         authoring::apply(
             &t,
             Command::RemovePanel {
-                panel: t.panels[0].id.clone()
+                panel: "missing".into()
             }
         )
         .is_err()
     );
+    // The last piece may go: the garment is empty then, as a new project is.
+    let emptied = authoring::apply(
+        &t,
+        Command::RemovePanel {
+            panel: t.panels[0].id.clone(),
+        },
+    )
+    .unwrap();
+    assert!(emptied.template.panels.is_empty() && emptied.garment.mesh.uv.is_empty());
+    assert_eq!(before, serde_json::to_vec(&t).unwrap());
 }
 
 #[test]

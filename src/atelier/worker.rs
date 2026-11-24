@@ -230,6 +230,13 @@ fn start_inner(
                 let previous = request.map(|_| w.scene.state.clone());
                 w.once = false;
                 let result: Result<(State, VbdMetrics), String> = (|| {
+                    // An empty project (no pieces yet) has nothing to simulate: it idles, with
+                    // no solver and no GPU buffers.
+                    if w.scene.garment.mesh.uv.is_empty() {
+                        cache = None;
+                        w.playing = false;
+                        return Ok((w.scene.state.clone(), VbdMetrics::default()));
+                    }
                     if w.gpu && gpu.is_none() {
                         return Err("GPU simulation requested without a GPU backend".to_owned());
                     }
@@ -383,6 +390,52 @@ mod final_diagnostics_transport_tests {
                 let _ = thread.join();
             }
         }
+    }
+
+    /// An empty project asked to play gets its state back once and the worker goes idle: no
+    /// solver is built and the GPU, which this worker does not even have, is never asked.
+    #[test]
+    fn empty_project_idles_without_a_solver() {
+        use fashioncraft::fitting::FittingProject;
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        reset();
+        let dir = tempfile::tempdir().unwrap();
+        let avatar = dir.path().join("avatar.obj");
+        std::fs::write(&avatar, "v 10 0 -10\nv 11 0 -10\nv 10 1 -10\nf 1 2 3\n").unwrap();
+        let scene = FittingProject::empty(avatar).compile().unwrap();
+        assert!(scene.garment.mesh.uv.is_empty());
+        let (tx, latest, thread) = start_inner(None, None).unwrap();
+        let worker = TestWorker {
+            tx: Some(tx),
+            release: None,
+            thread: Some(thread),
+        };
+        let work = Work {
+            generation: 3,
+            scene,
+            settings: VbdSettings::default(),
+            grab: None,
+            gpu: true,
+            ctx: egui::Context::default(),
+            playing: true,
+            once: false,
+        };
+        worker.tx.as_ref().unwrap().send(work).unwrap();
+        let started = Instant::now();
+        let done = loop {
+            if let Some(done) = latest.lock().unwrap().take() {
+                break done;
+            }
+            assert!(started.elapsed() < Duration::from_secs(10), "no answer");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(done.generation, 3);
+        let (state, _) = done.result.unwrap();
+        assert!(state.x.is_empty() && state.time == 0.);
+        // Idle: nothing more is published while it is not asked again.
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(latest.lock().unwrap().is_none());
+        worker.shutdown();
     }
 
     #[test]

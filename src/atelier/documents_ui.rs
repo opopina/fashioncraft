@@ -541,6 +541,7 @@ impl Atelier {
         self.document.path = Some(path.clone());
         self.document.dirty = false;
         self.remove_recovery();
+        self.remember_recent(&path);
         self.status = format!("Saved {}", path.display());
         Ok(path.display().to_string())
     }
@@ -572,6 +573,7 @@ impl Atelier {
                 self.document.path = Some(path.clone());
                 self.document.dirty = false;
                 self.remove_recovery();
+                self.remember_recent(&path);
                 self.status = format!(
                     "Saved {}{}",
                     path.display(),
@@ -661,6 +663,9 @@ impl Atelier {
                 self.simulation_error = None;
                 self.grab = None;
                 self.drag_plane = None;
+                if !recovered {
+                    self.remember_recent(&path);
+                }
                 self.document.path = (!recovered).then_some(path);
                 self.document.dirty = recovered || relinked;
                 self.status = if recovered {
@@ -689,12 +694,22 @@ impl Atelier {
             self.open_document_path(path, recovery);
         }
     }
+    /// File › New: an empty project, the avatar and nothing else.
     pub(super) fn new_document(&mut self, ctx: &egui::Context) {
+        // The scripted demos draw beside the rectangle new projects used to start with, and
+        // delete it later: they keep it.
+        if self.demo.is_some() {
+            self.new_rectangle_document(ctx);
+        } else {
+            self.new_empty_document(ctx);
+        }
+    }
+    /// A new project with a single unsewn, unpinned rectangle, for the scripted demos.
+    fn new_rectangle_document(&mut self, ctx: &egui::Context) {
         let ui_lang = self.prefs.language;
         if !self.can_replace_document(ctx) {
             return;
         }
-        // Start with a single unsewn, unpinned rectangle; empty solver meshes are unsupported.
         let mut p = self.project.clone();
         let command = fashioncraft::authoring::Command::Primitive {
             kind: fashioncraft::garment::shapes::Primitive::Rectangle,
@@ -714,14 +729,20 @@ impl Atelier {
                 if !self.load(p) {
                     return;
                 }
-                self.remove_recovery();
-                self.authoring.history = Default::default();
-                self.document.path = None;
+                self.begin_new_document();
                 self.document.dirty = true;
                 self.status = i18n::tr(ui_lang, "New project · one unsewn rectangle").into();
             }
             Err(e) => self.status = e,
         }
+    }
+    /// After a new document was loaded (File › New, the Home screen): it has no file, no
+    /// history and nothing to save yet.
+    pub(super) fn begin_new_document(&mut self) {
+        self.remove_recovery();
+        self.authoring.history = Default::default();
+        self.document.path = None;
+        self.document.dirty = false;
     }
     fn remove_recovery(&mut self) {
         if self.document.recovery.is_file() {

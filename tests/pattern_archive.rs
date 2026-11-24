@@ -67,16 +67,15 @@ fn archived_pieces_leave_the_board_and_come_back_where_they_were() {
 fn deleting_from_the_archive_keeps_the_drape_and_refusals_change_nothing() {
     let original = tshirt();
     let ids: Vec<String> = original.panels.iter().map(|p| p.id.clone()).collect();
-    // The last piece cannot go.
-    assert!(
-        run(
-            &original,
-            Command::ArchivePanels {
-                panels: ids.clone()
-            }
-        )
-        .is_err()
-    );
+    // Every piece can go to the archive, leaving an empty board.
+    let all = run(
+        &original,
+        Command::ArchivePanels {
+            panels: ids.clone(),
+        },
+    )
+    .unwrap();
+    assert!(all.panels.is_empty() && !all.archive.is_empty());
     assert!(
         run(
             &original,

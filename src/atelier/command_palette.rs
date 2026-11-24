@@ -45,6 +45,7 @@ fn aliases(id: CommandId) -> &'static str {
         ToolInspect => "debug report paint faces",
         ToolGraphic => "print logo image move scale rotate graphic",
         NewProject => "new blank empty document",
+        ShowHome => "home start welcome recent templates",
         OpenProject => "open load document json",
         SaveProject => "save write document",
         SaveProjectAs => "save as copy document",

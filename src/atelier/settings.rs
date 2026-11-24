@@ -70,6 +70,10 @@ pub(super) struct Preferences {
     pub(super) gizmo_axes: super::gizmo::GizmoAxes,
     /// AI agents and the Assistant panel (Settings › AI agents).
     pub(super) ai: AiPrefs,
+    /// Whether the Home screen opens when FashionCraft starts without a project.
+    pub(super) home_at_startup: bool,
+    /// Projects opened or saved last, newest first (File › Open recent, the Home screen).
+    pub(super) recent_projects: Vec<std::path::PathBuf>,
 }
 
 /// AI agents and the Assistant panel. API keys are not kept here: they go to the system's
@@ -123,6 +127,8 @@ impl Default for Preferences {
             user_poses: Default::default(),
             gizmo_axes: Default::default(),
             ai: Default::default(),
+            home_at_startup: true,
+            recent_projects: Vec::new(),
         }
     }
 }
@@ -131,6 +137,7 @@ impl Preferences {
     /// Clamp values that a hand-edited or corrupt file could otherwise push
     /// outside the ranges the board and `VbdSettings::validate` accept.
     fn sanitize(&mut self) {
+        self.recent_projects.truncate(super::home::RECENT_MAX);
         self.workspace.sanitize();
         self.viewport.sanitize();
         self.garment_display.sanitize();

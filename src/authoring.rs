@@ -4805,9 +4805,7 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             template.panels.push(copy);
         }
         Command::RemovePanel { panel } => {
-            if template.panels.len() <= 1 {
-                return Err("Keep at least one panel".into());
-            }
+            // The last piece goes too: an empty garment is an empty project.
             if !template.panels.iter().any(|p| p.id == panel) {
                 return Err("Panel not found".into());
             }
@@ -4825,9 +4823,6 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
             {
                 return Err("Select existing panels to delete".into());
             }
-            if ids.len() >= template.panels.len() {
-                return Err("Keep at least one panel".into());
-            }
             template.panels.retain(|p| !ids.contains(&p.id));
             template
                 .seams
@@ -4841,9 +4836,6 @@ pub fn apply(source: &GarmentTemplate, command: Command) -> Result<Edit, String>
                     .any(|id| !template.panels.iter().any(|p| &p.id == id))
             {
                 return Err("Select existing panels to archive".into());
-            }
-            if ids.len() >= template.panels.len() {
-                return Err("Keep at least one panel on the board".into());
             }
             let held = |id: &String| {
                 template.pin_targets.iter().any(|p| &p.panel == id)

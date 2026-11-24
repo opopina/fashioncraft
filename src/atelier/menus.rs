@@ -457,6 +457,8 @@ const SETTINGS: &[Item] = &[
 ];
 
 const WINDOW: &[Item] = &[
+    Run("Home", C::ShowHome),
+    S,
     Run("Split view", C::SplitView),
     Run("3D only", C::GarmentView),
     Run("2D only", C::PatternView),

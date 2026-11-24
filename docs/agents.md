@@ -89,10 +89,28 @@ the model's context window is (its tooltip says which):
 | Gemini CLI | `stats.models.*.tokens` | None | None reported |
 | Antigravity CLI | What it prints, if any | None | Its `used_percent`, if it prints one |
 
-**Long sessions.** Every request sends the person's messages and attachments whole, the latest 2
-screenshots (older ones become a line of text), earlier long tool results cut short, and at most
-the last 80 messages, so a long session neither grows without end nor resends every picture. When
-a CLI fails, the chat shows the error it gave.
+**Long sessions.** Each request declares a short list of common tools; `more_tools` lists the
+others and gives their inputs, and `use_tool` runs one (MCP clients see every tool). After the
+first `scene_summary`, the next ones give only what changed. The person's messages and
+attachments go whole; the recent messages go whole; before them, tool results are cut short and
+screenshots become a line of text, in steps of ten messages so that part stays the same from one
+request to the next and the provider's prompt cache serves it; at most about 80 messages are sent.
+On a replayed 33-step dress job this took the input from about 751k to 427k tokens (the last
+request from 36k to 18k). When a CLI fails, the chat shows the error it gave.
+
+**Copying and logs.** All text in the chat can be selected and copied, and the copy icon at the
+top copies the whole conversation. Each conversation is also written, as it happens, to
+`assistant-logs/conversation-<time>.jsonl` in FashionCraft's session folder (on macOS
+`~/Library/Application Support/FashionCraft/session/`): the messages, every tool call with its
+arguments and result, usage and failures, without picture bytes, so a run can be looked at
+afterwards.
+
+**Rules the Assistant keeps.** It never changes the avatar's pose or body unless asked; with a
+draped garment, a pose moves the avatar into place gradually and the cloth follows. Every change
+is checked: one that would make cloth start inside other cloth or the body is undone, and while
+such a state stands, tools that build on the garment wait until it is cleared. Pieces a cut, a
+copy or a merge makes get names of their own and free space on the board, and the Assistant
+names pieces for what they are.
 
 Some requests to try:
 

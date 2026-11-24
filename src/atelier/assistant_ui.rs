@@ -18,7 +18,7 @@ use super::*;
 use fashioncraft::agent::ToolResult;
 use fashioncraft::assistant::{Conversation, Event, Provider, Settings, Transport, describe_error};
 use fashioncraft::attachments::{self, Attachment};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU8, Ordering},
@@ -63,6 +63,8 @@ pub(super) struct AssistantUi {
     attach_note: Option<String>,
     /// What this conversation has used so far (kept in memory only).
     usage: Totals,
+    /// This conversation's log in the session folder (assistant-logs/), once it has begun.
+    log: Option<PathBuf>,
 }
 
 /// A conversation's usage, added up from each request's report.
@@ -124,6 +126,7 @@ impl Default for AssistantUi {
             thumbs: Default::default(),
             attach_note: None,
             usage: Totals::default(),
+            log: None,
         }
     }
 }
@@ -472,6 +475,9 @@ impl Atelier {
                 Err(mpsc::TryRecvError::Disconnected) => break true,
             }
         };
+        for update in &updates {
+            self.assistant_log_update(update);
+        }
         for update in updates {
             match update {
                 Update::Event(Event::Text(text)) => {
@@ -567,6 +573,7 @@ impl Atelier {
         self.assistant.failure = None;
         self.assistant.sent.clear();
         self.assistant.usage = Totals::default();
+        self.assistant.log = None;
     }
 
     /// Send `text` as if typed in the Assistant's box.
@@ -616,6 +623,10 @@ impl Atelier {
             self.assistant.sent.extend(attached.iter().cloned());
         }
         self.assistant.entries.push(Entry::You(text.clone()));
+        self.assistant_log(json!({
+            "you": text,
+            "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+        }));
         self.assistant.input.clear();
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
@@ -801,6 +812,95 @@ impl Atelier {
         });
     }
 
+    /// The conversation as text, for the clipboard: who said what, and each step with its
+    /// result.
+    fn assistant_transcript(&self) -> String {
+        let mut out = String::new();
+        for entry in &self.assistant.entries {
+            match entry {
+                Entry::You(t) => out.push_str(&format!("You: {t}\n\n")),
+                Entry::Attached(names) => {
+                    out.push_str(&format!("Attached: {}\n\n", names.join(", ")))
+                }
+                Entry::Model(t) => out.push_str(&format!("Assistant: {t}\n\n")),
+                Entry::Tool {
+                    name,
+                    detail,
+                    outcome,
+                    ..
+                } => {
+                    out.push_str(&format!("· {name} {detail}\n"));
+                    if let Some((error, text)) = outcome {
+                        out.push_str(&format!(
+                            "  {}{}\n",
+                            if *error { "Error: " } else { "→ " },
+                            text.replace('\n', "\n  ")
+                        ));
+                    }
+                }
+                Entry::Notice(t) | Entry::Problem(t) => out.push_str(&format!("({t})\n\n")),
+                Entry::Paused(steps) => out.push_str(&format!("(Paused after {steps} steps)\n\n")),
+            }
+        }
+        out
+    }
+
+    /// Adds one line to this conversation's log, `assistant-logs/<when it began>.jsonl` in the
+    /// session folder: messages, tool calls and their results, without picture bytes, so a
+    /// run can be looked at afterwards.
+    fn assistant_log(&mut self, mut line: serde_json::Value) {
+        let path = self.assistant.log.get_or_insert_with(|| {
+            let when = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            self.output
+                .join("assistant-logs")
+                .join(format!("conversation-{when}.jsonl"))
+        });
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.);
+        line["at"] = json!((at * 10.).round() / 10.);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&*path)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "{line}");
+        }
+    }
+
+    fn assistant_log_update(&mut self, update: &Update) {
+        let line = match update {
+            Update::Event(Event::Text(t)) => json!({"assistant": t}),
+            Update::Event(Event::Notice(t)) => json!({"notice": t}),
+            Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
+            Update::Event(Event::Usage(u)) => json!({"usage": {
+                "input": u.input, "cached": u.cached, "output": u.output, "cost_usd": u.cost_usd,
+            }}),
+            Update::Event(Event::ToolStarted { name, arguments }) => {
+                json!({"tool": name, "arguments": arguments})
+            }
+            Update::Event(Event::ToolFinished {
+                name,
+                text,
+                images,
+                is_error,
+            }) => {
+                json!({"result": name, "error": is_error, "text": text, "pictures": images.len()})
+            }
+            Update::Done(Err(e)) => json!({"failed": e}),
+            Update::Done(Ok(())) => json!({"turn": "ended"}),
+        };
+        self.assistant_log(line);
+    }
+
     /// Tokens, money and the limit this conversation has used, beside the provider's name.
     fn assistant_usage_readout(&self, ui: &mut egui::Ui) {
         use fashioncraft::assistant::short_count;
@@ -966,6 +1066,8 @@ impl Atelier {
             .min_width(320.)
             .resizable(true)
             .show(ctx, |ui| {
+                // Every text in the chat can be selected and copied.
+                ui.style_mut().interaction.selectable_labels = true;
                 let settings = self.assistant_settings();
                 let accent = super::workspace::accent(ui.visuals());
                 // Who answers, with a dot that is green when ready and FashionCraft's colour
@@ -1015,6 +1117,7 @@ impl Atelier {
                         if new_chat.inner.clicked() {
                             self.assistant.entries.clear();
                             self.assistant.usage = Totals::default();
+                            self.assistant.log = None;
                             *self
                                 .assistant
                                 .conversation
@@ -1032,6 +1135,19 @@ impl Atelier {
                         .clicked()
                         {
                             self.assistant.show_connection = !self.assistant.show_connection;
+                        }
+                        if !self.assistant.entries.is_empty()
+                            && super::icons::icon_only(
+                                ui,
+                                super::icons::Icon::Duplicate,
+                                24.,
+                                false,
+                                tr("Copy conversation"),
+                            )
+                            .clicked()
+                        {
+                            ui.ctx().copy_text(self.assistant_transcript());
+                            self.status = tr("Conversation copied").into();
                         }
                     });
                 });

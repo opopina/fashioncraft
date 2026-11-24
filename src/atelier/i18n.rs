@@ -1415,6 +1415,8 @@ fn spanish(text: &str) -> Option<&'static str> {
         "how full the model's context window is; not the plan's limit, which this provider does not report" => {
             "cuánto ocupa la ventana de contexto del modelo; no es el límite del plan, que este proveedor no informa"
         }
+        "Copy conversation" => "Copiar la conversación",
+        "Conversation copied" => "Conversación copiada",
         "Reading a piece" => "Leyendo una pieza",
         "Selecting" => "Seleccionando",
         "Creating a piece" => "Creando una pieza",

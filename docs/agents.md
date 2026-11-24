@@ -193,17 +193,67 @@ goes away.
 | `save_project` | Saves the project to `Documents/FashionCraft/<name>.json`. |
 | `export_garment` | Exports the garment to `Documents/FashionCraft/<name>.obj` or `.glb`. |
 
+**Any edit, by name**
+
+| Tool | What it does |
+|---|---|
+| `edit_ops` | FashionCraft's own edit commands (over 100: every undoable change to a pattern) with their fields as JSON Schema, filtered by words or asked for by name. |
+| `edit` | Runs one of them with its fields. It is the raw editing layer (metres), checked by the same code as the menus before it is applied, and undoable. |
+
+The schemas come from the Rust source of `authoring::Command` and the types its fields use, so a
+new command or field shows up by itself; a test builds a value from every schema and checks that
+the command accepts it. Four commands are not offered, each with its reason (`edit_ops` lists them).
+
+**Mouse tools in centimetres, and exact engines**
+
+| Tool | What it does |
+|---|---|
+| `transform_piece` | Moves or turns pieces on the 2D board, or in 3D about their centre (world cm: x to the avatar's left, y up, z to its front). |
+| `bend_segment` | Curves a segment so its middle moves a given number of cm outward or inward. |
+| `style_line` | The 3D view's style-line tool: bends, moves or stretches a segment by a 3D move in cm, across the seams it is sewn into. |
+| `add_internal_line` | An internal line through points in cm. |
+| `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
+| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
+| `pin` | Pins cloth around a point of a piece, removes or moves pins. |
+| `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
+| `trace_on_body` | The 3D pen: a closed line through points on the body becomes a piece laid there. |
+
+**Windows as tools**
+
+| Tool | Window |
+|---|---|
+| `simulation_settings` | Simulation properties: quality, GPU, iterations, damping, friction, collision distance, gravity, wind, floor, particle distance. |
+| `camera` | Camera properties and the View menu; with `screenshot` it returns a picture of the view. |
+| `render_settings` | The photoreal render's settings and the 3D view's style. |
+| `avatar_maker` | Create avatar (MakeHuman · Anny): settings, local measures and look. |
+| `pose_joints` | The pose editor's joints, in degrees. |
+| `measure_fabric` | Measure fabric: fits a fabric's parameters to tests on the real cloth and gives it to pieces. |
+| `points_of_measure` | Points of measure of the size chart. |
+| `measure` | The tape tools: body and garment girth at a height and the ease between them, or the distance between two outline points. |
+
+**Checking and knowing**
+
+| Tool | What it does |
+|---|---|
+| `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. |
+| `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
+
 `fashioncraft-cli tools` prints the tools with their input schemas.
 
-**What agents cannot do yet, and why.** These need the mouse or a window a person fills in, and
-have no agent tool: drawing freehand or with the pen, drawing internal lines and style lines,
-picking mesh regions, painting steam, placing buttons, graphics and trims by clicking, editing
-textures and UV islands by hand, the pose editor's joints, animation, and every file dialog
-(import, open, export formats other than OBJ and GLB). Agents are told so and point the person to
-the menu. Agents cannot drag curve handles; `pattern.smooth_curve` (with outline points selected) rounds a corner into a curve.
-The drafted bases are simplified blocks: straight armholes and sleeve caps, no collar, facing or
-closure. The fabric presets are indicative starting points, not laboratory measurements: calibrate
-them on the real fabric before manufacturing.
+**Every menu command is covered.** Each command in the registry either runs with `command_run`,
+is done by an agent tool (`agent_instead` in `src/atelier/commands.rs`), or has a written reason
+why agents cannot do it (`agent_reason`), which `command_list` and `command_run` pass on. A test
+fails when a command has none, and `agent_use` has no catch-all, so a new command must be
+classified before it builds. Of 225 commands, 122 run, 63 are done by an agent tool and 40 have a
+reason: file dialogs (agents read and write only `Documents/FashionCraft`), the person's own
+settings, image graphics, UV islands by hand, and animation.
+
+**What agents cannot do yet, and why.** Drawing freehand, file dialogs (import, open, export
+formats other than OBJ and GLB), placing image graphics, arranging UV islands by hand and
+animation. Agents are told so and point the person to the menu. The drafted bases are simplified
+blocks: straight armholes and sleeve caps; collars, plackets and pockets come from `add_detail`.
+The fabric presets are indicative starting points, not laboratory measurements: calibrate them on
+the real fabric (`measure_fabric`) before manufacturing.
 
 ## For developers
 
@@ -211,6 +261,11 @@ them on the real fabric before manufacturing.
 |---|---|
 | `src/agent.rs` | The tools, the connection file and the MCP server |
 | `src/agent_ops.rs` | What the tools read from a garment and the authoring commands their edits become, testable without a window |
+| `src/agent_base.rs` | The base tools' descriptions, and the form tools' logic that needs no window |
+| `src/agent_edit.rs` | The generic edit: `authoring::Command` from JSON, schemas derived from its source |
+| `src/agent_build.rs` | Exact engines: details, bends, buttons, lines, moves, and laying new pieces on the drape |
+| `src/agent_check.rs` | `check_garment`'s signals and problems |
+| `src/agent_guide.rs` | `guide`'s topics |
 | `src/agent_eval.rs` | The evaluation's checks and report |
 | `src/attachments.rs` | Reads attached files into what a model takes |
 | `evals/assistant/cases.json` | The evaluation's requests, in Spanish and English |
@@ -218,6 +273,7 @@ them on the real fabric before manufacturing.
 | `src/assistant.rs` | The Assistant's protocol for Claude and OpenAI-compatible APIs, and its tool loop |
 | `src/atelier/agent_hub.rs` | The window's queue for tool calls and the loopback server |
 | `src/atelier/agent_tools.rs` | The tools, run in the window |
+| `src/atelier/agent_base_tools.rs` | The base tools, run in the window |
 | `src/atelier/assistant_ui.rs` | The Assistant window and its HTTPS transport |
 | `src/atelier/assistant_keys.rs` | API key storage |
 | `src/atelier/assistant_eval.rs` | Runs the evaluation in the window |

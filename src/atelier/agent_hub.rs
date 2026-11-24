@@ -84,6 +84,8 @@ pub(super) enum Pending {
         /// The render window was open before; otherwise it closes again.
         was_open: bool,
     },
+    /// One of the base tools (`agent_base_tools`).
+    Base(super::agent_base_tools::BasePending),
 }
 
 pub(super) struct AgentHub {

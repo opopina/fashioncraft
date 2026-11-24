@@ -71,6 +71,75 @@ impl Default for RenderUi {
 }
 
 impl RenderUi {
+    /// Changes the settings an agent gave (`render_settings`) and reports them all.
+    pub(super) fn agent_settings(
+        &mut self,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        use serde_json::{Value, json};
+        let before = self.effective();
+        let number = |key: &str| {
+            args.get(key)
+                .and_then(Value::as_f64)
+                .filter(|v| v.is_finite())
+        };
+        let flag = |key: &str| args.get(key).and_then(Value::as_bool);
+        let s = &mut self.settings;
+        if let Some(v) = number("width") {
+            s.width = (v as u32).clamp(64, 8192);
+        }
+        if let Some(v) = number("height") {
+            s.height = (v as u32).clamp(64, 8192);
+        }
+        if let Some(v) = number("samples") {
+            s.samples = (v as u32).max(1);
+        }
+        if let Some(v) = number("bounces") {
+            s.bounces = (v as u32).clamp(1, 32);
+        }
+        if let Some(v) = number("exposure_ev") {
+            s.exposure_ev = v as f32;
+        }
+        if let Some(v) = number("focus_cm") {
+            s.focus_m = (v / 100.) as f32;
+        }
+        if let Some(v) = number("environment_gain") {
+            s.environment_gain = v as f32;
+        }
+        if let Some(v) = number("environment_turn_degrees") {
+            s.environment_turn_degrees = v as f32;
+        }
+        if let Some(v) = flag("background") {
+            s.environment_background = v;
+        }
+        if let Some(v) = flag("key_light") {
+            s.key_light = v;
+        }
+        if let Some(v) = flag("floor") {
+            s.floor = v;
+        }
+        if let Some(v) = flag("depth_of_field") {
+            self.depth_of_field = v;
+        }
+        if let Some(v) = number("aperture_mm") {
+            self.aperture_mm = (v as f32).max(0.);
+        }
+        if self.effective() != before
+            && let Some(w) = &self.worker
+        {
+            w.send(Request::Settings(self.effective()));
+        }
+        let s = &self.settings;
+        Ok(json!({
+            "width": s.width, "height": s.height, "samples": s.samples, "bounces": s.bounces,
+            "exposure_ev": s.exposure_ev, "depth_of_field": self.depth_of_field,
+            "aperture_mm": self.aperture_mm, "focus_cm": s.focus_m * 100.,
+            "environment_gain": s.environment_gain,
+            "environment_turn_degrees": s.environment_turn_degrees,
+            "background": s.environment_background, "key_light": s.key_light, "floor": s.floor,
+        }))
+    }
+
     /// The settings sent to the render.
     fn effective(&self) -> TraceSettings {
         TraceSettings {

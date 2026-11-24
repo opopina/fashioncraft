@@ -126,7 +126,7 @@ impl Atelier {
                 "size_chart" => Ok(ToolResult::json(&self.size_chart())),
                 "save_project" => self.agent_save(ctx, args),
                 "export_garment" => self.agent_export(ctx, args),
-                other => Err(format!("unknown tool '{other}'")),
+                other => return self.begin_base_tool(ctx, other, args),
             };
         Ok(result.unwrap_or_else(ToolResult::error))
     }
@@ -138,6 +138,7 @@ impl Atelier {
         pending: &mut Pending,
     ) -> Option<ToolResult> {
         match pending {
+            Pending::Base(base) => self.continue_base_tool(ctx, base),
             Pending::Simulate { until, seconds } => {
                 if Instant::now() < *until && self.playing {
                     return None;
@@ -227,7 +228,7 @@ impl Atelier {
         }
     }
 
-    fn screenshot_result(
+    pub(super) fn screenshot_result(
         &self,
         ctx: &egui::Context,
         image: &egui::ColorImage,
@@ -284,7 +285,7 @@ impl Atelier {
     }
 
     /// The drape as it stands: seam gaps mean something once the cloth has left its layout.
-    fn live(&self) -> Live<'_> {
+    pub(super) fn live(&self) -> Live<'_> {
         let x = &self.scene.state.x;
         let laid = &self.scene.garment.initial_state.x;
         let simulated =
@@ -413,6 +414,9 @@ impl Atelier {
                         entry["agent_can_run"] = json!(false);
                         entry["because"] = json!(usage_text(other));
                         entry["instead"] = json!(commands::agent_instead(d.id));
+                        if let Some(why) = commands::agent_reason(d.id) {
+                            entry["why_not"] = json!(why);
+                        }
                     }
                 }
                 entry
@@ -566,9 +570,10 @@ impl Atelier {
                     usage_text(usage)
                 ),
                 None => format!(
-                    "'{key}' ({label}) {}, so an agent cannot use it. Tell the person to choose \
-                     it from the menu themselves.",
-                    usage_text(usage)
+                    "'{key}' ({label}) {}, so an agent cannot use it ({}). Tell the person to \
+                     choose it from the menu themselves.",
+                    usage_text(usage),
+                    commands::agent_reason(descriptor.id).unwrap_or("no agent tool does it yet")
                 ),
             });
         }

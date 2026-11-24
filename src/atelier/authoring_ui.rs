@@ -949,8 +949,50 @@ impl Atelier {
     }
     /// [`Self::edit`], named `name` in the history.
     pub(super) fn edit_named(&mut self, command: Command, name: &'static str) -> bool {
-        match authoring::apply(&self.project.template, command) {
+        let applied = authoring::apply(&self.project.template, command);
+        self.install_named(applied, name, &[])
+    }
+    /// Several edits applied one after another and recorded as one undo step named `name`
+    /// (agents' compound changes, such as a pocket cut, stitched and sewn). `names` names the
+    /// new pieces (id, name). Unlike one whole-document replacement, each piece keeps its
+    /// drape as the edits that touch it allow.
+    pub(super) fn edit_sequence(
+        &mut self,
+        commands: Vec<Command>,
+        names: &[(String, String)],
+        name: &'static str,
+    ) -> bool {
+        let mut edit: Option<authoring::Edit> = None;
+        for command in commands {
+            let base = edit
+                .as_ref()
+                .map_or(&self.project.template, |e| &e.template);
+            match authoring::apply(base, command) {
+                Ok(mut next) => {
+                    if let Some(previous) = &edit {
+                        next.reset_simulation |= previous.reset_simulation;
+                    }
+                    edit = Some(next);
+                }
+                Err(e) => return self.install_named(Err(e), name, names),
+            }
+        }
+        let applied = edit.ok_or_else(|| "Nothing to change".to_owned());
+        self.install_named(applied, name, names)
+    }
+    fn install_named(
+        &mut self,
+        applied: Result<authoring::Edit, String>,
+        name: &'static str,
+        names: &[(String, String)],
+    ) -> bool {
+        match applied {
             Ok(mut edit) => {
+                for (id, new_name) in names {
+                    if let Some(p) = edit.template.panels.iter_mut().find(|p| &p.id == id) {
+                        p.name = new_name.clone();
+                    }
+                }
                 // Copies and mirrored copies are named in the interface's language.
                 {
                     let before: std::collections::BTreeSet<&str> = self

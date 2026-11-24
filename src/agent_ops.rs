@@ -130,11 +130,17 @@ fn segment_index(panel: &Panel, segment: &str) -> Result<usize, String> {
 
 // ----- Measuring -----------------------------------------------------------------------------
 
-/// Length of a whole segment, metres: an outline segment of a drafted piece, or a side of a
-/// legacy rectangle.
+/// Length of a whole segment, metres: an outline segment or internal line of a drafted piece,
+/// or a side of a legacy rectangle.
 pub fn segment_length(panel: &Panel, segment: Option<&str>, side: Side) -> Option<f64> {
     match (&panel.polygon, segment) {
-        (Some(polygon), Some(edge)) => authoring::edge_length(polygon, edge).ok(),
+        (Some(polygon), Some(edge)) => authoring::edge_length(polygon, edge).ok().or_else(|| {
+            // An internal line (a patch pocket is sewn to one).
+            let line = polygon.lines.iter().find(|l| l.id == edge)?;
+            Some(line_length(
+                &line.samples().unwrap_or_else(|_| line.points.clone()),
+            ))
+        }),
         _ => Some(match side {
             Side::Top | Side::Bottom => panel.pattern.width,
             Side::Left | Side::Right => panel.pattern.height,
@@ -170,6 +176,23 @@ fn bounds(points: &[DVec2]) -> (DVec2, DVec2) {
         (DVec2::splat(f64::INFINITY), DVec2::splat(f64::NEG_INFINITY)),
         |(lo, hi), p| (lo.min(*p), hi.max(*p)),
     )
+}
+
+/// Where a new piece can go on the board: to the right of every piece, level with the
+/// highest. New pieces start in 3D where they lie on the board, so two placed alike would
+/// start on top of each other.
+pub fn free_board_spot(template: &GarmentTemplate) -> DVec2 {
+    let (mut right, mut top) = (f64::NEG_INFINITY, f64::INFINITY);
+    for (i, panel) in template.panels.iter().enumerate() {
+        let origin = authoring::layout(template, i);
+        right = right.max(origin.x + piece_size(panel).x);
+        top = top.min(origin.y);
+    }
+    if right.is_finite() {
+        DVec2::new(right + 0.1, top)
+    } else {
+        DVec2::ZERO
+    }
 }
 
 /// Width and height of a piece on the board, metres.
@@ -789,8 +812,14 @@ fn create_piece(template: &GarmentTemplate, args: &Value) -> Result<Plan, String
         .iter()
         .find_map(|p| p.polygon.as_ref().map(|q| q.meshing_settings()))
         .unwrap_or_default();
+    // Beside the other pieces on the board (and so in 3D), never on top of one.
+    let lo = points
+        .iter()
+        .copied()
+        .fold(DVec2::splat(f64::INFINITY), DVec2::min);
+    let spot = free_board_spot(template);
     let command = Command::Polygon {
-        points: points.clone(),
+        points: points.iter().map(|p| *p - lo + spot).collect(),
         tangents: vec![],
         meshing,
         fabric,

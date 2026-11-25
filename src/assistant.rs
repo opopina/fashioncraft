@@ -51,6 +51,21 @@ the sewing line (drafting only). Notches mark matching points. Darts and pleats 
 - Lengths are in cm; on the 2D board x goes right and y down. Fabric values are model parameters, \
 not lab measurements of a real cloth.
 
+FashionCraft at a glance (the drafted bases' names, so a request needs no looking up first)
+- tshirt: front, back, sleeves cut in one (segments neck-left, neck-bottom, neck-right, \
+shoulder-*, sleeve-top-*, cuff-*, sleeve-under-*, side-*, hem). shirt: front, back (neck-*, \
+shoulder-*, armhole-*, side-*, hem), sleeve-right, sleeve-left (cap-right, cap-left, \
+underarm-right, underarm-left, hem). dress: front, back, as the shirt's. skirt: front, back \
+(waist, hip-*, side-*, hem). trousers: front-right, front-left, back-right, back-left (waist, \
+centre, crotch, inseam, hem, outseam-upper, outseam-lower). Right and left are the pattern's: \
+the shirt's sleeve-right sits on the avatar's left arm (set_sleeve's side is the avatar's).
+- Which tool: colour set_color; fabric set_fabric (weight, stretch: set_fabric_parameters); \
+longer or shorter move_points on the hem's end points of every body piece, the same amount; \
+pocket, collar, placket add_detail; buttons add_buttons; a sleeve set_sleeve; another garment \
+draft_garment (mode add); the same garment redrafted with other measurements draft_garment \
+mode replace (it replaces the garment: say so); how it fits simulate, then check_garment; a \
+picture screenshot; sizes grading; saving and exporting save_project, export_garment.
+
 Small requests
 - A small change (a colour, a fabric, a name, one setting, a view) is its one tool call and a \
 one-line reply: no planning, no guide, no screenshot, no simulating or check_garment unless the \
@@ -1059,6 +1074,63 @@ pub fn describe_error(status: u16, body: &Value) -> String {
         _ => "",
     };
     format!("HTTP {status}: {message}.{hint}")
+}
+
+#[cfg(test)]
+mod primer_tests {
+    use super::SYSTEM_PROMPT;
+    use crate::garment::presets;
+
+    /// Every piece, segment and tool the system prompt's "at a glance" names exists, so the model
+    /// can act on it without looking first.
+    #[test]
+    fn the_primer_names_real_pieces_segments_and_tools() {
+        let start = SYSTEM_PROMPT.find("FashionCraft at a glance").unwrap();
+        let end = SYSTEM_PROMPT[start..].find("\n\nSmall requests").unwrap() + start;
+        let primer = &SYSTEM_PROMPT[start..end];
+        let bases = [
+            ("tshirt", presets::tshirt(&Default::default(), 1).unwrap()),
+            (
+                "shirt",
+                presets::shirt_around(&Default::default(), 1, None).unwrap(),
+            ),
+            ("dress", presets::dress(&Default::default(), 1).unwrap()),
+            ("skirt", presets::skirt(&Default::default(), 1).unwrap()),
+            (
+                "trousers",
+                presets::trousers(&Default::default(), 1).unwrap(),
+            ),
+        ];
+        for (kind, template) in &bases {
+            assert!(primer.contains(&format!("{kind}:")), "{kind}");
+            for panel in &template.panels {
+                assert!(primer.contains(&panel.id), "{kind}: piece {}", panel.id);
+                for edge in &panel.polygon.as_ref().unwrap().edges {
+                    // "shoulder-*" stands for both sides.
+                    let wildcard = edge
+                        .rsplit_once('-')
+                        .filter(|(_, side)| matches!(*side, "right" | "left"))
+                        .map(|(stem, _)| format!("{stem}-*"));
+                    assert!(
+                        primer.contains(edge.as_str())
+                            || wildcard.is_some_and(|w| primer.contains(&w)),
+                        "{kind}: segment {edge} of {}",
+                        panel.id
+                    );
+                }
+            }
+        }
+        let tools: Vec<&str> = crate::agent::tools().iter().map(|t| t.name).collect();
+        let named = primer.split("Which tool:").nth(1).unwrap();
+        for word in named.split(|c: char| !(c.is_ascii_lowercase() || c == '_')) {
+            if word.contains('_') {
+                assert!(tools.contains(&word), "no tool {word}");
+            }
+        }
+        for tool in ["simulate", "screenshot", "grading"] {
+            assert!(named.contains(tool) && tools.contains(&tool), "{tool}");
+        }
+    }
 }
 
 #[cfg(test)]

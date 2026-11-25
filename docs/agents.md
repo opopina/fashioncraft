@@ -109,7 +109,10 @@ ones:
 On a replayed 33-step dress job this took the input from about 751k to 427k tokens (the last
 request from 36k to 18k). When a CLI fails, the chat shows the error it gave.
 
-**Small requests.** A small change ("make the shirt red") is one tool call and a one-line reply:
+**Small requests.** The system prompt carries a short map of the app (the drafted bases' pieces
+and segments, and which tool does each common request), checked against the real drafts by a
+test, so a request needs no looking up first. A small change ("make the shirt red") is one tool
+call and a one-line reply:
 no screenshot, simulation or check unless the drape changes. A message of up to 80 characters
 with nothing attached asks the CLIs for low reasoning effort for its first 3 steps, then their
 usual effort if the job turns out bigger: Codex `-c model_reasoning_effort="low"`, Claude Code and

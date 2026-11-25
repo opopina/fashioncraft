@@ -65,7 +65,7 @@ stay off.
 **Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
 model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
 after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
-Cmd+V while the message box has focus, or with **Paste**.
+Cmd+V (Ctrl+V on Windows and Linux) while the message box has focus, or with **Paste**.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
@@ -91,19 +91,38 @@ the model's context window is (its tooltip says which):
 
 **Long sessions.** Each request declares a short list of common tools; `more_tools` lists the
 others and gives their inputs, and `use_tool` runs one (MCP clients see every tool). After the
-first `scene_summary`, the next ones give only what changed. The person's messages and
-attachments go whole; the recent messages go whole; before them, tool results are cut short and
-screenshots become a line of text, in steps of ten messages so that part stays the same from one
-request to the next and the provider's prompt cache serves it; at most about 80 messages are sent.
+first `scene_summary`, the next ones give only what changed, and each later message of the
+person's ends with a note from FashionCraft: the scene is as the model last saw it, or what
+changed since (by hand, say), so the model need not look again. Every turn remembers the earlier
+ones:
+
+- **Claude (API key)** gets the conversation unchanged, only ever added to: Claude's thinking is
+  bound to everything before it, so an edited history would be refused or lose it, and the
+  unchanged start is what the prompt cache serves.
+- **ChatGPT, Gemini, local models and the four CLIs** get the person's messages and attachments
+  whole and the recent messages whole; before them, tool results are cut short and screenshots
+  become a line of text, in steps of ten messages so that part stays the same from one request
+  to the next and the provider's prompt cache serves it. Past about 80 messages, the oldest tool
+  steps are left out (said so), but what was said stays: every message of the person's and every
+  reply, so a long first job is still known in the next turn.
+
 On a replayed 33-step dress job this took the input from about 751k to 427k tokens (the last
 request from 36k to 18k). When a CLI fails, the chat shows the error it gave.
+
+**Small requests.** A small change ("make the shirt red") is one tool call and a one-line reply:
+no screenshot, simulation or check unless the drape changes. A message of up to 80 characters
+with nothing attached asks the CLIs for low reasoning effort for its first 3 steps, then their
+usual effort if the job turns out bigger: Codex `-c model_reasoning_effort="low"`, Claude Code and
+Antigravity `--effort low` (Gemini CLI has no such option). Starting a CLI takes 0.02 s (Codex,
+Claude Code) to 1.1 s (Gemini), so the time a step takes is the model's.
 
 **Copying and logs.** All text in the chat can be selected and copied, and the copy icon at the
 top copies the whole conversation. Each conversation is also written, as it happens, to
 `assistant-logs/conversation-<time>.jsonl` in FashionCraft's session folder (on macOS
-`~/Library/Application Support/FashionCraft/session/`): the messages, every tool call with its
-arguments and result, usage and failures, without picture bytes, so a run can be looked at
-afterwards.
+`~/Library/Application Support/FashionCraft/session/`, on Linux
+`~/.local/share/fashioncraft/session/`): the messages, every tool call with its arguments and
+result, how long each answer took (`model_seconds`), usage and failures, each line with its time
+(`at`) and without picture bytes, so a run can be looked at afterwards.
 
 **Rules the Assistant keeps.** It never changes the avatar's pose or body unless asked; with a
 draped garment, a pose moves the avatar into place gradually and the cloth follows. Every change
@@ -120,9 +139,10 @@ Some requests to try:
 - "Set up sizes S, M, L and XL with M as the base and show me the size chart."
 - "Save this as summer-tee and export it as GLB."
 
-**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V in the
-message box with a picture or files on the clipboard (on Windows and Linux, the **Paste** button
-does this for a picture). Each file shows as a chip above the message; hover it to see what was
+**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
+Windows and Linux) in the message box with a picture or files on the clipboard; text still pastes
+as text. If the clipboard cannot be read (on Wayland FashionCraft reads it through XWayland), the
+reason shows under the attachments. Each file shows as a chip above the message; hover it to see what was
 read, × takes it off. What the model receives:
 
 | File | The model gets |
@@ -180,8 +200,10 @@ goes away.
 **Limits.**
 
 - The tools need the FashionCraft window open. There is no headless mode yet.
-- A screenshot needs the window to be visible. The other tools also work while the window is
-  covered or minimised.
+- Pictures of the 3D view (`screenshot`, `camera` with `screenshot`, `check_garment` with a
+  view) are drawn for the purpose, so they work while the window is covered or minimised, and
+  without the marks drawn over the view. A screenshot of the whole window needs the window
+  shown. The other tools also work while the window is covered or minimised.
 - A dialog open in the window blocks the tools. After 15 seconds, the agent gets "FashionCraft is
   busy", and nothing runs later.
 
@@ -194,7 +216,7 @@ goes away.
 | `scene_summary` | Every piece (size, segments with ids, lengths and the side they face, internal lines, placement), every seam (the length of each side, and after a simulation its gap in mm and whether it closed), the fabrics with their physical parameters, the avatar's measurements, pose and arrangement points, the sizes, the current selection, warnings (unequal seams, open seams, missed target lengths, pieces sewn to nothing), and the simulation state. |
 | `piece_detail` | One piece in full: numbered outline points (cm, x right, y down), each segment's end points, length, curve, target length, seam allowance, notches and seams, its internal lines and placement. |
 | `size_chart` | The sizes and every point of measure in every size. |
-| `screenshot` | A PNG of the 3D view, or of the whole window. |
+| `screenshot` | A PNG of the 3D view (drawn for the purpose, whatever the window's state), or of the whole window (shown). |
 
 **Selecting and menu commands**
 
@@ -208,7 +230,7 @@ goes away.
 
 | Tool | What it does |
 |---|---|
-| `draft_garment` | Replaces the garment with a base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. It warns when a piece starts touching the body. |
+| `draft_garment` | A base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. `mode` `add` (the default) wears it over the garment there, which keeps its pieces and drape: it must be draped first; the new garment keeps its arrangement around the avatar, goes on an outer layer, moves up to 8 cm out where it would start inside or within 3 mm of the other cloth, and its pieces are named after it ("t-shirt front"), in one undo step. `replace` drafts it instead of everything there. It warns when a piece starts touching the body. |
 | `create_piece` | A new piece from a rectangle or an outline of points, named. |
 | `move_points` | Moves outline points by an offset in cm. |
 | `set_segment_length` | Makes a straight segment a given length, keeping its start, end or middle. |

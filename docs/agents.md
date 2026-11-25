@@ -205,7 +205,11 @@ goes away.
 - The tools need the FashionCraft window open. There is no headless mode yet.
 - Pictures of the 3D view (`screenshot`, `camera` with `screenshot`, `check_garment` with a
   view) are drawn for the purpose, so they work while the window is covered or minimised, and
-  without the marks drawn over the view. A screenshot of the whole window needs the window
+  without the marks drawn over the view. Each costs time and about 1-2k tokens, so the prompt
+  asks for one only to verify a finished job, to compare with the person's picture, to place a
+  problem the numbers cannot, or when asked, one view per check; a picture fewer than 3 rounds
+  after the one before in the same turn comes with a short note saying so. The bench's colour
+  cases (`navy-colour-es`, `red-shirt-en`) fail if the model takes a picture. A screenshot of the whole window needs the window
   shown. The other tools also work while the window is covered or minimised.
 - A dialog open in the window blocks the tools. After 15 seconds, the agent gets "FashionCraft is
   busy", and nothing runs later.

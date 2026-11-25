@@ -25,6 +25,15 @@ pub fn with_note(text: &str, note: &str) -> String {
     format!("{text}{NOTE_START}{note})")
 }
 
+/// A picture fewer than this many rounds of tools after the one before, in one turn, comes with
+/// [`PICTURE_NOTE`]: pictures cost time and tokens, and the numbers say most of it.
+pub const PICTURE_GAP_ROUNDS: usize = 3;
+/// What a picture taken too soon after another says to the model (the picture still comes).
+pub const PICTURE_NOTE: &str = "(Note from FashionCraft: another picture so soon. Each costs time \
+     and about 1-2k tokens, and check_garment, scene_summary and the seam gaps already give the \
+     numbers. Take one only to verify the finished result, compare with the person's picture, \
+     place a problem the numbers cannot, or when the person asks; one view per check.)";
+
 /// A safety stop against a runaway loop: this many rounds of tools in one turn. A turn has no
 /// other limit; [`Settings::pause_every`] pauses it for a review when the person wants that.
 pub const SAFETY_ROUNDS: usize = 400;
@@ -103,8 +112,12 @@ current one, and say first that the current one will go. Never place a sleeve by
 places it. Never change the avatar's pose or body unless the person asks for it. Give pieces \
 names that say what they are (piece_edit rename), such as front bodice, waistband or skirt \
 front.
-5. Look with camera (a view and screenshot true), check_garment with a view, or screenshot, and \
-describe what you actually see.
+5. Pictures (screenshot, camera with screenshot, check_garment with a view) cost time and about \
+1-2k tokens each, and check_garment, scene_summary and the seam gaps already say most of what \
+you need. Take one only to verify the finished result at the end of a job, to compare with a \
+picture the person attached, to locate a problem the numbers show but cannot place, or when the \
+person asks: one view per check unless they ask for more, never after every step, never \
+several angles by default. Describe what you actually see.
 6. Report briefly what changed, with the key numbers, and what is left.
 
 Attachments
@@ -115,7 +128,7 @@ summary (pieces and sizes) and a picture of its pieces; open_attachment opens it
 importer for the person to confirm.
 - To make a garment from a photo or sketch: describe what you see (silhouette, pieces, seams, \
 closures, length, fit, fabric), draft the nearest base with draft_garment, adjust it, simulate, \
-take a screenshot, compare it with the picture and adjust again. Say what you could not match.
+take one screenshot from the picture's angle, compare it with the picture and adjust again. Say what you could not match.
 
 Limits and honesty
 - Every mouse tool and form window has a tool equivalent (command_list says which). You cannot \
@@ -525,6 +538,8 @@ impl Conversation {
         // The last call that failed, and how many times in a row it has.
         let mut failing: Option<(String, String)> = None;
         let mut failures = 0usize;
+        // The round of the last picture a tool returned in this turn.
+        let mut last_picture: Option<usize> = None;
         loop {
             if stop() {
                 events(Event::Notice("Stopped.".into()));
@@ -577,13 +592,23 @@ impl Conversation {
                                     name: name.clone(),
                                     arguments: arguments.clone(),
                                 });
-                                let result = run_tool(&name, &arguments);
+                                let mut result = run_tool(&name, &arguments);
+                                let pictures = images(&result);
                                 events(Event::ToolFinished {
                                     name,
                                     text: result.joined_text(),
-                                    images: images(&result),
+                                    images: pictures.clone(),
                                     is_error: result.is_error,
                                 });
+                                if !pictures.is_empty() {
+                                    if last_picture.is_some_and(|r| rounds - r < PICTURE_GAP_ROUNDS)
+                                    {
+                                        result.content.push(Content::Text {
+                                            text: PICTURE_NOTE.into(),
+                                        });
+                                    }
+                                    last_picture = Some(rounds);
+                                }
                                 result
                             }
                         }
@@ -1342,6 +1367,62 @@ mod tests {
                 }))
             })
             .collect()
+    }
+
+    #[test]
+    fn pictures_too_close_together_come_with_a_note_and_the_prompt_says_when() {
+        // Round 0 a screenshot, round 1 another (too soon), rounds 2-4 other tools, round 5 a
+        // third (far enough).
+        let script = [
+            "screenshot",
+            "screenshot",
+            "set_color",
+            "set_color",
+            "set_color",
+            "screenshot",
+        ];
+        let mut answers: Vec<Result<Value, String>> = script
+            .iter()
+            .enumerate()
+            .map(|(k, tool)| {
+                Ok(json!({"content": [{"type": "tool_use", "id": format!("t{k}"), "name": tool, "input": {}}],
+                          "stop_reason": "tool_use"}))
+            })
+            .collect();
+        answers.push(Ok(
+            json!({"content": [{"type": "text", "text": "Done."}], "stop_reason": "end_turn"}),
+        ));
+        let mut transport = Canned::new(answers);
+        let mut conversation = Conversation::new(Provider::Anthropic);
+        let (result, ..) = run(
+            &mut conversation,
+            &settings(Provider::Anthropic),
+            &mut transport,
+            "Make it red and show me",
+        );
+        assert!(result.is_ok());
+        let noted: Vec<bool> = conversation
+            .messages()
+            .iter()
+            .filter(|m| m["role"] == "user")
+            .filter_map(|m| m["content"][0]["content"].as_array())
+            .filter(|c| c.iter().any(|b| b["type"] == "image"))
+            .map(|c| c.iter().any(|b| b["text"] == PICTURE_NOTE))
+            .collect();
+        assert_eq!(noted, [false, true, false]);
+        // The shared prompt (the Assistant's and the MCP server's) says when a picture is
+        // worth it, and a small change takes none.
+        for rule in [
+            "only to verify the finished result",
+            "compare with a \
+picture the person attached",
+            "one view per check",
+            "never after every step",
+        ] {
+            let flat = SYSTEM_PROMPT.replace('\n', " ");
+            assert!(flat.contains(&rule.replace('\n', " ")), "{rule}");
+        }
+        assert!(SYSTEM_PROMPT.contains("no screenshot"));
     }
 
     /// A tool call and, after `rounds` of them, a final reply, in the provider's answer form.

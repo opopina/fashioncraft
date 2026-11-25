@@ -590,7 +590,9 @@ pub fn tools() -> Vec<Tool> {
             "screenshot",
             "A PNG picture of the 3D view as it is now, to look at the garment; or of the whole \
              window, panels included. Turn the view first with command_run 'view.front', \
-             'view.back', 'view.avatar_left'…",
+             'view.back', 'view.avatar_left'… A picture costs time and 1-2k tokens: take one \
+             only to verify a finished result, compare with the person's picture, place a \
+             problem the numbers cannot, or when asked.",
             object(
                 json!({"area": {"type": "string", "enum": ["view", "window"],
                     "description": "The 3D view (the default) or the whole window."}}),

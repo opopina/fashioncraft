@@ -56,7 +56,24 @@
         {"kind": "any", "path": "/fabrics/*/rgb/2", "above": 70},
         {"kind": "any", "path": "/fabrics/*/rgb/0", "below": 60},
         {"kind": "not_called", "tool": "draft_garment"},
+        {"kind": "not_called", "tool": "screenshot"},
+        {"kind": "not_called", "tool": "camera"},
         {"kind": "language", "lang": "es"}
+      ]
+    },
+    {
+      "id": "red-shirt-en",
+      "start": "shirt",
+      "prompt": "Make the shirt red.",
+      "checks": [
+        {"kind": "called", "tool": "set_color"},
+        {"kind": "any", "path": "/fabrics/*/rgb/0", "above": 150},
+        {"kind": "any", "path": "/fabrics/*/rgb/2", "below": 90},
+        {"kind": "not_called", "tool": "screenshot"},
+        {"kind": "not_called", "tool": "camera"},
+        {"kind": "not_called", "tool": "simulate"},
+        {"kind": "max_calls", "count": 2},
+        {"kind": "language", "lang": "en"}
       ]
     },
     {

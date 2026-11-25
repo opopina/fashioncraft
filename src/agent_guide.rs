@@ -15,7 +15,8 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
          add_pleats, add_detail…) rather than moving raw points; use edit for anything else.\n\
          4. simulate for 5–10 s, then check_garment. Fix what it reports (open seams, strain, \
          cloth inside the body), simulate again and check again until it says ok.\n\
-         5. Look: camera with a view and screenshot true, or render.\n\
+         5. At the end, one picture to verify the result (camera with a view and screenshot \
+         true); not after every step: the numbers say most of it.\n\
          Every change is on Edit › Undo; tell the person what you changed.",
     ),
     (

@@ -388,6 +388,46 @@ mod tests {
     }
 
     #[test]
+    fn a_small_colour_change_that_takes_a_picture_fails_its_case() {
+        let s = suite();
+        let case = s.cases.iter().find(|c| c.id == "red-shirt-en").unwrap();
+        let before = json!({"fabrics": [{"rgb": [238, 235, 229]}]});
+        let after = json!({"fabrics": [{"rgb": [200, 20, 20]}]});
+        let call = |name: &str| Call {
+            name: name.into(),
+            arguments: json!({}),
+            is_error: false,
+        };
+        let quiet = Transcript {
+            calls: vec![call("set_color")],
+            reply: "Done: the shirt is red.".into(),
+            failure: None,
+        };
+        let failed = |run: &Transcript| -> Vec<String> {
+            evaluate(case, &before, &after, run)
+                .into_iter()
+                .filter(|o| !o.passed)
+                .map(|o| o.check)
+                .collect()
+        };
+        assert!(failed(&quiet).is_empty(), "{:?}", failed(&quiet));
+        for looked in ["screenshot", "camera", "simulate"] {
+            let run = Transcript {
+                calls: vec![call("set_color"), call(looked)],
+                ..quiet.clone()
+            };
+            assert!(!failed(&run).is_empty(), "{looked} passed");
+        }
+        // The Spanish case says the same.
+        let navy = s.cases.iter().find(|c| c.id == "navy-colour-es").unwrap();
+        assert!(
+            navy.checks
+                .iter()
+                .any(|c| matches!(c, Check::NotCalled { tool } if tool == "screenshot"))
+        );
+    }
+
+    #[test]
     fn the_bundled_cases_read_and_cover_both_languages() {
         let s = suite();
         assert!(s.cases.len() >= 20, "{}", s.cases.len());

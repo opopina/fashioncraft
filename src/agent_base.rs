@@ -277,7 +277,8 @@ pub fn tools() -> Vec<Tool> {
             "camera",
             "Turn the 3D view: a named view, or yaw/pitch in degrees (yaw 0 looks at the \
              avatar's front), distance_cm, target_cm, fov_degrees, orthographic, frame (fit \
-             everything). With screenshot true it returns a picture of the view afterwards.",
+             everything). With screenshot true it returns a picture of the view afterwards (see \
+             screenshot for when one is worth it).",
             object(
                 json!({
                     "view": {"type": "string", "enum": VIEWS},
@@ -428,7 +429,8 @@ pub fn tools() -> Vec<Tool> {
             "Check the garment after simulating, and call it every time you simulate: a short \
              list of problems with where each is (open seams and their gaps, strained cloth, \
              tight spots pressing on the body, cloth inside the body, a drape still moving), \
-             plus the numbers. ok true means none. With view it adds a picture from that view.",
+             plus the numbers. ok true means none. With view it adds a picture from that view: only \
+             when the result needs looking at, not on every check.",
             object(json!({"view": {"type": "string", "enum": VIEWS}}), &[]),
             false,
         ),

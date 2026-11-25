@@ -107,7 +107,7 @@ impl Atelier {
 
     /// A drafted garment worn over the one on the avatar, which keeps its pieces and drape
     /// (see [`fashioncraft::agent_build::wear_over`]): each try is checked as the edit would
-    /// start, the drape kept, against the body. One undo step.
+    /// start, the drape kept ([`fashioncraft::agent_build::starts_clear`]). One undo step.
     pub(super) fn wear_over(
         &mut self,
         incoming: GarmentTemplate,
@@ -120,19 +120,24 @@ impl Atelier {
             body.vertices.iter().copied().sum::<glam::DVec3>() / body.vertices.len() as f64
         };
         let (draped, state) = (self.scene.garment.clone(), self.scene.state.clone());
+        let contact = self.settings.contact.clone();
+        let laid = &self.scene.garment.initial_state.x;
+        let draped_now = state.x.len() == laid.len()
+            && state
+                .x
+                .iter()
+                .zip(laid)
+                .any(|(a, b)| a.distance(*b) > 0.002);
         let (build, _) = fashioncraft::agent_build::wear_over(
             &self.project.template,
             &incoming,
             garment,
             axis,
-            &mut |edit| {
-                let kept = edit.state_keeping_drape(&draped, &state);
-                fashioncraft::vbd::VbdSolver::new(
-                    std::sync::Arc::new(edit.garment.clone()),
-                    Some(&body),
-                    &kept,
+            draped_now,
+            &mut |edit, added| {
+                fashioncraft::agent_build::starts_clear(
+                    edit, added, &draped, &state, &body, &contact,
                 )
-                .is_ok()
             },
         )?;
         self.playing = false;

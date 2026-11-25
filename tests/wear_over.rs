@@ -32,13 +32,14 @@ fn a_tshirt_goes_over_a_draped_skirt_and_the_skirt_stays() {
     }
 
     let shirt = tshirt(&TshirtMeasurements::default(), 1).unwrap();
+    let contact = VbdSettings::default().contact;
     let mut tries = 0;
-    let (build, push) = agent_build::wear_over(&skirt, &shirt, "t-shirt", axis, &mut |edit| {
-        tries += 1;
-        let kept = edit.state_keeping_drape(&draped, &state);
-        VbdSolver::new(Arc::new(edit.garment.clone()), Some(&body), &kept).is_ok()
-    })
-    .unwrap();
+    let (build, push) =
+        agent_build::wear_over(&skirt, &shirt, "t-shirt", axis, true, &mut |edit, added| {
+            tries += 1;
+            agent_build::starts_clear(edit, added, &draped, &state, &body, &contact)
+        })
+        .unwrap();
     assert!(tries >= 1 && push <= 0.08);
     assert_eq!(build.history_name, "Add garment");
     let both = agent_build::applied(&skirt, &build).unwrap();
@@ -73,10 +74,34 @@ fn a_tshirt_goes_over_a_draped_skirt_and_the_skirt_stays() {
     let garment = Arc::new(edit.garment.clone());
     let mut state = edit.state_keeping_drape(&draped, &state);
     let mut solver = VbdSolver::new(garment, Some(&body), &state).unwrap();
-    for _ in 0..60 {
+    for _ in 0..120 {
         solver
             .step(&mut state, &VbdSettings::default(), None)
             .unwrap();
     }
     assert!(state.x.iter().all(|x| x.is_finite()));
+}
+
+#[test]
+fn a_garment_still_laid_out_flat_is_draped_before_another_goes_over_it() {
+    // Laid out flat together, a skirt and a t-shirt close in on the body at once and catch on
+    // each other within 20 steps (each alone runs on): the skirt is draped first.
+    let skirt = skirt(&SkirtMeasurements::default(), 1).unwrap();
+    let shirt = tshirt(&TshirtMeasurements::default(), 1).unwrap();
+    let mut asked = false;
+    let refused = agent_build::wear_over(
+        &skirt,
+        &shirt,
+        "t-shirt",
+        DVec3::ZERO,
+        false,
+        &mut |_, _| {
+            asked = true;
+            true
+        },
+    )
+    .err()
+    .unwrap();
+    assert!(refused.contains("simulate it first"), "{refused}");
+    assert!(!asked);
 }

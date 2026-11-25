@@ -169,6 +169,67 @@ pub fn compose(
     edit.ok_or_else(|| "Nothing to change".into())
 }
 
+/// Whether an edit's garment can start simulating from where the window would start it (the
+/// drape of `draped` in `state` kept where the pieces are unchanged): the solver accepts the
+/// start (no cloth inside cloth or the body), no two surfaces touch, and the `added` pieces
+/// start at least a contact radius from the other cloth. Closer, the first steps press them
+/// into it until the solver refuses to go on (two flat drafts of the same hip girth lie in
+/// one plane, say).
+pub fn starts_clear(
+    edit: &authoring::Edit,
+    added: &[String],
+    draped: &CompiledGarment,
+    state: &crate::model::State,
+    body: &crate::avatar::SurfaceMesh,
+    contact: &crate::ogc::OgcSettings,
+) -> bool {
+    use crate::ogc::{geometry, potential::Kind};
+    let kept = edit.state_keeping_drape(draped, state);
+    let garment = &edit.garment;
+    let Ok(mut solver) =
+        crate::vbd::VbdSolver::new(std::sync::Arc::new(garment.clone()), Some(body), &kept)
+    else {
+        return false;
+    };
+    let x = solver.world.positions(&kept.x);
+    let Ok(found) = solver.world.detect(&x, 2. * contact.radius, contact) else {
+        return false;
+    };
+    if found.minimum_distance <= 1e-6 {
+        return false;
+    }
+    let cloth = garment.mesh.uv.len();
+    let mut fresh = vec![false; cloth];
+    for range in garment.panels.iter().filter(|r| added.contains(&r.id)) {
+        fresh[range.vertices.clone()].fill(true);
+    }
+    let p = |v: usize| x[v].to_array();
+    let gap = found
+        .contacts
+        .iter()
+        .filter(|c| {
+            let vs = &c.vertices[..c.count];
+            vs.iter().all(|&v| v < cloth)
+                && vs.iter().any(|&v| fresh[v])
+                && vs.iter().any(|&v| !fresh[v])
+        })
+        .map(|c| {
+            let [a, b, d, e] = c.vertices;
+            match c.kind {
+                Kind::PointPoint => x[a].distance(x[b]),
+                Kind::PointEdge => geometry::point_edge_distance(p(a), p(b), p(d)),
+                Kind::PointFace | Kind::PointTriangle => {
+                    geometry::point_face_distance(p(a), p(b), p(d), p(e))
+                }
+                Kind::EdgeEdge | Kind::EdgeEdgeInterior | Kind::SegmentSegment => {
+                    geometry::edge_edge_distance(p(a), p(b), p(d), p(e))
+                }
+            }
+        })
+        .fold(f64::INFINITY, f64::min);
+    gap >= contact.radius
+}
+
 /// How far out, in metres, an added garment's pieces are tried, nearest first (see
 /// [`wear_over`]).
 pub const WEAR_PUSHES_M: [f64; 7] = [0., 0.01, 0.02, 0.03, 0.045, 0.06, 0.08];
@@ -176,17 +237,27 @@ pub const WEAR_PUSHES_M: [f64; 7] = [0., 0.01, 0.02, 0.03, 0.045, 0.06, 0.08];
 /// A second garment worn over what is on the avatar (a shirt with a skirt): `incoming`, a draft
 /// arranged around the avatar, is added keeping that 3D arrangement (a paste would move it
 /// aside), on a simulation layer outside every piece there, its pieces named after the garment
-/// (`garment` "shirt": "shirt front"). Each new piece moves out from the avatar's vertical axis
-/// (through `axis`) by the least of [`WEAR_PUSHES_M`] for which `starts_clear` accepts the edit:
-/// the window asks whether it starts clear of the body and of the garment as draped now. With
-/// the distance used; an error when none is far enough.
+/// (`garment` "shirt": "shirt front"), once the garment there is draped (`draped_now`). Each new
+/// piece moves out from the avatar's vertical axis
+/// (through `axis`) by the least of [`WEAR_PUSHES_M`] for which `starts_clear` accepts the edit
+/// and its new pieces' ids (see [`starts_clear`], with the drape as it is now). With the
+/// distance used; an error when none is far enough.
 pub fn wear_over(
     current: &GarmentTemplate,
     incoming: &GarmentTemplate,
     garment: &str,
     axis: DVec3,
-    starts_clear: &mut dyn FnMut(&authoring::Edit) -> bool,
+    draped_now: bool,
+    starts_clear: &mut dyn FnMut(&authoring::Edit, &[String]) -> bool,
 ) -> Result<(Build, f64), String> {
+    // Two garments laid out flat together close in on the body at once and catch on each
+    // other; over a draped one, the new one settles on it.
+    if !draped_now && !current.panels.is_empty() {
+        return Err(format!(
+            "The garment there is still laid out flat: simulate it first (5 to 10 s), then add \
+             the {garment}, so it goes over it as it hangs"
+        ));
+    }
     let ids: Vec<String> = incoming.panels.iter().map(|p| p.id.clone()).collect();
     if ids.is_empty() {
         return Err(format!("The {garment} has no pieces"));
@@ -260,7 +331,7 @@ pub fn wear_over(
             layer,
         });
         let edit = compose(current, &commands)?;
-        if starts_clear(&edit) {
+        if starts_clear(&edit, &new) {
             let list: Vec<&str> = names.iter().map(|(_, n)| n.as_str()).collect();
             let done = format!(
                 "Added the {garment} over the garment already there, on layer {layer} (outside \

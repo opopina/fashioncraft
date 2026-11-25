@@ -827,6 +827,9 @@ const RECENT_MESSAGES: usize = 8;
 /// serves it.
 const CHUNK: usize = 10;
 
+const TOOL_STEPS_LEFT_OUT: &str = "(The tool steps before this point are left out to keep the \
+     conversation short; what was said is above.)";
+
 const OMITTED_SCREENSHOT: &str =
     "(An earlier screenshot, left out to keep the conversation short.)";
 
@@ -860,71 +863,68 @@ fn shorten(text: &str) -> String {
     )
 }
 
-/// What is sent of a conversation: the person's messages and attachments whole; the recent
-/// messages whole; before them, tool results cut to [`OLD_RESULT_CHARS`] and screenshots as a
-/// line of text; at most about [`MAX_MESSAGES`] messages (the oldest left out, from a message
-/// of the person's so tool calls keep their results). The boundaries move in steps, so the
-/// compacted part is the same from one request to the next and stays in the provider's cache.
-/// The conversation itself keeps everything for the window to show.
+/// What is sent of a conversation to OpenAI-compatible providers and the CLIs: the person's
+/// messages and attachments whole; the recent messages whole; before them, tool results cut to
+/// [`OLD_RESULT_CHARS`] and screenshots as a line of text; and past about [`MAX_MESSAGES`]
+/// messages, only what was said before the cut (the person's messages and the model's replies,
+/// not the tool steps). The boundaries move in steps, so the compacted part is the same from
+/// one request to the next and stays in the provider's cache. The conversation itself keeps
+/// everything. Claude's Messages API gets the conversation as it is (see [`anthropic_request`]).
 pub fn compact(messages: &[Value]) -> Vec<Value> {
-    let mut start = 0;
+    let mut out: Vec<Value> = Vec::new();
+    let mut rest_start = 0;
     if messages.len() > MAX_MESSAGES {
-        // The cut moves in steps too, and starts at a message of the person's.
-        let from = (messages.len() - MAX_MESSAGES).div_ceil(CHUNK) * CHUNK;
-        start = (from..messages.len())
-            .find(|&i| from_person(&messages[i]))
-            .or_else(|| (0..from).rev().find(|&i| from_person(&messages[i])))
-            .unwrap_or(0);
-    }
-    let kept = &messages[start..];
-    // Before `whole`, results are cut short and screenshots left out; from it on, nothing
-    // changes. It moves in steps of CHUNK, so the cut part stays the same between requests.
-    let whole = kept.len().saturating_sub(RECENT_MESSAGES) / CHUNK * CHUNK;
-    let mut out: Vec<Value> = kept
-        .iter()
-        .enumerate()
-        .map(|(i, message)| {
-            let mut m = message.clone();
-            let old = i < whole && !from_person(message);
-            if !old {
-                return m;
-            }
-            // `get_mut`, never `[]` on a mutable value: indexing would add the missing key.
-            if let Some(parts) = m.get_mut("content").and_then(Value::as_array_mut) {
-                for part in parts.iter_mut() {
-                    if part["type"] == "image_url" {
-                        *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
-                    }
-                    if let Some(inner) = part.get_mut("content").and_then(Value::as_array_mut) {
-                        for block in inner.iter_mut() {
-                            if block["type"] == "image" {
-                                *block = json!({"type": "text", "text": OMITTED_SCREENSHOT});
-                            }
-                            if let Some(text) = block.get("text").and_then(Value::as_str) {
-                                block["text"] = json!(shorten(text));
-                            }
-                        }
-                    }
-                }
-            } else if message["role"] == "tool"
-                && let Some(text) = message["content"].as_str()
-            {
-                m["content"] = json!(shorten(text));
-            }
-            m
-        })
-        .collect();
-    if start > 0
-        && let Some(first) = out.first_mut()
-    {
-        let note = format!("(The first {start} messages of this conversation are left out.)");
-        match &mut first["content"] {
-            Value::String(text) => *text = format!("{note}\n{text}"),
-            Value::Array(parts) => parts.insert(0, json!({"type": "text", "text": note})),
-            _ => {}
+        // Before the cut only what was said stays: every message of the person's and every
+        // reply, so a long first job is still remembered in the next turn. The cut moves in
+        // steps and lands where a round starts, so no tool result loses its call.
+        let mut cut = (messages.len() - MAX_MESSAGES).div_ceil(CHUNK) * CHUNK;
+        while cut < messages.len() && !starts_round(&messages[cut]) {
+            cut += 1;
+        }
+        if cut < messages.len() {
+            out.extend(messages[..cut].iter().filter_map(said));
+            out.push(json!({"role": "assistant", "content": TOOL_STEPS_LEFT_OUT}));
+            rest_start = cut;
         }
     }
+    let rest = &messages[rest_start..];
+    // Before `whole`, results are cut short and screenshots left out; from it on, nothing
+    // changes. It moves in steps of CHUNK, so the cut part stays the same between requests.
+    let whole = rest.len().saturating_sub(RECENT_MESSAGES) / CHUNK * CHUNK;
+    out.extend(rest.iter().enumerate().map(|(i, message)| {
+        let mut m = message.clone();
+        if i >= whole || from_person(message) {
+            return m;
+        }
+        // `get_mut`, never `[]` on a mutable value: indexing would add the missing key.
+        if let Some(parts) = m.get_mut("content").and_then(Value::as_array_mut) {
+            for part in parts.iter_mut().filter(|p| p["type"] == "image_url") {
+                *part = json!({"type": "text", "text": OMITTED_SCREENSHOT});
+            }
+        } else if message["role"] == "tool"
+            && let Some(text) = message["content"].as_str()
+        {
+            m["content"] = json!(shorten(text));
+        }
+        m
+    }));
     out
+}
+
+/// Whether a message starts a round: the person's, or the model's (its tool calls follow).
+fn starts_round(message: &Value) -> bool {
+    from_person(message) || message["role"] == "assistant"
+}
+
+/// What a message said, for the part of a long conversation before the cut: the person's
+/// messages whole, the model's text without its tool calls, nothing else.
+fn said(message: &Value) -> Option<Value> {
+    if from_person(message) {
+        return Some(message.clone());
+    }
+    let text = message["content"].as_str().unwrap_or_default().trim();
+    (message["role"] == "assistant" && !text.is_empty())
+        .then(|| json!({"role": "assistant", "content": text}))
 }
 
 /// The Messages API request, and whether it needs the fallback beta header.
@@ -939,7 +939,10 @@ pub fn anthropic_request(settings: &Settings, messages: &[Value]) -> (Value, boo
         "max_tokens": MAX_TOKENS,
         "system": SYSTEM_PROMPT,
         "tools": tools,
-        "messages": compact(messages),
+        // As it is, only ever added to: Claude's thinking blocks are bound to everything before
+        // them, so an edited history would be refused or lose them; and an unchanged start is
+        // what the prompt cache serves.
+        "messages": messages,
         // Caches the system prompt, the tools and the conversation so far between rounds.
         "cache_control": {"type": "ephemeral"},
     });
@@ -1077,39 +1080,42 @@ mod compact_tests {
         }
         assert!(same >= (messages.len() - 30) * 8 / 10, "{same}");
 
-        // Past the cap, the oldest are left out from a message of the person's, said so.
+        // Past the cap, the tool steps of the oldest part are left out, said so; what the
+        // person and the model said stays, and every result still follows its call.
         for i in 0..40 {
             messages.push(json!({"role": "user", "content": format!("again {i}")}));
             messages.extend(shot(100 + i));
+            messages.push(json!({"role": "assistant", "content": format!("done {i}")}));
         }
         let sent = compact(&messages);
-        assert!(sent.len() <= MAX_MESSAGES + CHUNK);
-        assert!(from_person(&sent[0]));
         assert!(
-            sent[0]["content"]
-                .as_str()
-                .unwrap()
-                .contains("are left out")
+            sent.len() <= MAX_MESSAGES + CHUNK + 2 * 40 + 2,
+            "{}",
+            sent.len()
         );
+        assert!(sent.len() < messages.len() / 2);
+        let text = serde_json::to_string(&sent).unwrap();
+        assert!(text.contains("PHOTO") && text.contains("Make this"));
+        for i in 0..40 {
+            assert!(text.contains(&format!("\"again {i}\"")), "again {i}");
+            assert!(text.contains(&format!("\"done {i}\"")), "done {i}");
+        }
+        assert_eq!(text.matches("tool steps before this point").count(), 1);
         for (i, m) in sent.iter().enumerate() {
             if m["role"] == "tool" {
-                assert_eq!(sent[i - 1]["role"], "assistant");
+                let calls = sent[i - 1]["tool_calls"].as_array().unwrap();
+                assert!(calls.iter().any(|c| c["id"] == m["tool_call_id"]));
             }
         }
-        // Anthropic's form: screenshots inside tool results, the old ones left out.
-        let anthropic: Vec<Value> = (0..30)
-            .map(|i| json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": format!("t{i}"),
-                "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "IMG"}}]}]}))
-            .collect();
-        let text = serde_json::to_string(&compact(&anthropic)).unwrap();
-        assert_eq!(
-            text.matches("\"IMG\"").count(),
-            30 - (30 - RECENT_MESSAGES) / CHUNK * CHUNK
-        );
-        // Blocks are passed on exactly: nothing is added to them.
-        let thinking = vec![json!({"role": "assistant", "content": [
-            {"type": "thinking", "thinking": "plan", "signature": "sig"}]})];
-        assert_eq!(compact(&thinking), thinking);
+        // Stable between requests here too, except where the cut moves.
+        let mut same = 0;
+        for n in 150..messages.len() {
+            let (a, b) = (compact(&messages[..n]), compact(&messages[..n + 1]));
+            if a.len() <= b.len() && a[..] == b[..a.len()] {
+                same += 1;
+            }
+        }
+        assert!(same >= (messages.len() - 150) * 7 / 10, "{same}");
     }
 }
 
@@ -1214,6 +1220,88 @@ mod tests {
                 }))
             })
             .collect()
+    }
+
+    /// A tool call and, after `rounds` of them, a final reply, in the provider's answer form.
+    fn job(provider: Provider, rounds: usize, reply: &str) -> Vec<Result<Value, String>> {
+        let mut answers: Vec<Result<Value, String>> = (0..rounds)
+            .map(|k| {
+                Ok(if provider == Provider::Anthropic {
+                    json!({"content": [{"type": "thinking", "thinking": format!("plan {k}"), "signature": format!("sig{k}")},
+                        {"type": "tool_use", "id": format!("t{k}"), "name": "set_color", "input": {"color": "red"}}],
+                        "stop_reason": "tool_use"})
+                } else {
+                    json!({"choices": [{"message": {"role": "assistant", "content": null, "tool_calls": [
+                        {"id": format!("c{k}"), "type": "function",
+                         "function": {"name": "set_color", "arguments": "{\"color\":\"red\"}"}}]},
+                        "finish_reason": "tool_calls"}]})
+                })
+            })
+            .collect();
+        answers.push(Ok(if provider == Provider::Anthropic {
+            json!({"content": [{"type": "text", "text": reply}], "stop_reason": "end_turn"})
+        } else {
+            json!({"choices": [{"message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}]})
+        }));
+        answers
+    }
+
+    /// The messages a request sent, whichever provider's form.
+    fn messages_of(sent: &Sent) -> &Vec<Value> {
+        sent.2["messages"].as_array().unwrap()
+    }
+
+    #[test]
+    fn the_second_turn_remembers_the_first_through_each_api() {
+        for provider in [Provider::Anthropic, Provider::OpenAi] {
+            for rounds in [1, 70] {
+                let mut answers = job(provider, rounds, "Done: the shirt is red.");
+                answers.extend(job(provider, 0, "It is blue now."));
+                let mut transport = Canned::new(answers);
+                let mut conversation = Conversation::new(provider);
+                let settings = Settings {
+                    model: "some-model".into(),
+                    ..settings(provider)
+                };
+                let (first, ..) = run(
+                    &mut conversation,
+                    &settings,
+                    &mut transport,
+                    "Make the shirt red",
+                );
+                let (second, ..) = run(
+                    &mut conversation,
+                    &settings,
+                    &mut transport,
+                    "Now make it blue",
+                );
+                assert!(
+                    first.is_ok() && second.is_ok(),
+                    "{provider:?} {rounds}: {first:?} {second:?}"
+                );
+                let last = serde_json::to_string(transport.sent.last().unwrap()).unwrap();
+                for carried in [
+                    "Make the shirt red",
+                    "did set_color",
+                    "Done: the shirt is red.",
+                    "Now make it blue",
+                ] {
+                    assert!(
+                        last.contains(carried),
+                        "{provider:?}, {rounds} rounds: {carried:?} is missing"
+                    );
+                }
+                if provider == Provider::Anthropic {
+                    // Only ever added to: each request starts with the one before, thinking
+                    // blocks and all, so none is invalidated and the cache serves the start.
+                    for pair in transport.sent.windows(2) {
+                        let (a, b) = (messages_of(&pair[0]), messages_of(&pair[1]));
+                        assert!(b.len() > a.len() && b[..a.len()] == a[..]);
+                    }
+                    assert_eq!(last.matches("\"signature\"").count(), rounds);
+                }
+            }
+        }
     }
 
     #[test]

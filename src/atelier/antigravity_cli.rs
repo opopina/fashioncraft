@@ -280,4 +280,33 @@ echo "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"structured_outp
             "Skirt and waistband"
         );
     }
+
+    #[cfg(unix)]
+    mod two_turns {
+        use super::*;
+
+        struct TwoTurns(PathBuf);
+        impl Transport for TwoTurns {
+            fn post(
+                &mut self,
+                _: &str,
+                _: &[(&str, String)],
+                body: &Value,
+            ) -> Result<Value, String> {
+                Cli(&AtomicBool::new(false))
+                    .run(&self.0, body)
+                    .map_err(|e| e.to_string())
+            }
+        }
+
+        #[test]
+        fn the_second_turn_remembers_the_first() {
+            super::super::super::cli_process::check_two_turns(
+                fashioncraft::assistant::Provider::AntigravityCli,
+                r#"echo '{"event":"init","conversation_id":"c1"}'
+    echo "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"structured_output\":$answer}}""#,
+                &mut |exe| Box::new(TwoTurns(exe)),
+            );
+        }
+    }
 }

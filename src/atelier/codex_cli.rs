@@ -187,4 +187,14 @@ fi
             "Two pieces"
         );
     }
+
+    #[test]
+    fn the_second_turn_remembers_the_first() {
+        super::super::cli_process::check_two_turns(
+            fashioncraft::assistant::Provider::CodexCli,
+            r#"while [ "$1" != "--output-last-message" ]; do shift || exit 2; done
+echo "$answer" > "$2""#,
+            &mut |exe| Box::new(StandIn(exe)),
+        );
+    }
 }

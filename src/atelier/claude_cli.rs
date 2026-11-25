@@ -253,4 +253,33 @@ echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structur
         let next = cli.run(&exe, &body).unwrap();
         assert_eq!(next["choices"][0]["message"]["content"], "Front and back");
     }
+
+    #[cfg(unix)]
+    mod two_turns {
+        use super::*;
+
+        struct TwoTurns(PathBuf);
+        impl Transport for TwoTurns {
+            fn post(
+                &mut self,
+                _: &str,
+                _: &[(&str, String)],
+                body: &Value,
+            ) -> Result<Value, String> {
+                Cli(&AtomicBool::new(false))
+                    .run(&self.0, body)
+                    .map_err(|e| e.to_string())
+            }
+        }
+
+        #[test]
+        fn the_second_turn_remembers_the_first() {
+            super::super::super::cli_process::check_two_turns(
+                fashioncraft::assistant::Provider::ClaudeCli,
+                r#"echo '{"type":"system","subtype":"init"}'
+    echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structured_output\":$answer}""#,
+                &mut |exe| Box::new(TwoTurns(exe)),
+            );
+        }
+    }
 }

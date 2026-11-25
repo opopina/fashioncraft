@@ -105,6 +105,45 @@ impl Atelier {
         Ok(())
     }
 
+    /// A drafted garment worn over the one on the avatar, which keeps its pieces and drape
+    /// (see [`fashioncraft::agent_build::wear_over`]): each try is checked as the edit would
+    /// start, the drape kept, against the body. One undo step.
+    pub(super) fn wear_over(
+        &mut self,
+        incoming: GarmentTemplate,
+        garment: &str,
+    ) -> Result<String, String> {
+        let body = std::sync::Arc::clone(&self.scene.collider.surface);
+        let axis = if body.vertices.is_empty() {
+            glam::DVec3::ZERO
+        } else {
+            body.vertices.iter().copied().sum::<glam::DVec3>() / body.vertices.len() as f64
+        };
+        let (draped, state) = (self.scene.garment.clone(), self.scene.state.clone());
+        let (build, _) = fashioncraft::agent_build::wear_over(
+            &self.project.template,
+            &incoming,
+            garment,
+            axis,
+            &mut |edit| {
+                let kept = edit.state_keeping_drape(&draped, &state);
+                fashioncraft::vbd::VbdSolver::new(
+                    std::sync::Arc::new(edit.garment.clone()),
+                    Some(&body),
+                    &kept,
+                )
+                .is_ok()
+            },
+        )?;
+        self.playing = false;
+        if !self.edit_sequence(build.commands, &build.names, build.history_name) {
+            return Err(self.status.clone());
+        }
+        self.authoring.selected = None;
+        self.authoring.selection.panels.clear();
+        Ok(build.done)
+    }
+
     /// The pose on show: the one being edited in the pose window, or the avatar's own.
     fn pose_on_show(&self) -> Pose {
         self.authoring

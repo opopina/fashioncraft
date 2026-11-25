@@ -282,14 +282,19 @@ pub fn tools() -> Vec<Tool> {
         ),
         tool(
             "draft_garment",
-            "Replace the garment with a base drafted from measurements, sewn and placed around \
-             the avatar: tshirt (kimono sleeves), shirt (set-in sleeves), dress (sleeveless \
-             A-line), skirt or trousers. With from_avatar (default) the measurements come from \
-             the avatar; measurements_cm overrides any of them and the reply lists them all. \
-             Unsaved work is replaced: save_project first if it matters.",
+            "Draft a garment from measurements, sewn and placed around the avatar: tshirt (kimono \
+             sleeves), shirt (set-in sleeves), dress (sleeveless A-line), skirt or trousers. \
+             mode add (the default) wears it over the garment already there, which stays as it \
+             is (a shirt with a skirt): it goes on an outer layer, a little out where needed to \
+             start clear, its pieces named after it. mode replace removes every piece first: \
+             only when the person asks for it instead of the current garment, after saying so \
+             (unsaved work is lost: save_project first if it matters). With from_avatar \
+             (default) the measurements come from the avatar; measurements_cm overrides any of \
+             them and the reply lists them all.",
             object(
                 json!({
                     "kind": {"type": "string", "enum": GARMENT_KINDS},
+                    "mode": {"type": "string", "enum": ["add", "replace"], "description": "add (default): over the garment there; replace: instead of it."},
                     "from_avatar": {"type": "boolean", "description": "Measure the avatar first (default true)."},
                     "measurements_cm": {
                         "type": "object",

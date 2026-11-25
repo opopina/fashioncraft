@@ -82,10 +82,20 @@ impl Atelier {
                         .and_then(Value::as_bool)
                         .unwrap_or(true);
                     let kind = args.get("kind").and_then(Value::as_str).unwrap_or("");
-                    self.agent_draft(kind, from_avatar, &overrides).map(|text| {
-                        self.agent_spread_board();
-                        ToolResult::text(text)
-                    })
+                    // Worn over what is there unless replacing is asked for.
+                    let add = args.get("mode").and_then(Value::as_str) != Some("replace")
+                        && !self.project.template.panels.is_empty();
+                    let clear_before = self.blocker().is_none();
+                    self.agent_draft(kind, from_avatar, &overrides, add)
+                        .and_then(|text| {
+                            if add {
+                                self.guard_change(clear_before, true)?;
+                            } else {
+                                self.agent_spread_board();
+                            }
+                            Ok(text)
+                        })
+                        .map(ToolResult::text)
                 }
                 "set_fabric" => self.agent_fabric(args),
                 "set_color" => self.agent_color(args),

@@ -169,6 +169,130 @@ pub fn compose(
     edit.ok_or_else(|| "Nothing to change".into())
 }
 
+/// How far out, in metres, an added garment's pieces are tried, nearest first (see
+/// [`wear_over`]).
+pub const WEAR_PUSHES_M: [f64; 7] = [0., 0.01, 0.02, 0.03, 0.045, 0.06, 0.08];
+
+/// A second garment worn over what is on the avatar (a shirt with a skirt): `incoming`, a draft
+/// arranged around the avatar, is added keeping that 3D arrangement (a paste would move it
+/// aside), on a simulation layer outside every piece there, its pieces named after the garment
+/// (`garment` "shirt": "shirt front"). Each new piece moves out from the avatar's vertical axis
+/// (through `axis`) by the least of [`WEAR_PUSHES_M`] for which `starts_clear` accepts the edit:
+/// the window asks whether it starts clear of the body and of the garment as draped now. With
+/// the distance used; an error when none is far enough.
+pub fn wear_over(
+    current: &GarmentTemplate,
+    incoming: &GarmentTemplate,
+    garment: &str,
+    axis: DVec3,
+    starts_clear: &mut dyn FnMut(&authoring::Edit) -> bool,
+) -> Result<(Build, f64), String> {
+    let ids: Vec<String> = incoming.panels.iter().map(|p| p.id.clone()).collect();
+    if ids.is_empty() {
+        return Err(format!("The {garment} has no pieces"));
+    }
+    let paste = Command::Paste {
+        clipboard: authoring::clipboard::PatternClipboard::capture(incoming, &ids)?,
+        center: DVec2::ZERO,
+    };
+    let before = current.panels.len();
+    let pasted = authoring::apply(current, paste.clone())?.template;
+    let new: Vec<String> = pasted.panels[before..]
+        .iter()
+        .map(|p| p.id.clone())
+        .collect();
+    // The paste moved the copy aside; it goes back where it was drafted.
+    let back =
+        incoming.panels[0].placement.translation - pasted.panels[before].placement.translation;
+    let drafted = incoming.compile()?;
+    let outward: Vec<DVec3> = incoming
+        .panels
+        .iter()
+        .map(|p| {
+            let centre = drafted
+                .panels
+                .iter()
+                .find(|r| r.id == p.id)
+                .filter(|r| !r.vertices.is_empty())
+                .map_or(axis, |r| {
+                    r.vertices
+                        .clone()
+                        .map(|v| drafted.initial_state.x[v])
+                        .sum::<DVec3>()
+                        / r.vertices.len() as f64
+                });
+            DVec3::new(centre.x - axis.x, 0., centre.z - axis.z).normalize_or_zero()
+        })
+        .collect();
+    let layer = current.panel_layers.values().max().map_or(1, |l| l + 1);
+    let word = garment.to_lowercase();
+    let names: Vec<(String, String)> = new
+        .iter()
+        .zip(&incoming.panels)
+        .map(|(id, p)| {
+            // "Tshirt front" becomes "t-shirt front", "Front" "t-shirt front".
+            let name = p.name.to_lowercase();
+            let compact = word.replace(['-', ' '], "");
+            let name = if name.contains(&word) {
+                name
+            } else if name.contains(&compact) {
+                name.replacen(&compact, &word, 1)
+            } else {
+                format!("{word} {name}")
+            };
+            (id.clone(), name)
+        })
+        .collect();
+    for push in WEAR_PUSHES_M {
+        let mut commands = vec![paste.clone()];
+        commands.extend(
+            new.iter()
+                .zip(&outward)
+                .map(|(id, out)| Command::PlaceGroup {
+                    panels: vec![id.clone()],
+                    pivot: DVec3::ZERO,
+                    translation: back + *out * push,
+                    rotation: DQuat::IDENTITY,
+                }),
+        );
+        commands.push(Command::SetLayer {
+            panels: new.clone(),
+            layer,
+        });
+        let edit = compose(current, &commands)?;
+        if starts_clear(&edit) {
+            let list: Vec<&str> = names.iter().map(|(_, n)| n.as_str()).collect();
+            let done = format!(
+                "Added the {garment} over the garment already there, on layer {layer} (outside \
+                 it: where they touch, the {garment} gives way){}: {}. The pieces there keep \
+                 their drape; simulate to drape the {garment} over them",
+                if push > 0. {
+                    format!(", {:.1} cm out so it starts clear of it", push * 100.)
+                } else {
+                    String::new()
+                },
+                list.join(", ")
+            );
+            return Ok((
+                Build {
+                    commands,
+                    names,
+                    done,
+                    history_name: "Add garment",
+                    lay: None,
+                },
+                push,
+            ));
+        }
+    }
+    Err(format!(
+        "The {garment} would start inside the garment already there or the body even {:.0} cm \
+         out from it. Take the other garment off first (save_project, then draft with mode \
+         replace), or simulation.reset to lay everything out flat and try again",
+        WEAR_PUSHES_M[WEAR_PUSHES_M.len() - 1] * 100.
+    ))
+}
+
 /// The template a build's edits make (its new pieces named), for tests and checks.
 pub fn applied(template: &GarmentTemplate, build: &Build) -> Result<GarmentTemplate, String> {
     let mut t = template.clone();

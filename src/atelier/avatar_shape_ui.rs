@@ -738,13 +738,15 @@ fn listed<const N: usize>(names: &[&str; N], values: &[f64; N]) -> String {
 
 impl Atelier {
     /// Drafts a garment for an agent, as the drafting windows' Create does: the window's
-    /// values, or the avatar's when `from_avatar`, with `overrides` (centimetres) on top.
-    /// Reports the measurements used.
+    /// values, or the avatar's when `from_avatar`, with `overrides` (centimetres) on top. With
+    /// `add` it is worn over the garment there ([`Self::wear_over`]); otherwise it replaces
+    /// it. Reports the measurements used.
     pub(super) fn agent_draft(
         &mut self,
         kind: &str,
         from_avatar: bool,
         overrides: &BTreeMap<String, f64>,
+        add: bool,
     ) -> Result<String, String> {
         use fashioncraft::garment::presets;
         let (template, used) = match kind {
@@ -907,6 +909,14 @@ impl Atelier {
             }
             other => return Err(format!("unknown garment kind '{other}'")),
         };
+        if add {
+            let word = match kind {
+                "tshirt" => "t-shirt",
+                other => other,
+            };
+            let done = self.wear_over(template, word)?;
+            return Ok(format!("Drafted a {word} (cm): {used}. {done}"));
+        }
         let mut project =
             FittingProject::basic(GarmentKind::Tshirt, 2, self.project.avatar_path.clone());
         project.template = template;

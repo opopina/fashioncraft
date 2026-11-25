@@ -61,6 +61,8 @@ pub(super) struct AssistantUi {
     thumbs: std::collections::HashMap<String, egui::TextureHandle>,
     /// Why the last attach or paste found nothing, shown under the chips.
     attach_note: Option<String>,
+    /// A text paste came since the paste key was last let go (see [`paste_asked`]).
+    text_pasted: bool,
     /// What this conversation has used so far (kept in memory only).
     usage: Totals,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
@@ -125,6 +127,7 @@ impl Default for AssistantUi {
             sent: Vec::new(),
             thumbs: Default::default(),
             attach_note: None,
+            text_pasted: false,
             usage: Totals::default(),
             log: None,
         }
@@ -329,10 +332,19 @@ impl Atelier {
         }
     }
 
-    /// Attach the clipboard's files or picture; false when it holds neither.
-    fn assistant_paste(&mut self) -> bool {
-        let Ok(mut clipboard) = arboard::Clipboard::new() else {
-            return false;
+    /// Attach the clipboard's files or picture; false when it holds neither. With `tell`, a
+    /// clipboard that cannot be read says why under the chips (not after a text paste, which
+    /// egui reads on its own).
+    fn assistant_paste(&mut self, tell: bool) -> bool {
+        let mut clipboard = match arboard::Clipboard::new() {
+            Ok(clipboard) => clipboard,
+            Err(e) => {
+                if tell {
+                    self.assistant.attach_note =
+                        Some(format!("The clipboard could not be read: {e}"));
+                }
+                return false;
+            }
         };
         if let Ok(files) = clipboard.get().file_list()
             && !files.is_empty()
@@ -340,17 +352,28 @@ impl Atelier {
             self.assistant_attach_paths(files);
             return true;
         }
-        if let Ok(image) = clipboard.get_image() {
-            match attachments::from_rgba(
-                "pasted.png",
-                image.width as u32,
-                image.height as u32,
-                image.bytes.into_owned(),
-            ) {
-                Ok(a) => self.assistant_attach(a),
-                Err(e) => self.assistant.attach_note = Some(e),
+        match clipboard.get_image() {
+            Ok(image) => {
+                match attachments::from_rgba(
+                    "pasted.png",
+                    image.width as u32,
+                    image.height as u32,
+                    image.bytes.into_owned(),
+                ) {
+                    Ok(a) => self.assistant_attach(a),
+                    Err(e) => self.assistant.attach_note = Some(e),
+                }
+                return true;
             }
-            return true;
+            // Text only (it pastes as text) or nothing.
+            Err(arboard::Error::ContentNotAvailable) => {}
+            Err(e) => {
+                if tell {
+                    self.assistant.attach_note = Some(format!(
+                        "The picture on the clipboard could not be read: {e}"
+                    ))
+                }
+            }
         }
         false
     }
@@ -364,8 +387,15 @@ impl Atelier {
             self.assistant_attach(attachments::from_path(file.path()));
         }
         let focused = ctx.memory(|m| m.has_focus(input_id));
-        let pasted = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
-        if focused && (paste_key || pasted) && self.assistant_paste() {
+        let asked = ctx.input(|i| {
+            paste_asked(
+                &i.events,
+                &mut self.assistant.text_pasted,
+                cfg!(target_os = "macos"),
+            )
+        });
+        let text_came = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
+        if focused && (paste_key || asked) && self.assistant_paste(!text_came) {
             ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Paste(_))));
         }
         for a in self.assistant.pending.iter().chain(&self.assistant.sent) {
@@ -1325,7 +1355,8 @@ impl Atelier {
                                 .small_button(tr("Paste"))
                                 .on_hover_text(tr("Attach the picture or files on the clipboard"))
                                 .clicked()
-                                && !self.assistant_paste()
+                                && !self.assistant_paste(true)
+                                && self.assistant.attach_note.is_none()
                             {
                                 self.assistant.attach_note =
                                     Some(tr("The clipboard holds no picture or file.").into());
@@ -1534,6 +1565,45 @@ impl Atelier {
     }
 }
 
+/// Whether this frame's input asks for a paste the Assistant should look at for pictures and
+/// files. A text paste does ([`egui::Event::Paste`]). On Linux and Windows egui-winit makes
+/// Ctrl+V (Shift+Insert on Windows, a Paste key) a text paste only when the clipboard holds
+/// text, and swallows the key press, so a clipboard with only a picture or files gives nothing
+/// but the key's release: that release asks too, unless a text paste came with its press
+/// (`text_pasted`). On macOS the AppKit key monitor tells instead ([`super::native_menu`]).
+fn paste_asked(events: &[egui::Event], text_pasted: &mut bool, mac: bool) -> bool {
+    let pasted = events.iter().any(|e| matches!(e, egui::Event::Paste(_)));
+    *text_pasted |= pasted;
+    if mac {
+        return pasted;
+    }
+    let paste_key = |key: egui::Key, modifiers: egui::Modifiers| {
+        (key == egui::Key::V && modifiers.command)
+            || key == egui::Key::Paste
+            || (cfg!(windows) && key == egui::Key::Insert && modifiers.shift)
+    };
+    let released: Vec<(egui::Key, egui::Modifiers)> = events
+        .iter()
+        .filter_map(|e| match e {
+            egui::Event::Key {
+                key,
+                pressed: false,
+                modifiers,
+                ..
+            } => Some((*key, *modifiers)),
+            _ => None,
+        })
+        .collect();
+    let asked = released.iter().any(|&(k, m)| paste_key(k, m));
+    // The key's release ends this paste either way, even with Ctrl let go first.
+    let ended = asked
+        || released
+            .iter()
+            .any(|&(k, _)| matches!(k, egui::Key::V | egui::Key::Insert));
+    let by_text = ended && std::mem::take(text_pasted);
+    pasted || (asked && !by_text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::tidy;
@@ -1551,6 +1621,63 @@ mod tests {
                 "{mark} has no glyph"
             );
         }
+    }
+
+    #[test]
+    fn ctrl_v_with_a_picture_or_files_is_seen_on_linux_and_windows() {
+        use eframe::egui::{Event, Key, Modifiers};
+        let release = |modifiers| Event::Key {
+            key: Key::V,
+            physical_key: Some(Key::V),
+            pressed: false,
+            repeat: false,
+            modifiers,
+        };
+        let text = || Event::Paste("a.png".into());
+        let mut seen = false;
+        // Only a picture on the clipboard: the press gives nothing, the release asks.
+        assert!(super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        // Text: the paste asks once, its release does not ask again (same frame or the next).
+        assert!(super::paste_asked(&[text()], &mut seen, false));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        assert!(super::paste_asked(
+            &[text(), release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        assert!(!seen);
+        // A V typed without Ctrl, or any key on macOS (its key monitor tells), asks nothing.
+        assert!(!super::paste_asked(
+            &[release(Modifiers::NONE)],
+            &mut seen,
+            false
+        ));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            true
+        ));
+        // Ctrl let go before V after a text paste: the next picture paste still asks.
+        let mut seen = false;
+        assert!(super::paste_asked(&[text()], &mut seen, false));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::NONE)],
+            &mut seen,
+            false
+        ));
+        assert!(super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
     }
 
     #[test]

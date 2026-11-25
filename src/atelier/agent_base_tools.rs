@@ -12,9 +12,6 @@ use glam::{DVec2, DVec3};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
-/// Marks the screenshots these tools ask for among the window's screenshots.
-struct BaseShot;
-
 /// A base tool that finishes over later frames.
 pub(super) enum BasePending {
     /// The avatar moves into a new pose while the cloth simulates along, until done.
@@ -27,13 +24,9 @@ pub(super) enum BasePending {
         name: String,
         pieces: Vec<String>,
     },
-    /// A picture of the 3D view once the camera has moved: frames waited, when it was asked
-    /// for, and the text that goes with it.
-    Shot {
-        frames: u32,
-        asked: Option<Instant>,
-        text: String,
-    },
+    /// A picture of the 3D view once the camera has moved: frames waited, and the text that
+    /// goes with it.
+    Shot { frames: u32, text: String },
 }
 
 fn cm(m: f64) -> f64 {
@@ -148,7 +141,6 @@ impl Atelier {
                         Ok(()) => {
                             return Err(Pending::Base(BasePending::Shot {
                                 frames: 0,
-                                asked: None,
                                 text: serde_json::to_string_pretty(&report).unwrap_or_default(),
                             }));
                         }
@@ -222,7 +214,6 @@ impl Atelier {
                     pending,
                     BasePending::Shot {
                         frames: 0,
-                        asked: Some(Instant::now()),
                         text: String::new(),
                     },
                 )
@@ -238,51 +229,15 @@ impl Atelier {
                     .unwrap_or_else(ToolResult::error),
                 )
             }
-            BasePending::Shot {
-                frames,
-                asked,
-                text,
-            } => {
-                let Some(when) = *asked else {
-                    // Let the view draw the new camera before taking it.
-                    *frames += 1;
-                    ctx.request_repaint();
-                    if *frames >= 3 {
-                        if ctx.input(|i| i.viewport().visible() == Some(false))
-                            || self.authoring.selection.garment_rect.is_none()
-                        {
-                            return Some(ToolResult::text(format!(
-                                "{text}\n(No picture: the 3D view is not on screen.)"
-                            )));
-                        }
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                            egui::UserData::new(BaseShot),
-                        ));
-                        *asked = Some(Instant::now());
-                    }
+            BasePending::Shot { frames, text } => {
+                // Let the view take the new camera first (a framing waits for a frame).
+                *frames += 1;
+                ctx.request_repaint();
+                if *frames < 3 {
                     return None;
-                };
-                let shot = ctx.input(|i| {
-                    i.events.iter().find_map(|event| match event {
-                        egui::Event::Screenshot {
-                            user_data, image, ..
-                        } if user_data
-                            .data
-                            .as_ref()
-                            .is_some_and(|d| d.downcast_ref::<BaseShot>().is_some()) =>
-                        {
-                            Some(image.clone())
-                        }
-                        _ => None,
-                    })
-                });
-                let Some(image) = shot else {
-                    return (when.elapsed() > Duration::from_secs(10))
-                        .then(|| ToolResult::text(format!("{text}\n(No picture came back.)")));
-                };
-                let mut result = self
-                    .screenshot_result(ctx, &image, false)
-                    .unwrap_or_else(ToolResult::error);
+                }
+                // Drawn for the purpose, so the window may be minimised or covered.
+                let mut result = self.view_picture(ctx).unwrap_or_else(ToolResult::error);
                 if !text.is_empty() {
                     result
                         .content
@@ -1064,7 +1019,6 @@ impl Atelier {
         if args.get("screenshot").and_then(Value::as_bool) == Some(true) {
             return Ok(Some(Pending::Base(BasePending::Shot {
                 frames: 0,
-                asked: None,
                 text: serde_json::to_string(&self.camera_json()).unwrap_or_default(),
             })));
         }

@@ -1925,7 +1925,9 @@ impl Viewport {
                 / 1e6,
         ))
     }
-    pub fn capture(&self, path: &std::path::Path) -> Result<(), String> {
+    /// The last drawn frame, RGBA rows top to bottom, and its size: the 3D view as
+    /// [`Self::draw_scene`] left it, whether or not the window shows it.
+    pub fn pixels(&self) -> Result<(Vec<u8>, [u32; 2]), String> {
         let row = (self.size[0] * 4).div_ceil(256) * 256;
         let d = &self.render_state.device;
         let buffer = d.create_buffer(&wgpu::BufferDescriptor {
@@ -1962,14 +1964,12 @@ impl Viewport {
             .chunks_exact(row as usize)
             .flat_map(|r| r[..(self.size[0] * 4) as usize].iter().copied())
             .collect();
-        image::save_buffer(
-            path,
-            &pixels,
-            self.size[0],
-            self.size[1],
-            image::ColorType::Rgba8,
-        )
-        .map_err(|e| e.to_string())
+        Ok((pixels, self.size))
+    }
+    pub fn capture(&self, path: &std::path::Path) -> Result<(), String> {
+        let (pixels, [width, height]) = self.pixels()?;
+        image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8)
+            .map_err(|e| e.to_string())
     }
 }
 fn read_buffer(device: &wgpu::Device, buffer: &wgpu::Buffer) -> Result<Vec<u8>, String> {

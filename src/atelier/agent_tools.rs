@@ -31,125 +31,125 @@ impl Atelier {
         if let Some(refusal) = self.refuse_while_blocked(name) {
             return Ok(ToolResult::error(refusal));
         }
-        let result =
-            match name {
-                "scene_summary" => Ok(ToolResult::json(&self.agent_scene_summary(ctx, args))),
-                "piece_detail" => agent_ops::piece_detail(
-                    &self.project.template,
-                    args.get("piece").and_then(Value::as_str).unwrap_or(""),
-                )
-                .map(|v| ToolResult::json(&v)),
-                "select" => self.agent_select(args).map(|v| ToolResult::json(&v)),
-                "command_list" => Ok(ToolResult::json(
-                    &self.command_list(
-                        args.get("query").and_then(Value::as_str).unwrap_or(""),
-                        args.get("include_interactive")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
-                    ),
-                )),
-                "command_run" => self.agent_command(ctx, args),
-                "create_piece"
-                | "move_points"
-                | "set_segment_length"
-                | "add_point"
-                | "add_dart"
-                | "add_pleats"
-                | "piece_edit"
-                | "sew"
-                | "seam_edit"
-                | "set_fabric_parameters" => self.agent_plan(name, args),
-                "place_piece" => self.agent_place_piece(args),
-                "open_attachment" => self.agent_open_attachment(ctx, args),
-                "set_avatar" => self.agent_avatar(args),
-                "grading" => self.agent_grading(args),
-                "render" => match self.agent_render(args) {
-                    Ok(pending) => return Err(pending),
-                    Err(e) => Err(e),
-                },
-                "draft_garment" => {
-                    let overrides: std::collections::BTreeMap<String, f64> = args
-                        .get("measurements_cm")
-                        .and_then(Value::as_object)
-                        .map(|m| {
-                            m.iter()
-                                .filter_map(|(k, v)| Some((k.clone(), v.as_f64()?)))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let from_avatar = args
-                        .get("from_avatar")
+        let result = match name {
+            "scene_summary" => Ok(ToolResult::json(&self.agent_scene_summary(ctx, args))),
+            "piece_detail" => agent_ops::piece_detail(
+                &self.project.template,
+                args.get("piece").and_then(Value::as_str).unwrap_or(""),
+            )
+            .map(|v| ToolResult::json(&v)),
+            "select" => self.agent_select(args).map(|v| ToolResult::json(&v)),
+            "command_list" => Ok(ToolResult::json(
+                &self.command_list(
+                    args.get("query").and_then(Value::as_str).unwrap_or(""),
+                    args.get("include_interactive")
                         .and_then(Value::as_bool)
-                        .unwrap_or(true);
-                    let kind = args.get("kind").and_then(Value::as_str).unwrap_or("");
-                    // Worn over what is there unless replacing is asked for.
-                    let add = args.get("mode").and_then(Value::as_str) != Some("replace")
-                        && !self.project.template.panels.is_empty();
-                    let clear_before = self.blocker().is_none();
-                    self.agent_draft(kind, from_avatar, &overrides, add)
-                        .and_then(|text| {
-                            if add {
-                                self.guard_change(clear_before, true)?;
-                            } else {
-                                self.agent_spread_board();
-                            }
-                            Ok(text)
-                        })
-                        .map(ToolResult::text)
+                        .unwrap_or(false),
+                ),
+            )),
+            "command_run" => self.agent_command(ctx, args),
+            "create_piece"
+            | "move_points"
+            | "set_segment_length"
+            | "add_point"
+            | "add_dart"
+            | "add_pleats"
+            | "piece_edit"
+            | "sew"
+            | "seam_edit"
+            | "set_fabric_parameters" => self.agent_plan(name, args),
+            "place_piece" => self.agent_place_piece(args),
+            "open_attachment" => self.agent_open_attachment(ctx, args),
+            "set_avatar" => self.agent_avatar(args),
+            "grading" => self.agent_grading(args),
+            "render" => match self.agent_render(args) {
+                Ok(pending) => return Err(pending),
+                Err(e) => Err(e),
+            },
+            "draft_garment" => {
+                let overrides: std::collections::BTreeMap<String, f64> = args
+                    .get("measurements_cm")
+                    .and_then(Value::as_object)
+                    .map(|m| {
+                        m.iter()
+                            .filter_map(|(k, v)| Some((k.clone(), v.as_f64()?)))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let from_avatar = args
+                    .get("from_avatar")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true);
+                let kind = args.get("kind").and_then(Value::as_str).unwrap_or("");
+                // Worn over what is there unless replacing is asked for.
+                let add = args.get("mode").and_then(Value::as_str) != Some("replace")
+                    && !self.project.template.panels.is_empty();
+                let clear_before = self.blocker().is_none();
+                self.agent_draft(kind, from_avatar, &overrides, add)
+                    .and_then(|text| {
+                        if add {
+                            self.guard_change(clear_before, true)?;
+                        } else {
+                            self.agent_spread_board();
+                        }
+                        Ok(text)
+                    })
+                    .map(ToolResult::text)
+            }
+            "set_fabric" => self.agent_fabric(args),
+            "set_color" => self.agent_color(args),
+            "simulate" => {
+                let seconds = args
+                    .get("seconds")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(5.)
+                    .clamp(0.5, 60.);
+                if !self.playing {
+                    self.invoke_command(commands::CommandId::ToggleSimulation, ctx);
                 }
-                "set_fabric" => self.agent_fabric(args),
-                "set_color" => self.agent_color(args),
-                "simulate" => {
-                    let seconds = args
-                        .get("seconds")
-                        .and_then(Value::as_f64)
-                        .unwrap_or(5.)
-                        .clamp(0.5, 60.);
-                    if !self.playing {
-                        self.invoke_command(commands::CommandId::ToggleSimulation, ctx);
-                    }
-                    if !self.playing {
-                        Err(match self.simulation_problem() {
-                            Some(problem) => format!(
-                                "The simulation did not start: {}. {}",
-                                problem["error"].as_str().unwrap_or(&self.status),
-                                problem["what_to_do"].as_str().unwrap_or("")
-                            ),
-                            None => format!("The simulation did not start: {}", self.status),
-                        })
-                    } else {
-                        return Err(Pending::Simulate {
-                            until: Instant::now() + Duration::from_secs_f64(seconds),
-                            seconds,
-                        });
-                    }
+                if !self.playing {
+                    Err(match self.simulation_problem() {
+                        Some(problem) => format!(
+                            "The simulation did not start: {}. {}",
+                            problem["error"].as_str().unwrap_or(&self.status),
+                            problem["what_to_do"].as_str().unwrap_or("")
+                        ),
+                        None => format!("The simulation did not start: {}", self.status),
+                    })
+                } else {
+                    return Err(Pending::Simulate {
+                        until: Instant::now() + Duration::from_secs_f64(seconds),
+                        seconds,
+                    });
                 }
-                "screenshot" => {
-                    let whole_window = args.get("area").and_then(Value::as_str) == Some("window");
-                    if ctx.input(|i| i.viewport().visible() == Some(false)) {
-                        Err(
-                            "The FashionCraft window is minimised or covered, so there is nothing \
-                         to capture: bring it to the front"
-                                .to_owned(),
-                        )
-                    } else if !whole_window && self.authoring.selection.garment_rect.is_none() {
-                        Err("The 3D view is not on screen: show it (Window › 3D only or Split view)"
-                        .to_owned())
-                    } else {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                            egui::UserData::new(AgentShot),
-                        ));
-                        return Err(Pending::Screenshot {
-                            asked: Instant::now(),
-                            whole_window,
-                        });
-                    }
+            }
+            "screenshot" => {
+                let whole_window = args.get("area").and_then(Value::as_str) == Some("window");
+                if !whole_window {
+                    // Drawn for the purpose: the window's state does not matter.
+                    self.view_picture(ctx)
+                } else if ctx.input(|i| i.viewport().visible() == Some(false)) {
+                    Err(
+                        "The FashionCraft window is minimised or covered, so the whole \
+                             window cannot be captured: bring it to the front, or take the 3D \
+                             view (area 3d), which works either way"
+                            .to_owned(),
+                    )
+                } else {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
+                        AgentShot,
+                    )));
+                    return Err(Pending::Screenshot {
+                        asked: Instant::now(),
+                        whole_window,
+                    });
                 }
-                "size_chart" => Ok(ToolResult::json(&self.size_chart())),
-                "save_project" => self.agent_save(ctx, args),
-                "export_garment" => self.agent_export(ctx, args),
-                other => return self.begin_base_tool(ctx, other, args),
-            };
+            }
+            "size_chart" => Ok(ToolResult::json(&self.size_chart())),
+            "save_project" => self.agent_save(ctx, args),
+            "export_garment" => self.agent_export(ctx, args),
+            other => return self.begin_base_tool(ctx, other, args),
+        };
         Ok(result.unwrap_or_else(ToolResult::error))
     }
 
@@ -266,6 +266,7 @@ impl Atelier {
         }
     }
 
+    /// A window screenshot as a tool result: the whole window, or the 3D view's part of it.
     pub(super) fn screenshot_result(
         &self,
         ctx: &egui::Context,
@@ -285,41 +286,38 @@ impl Atelier {
             image.region(&rect, Some(pixels_per_point))
         };
         let pixels: Vec<u8> = view.pixels.iter().flat_map(|p| p.to_array()).collect();
-        let mut picture =
-            image::RgbaImage::from_raw(view.size[0] as u32, view.size[1] as u32, pixels)
-                .ok_or("The screenshot has the wrong size")?;
-        // A model sees at most about this much; a smaller picture uploads faster.
-        let longest = picture.width().max(picture.height());
-        if longest > 1280 {
-            let scale = 1280. / longest as f32;
-            picture = image::imageops::resize(
-                &picture,
-                (picture.width() as f32 * scale) as u32,
-                (picture.height() as f32 * scale) as u32,
-                image::imageops::FilterType::Triangle,
-            );
+        let picture = image::RgbaImage::from_raw(view.size[0] as u32, view.size[1] as u32, pixels)
+            .ok_or("The screenshot has the wrong size")?;
+        picture_result(picture, whole_window)
+    }
+
+    /// The 3D view as a picture, drawn for the purpose into the 3D view's own texture: it needs
+    /// no frame on screen, so it works with the window minimised or covered, or with the 3D
+    /// view hidden by the layout. The view's size when it is on screen (else 1280 × 960), at
+    /// most 1280 pixels a side; without the marks egui paints over the view.
+    pub(super) fn view_picture(&mut self, ctx: &egui::Context) -> Result<ToolResult, String> {
+        let mut size = self
+            .authoring
+            .selection
+            .garment_rect
+            .map(|r| r.size() * ctx.pixels_per_point())
+            .filter(|s| s.x >= 64. && s.y >= 64.)
+            .unwrap_or(egui::vec2(1280., 960.));
+        let longest = size.x.max(size.y);
+        if longest > 1280. {
+            size *= 1280. / longest;
         }
-        let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(picture)
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .map_err(|e| e.to_string())?;
-        Ok(ToolResult {
-            content: vec![
-                Content::Image {
-                    data: fashioncraft::agent::base64(&png),
-                    mime_type: "image/png".into(),
-                },
-                Content::Text {
-                    text: if whole_window {
-                        "The whole window now."
-                    } else {
-                        "The 3D view now."
-                    }
-                    .into(),
-                },
-            ],
-            is_error: false,
-        })
+        // A camera move that waits for the view's shape (framing the garment) is made now.
+        self.camera
+            .apply_pending_frame(egui::Rect::from_min_size(egui::Pos2::ZERO, size));
+        let (_, live) = self.draw_3d(ctx, size);
+        if let Some(live) = live {
+            self.scene.state = live;
+        }
+        let (pixels, [width, height]) = self.viewport.pixels()?;
+        let picture = image::RgbaImage::from_raw(width, height, pixels)
+            .ok_or("The 3D view's picture has the wrong size")?;
+        picture_result(picture, false)
     }
 
     /// The drape as it stands: seam gaps mean something once the cloth has left its layout.
@@ -1025,4 +1023,40 @@ fn usage_text(usage: commands::AgentUse) -> &'static str {
         U::Dialog => "opens a file dialog",
         U::Web => "opens a web page",
     }
+}
+
+/// A picture for the model, at most 1280 pixels a side (about what a model sees; a smaller one
+/// uploads faster), as PNG with a line saying what it shows.
+fn picture_result(mut picture: image::RgbaImage, whole_window: bool) -> Result<ToolResult, String> {
+    let longest = picture.width().max(picture.height());
+    if longest > 1280 {
+        let scale = 1280. / longest as f32;
+        picture = image::imageops::resize(
+            &picture,
+            (picture.width() as f32 * scale) as u32,
+            (picture.height() as f32 * scale) as u32,
+            image::imageops::FilterType::Triangle,
+        );
+    }
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(picture)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(ToolResult {
+        content: vec![
+            Content::Image {
+                data: fashioncraft::agent::base64(&png),
+                mime_type: "image/png".into(),
+            },
+            Content::Text {
+                text: if whole_window {
+                    "The whole window now."
+                } else {
+                    "The 3D view now."
+                }
+                .into(),
+            },
+        ],
+        is_error: false,
+    })
 }

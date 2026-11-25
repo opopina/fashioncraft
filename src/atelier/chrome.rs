@@ -583,160 +583,8 @@ impl Atelier {
         let size = rect.size() * ctx.pixels_per_point();
         // The photoreal render takes its scene from this frame when it needs one.
         self.render_before_draw();
-        // The animation timeline shows its take and posed avatar in place of the live drape,
-        // for drawing only.
-        let animated_avatar = self.animation_avatar();
-        let live_state = self
-            .animation_frame_state()
-            .map(|shown| std::mem::replace(&mut self.scene.state, shown));
-        let mut optics =
-            fashioncraft::garment::appearance::bind(&self.project.template, &self.scene.garment);
-        // A fabric without a look of its own is drawn as soft off-white cloth, lit like any
-        // other fabric, instead of the flat unlit grey kept for diagnostic colours.
-        for look in optics.iter_mut().filter(|look| look.is_none()) {
-            *look = Some(fashioncraft::garment::appearance::FabricAppearance {
-                color_srgb: [0xEE, 0xEB, 0xE5],
-                roughness: 0.85,
-                ..Default::default()
-            });
-        }
-        self.prefs.garment_display.style.apply(&mut optics);
-        let (visible_faces, face_colors) = self.display_buffers();
-        let flipped_faces = self.flipped_faces();
-        // Trims of the pieces on show, lying on their front faces.
-        let trims = if self.prefs.garment_display.garment && self.prefs.garment_display.trims {
-            let zippers = fashioncraft::garment::trims::zipper_trims(&self.project.template);
-            let shown: Vec<_> = self
-                .project
-                .template
-                .trims
-                .iter()
-                .chain(&zippers)
-                .filter(|t| self.panel_shown(&t.panel_id))
-                .cloned()
-                .collect();
-            let front = self.face_positions(true);
-            let x = front.as_ref().unwrap_or(&self.scene.state.x);
-            let (frayed, others): (Vec<_>, Vec<_>) = shown.into_iter().partition(|t| {
-                matches!(t.kind, fashioncraft::garment::trims::TrimKind::Fray { .. })
-            });
-            let mut triangles =
-                fashioncraft::garment::trims::trim_triangles(&others, &self.scene.garment, x);
-            // Loose threads in the colour of their own piece's fabric.
-            for trim in &frayed {
-                let color = self
-                    .scene
-                    .garment
-                    .panels
-                    .iter()
-                    .find(|p| p.id == trim.panel_id)
-                    .and_then(|p| optics.get(p.material))
-                    .and_then(|look| look.as_ref())
-                    .map_or(fashioncraft::garment::trims::FRAY_COLOR, |look| {
-                        look.linear_color()
-                    });
-                triangles.extend(fashioncraft::garment::trims::fray_triangles(
-                    trim,
-                    &self.scene.garment,
-                    x,
-                    color,
-                ));
-            }
-            triangles
-        } else {
-            vec![]
-        };
-        let graphic_draws =
-            if self.prefs.garment_display.garment && self.prefs.garment_display.graphics {
-                self.graphic_draws(&ctx)
-            } else {
-                vec![]
-            };
-        let fabric_images = self.fabric_images(&ctx, &optics);
-        let fabric_images: Vec<_> = fabric_images
-            .iter()
-            .map(|maps| maps.each_ref().map(Option::as_deref))
-            .collect();
-        let graphics: Vec<fashioncraft::render::GraphicDraw> = graphic_draws
-            .iter()
-            .map(
-                |(image, triangles, opacity)| fashioncraft::render::GraphicDraw {
-                    image,
-                    triangles,
-                    opacity: *opacity,
-                },
-            )
-            .collect();
+        let (texture, live_state) = self.draw_3d(&ctx, size);
         let display = self.prefs.garment_display;
-        let collider = self.scene.collider.clone();
-        let shown_avatar = (display.avatar && !self.project.avatar_removed)
-            .then_some(animated_avatar.as_deref().unwrap_or(&collider.surface));
-        // The avatar's skin and hair, moved with it as it is posed.
-        let look_shown = display.avatar_look && !display.schematic;
-        if let Some(body) = shown_avatar.filter(|_| look_shown) {
-            self.authoring
-                .avatar_look
-                .prepare(&self.project.avatar_path, body);
-        }
-        let mut look_parts = Vec::new();
-        let avatar_look = shown_avatar
-            .filter(|_| look_shown)
-            .and_then(|_| self.authoring.avatar_look.view(&mut look_parts));
-        // Seam lines would float in the air when their pieces are hidden or isolated away.
-        let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
-        let texture_offsets = self.texture_offsets_per_face();
-        // High quality: twice the pixels each way, averaged down when shown.
-        let supersample = if display.high_quality { 2. } else { 1. };
-        let texture = self.viewport.draw_scene(
-            [(size.x * supersample) as u32, (size.y * supersample) as u32],
-            &self.camera,
-            DrawModel {
-                marked_faces: if self.clean_view {
-                    None
-                } else {
-                    Some(&self.issue.faces)
-                },
-                mesh: &self.scene.garment.mesh,
-                state: &self.scene.state,
-                materials: &self.scene.garment.materials,
-                optics: Some(&optics),
-                sphere: None,
-                avatar: shown_avatar,
-                // The contact and pressure maps ask the collider which cloth touches the avatar.
-                collider:
-                    ((display.contacts || (self.heat && display.pressure)) && !self.clean_view)
-                        .then_some(
-                            self.scene.collider.as_ref() as &dyn fashioncraft::contact::Collider
-                        ),
-                seams: if self.seams && !self.clean_view && seams_shown {
-                    &self.scene.garment.seams
-                } else {
-                    &[]
-                },
-                trims: &trims,
-                graphics: &graphics,
-                fabric_images: &fabric_images,
-                avatar_look,
-                display: fashioncraft::render::DisplayOptions {
-                    visible_faces: visible_faces.as_deref(),
-                    face_colors: face_colors.as_deref(),
-                    flipped_faces: flipped_faces.as_deref(),
-                    avatar_color: super::garment_display::srgb_to_linear(display.avatar_color),
-                    strain_max: display.strain_max_percent / 100.,
-                    strain_gradient: display.strain_gradient,
-                    strain_mode: self.strain_mode(),
-                    schematic: self.schematic_options(),
-                    // The solver keeps cloth one contact radius off the avatar; 2 mm more covers
-                    // cloth resting just above that shell.
-                    contact_tolerance_m: self.settings.contact.radius + 0.002,
-                    translucent: display.style == super::garment_display::GarmentStyle::Translucent,
-                    texture_offsets: texture_offsets.as_deref(),
-                },
-            },
-            self.wire && !self.clean_view,
-            self.heat && !self.clean_view,
-            display.contacts && !self.clean_view,
-        );
         ui.painter().image(
             texture,
             rect,
@@ -951,6 +799,174 @@ fn final_diagnostics_controls(ui: &mut egui::Ui, view: FinalDiagnosticsView<'_>)
         );
     }
     requested
+}
+
+impl Atelier {
+    /// Draws the 3D scene as the 3D view shows it into the viewport's texture, `size` pixels
+    /// (twice that each way in high quality): the animation's frame when the timeline shows
+    /// one, without the overlays egui paints on top. With the live drape to put back once the
+    /// overlays are drawn, when an animation frame took its place.
+    pub(super) fn draw_3d(
+        &mut self,
+        ctx: &egui::Context,
+        size: egui::Vec2,
+    ) -> (egui::TextureId, Option<fashioncraft::model::State>) {
+        // The animation timeline shows its take and posed avatar in place of the live drape,
+        // for drawing only.
+        let animated_avatar = self.animation_avatar();
+        let live_state = self
+            .animation_frame_state()
+            .map(|shown| std::mem::replace(&mut self.scene.state, shown));
+        let mut optics =
+            fashioncraft::garment::appearance::bind(&self.project.template, &self.scene.garment);
+        // A fabric without a look of its own is drawn as soft off-white cloth, lit like any
+        // other fabric, instead of the flat unlit grey kept for diagnostic colours.
+        for look in optics.iter_mut().filter(|look| look.is_none()) {
+            *look = Some(fashioncraft::garment::appearance::FabricAppearance {
+                color_srgb: [0xEE, 0xEB, 0xE5],
+                roughness: 0.85,
+                ..Default::default()
+            });
+        }
+        self.prefs.garment_display.style.apply(&mut optics);
+        let (visible_faces, face_colors) = self.display_buffers();
+        let flipped_faces = self.flipped_faces();
+        // Trims of the pieces on show, lying on their front faces.
+        let trims = if self.prefs.garment_display.garment && self.prefs.garment_display.trims {
+            let zippers = fashioncraft::garment::trims::zipper_trims(&self.project.template);
+            let shown: Vec<_> = self
+                .project
+                .template
+                .trims
+                .iter()
+                .chain(&zippers)
+                .filter(|t| self.panel_shown(&t.panel_id))
+                .cloned()
+                .collect();
+            let front = self.face_positions(true);
+            let x = front.as_ref().unwrap_or(&self.scene.state.x);
+            let (frayed, others): (Vec<_>, Vec<_>) = shown.into_iter().partition(|t| {
+                matches!(t.kind, fashioncraft::garment::trims::TrimKind::Fray { .. })
+            });
+            let mut triangles =
+                fashioncraft::garment::trims::trim_triangles(&others, &self.scene.garment, x);
+            // Loose threads in the colour of their own piece's fabric.
+            for trim in &frayed {
+                let color = self
+                    .scene
+                    .garment
+                    .panels
+                    .iter()
+                    .find(|p| p.id == trim.panel_id)
+                    .and_then(|p| optics.get(p.material))
+                    .and_then(|look| look.as_ref())
+                    .map_or(fashioncraft::garment::trims::FRAY_COLOR, |look| {
+                        look.linear_color()
+                    });
+                triangles.extend(fashioncraft::garment::trims::fray_triangles(
+                    trim,
+                    &self.scene.garment,
+                    x,
+                    color,
+                ));
+            }
+            triangles
+        } else {
+            vec![]
+        };
+        let graphic_draws =
+            if self.prefs.garment_display.garment && self.prefs.garment_display.graphics {
+                self.graphic_draws(ctx)
+            } else {
+                vec![]
+            };
+        let fabric_images = self.fabric_images(ctx, &optics);
+        let fabric_images: Vec<_> = fabric_images
+            .iter()
+            .map(|maps| maps.each_ref().map(Option::as_deref))
+            .collect();
+        let graphics: Vec<fashioncraft::render::GraphicDraw> = graphic_draws
+            .iter()
+            .map(
+                |(image, triangles, opacity)| fashioncraft::render::GraphicDraw {
+                    image,
+                    triangles,
+                    opacity: *opacity,
+                },
+            )
+            .collect();
+        let display = self.prefs.garment_display;
+        let collider = self.scene.collider.clone();
+        let shown_avatar = (display.avatar && !self.project.avatar_removed)
+            .then_some(animated_avatar.as_deref().unwrap_or(&collider.surface));
+        // The avatar's skin and hair, moved with it as it is posed.
+        let look_shown = display.avatar_look && !display.schematic;
+        if let Some(body) = shown_avatar.filter(|_| look_shown) {
+            self.authoring
+                .avatar_look
+                .prepare(&self.project.avatar_path, body);
+        }
+        let mut look_parts = Vec::new();
+        let avatar_look = shown_avatar
+            .filter(|_| look_shown)
+            .and_then(|_| self.authoring.avatar_look.view(&mut look_parts));
+        // Seam lines would float in the air when their pieces are hidden or isolated away.
+        let seams_shown = display.garment && self.authoring.view3d.isolated.is_none();
+        let texture_offsets = self.texture_offsets_per_face();
+        // High quality: twice the pixels each way, averaged down when shown.
+        let supersample = if display.high_quality { 2. } else { 1. };
+        let texture = self.viewport.draw_scene(
+            [(size.x * supersample) as u32, (size.y * supersample) as u32],
+            &self.camera,
+            DrawModel {
+                marked_faces: if self.clean_view {
+                    None
+                } else {
+                    Some(&self.issue.faces)
+                },
+                mesh: &self.scene.garment.mesh,
+                state: &self.scene.state,
+                materials: &self.scene.garment.materials,
+                optics: Some(&optics),
+                sphere: None,
+                avatar: shown_avatar,
+                // The contact and pressure maps ask the collider which cloth touches the avatar.
+                collider:
+                    ((display.contacts || (self.heat && display.pressure)) && !self.clean_view)
+                        .then_some(
+                            self.scene.collider.as_ref() as &dyn fashioncraft::contact::Collider
+                        ),
+                seams: if self.seams && !self.clean_view && seams_shown {
+                    &self.scene.garment.seams
+                } else {
+                    &[]
+                },
+                trims: &trims,
+                graphics: &graphics,
+                fabric_images: &fabric_images,
+                avatar_look,
+                display: fashioncraft::render::DisplayOptions {
+                    visible_faces: visible_faces.as_deref(),
+                    face_colors: face_colors.as_deref(),
+                    flipped_faces: flipped_faces.as_deref(),
+                    avatar_color: super::garment_display::srgb_to_linear(display.avatar_color),
+                    strain_max: display.strain_max_percent / 100.,
+                    strain_gradient: display.strain_gradient,
+                    strain_mode: self.strain_mode(),
+                    schematic: self.schematic_options(),
+                    // The solver keeps cloth one contact radius off the avatar; 2 mm more covers
+                    // cloth resting just above that shell.
+                    contact_tolerance_m: self.settings.contact.radius + 0.002,
+                    translucent: display.style == super::garment_display::GarmentStyle::Translucent,
+                    texture_offsets: texture_offsets.as_deref(),
+                },
+            },
+            self.wire && !self.clean_view,
+            self.heat && !self.clean_view,
+            display.contacts && !self.clean_view,
+        );
+        (texture, live_state)
+    }
 }
 
 #[cfg(test)]

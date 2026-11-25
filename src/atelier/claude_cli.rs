@@ -74,7 +74,7 @@ fn executable() -> PathBuf {
 }
 
 fn input(body: &Value) -> io::Result<File> {
-    let mut history = body.clone();
+    let mut history = super::cli_process::history(body);
     let mut images = Vec::new();
     for msg in history["messages"].as_array_mut().into_iter().flatten() {
         for part in msg["content"].as_array_mut().into_iter().flatten() {
@@ -166,6 +166,9 @@ impl Cli<'_> {
             .arg(cli_process::schema().to_string());
         if let Some(model) = body["model"].as_str().filter(|s| !s.is_empty()) {
             cmd.arg("--model").arg(model);
+        }
+        if let Some(effort) = cli_process::effort(body) {
+            cmd.arg("--effort").arg(effort);
         }
         let mut child = cmd.stdin(input(body)?).stdout(output.try_clone()?).stderr(errors.try_clone()?).spawn()
             .map_err(|e| io::Error::other(format!("Could not start Claude Code: {e}. Set FASHIONCRAFT_CLAUDE to the Claude Code executable.")))?;
@@ -276,6 +279,7 @@ echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structur
         fn the_second_turn_remembers_the_first() {
             super::super::super::cli_process::check_two_turns(
                 fashioncraft::assistant::Provider::ClaudeCli,
+                Some("--effort\nlow\n"),
                 r#"echo '{"type":"system","subtype":"init"}'
     echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structured_output\":$answer}""#,
                 &mut |exe| Box::new(TwoTurns(exe)),

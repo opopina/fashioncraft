@@ -9,6 +9,24 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// The reasoning effort FashionCraft asks of a small request (`reasoning_effort` in the body),
+/// for the CLIs that take one. Low, medium or high only: anything else is not passed on.
+pub(super) fn effort(body: &Value) -> Option<&str> {
+    body["reasoning_effort"]
+        .as_str()
+        .filter(|e| ["low", "medium", "high"].contains(e))
+}
+
+/// The conversation as a CLI's prompt carries it: the request without FashionCraft's hints to
+/// the CLI itself, which go on its command line.
+pub(super) fn history(body: &Value) -> Value {
+    let mut history = body.clone();
+    if let Some(fields) = history.as_object_mut() {
+        fields.remove("reasoning_effort");
+    }
+    history
+}
+
 pub(super) fn schema() -> Value {
     json!({"type":"object","properties":{
             "text":{"type":"string"},"tool":{"type":"string"},"arguments":{"type":"string"}
@@ -361,6 +379,7 @@ pub(super) fn json_errors(output: &mut File) -> Option<String> {
 #[cfg(all(test, unix))]
 pub(super) fn check_two_turns(
     provider: fashioncraft::assistant::Provider,
+    effort_option: Option<&str>,
     cli_output: &str,
     transport: &mut dyn FnMut(PathBuf) -> Box<dyn fashioncraft::assistant::Transport>,
 ) {
@@ -375,6 +394,7 @@ pub(super) fn check_two_turns(
 d=$(dirname "$0")
 n=$(ls "$d" | grep -c '^prompt-')
 cat > "$d/prompt-$n.txt"
+printf '%s\n' "$@" > "$d/args-$n.txt"
 if [ "$n" -ge {rounds} ]; then
   answer='{{"text":"Done: the shirt is red.","tool":"","arguments":"{{}}"}}'
 else
@@ -405,6 +425,21 @@ fi
                 )
                 .unwrap();
         }
+        // A small request: low effort for the first steps, on the command line, never in
+        // the prompt.
+        let args =
+            |n: usize| std::fs::read_to_string(dir.path().join(format!("args-{n}.txt"))).unwrap();
+        if let Some(option) = effort_option {
+            assert!(args(0).contains(option), "{provider:?}: {}", args(0));
+            if rounds > fashioncraft::assistant::LIGHT_ROUNDS {
+                assert!(!args(rounds).contains(option));
+            }
+        }
+        assert!(
+            !std::fs::read_to_string(dir.path().join("prompt-0.txt"))
+                .unwrap()
+                .contains("reasoning_effort")
+        );
         // Turn 1 took `rounds` tool calls and a reply; the last prompt is turn 2's.
         let prompts = std::fs::read_dir(dir.path())
             .unwrap()

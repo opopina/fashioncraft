@@ -34,7 +34,7 @@ fn executable() -> PathBuf {
 }
 
 fn input(dir: &Path, body: &Value) -> io::Result<(File, Vec<String>)> {
-    let mut history = body.clone();
+    let mut history = super::cli_process::history(body);
     let mut image_refs = Vec::new();
     for msg in history["messages"].as_array_mut().into_iter().flatten() {
         for part in msg["content"].as_array_mut().into_iter().flatten() {
@@ -294,6 +294,7 @@ fi
         fn the_second_turn_remembers_the_first() {
             super::super::super::cli_process::check_two_turns(
                 fashioncraft::assistant::Provider::GeminiCli,
+                None,
                 r#"esc=$(printf '%s' "$answer" | sed 's/\\/\\\\/g; s/"/\\"/g')
     printf '{"response":"%s"}\n' "$esc""#,
                 &mut |exe| Box::new(TwoTurns(exe)),

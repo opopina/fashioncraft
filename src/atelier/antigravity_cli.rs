@@ -37,7 +37,7 @@ fn executable() -> PathBuf {
 }
 
 fn input(dir: &Path, body: &Value) -> io::Result<File> {
-    let mut history = body.clone();
+    let mut history = super::cli_process::history(body);
     let mut screenshots = 0usize;
     for msg in history["messages"].as_array_mut().into_iter().flatten() {
         for part in msg["content"].as_array_mut().into_iter().flatten() {
@@ -149,6 +149,9 @@ impl Cli<'_> {
             .arg(&schema);
         if let Some(model) = body["model"].as_str().filter(|s| !s.is_empty()) {
             cmd.arg("--model").arg(model);
+        }
+        if let Some(effort) = cli_process::effort(body) {
+            cmd.arg("--effort").arg(effort);
         }
         let mut child = cmd
             .stdin(input(dir.path(), body)?)
@@ -303,6 +306,7 @@ echo "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"structured_outp
         fn the_second_turn_remembers_the_first() {
             super::super::super::cli_process::check_two_turns(
                 fashioncraft::assistant::Provider::AntigravityCli,
+                Some("--effort\nlow\n"),
                 r#"echo '{"event":"init","conversation_id":"c1"}'
     echo "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"structured_output\":$answer}}""#,
                 &mut |exe| Box::new(TwoTurns(exe)),

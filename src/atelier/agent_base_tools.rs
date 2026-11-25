@@ -308,6 +308,20 @@ impl Atelier {
         }
     }
 
+    /// A note for the person's next message to the Assistant about the scene the model last
+    /// saw (see [`agent_base::scene_note`]).
+    pub(super) fn agent_scene_note(&mut self, ctx: &egui::Context) -> Option<String> {
+        let id = egui::Id::new("agent.last_scene_summary");
+        let epoch = fashioncraft::assistant::conversation_epoch();
+        let last: (u64, Value) = ctx.data(|d| d.get_temp(id))?;
+        let now = self.scene_summary();
+        let (note, known) = agent_base::scene_note(&last, epoch, &now)?;
+        if known {
+            ctx.data_mut(|d| d.insert_temp(id, (epoch, now)));
+        }
+        Some(note)
+    }
+
     /// Pieces lying on top of each other on the board move apart (a drafted garment's front and
     /// back are drawn in the same place): one undo step, board only.
     pub(super) fn agent_spread_board(&mut self) {

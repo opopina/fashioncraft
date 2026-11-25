@@ -491,6 +491,7 @@ impl Atelier {
                     self.assistant.entries.push(Entry::Paused(steps))
                 }
                 Update::Event(Event::Usage(usage)) => self.assistant.usage.add(&usage),
+                Update::Event(Event::Answered { .. }) => {}
                 Update::Event(Event::ToolStarted { name, arguments }) => {
                     self.assistant.calls.push(fashioncraft::agent_eval::Call {
                         name: name.clone(),
@@ -615,6 +616,8 @@ impl Atelier {
                 *conversation = Conversation::new(settings.provider);
             }
         }
+        // What the model knows of the scene, so a small request needs no scene_summary first.
+        let note = self.agent_scene_note(ctx);
         let attached = std::mem::take(&mut self.assistant.pending);
         if !attached.is_empty() {
             self.assistant.entries.push(Entry::Attached(
@@ -626,7 +629,11 @@ impl Atelier {
         self.assistant_log(json!({
             "you": text,
             "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+            "scene_note": note,
         }));
+        if let Some(note) = &note {
+            text = fashioncraft::assistant::with_note(&text, note);
+        }
         self.assistant.input.clear();
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
@@ -881,6 +888,9 @@ impl Atelier {
             Update::Event(Event::Text(t)) => json!({"assistant": t}),
             Update::Event(Event::Notice(t)) => json!({"notice": t}),
             Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
+            Update::Event(Event::Answered { seconds }) => {
+                json!({"model_seconds": (seconds * 10.).round() / 10.})
+            }
             Update::Event(Event::Usage(u)) => json!({"usage": {
                 "input": u.input, "cached": u.cached, "output": u.output, "cost_usd": u.cost_usd,
             }}),

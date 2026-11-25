@@ -11,7 +11,20 @@ use serde_json::{Value, json};
 pub const ANTHROPIC_VERSION: &str = "2026-10-21";
 /// The beta that lets a declined request be retried on Anthropic's recommended fallback model.
 pub const ANTHROPIC_FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
-/// A turn stops after this many rounds of tool calls; the person can say "continue".
+/// A message of the person's up to this many characters, with nothing attached, is a small
+/// request (make it red, rename the front): the CLIs that can are asked for low reasoning effort
+/// for its first [`LIGHT_ROUNDS`] steps, then for their usual effort if the job turns out bigger.
+pub const LIGHT_REQUEST_CHARS: usize = 80;
+pub const LIGHT_ROUNDS: usize = 3;
+/// Where a note of FashionCraft's starts after the person's words (see [`with_note`]).
+const NOTE_START: &str = "\n\n(FashionCraft: ";
+
+/// The person's message with a note of FashionCraft's for the model after it, such as what
+/// changed in the scene since the model last looked.
+pub fn with_note(text: &str, note: &str) -> String {
+    format!("{text}{NOTE_START}{note})")
+}
+
 /// A safety stop against a runaway loop: this many rounds of tools in one turn. A turn has no
 /// other limit; [`Settings::pause_every`] pauses it for a review when the person wants that.
 pub const SAFETY_ROUNDS: usize = 400;
@@ -38,9 +51,17 @@ the sewing line (drafting only). Notches mark matching points. Darts and pleats 
 - Lengths are in cm; on the 2D board x goes right and y down. Fabric values are model parameters, \
 not lab measurements of a real cloth.
 
+Small requests
+- A small change (a colour, a fabric, a name, one setting, a view) is its one tool call and a \
+one-line reply: no planning, no guide, no screenshot, no simulating or check_garment unless the \
+change alters the drape (a colour never does). set_color and set_fabric without pieces change \
+the whole garment, so they need no scene_summary first.
+
 How to work
 1. Look: scene_summary (pieces, segments and lengths, seams, fabrics, avatar, selection, \
-warnings); piece_detail before editing a piece.
+warnings); piece_detail before editing a piece. When the person's message ends with a note from \
+FashionCraft that the scene is unchanged since your last scene_summary, or with what changed, \
+you already know the scene: do not call it again.
 2. Plan the steps. Ask only when something essential is missing; otherwise choose sensibly and \
 say what you chose.
 3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
@@ -280,6 +301,9 @@ pub enum Event {
     Paused { steps: usize },
     /// What one request used.
     Usage(Usage),
+    /// How long the provider took to answer one request, in seconds (the model's thinking
+    /// and writing, and for a CLI its start).
+    Answered { seconds: f64 },
 }
 
 /// What one request used, as the provider reported it.
@@ -470,6 +494,9 @@ impl Conversation {
             return Err(missing);
         }
         self.push_user(text, attachments);
+        let own_words = text.split(NOTE_START).next().unwrap_or(text);
+        let light =
+            own_words.trim().chars().count() <= LIGHT_REQUEST_CHARS && attachments.is_empty();
         let all = tools();
         let known: Vec<&str> = all
             .iter()
@@ -492,10 +519,17 @@ impl Conversation {
                 )));
                 return Ok(());
             }
+            let asked = std::time::Instant::now();
             let calls = match self.provider {
                 Provider::Anthropic => self.anthropic_step(settings, transport, events)?,
-                _ => self.openai_step(settings, transport, events)?,
+                _ => {
+                    let low = light && rounds < LIGHT_ROUNDS;
+                    self.openai_step(settings, transport, events, low)?
+                }
             };
+            events(Event::Answered {
+                seconds: asked.elapsed().as_secs_f64(),
+            });
             if calls.is_empty() {
                 return Ok(());
             }
@@ -695,13 +729,21 @@ impl Conversation {
             .push(json!({"role": "user", "content": blocks}));
     }
 
+    /// One request in the chat-completions form. `low_effort` asks a CLI for low reasoning
+    /// effort (`reasoning_effort` in the body, which each CLI turns into its own option and
+    /// leaves out of the prompt); servers on the network never get it, since models without
+    /// reasoning refuse the field.
     fn openai_step(
         &mut self,
         settings: &Settings,
         transport: &mut dyn Transport,
         events: &mut dyn FnMut(Event),
+        low_effort: bool,
     ) -> Result<Vec<Call>, String> {
-        let body = openai_request(settings, &self.messages);
+        let mut body = openai_request(settings, &self.messages);
+        if low_effort && self.provider.is_cli() {
+            body["reasoning_effort"] = json!("low");
+        }
         let mut headers = Vec::new();
         if !settings.api_key.trim().is_empty() {
             headers.push((
@@ -1204,7 +1246,12 @@ mod tests {
                     ToolResult::text(format!("did {name}"))
                 }
             },
-            &mut |e| events.push(e),
+            // How long each answer took is checked on its own.
+            &mut |e| {
+                if !matches!(e, Event::Answered { .. }) {
+                    events.push(e)
+                }
+            },
             &|| false,
         );
         (result, events, ran)
@@ -1301,6 +1348,49 @@ mod tests {
                     assert_eq!(last.matches("\"signature\"").count(), rounds);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn small_requests_ask_a_cli_for_low_effort_at_first_and_every_answer_is_timed() {
+        let noted = with_note("Make it red", &"the scene changed: ".repeat(200));
+        let long = "Make a dress like the one in the photo, fitted at the waist. ".repeat(3);
+        for (provider, text, low) in [
+            (Provider::CodexCli, "Make the shirt red", LIGHT_ROUNDS),
+            (Provider::ClaudeCli, noted.as_str(), LIGHT_ROUNDS),
+            (Provider::CodexCli, long.as_str(), 0),
+            (Provider::OpenAi, "Make the shirt red", 0),
+        ] {
+            let mut transport = Canned::new(job(provider, 5, "Done."));
+            let mut conversation = Conversation::new(provider);
+            let settings = Settings {
+                model: "some-model".into(),
+                ..settings(provider)
+            };
+            let mut timed = 0;
+            let result = conversation.turn(
+                &settings,
+                text,
+                &mut transport,
+                &mut |_, _| ToolResult::text("Coloured it red"),
+                &mut |e| {
+                    timed += usize::from(matches!(e, Event::Answered { seconds } if seconds >= 0.))
+                },
+                &|| false,
+            );
+            assert!(result.is_ok(), "{provider:?}: {result:?}");
+            let asked: Vec<bool> = transport
+                .sent
+                .iter()
+                .map(|s| s.2["reasoning_effort"] == "low")
+                .collect();
+            // The first steps, then the CLI's usual effort; never for a server on the network.
+            assert_eq!(
+                asked,
+                (0..6).map(|i| i < low).collect::<Vec<_>>(),
+                "{provider:?}"
+            );
+            assert_eq!(timed, 6);
         }
     }
 
@@ -1689,6 +1779,7 @@ mod tests {
                 },
             )
             .unwrap();
+        notices.retain(|e| !matches!(e, Event::Answered { .. }));
         assert_eq!(notices, vec![Event::Notice("Stopped.".into())]);
         assert_eq!(ran, 0);
         let last = conversation.messages().last().unwrap();

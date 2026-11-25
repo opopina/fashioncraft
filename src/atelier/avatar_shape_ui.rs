@@ -190,6 +190,8 @@ pub(super) struct DraftUi {
     pub open: bool,
     values: [f64; 8],
     error: Option<String>,
+    /// Replace… was pressed: the window asks before replacing.
+    confirm_replace: bool,
 }
 
 impl Default for DraftUi {
@@ -209,6 +211,7 @@ impl Default for DraftUi {
             ]
             .map(|v| (v * 1000.).round() / 10.),
             error: None,
+            confirm_replace: false,
         }
     }
 }
@@ -242,7 +245,9 @@ impl Atelier {
             return;
         }
         let mut open = true;
-        let (mut from_avatar, mut create) = (false, false);
+        // The scripted demos replace, as they always have (see new_document).
+        let has_pieces = !self.project.template.panels.is_empty() && self.demo.is_none();
+        let (mut from_avatar, mut make) = (false, None);
         let state = &mut self.authoring.shirt_draft;
         egui::Window::new(i18n::tr(ui_lang, "T-shirt from measurements"))
             .open(&mut open)
@@ -286,14 +291,18 @@ impl Atelier {
                     {
                         from_avatar = true;
                     }
-                    if ui
-                        .button(i18n::tr(ui_lang, "Create"))
-                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with this T-shirt"))
-                        .clicked()
-                    {
-                        create = true;
-                    }
+                    make = make_buttons(
+                        ui,
+                        ui_lang,
+                        has_pieces,
+                        &mut state.confirm_replace,
+                        "Replace the garment with this T-shirt",
+                        "draft.tshirt.create",
+                    );
                 });
+                if let Some(confirmed) = confirm_replace(ui, ui_lang, &mut state.confirm_replace) {
+                    make = Some(confirmed);
+                }
                 if let Some(e) = &state.error {
                     ui.colored_label(Color32::LIGHT_RED, e);
                 }
@@ -308,7 +317,7 @@ impl Atelier {
                 Err(e) => self.authoring.shirt_draft.error = Some(e),
             }
         }
-        if create {
+        if let Some(make) = make {
             let v = self.authoring.shirt_draft.values.map(|x| x / 100.);
             let m = fashioncraft::garment::presets::TshirtMeasurements {
                 bust_m: v[0],
@@ -322,21 +331,14 @@ impl Atelier {
             };
             match fashioncraft::garment::presets::tshirt(&m, 2) {
                 Ok(template) => {
-                    let mut project = FittingProject::basic(
-                        GarmentKind::Tshirt,
-                        2,
-                        self.project.avatar_path.clone(),
-                    );
-                    project.template = template;
-                    project.avatar_pose = self.project.avatar_pose.clone();
-                    project.scene_objects = self.project.scene_objects.clone();
-                    if self.load(project) {
-                        self.authoring.shirt_draft.error = None;
-                        self.status =
-                            i18n::tr(ui_lang, "T-shirt drafted from the measurements").into();
-                    } else {
-                        self.authoring.shirt_draft.error = Some(self.status.clone());
-                    }
+                    self.authoring.shirt_draft.error = self
+                        .place_draft(
+                            template,
+                            make,
+                            "t-shirt",
+                            "T-shirt drafted from the measurements",
+                        )
+                        .err();
                 }
                 Err(e) => self.authoring.shirt_draft.error = Some(e),
             }
@@ -349,6 +351,8 @@ pub(super) struct SkirtDraftUi {
     pub open: bool,
     values: [f64; 7],
     error: Option<String>,
+    /// Replace… was pressed: the window asks before replacing.
+    confirm_replace: bool,
 }
 
 impl Default for SkirtDraftUi {
@@ -367,6 +371,7 @@ impl Default for SkirtDraftUi {
             ]
             .map(|v| (v * 1000.).round() / 10.),
             error: None,
+            confirm_replace: false,
         }
     }
 }
@@ -399,7 +404,9 @@ impl Atelier {
             return;
         }
         let mut open = true;
-        let (mut from_avatar, mut create) = (false, false);
+        // The scripted demos replace, as they always have (see new_document).
+        let has_pieces = !self.project.template.panels.is_empty() && self.demo.is_none();
+        let (mut from_avatar, mut make) = (false, None);
         let state = &mut self.authoring.skirt_draft;
         egui::Window::new(i18n::tr(ui_lang, "Skirt from measurements"))
             .open(&mut open)
@@ -442,14 +449,18 @@ impl Atelier {
                     {
                         from_avatar = true;
                     }
-                    if ui
-                        .button(i18n::tr(ui_lang, "Create"))
-                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with this skirt"))
-                        .clicked()
-                    {
-                        create = true;
-                    }
+                    make = make_buttons(
+                        ui,
+                        ui_lang,
+                        has_pieces,
+                        &mut state.confirm_replace,
+                        "Replace the garment with this skirt",
+                        "draft.skirt.create",
+                    );
                 });
+                if let Some(confirmed) = confirm_replace(ui, ui_lang, &mut state.confirm_replace) {
+                    make = Some(confirmed);
+                }
                 if let Some(e) = &state.error {
                     ui.colored_label(Color32::LIGHT_RED, e);
                 }
@@ -464,7 +475,7 @@ impl Atelier {
                 Err(e) => self.authoring.skirt_draft.error = Some(e),
             }
         }
-        if create {
+        if let Some(make) = make {
             let v = self.authoring.skirt_draft.values.map(|x| x / 100.);
             let m = fashioncraft::garment::presets::SkirtMeasurements {
                 waist_m: v[0],
@@ -477,21 +488,14 @@ impl Atelier {
             };
             match fashioncraft::garment::presets::skirt(&m, 2) {
                 Ok(template) => {
-                    let mut project = FittingProject::basic(
-                        GarmentKind::Tshirt,
-                        2,
-                        self.project.avatar_path.clone(),
-                    );
-                    project.template = template;
-                    project.avatar_pose = self.project.avatar_pose.clone();
-                    project.scene_objects = self.project.scene_objects.clone();
-                    if self.load(project) {
-                        self.authoring.skirt_draft.error = None;
-                        self.status =
-                            i18n::tr(ui_lang, "Skirt drafted from the measurements").into();
-                    } else {
-                        self.authoring.skirt_draft.error = Some(self.status.clone());
-                    }
+                    self.authoring.skirt_draft.error = self
+                        .place_draft(
+                            template,
+                            make,
+                            "skirt",
+                            "Skirt drafted from the measurements",
+                        )
+                        .err();
                 }
                 Err(e) => self.authoring.skirt_draft.error = Some(e),
             }
@@ -504,6 +508,8 @@ pub(super) struct TrousersDraftUi {
     pub open: bool,
     values: [f64; 8],
     error: Option<String>,
+    /// Replace… was pressed: the window asks before replacing.
+    confirm_replace: bool,
 }
 
 impl Default for TrousersDraftUi {
@@ -523,6 +529,7 @@ impl Default for TrousersDraftUi {
             ]
             .map(|v| (v * 1000.).round() / 10.),
             error: None,
+            confirm_replace: false,
         }
     }
 }
@@ -559,7 +566,9 @@ impl Atelier {
             return;
         }
         let mut open = true;
-        let (mut from_avatar, mut create) = (false, false);
+        // The scripted demos replace, as they always have (see new_document).
+        let has_pieces = !self.project.template.panels.is_empty() && self.demo.is_none();
+        let (mut from_avatar, mut make) = (false, None);
         let state = &mut self.authoring.trousers_draft;
         egui::Window::new(i18n::tr(ui_lang, "Trousers from measurements"))
             .open(&mut open)
@@ -602,14 +611,18 @@ impl Atelier {
                     if button.clicked() {
                         from_avatar = true;
                     }
-                    let button = ui
-                        .button(i18n::tr(ui_lang, "Create"))
-                        .on_hover_text(i18n::tr(ui_lang, "Replace the garment with these trousers"));
-                    super::demo::mark(ui.ctx(), "draft.trousers.create", button.rect);
-                    if button.clicked() {
-                        create = true;
-                    }
+                    make = make_buttons(
+                        ui,
+                        ui_lang,
+                        has_pieces,
+                        &mut state.confirm_replace,
+                        "Replace the garment with these trousers",
+                        "draft.trousers.create",
+                    );
                 });
+                if let Some(confirmed) = confirm_replace(ui, ui_lang, &mut state.confirm_replace) {
+                    make = Some(confirmed);
+                }
                 if let Some(e) = &state.error {
                     ui.colored_label(Color32::LIGHT_RED, e);
                 }
@@ -624,7 +637,7 @@ impl Atelier {
                 Err(e) => self.authoring.trousers_draft.error = Some(e),
             }
         }
-        if create {
+        if let Some(make) = make {
             let v = self.authoring.trousers_draft.values.map(|x| x / 100.);
             let m = fashioncraft::garment::presets::TrousersMeasurements {
                 waist_m: v[0],
@@ -638,25 +651,129 @@ impl Atelier {
             };
             match fashioncraft::garment::presets::trousers(&m, 2) {
                 Ok(template) => {
-                    let mut project = FittingProject::basic(
-                        GarmentKind::Tshirt,
-                        2,
-                        self.project.avatar_path.clone(),
-                    );
-                    project.template = template;
-                    project.avatar_pose = self.project.avatar_pose.clone();
-                    project.scene_objects = self.project.scene_objects.clone();
-                    if self.load(project) {
-                        self.authoring.trousers_draft.error = None;
-                        self.status =
-                            i18n::tr(ui_lang, "Trousers drafted from the measurements").into();
-                    } else {
-                        self.authoring.trousers_draft.error = Some(self.status.clone());
-                    }
+                    self.authoring.trousers_draft.error = self
+                        .place_draft(
+                            template,
+                            make,
+                            "trousers",
+                            "Trousers drafted from the measurements",
+                        )
+                        .err();
                 }
                 Err(e) => self.authoring.trousers_draft.error = Some(e),
             }
         }
+    }
+}
+
+/// What a drafting window's buttons asked for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Make {
+    /// Worn over the garment on the board, which stays.
+    Add,
+    /// In place of everything on the board: the only choice when it is empty.
+    Replace,
+}
+
+/// A drafting window's buttons, after "From the avatar" in the same row: with pieces on the
+/// board, Add (worn over them) and Replace…, which asks first (`confirming`); with none,
+/// Create. `replace_hint` says what replacing does ("Replace the garment with this skirt").
+fn make_buttons(
+    ui: &mut egui::Ui,
+    lang: i18n::Language,
+    has_pieces: bool,
+    confirming: &mut bool,
+    replace_hint: &'static str,
+    mark: &str,
+) -> Option<Make> {
+    if !has_pieces {
+        let create = ui
+            .button(i18n::tr(lang, "Create"))
+            .on_hover_text(i18n::tr(lang, replace_hint));
+        super::demo::mark(ui.ctx(), mark, create.rect);
+        return create.clicked().then_some(Make::Replace);
+    }
+    let add = ui.button(i18n::tr(lang, "Add")).on_hover_text(i18n::tr(
+        lang,
+        "Wear it over the garment on the board, which stays (simulate that one first)",
+    ));
+    super::demo::mark(ui.ctx(), mark, add.rect);
+    if ui
+        .button(i18n::tr(lang, "Replace…"))
+        .on_hover_text(i18n::tr(lang, replace_hint))
+        .clicked()
+    {
+        *confirming = true;
+    }
+    add.clicked().then_some(Make::Add)
+}
+
+/// Under the buttons while Replace… waits for an answer: what replacing loses, then Replace or
+/// Cancel.
+fn confirm_replace(ui: &mut egui::Ui, lang: i18n::Language, confirming: &mut bool) -> Option<Make> {
+    if !*confirming {
+        return None;
+    }
+    ui.colored_label(
+        Color32::from_rgb(240, 190, 90),
+        i18n::tr(
+            lang,
+            "This takes every piece off the board; unsaved changes are lost.",
+        ),
+    );
+    let mut made = None;
+    ui.horizontal(|ui| {
+        if ui.button(i18n::tr(lang, "Replace")).clicked() {
+            made = Some(Make::Replace);
+            *confirming = false;
+        }
+        if ui.button(i18n::tr(lang, "Cancel")).clicked() {
+            *confirming = false;
+        }
+    });
+    made
+}
+
+impl Atelier {
+    /// A garment drafted in a drafting window: worn over the one on the board (`Make::Add`, see
+    /// [`Self::wear_over`]), or in place of everything there, saying `drafted`.
+    fn place_draft(
+        &mut self,
+        template: fashioncraft::garment::GarmentTemplate,
+        make: Make,
+        garment: &str,
+        drafted: &'static str,
+    ) -> Result<(), String> {
+        let lang = self.prefs.language;
+        if make == Make::Add {
+            self.wear_over(template, garment).map_err(|e| {
+                if e.contains("still laid out flat") {
+                    i18n::tr(
+                        lang,
+                        "The garment on the board is still laid out flat: simulate it first, then add this one over it",
+                    )
+                    .to_owned()
+                } else {
+                    e
+                }
+            })?;
+            self.status = i18n::tr(
+                lang,
+                "Added over the garment on the board, on an outer layer: simulate to drape it",
+            )
+            .into();
+            return Ok(());
+        }
+        let mut project =
+            FittingProject::basic(GarmentKind::Tshirt, 2, self.project.avatar_path.clone());
+        project.template = template;
+        project.avatar_pose = self.project.avatar_pose.clone();
+        project.scene_objects = self.project.scene_objects.clone();
+        if !self.load(project) {
+            return Err(self.status.clone());
+        }
+        self.status = i18n::tr(lang, drafted).into();
+        Ok(())
     }
 }
 
@@ -1048,5 +1165,116 @@ impl Atelier {
             arms[0][0].y.max(arms[1][0].y) + 0.09,
         ];
         Ok((v.map(|x| (x * 1000.).round() / 10.), arms))
+    }
+}
+
+#[cfg(test)]
+mod make_tests {
+    use super::{Make, confirm_replace, i18n, make_buttons};
+    use eframe::egui;
+
+    /// One frame of a drafting window's buttons: what they asked for, and each label with
+    /// its centre.
+    fn frame(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        has_pieces: bool,
+        confirming: &mut bool,
+    ) -> (Option<Make>, Vec<(String, egui::Pos2)>) {
+        let mut made = None;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.horizontal(|ui| {
+                    made = make_buttons(
+                        ui,
+                        i18n::Language::English,
+                        has_pieces,
+                        confirming,
+                        "Replace the garment with this skirt",
+                        "draft.test.create",
+                    );
+                });
+                if let Some(confirmed) = confirm_replace(ui, i18n::Language::English, confirming) {
+                    made = Some(confirmed);
+                }
+            },
+        );
+        output.textures_delta.clear();
+        let labels = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => {
+                    Some((t.galley.text().to_owned(), t.pos + t.galley.size() / 2.))
+                }
+                _ => None,
+            })
+            .collect();
+        (made, labels)
+    }
+
+    /// Clicks the button labelled `label`: what the buttons asked for then.
+    fn click(
+        ctx: &egui::Context,
+        label: &str,
+        has_pieces: bool,
+        confirming: &mut bool,
+    ) -> Option<Make> {
+        let (_, labels) = frame(ctx, vec![], has_pieces, confirming);
+        let at = labels
+            .iter()
+            .find(|(text, _)| text == label)
+            .unwrap_or_else(|| panic!("no {label} in {labels:?}"))
+            .1;
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(
+            ctx,
+            vec![egui::Event::PointerMoved(at), button(true)],
+            has_pieces,
+            confirming,
+        );
+        frame(ctx, vec![button(false)], has_pieces, confirming).0
+    }
+
+    #[test]
+    fn a_drafting_window_adds_and_replaces_only_after_asking() {
+        let ctx = egui::Context::default();
+        let mut confirming = false;
+        // An empty board: Create, which replaces nothing.
+        let (_, labels) = frame(&ctx, vec![], false, &mut confirming);
+        assert!(labels.iter().any(|(t, _)| t == "Create"));
+        assert!(!labels.iter().any(|(t, _)| t == "Add"));
+        assert_eq!(
+            click(&ctx, "Create", false, &mut confirming),
+            Some(Make::Replace)
+        );
+        // Pieces on the board: Add wears the new garment over them.
+        assert_eq!(click(&ctx, "Add", true, &mut confirming), Some(Make::Add));
+        // Replace… asks first; Cancel keeps everything, Replace replaces.
+        assert_eq!(click(&ctx, "Replace…", true, &mut confirming), None);
+        assert!(confirming);
+        let (_, labels) = frame(&ctx, vec![], true, &mut confirming);
+        assert!(
+            labels
+                .iter()
+                .any(|(t, _)| t.contains("every piece off the board"))
+        );
+        assert_eq!(click(&ctx, "Cancel", true, &mut confirming), None);
+        assert!(!confirming);
+        click(&ctx, "Replace…", true, &mut confirming);
+        assert_eq!(
+            click(&ctx, "Replace", true, &mut confirming),
+            Some(Make::Replace)
+        );
+        assert!(!confirming);
     }
 }

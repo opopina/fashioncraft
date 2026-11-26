@@ -255,3 +255,40 @@ fn a_shirt_with_set_in_sleeves_added_over_a_skirt_closes_like_the_shirt_alone() 
         "strain {worn_strain} % worn over the skirt, {alone_strain} % alone"
     );
 }
+
+#[test]
+fn sleeves_wrapped_round_the_arms_are_not_pushed_out_with_the_body() {
+    // Pushed out to start clear of the skirt, the shirt's front and back move out; its sleeves
+    // stay round the arms: moved sideways they sat off the arm and caught on it as they fell
+    // (the app: underarm seams 75 mm open, the arm between their sides).
+    let skirt = skirt(&SkirtMeasurements::default(), 1).unwrap();
+    let shirt = fashioncraft::garment::presets::shirt_around(
+        &fashioncraft::garment::presets::ShirtMeasurements {
+            arms: arms(),
+            ..Default::default()
+        },
+        1,
+        None,
+    )
+    .unwrap();
+    let mut tries = 0;
+    let (build, push) =
+        agent_build::wear_over(&skirt, &shirt, "shirt", DVec3::ZERO, true, &mut |_, _| {
+            tries += 1;
+            tries > 1
+        })
+        .unwrap();
+    assert!(push > 0.);
+    let both = agent_build::applied(&skirt, &build).unwrap();
+    for (p, drafted) in both.panels[skirt.panels.len()..].iter().zip(&shirt.panels) {
+        let moved = p
+            .placement
+            .translation
+            .distance(drafted.placement.translation);
+        if shirt.panel_wraps.contains_key(&drafted.id) {
+            assert!(moved < 1e-9, "{} moved {moved}", drafted.id);
+        } else {
+            assert!((moved - push).abs() < 1e-6, "{} moved {moved}", drafted.id);
+        }
+    }
+}

@@ -238,7 +238,7 @@ pub const WEAR_PUSHES_M: [f64; 7] = [0., 0.01, 0.02, 0.03, 0.045, 0.06, 0.08];
 /// arranged around the avatar, is added keeping that 3D arrangement (a paste would move it
 /// aside), on a simulation layer outside every piece there, its pieces named after the garment
 /// (`garment` "shirt": "shirt front"), once the garment there is draped (`draped_now`). Each new
-/// piece moves out from the avatar's vertical axis
+/// piece but those wrapped round a limb moves out from the avatar's vertical axis
 /// (through `axis`) by the least of [`WEAR_PUSHES_M`] for which `starts_clear` accepts the edit
 /// and its new pieces' ids (see [`starts_clear`], with the drape as it is now). With the
 /// distance used; an error when none is far enough.
@@ -292,6 +292,11 @@ pub fn wear_over(
                         .sum::<DVec3>()
                         / r.vertices.len() as f64
                 });
+            // A piece wrapped round a limb (a sleeve) stays where the draft put it: moved
+            // sideways it sits off the arm, and as it falls it catches on it.
+            if incoming.panel_wraps.contains_key(&p.id) {
+                return DVec3::ZERO;
+            }
             DVec3::new(centre.x - axis.x, 0., centre.z - axis.z).normalize_or_zero()
         })
         .collect();

@@ -65,7 +65,7 @@ stay off.
 **Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
 model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
 after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
-Cmd+V (Ctrl+V on Windows and Linux) while the message box has focus, or with **Paste**.
+Cmd+V (Ctrl+V on Windows and Linux) while the Assistant is open, wherever the focus is.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
@@ -143,9 +143,11 @@ Some requests to try:
 - "Save this as summer-tee and export it as GLB."
 
 **Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
-Windows and Linux) in the message box with a picture or files on the clipboard; text still pastes
-as text. If the clipboard cannot be read (on Wayland FashionCraft reads it through XWayland), the
-reason shows under the attachments. Each file shows as a chip above the message; hover it to see what was
+Windows and Linux) while the Assistant is open, wherever the focus is, with a picture or files on
+the clipboard; text still pastes as text into the field that has the focus. On Linux under
+Wayland FashionCraft reads the clipboard with `wl-paste` (the wl-clipboard package) when it is
+installed, else through XWayland; under X11 with its own reader, then `xclip` when it is
+installed. If the clipboard cannot be read, the reason shows under the attachments. Each file shows as a chip above the message; hover it to see what was
 read, × takes it off. What the model receives:
 
 | File | The model gets |

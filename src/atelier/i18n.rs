@@ -1396,12 +1396,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Attach files" => "Adjuntar archivos",
         "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
         "All files" => "Todos los archivos",
-        "Attach the picture or files on the clipboard" => {
-            "Adjuntar la imagen o los archivos del portapapeles"
-        }
-        "The clipboard holds no picture or file." => {
-            "El portapapeles no tiene ninguna imagen ni archivo."
-        }
         "Paused for your review after" => "En pausa para que revises, tras",
         "steps." => "pasos.",
         "Continue" => "Continuar",

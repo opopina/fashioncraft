@@ -230,6 +230,32 @@ pub fn starts_clear(
     gap >= contact.radius
 }
 
+/// The fabric a drafted base is cut from: a t-shirt in jersey, a shirt, dress, skirt or
+/// trousers in light woven cotton. Indicative values, as every preset's.
+pub fn fabric_for(kind: &str) -> &'static crate::fabrics::FabricPreset {
+    let id = if matches!(kind, "tshirt" | "t-shirt") {
+        "jersey"
+    } else {
+        "cotton"
+    };
+    crate::fabrics::PRESETS
+        .iter()
+        .find(|p| p.id == id)
+        .expect("the preset is listed")
+}
+
+/// Cuts every piece of a fresh draft from its kind's fabric ([`fabric_for`]), named as
+/// set_fabric names a preset; returns the fabric's name.
+pub fn cut_from_fitting_fabric(template: &mut GarmentTemplate, kind: &str) -> String {
+    let preset = fabric_for(kind);
+    let name = format!("{} (approx.)", preset.name);
+    for fabric in &mut template.fabrics {
+        fabric.name = name.clone();
+        fabric.properties = preset.properties();
+    }
+    name
+}
+
 /// How far out, in metres, an added garment's pieces are tried, nearest first (see
 /// [`wear_over`]).
 pub const WEAR_PUSHES_M: [f64; 7] = [0., 0.01, 0.02, 0.03, 0.045, 0.06, 0.08];
@@ -262,6 +288,22 @@ pub fn wear_over(
     if ids.is_empty() {
         return Err(format!("The {garment} has no pieces"));
     }
+    // Its own fabric, even when cut from the same preset as the garment there: a paste shares
+    // a fabric with the same name and properties, and a colour for one would colour both.
+    let mut incoming = incoming.clone();
+    for fabric in &mut incoming.fabrics {
+        let base = fabric.name.clone();
+        let mut n = 1;
+        while current.fabrics.iter().any(|f| f.name == fabric.name) {
+            n += 1;
+            fabric.name = if n == 2 {
+                format!("{base}, {garment}")
+            } else {
+                format!("{base}, {garment} {n}")
+            };
+        }
+    }
+    let incoming = &incoming;
     let paste = Command::Paste {
         clipboard: authoring::clipboard::PatternClipboard::capture(incoming, &ids)?,
         center: DVec2::ZERO,

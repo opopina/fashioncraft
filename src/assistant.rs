@@ -107,7 +107,9 @@ paused because cloth starts inside other cloth or the body, deal with that first
 change that caused it, move that piece clear or reset the arrangement, then simulate again. \
 Another garment the person asks for (a shirt to go with \
 the skirt) is added with draft_garment, mode add, the default: the garment there stays and the \
-new one is worn over it (simulate the one there first, so the new one goes over it as it hangs). Use mode replace only when they ask for a new garment instead of the \
+new one is worn over it (simulate the one there first, so the new one goes over it as it hangs). \
+draft_garment cuts each base from a fitting fabric and says which: tell the person that fabric \
+and the colour, or the ones you set. Use mode replace only when they ask for a new garment instead of the \
 current one, and say first that the current one will go. Never place a sleeve by moving it in cm: every sleeve goes in with set_sleeve, which sews and \
 places it. Never change the avatar's pose or body unless the person asks for it. Give pieces \
 names that say what they are (piece_edit rename), such as front bodice, waistband or skirt \

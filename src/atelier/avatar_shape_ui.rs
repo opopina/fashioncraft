@@ -745,6 +745,8 @@ impl Atelier {
         drafted: &'static str,
     ) -> Result<(), String> {
         let lang = self.prefs.language;
+        let mut template = template;
+        fashioncraft::agent_build::cut_from_fitting_fabric(&mut template, garment);
         if make == Make::Add {
             self.wear_over(template, garment).map_err(|e| {
                 if e.contains("still laid out flat") {
@@ -1026,6 +1028,9 @@ impl Atelier {
             }
             other => return Err(format!("unknown garment kind '{other}'")),
         };
+        let mut template = template;
+        let fabric = fashioncraft::agent_build::cut_from_fitting_fabric(&mut template, kind);
+        let used = format!("{used}. Fabric: {fabric}, not coloured yet (off-white)");
         if add {
             let word = match kind {
                 "tshirt" => "t-shirt",

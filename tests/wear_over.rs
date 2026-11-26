@@ -249,6 +249,24 @@ fn a_shirt_with_set_in_sleeves_added_over_a_skirt_closes_like_the_shirt_alone() 
         })
     };
     let worn_strain = worst(&both, &garment, &worn.x, &worn.v);
+    // The sleeve caps are eased into the armholes on purpose: that is no problem to report.
+    let report = fashioncraft::agent_check::check(&fashioncraft::agent_check::Input {
+        template: &both,
+        live: fashioncraft::agent_ops::Live {
+            garment: &garment,
+            x: &worn.x,
+            simulated: true,
+        },
+        v: &worn.v,
+        body: None,
+        pressure: None,
+        body_cm: None,
+    });
+    assert!(
+        !report["problems"].to_string().contains("gathering"),
+        "{}",
+        report["problems"]
+    );
     let alone_strain = worst(&shirt, &alone_garment, &alone.x, &alone.v);
     assert!(
         worn_strain <= alone_strain + 15.,
@@ -291,4 +309,39 @@ fn sleeves_wrapped_round_the_arms_are_not_pushed_out_with_the_body() {
             assert!((moved - push).abs() < 1e-6, "{} moved {moved}", drafted.id);
         }
     }
+}
+
+#[test]
+fn an_added_garment_is_cut_from_its_own_fitting_fabric() {
+    // A shirt in cotton, a t-shirt in jersey, not the uncalibrated reference cloth.
+    assert_eq!(agent_build::fabric_for("tshirt").id, "jersey");
+    assert_eq!(agent_build::fabric_for("shirt").id, "cotton");
+    let mut skirt = skirt(&SkirtMeasurements::default(), 1).unwrap();
+    let skirt_fabric = agent_build::cut_from_fitting_fabric(&mut skirt, "skirt");
+    let mut shirt = fashioncraft::garment::presets::shirt_around(
+        &fashioncraft::garment::presets::ShirtMeasurements {
+            arms: arms(),
+            ..Default::default()
+        },
+        1,
+        None,
+    )
+    .unwrap();
+    let shirt_fabric = agent_build::cut_from_fitting_fabric(&mut shirt, "shirt");
+    assert!(shirt_fabric.contains("cotton") && shirt_fabric == skirt_fabric);
+    // Cut from the same preset, it still gets a fabric of its own: a colour for the shirt must
+    // not colour the skirt.
+    let (build, _) =
+        agent_build::wear_over(&skirt, &shirt, "shirt", DVec3::ZERO, true, &mut |_, _| true)
+            .unwrap();
+    let both = agent_build::applied(&skirt, &build).unwrap();
+    assert_eq!(both.fabrics.len(), 2);
+    let fabric_of = |i: usize| {
+        let id = &both.panels[i].fabric;
+        both.fabrics.iter().find(|f| &f.id == id).unwrap()
+    };
+    let (skirt_cloth, shirt_cloth) = (fabric_of(0), fabric_of(both.panels.len() - 1));
+    assert_ne!(skirt_cloth.id, shirt_cloth.id);
+    assert_eq!(shirt_cloth.name, format!("{shirt_fabric}, shirt"));
+    assert_eq!(skirt_cloth.name, skirt_fabric);
 }

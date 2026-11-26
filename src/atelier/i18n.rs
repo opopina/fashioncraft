@@ -494,6 +494,207 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Smooth curve" => "Suavizar curva",
         "Cut and extend" => "Cortar y extender",
         "Create" => "Crear",
+        "Back to before this message" => "Volver a antes de este mensaje",
+        "This piece" => "Esta pieza",
+        "more in the steps" => "más en los pasos",
+        "What shall we do?" => "¿Qué hacemos?",
+        "there is no garment yet" => "aún no hay prenda",
+        "there is a garment of" => "hay una prenda de",
+        "there is a skirt of" => "hay una falda de",
+        "there are trousers of" => "hay un pantalón de",
+        "there is a shirt of" => "hay una camisa de",
+        "In" => "En",
+        "this project" => "este proyecto",
+        "on the avatar" => "en el avatar",
+        "Ask for a change, a new garment or a check." => {
+            "Pide un cambio, una prenda nueva o una revisión."
+        }
+        "For this project" => "Para este proyecto",
+        "Draft a skirt for this avatar" => "Traza una falda para este avatar",
+        "Draft a shirt for this avatar" => "Traza una camisa para este avatar",
+        "Make a garment from a photo" => "Haz una prenda a partir de una foto",
+        "What can you do here?" => "¿Qué puedes hacer aquí?",
+        "Make a shirt to go with this skirt" => "Hazle una camisa que vaya con esta falda",
+        "Make a shirt to go with these trousers" => "Hazle una camisa que vaya con este pantalón",
+        "Make a skirt to go with this shirt" => "Hazle una falda que vaya con esta camisa",
+        "Make a garment to go with this one" => "Hazle una prenda que vaya con esta",
+        "Check seams, strain and pressure" => "Revisa costuras, tensión y presión",
+        "Grade it to sizes S, M and L" => "Pásala a talla S, M y L",
+        "Show me the size chart" => "Muéstrame la tabla de tallas",
+        "Make it from a photo" => "Hazla a partir de una foto",
+        "Remembered for this project" => "Recuerda de este proyecto",
+        "One note per line: who it is for, sizes, fabrics, the workshop's rules" => {
+            "Una nota por línea: para quién es, tallas, telas, las reglas del taller"
+        }
+        "Save notes" => "Guardar notas",
+        "Nothing yet. What you or the assistant note here goes to every conversation about this project." => {
+            "Nada aún. Lo que anotéis aquí tú o el asistente va a cada conversación de este proyecto."
+        }
+        "Edit project notes" => "Editar notas del proyecto",
+        "Each project also keeps its own notes, read at the start too." => {
+            "Además, cada proyecto guarda sus propias notas, que también se leen al empezar."
+        }
+        "Noting for the project" => "Anotando en el proyecto",
+        "Who answers" => "Quién responde",
+        "Ready to use" => "Listo para usar",
+        "Automatic" => "Automático",
+        "Always the same" => "Siempre el mismo",
+        "Simple steps" => "Pasos simples",
+        "New garments and fixes" => "Prendas nuevas y arreglos",
+        "Changing a colour does not need the large model; drawing a garment does." => {
+            "Cambiar un color no necesita el modelo grande; dibujar una prenda sí."
+        }
+        "Instructions" => "Instrucciones",
+        "Permissions" => "Permisos",
+        "Limits and usage" => "Límites y uso",
+        "Own instructions" => "Instrucciones propias",
+        "Defaults" => "Valores por defecto",
+        "Permissions, review, pictures, spend cap and Automatic as they come; the connection and your instructions stay" => {
+            "Permisos, revisión, capturas, tope de gasto y Automático como vienen; la conexión y tus instrucciones se quedan"
+        }
+        "They go at the start of every conversation, in every project." => {
+            "Van al principio de cada conversación, en todos los proyectos."
+        }
+        "For example: I work for a school uniform workshop. Measure in centimetres and use sizes by age. Ask me the size before exporting." => {
+            "Por ejemplo: trabajo para un taller de uniformes escolares. Mide en centímetros y usa tallas por edad. Pregúntame la talla antes de exportar."
+        }
+        "What it does inside the project is undone with Undo. What leaves the project is not." => {
+            "Lo que hace dentro del proyecto se deshace con Deshacer. Lo que sale del proyecto, no."
+        }
+        "Edit patterns and garments" => "Editar patrones y prendas",
+        "Drawing, sewing, changing fabrics and colours" => {
+            "Dibujar, coser, cambiar telas y colores"
+        }
+        "Simulate and take pictures" => "Simular y hacer capturas",
+        "Moves the cloth; does not change the pattern" => "Mueve la tela; no cambia el patrón",
+        "Read what you attach" => "Leer lo que adjuntas",
+        "Photos, tables, PDF, DXF and SVG" => "Fotos, tablas, PDF, DXF y SVG",
+        "Save the project" => "Guardar el proyecto",
+        "Overwrites the project's file" => "Sobrescribe el archivo del proyecto",
+        "Export and write files" => "Exportar y escribir archivos",
+        "OBJ, glTF, pictures, outside the project" => "OBJ, glTF, imágenes, fuera del proyecto",
+        "Without asking" => "Sin preguntar",
+        "Ask first" => "Preguntar antes",
+        "Never" => "Nunca",
+        "of your plan's limit" => "del límite de tu plan",
+        "of the model's context" => "del contexto del modelo",
+        "Nothing used yet in this conversation" => "Nada usado aún en esta conversación",
+        "This conversation" => "Esta conversación",
+        "tokens" => "tokens",
+        "Pictures" => "Capturas",
+        "After each simulation" => "Después de cada simulación",
+        "Only when needed" => "Solo cuando hacen falta",
+        "Spend cap" => "Tope de gasto",
+        "per conversation · API key only" => "por conversación · solo con clave de API",
+        "It stops a conversation once it has cost this much, from published prices; 0: no cap" => {
+            "Detiene la conversación cuando ha costado esto, según los precios publicados; 0: sin tope"
+        }
+        "Open the Assistant's settings" => "Abrir los ajustes del asistente",
+        "Auto" => "Auto",
+        "A small model for simple steps, a large one for new garments and fixes" => {
+            "Un modelo pequeño para pasos simples, uno grande para prendas nuevas y arreglos"
+        }
+        "This conversation reached its spend cap" => "Esta conversación llegó a su tope de gasto",
+        "Start a new chat, or raise the cap in Settings › Limits and usage." => {
+            "Empieza un chat nuevo o sube el tope en Ajustes › Límites y uso."
+        }
+        "Spend cap reached" => "Tope de gasto alcanzado",
+        "it stops after this step." => "se detiene tras este paso.",
+        "Change the project" => "Cambiar el proyecto",
+        "Simulate or take a picture" => "Simular o hacer una captura",
+        "Open what you attached" => "Abrir lo que adjuntaste",
+        "Save the project on your computer" => "Guardar el proyecto en tu ordenador",
+        "Save a file on your computer" => "Guardar un archivo en tu ordenador",
+        "Outside the project: Undo does not delete it." => {
+            "Fuera del proyecto: Deshacer no lo borra."
+        }
+        "Undo takes it back." => "Deshacer lo revierte.",
+        "Allow" => "Permitir",
+        "Always in this project" => "Siempre en este proyecto",
+        "It stops asking for this kind of step in this project until FashionCraft closes" => {
+            "Deja de preguntar por este tipo de paso en este proyecto hasta que cierres FashionCraft"
+        }
+        "No" => "No",
+        "Allowed" => "Permitido",
+        "Allowed in this project" => "Permitido en este proyecto",
+        "Not allowed" => "No permitido",
+        "Paused after" => "Pausa después de",
+        "steps" => "pasos",
+        "Look at how it goes in the 3D view. You can go on, tell it something else or go back." => {
+            "Mira cómo va en la vista 3D. Puedes seguir, decirle otra cosa o volver atrás."
+        }
+        "Back to before the pause" => "Volver a antes de la pausa",
+        "Put the project back as it was before these steps (Undo brings them back)" => {
+            "Devuelve el proyecto a como estaba antes de estos pasos (Deshacer los recupera)"
+        }
+        "Or tell it something else (Enter sends)" => "O dile otra cosa (Intro envía)",
+        "What it may do without asking is chosen in Settings › Permissions." => {
+            "Qué puede hacer sin preguntar se elige en Ajustes › Permisos."
+        }
+        "Write the next instruction; it goes when this ends" => {
+            "Escribe la siguiente indicación; sale cuando termine"
+        }
+        "Stop ends after the step in progress; what is done is undone with ⌘Z." => {
+            "Detener para después del paso en curso; lo hecho se deshace con ⌘Z."
+        }
+        "Stop ends after the step in progress; what is done is undone with Ctrl+Z." => {
+            "Detener para después del paso en curso; lo hecho se deshace con Ctrl+Z."
+        }
+        "Next, when this ends:" => "Después, al terminar:",
+        "Take it back into the box" => "Devolverlo a la caja",
+        "These pieces" => "Estas piezas",
+        "Take the piece off the message" => "Quitar la pieza del mensaje",
+        "Write, or paste a picture with ⌘V (Enter sends)" => {
+            "Escribe, o pega una imagen con ⌘V (Intro envía)"
+        }
+        "Write, or paste a picture with Ctrl+V (Enter sends)" => {
+            "Escribe, o pega una imagen con Ctrl+V (Intro envía)"
+        }
+        "Every change is undone with Undo (⌘Z)." => "Cada cambio se deshace con Deshacer (⌘Z).",
+        "Every change is undone with Undo (Ctrl+Z)." => {
+            "Cada cambio se deshace con Deshacer (Ctrl+Z)."
+        }
+        "Attach" => "Adjuntar",
+        "Put the project back as it was before this message (Undo brings it back)" => {
+            "Deja el proyecto como estaba antes de este mensaje (Deshacer lo recupera)"
+        }
+        "Project put back to before" => "Proyecto devuelto a antes de",
+        "Project put back to before that message" => "Proyecto devuelto a antes de ese mensaje",
+        "Checking the garment" => "Revisando la prenda",
+        "Turning the view" => "Girando la vista",
+        "Setting a sleeve" => "Montando una manga",
+        "Adding a detail" => "Añadiendo un detalle",
+        "Adding buttons" => "Añadiendo botones",
+        "Adding a line" => "Añadiendo una línea",
+        "Bending a segment" => "Curvando un tramo",
+        "Moving a piece" => "Moviendo una pieza",
+        "Measuring" => "Midiendo",
+        "Reading the guide" => "Consultando la guía",
+        "Looking up tools" => "Buscando herramientas",
+        "Editing the pattern" => "Editando el patrón",
+        "Strain" => "Tensión",
+        "on" => "en",
+        "Tight:" => "Aprieta",
+        "Still moving: simulate longer" => "Aún se mueve: simula más",
+        "of" => "de",
+        "step in the project" => "paso en el proyecto",
+        "steps in the project" => "pasos en el proyecto",
+        "Plan" => "Plan",
+        "done" => "hechos",
+        "seams closed" => "costuras cerradas",
+        "Nothing inside the body" => "Nada dentro del cuerpo",
+        "Review after simulating" => "Revisión después de simular",
+        "Default" => "Predeterminado",
+        "waiting for your answer" => "espera tu respuesta",
+        "Assistant settings" => "Ajustes del asistente",
+        "Copy the conversation" => "Copiar la conversación",
+        "Other…" => "Otro…",
+        "Close the Assistant" => "Cerrar el asistente",
+        "Open the Assistant" => "Abrir el asistente",
+        "Open the Assistant; it is working" => "Abrir el asistente; está trabajando",
+        "Open the Assistant; it is waiting for your answer" => {
+            "Abrir el asistente; espera tu respuesta"
+        }
         "Replace" => "Reemplazar",
         "Wear it over the garment on the board, which stays (simulate that one first)" => {
             "Ponerla encima de la prenda del tablero, que se queda (simula esa primero)"
@@ -1328,7 +1529,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "You" => "Tú",
         "Connection" => "Conexión",
         "New chat" => "Nuevo chat",
-        "Provider" => "Proveedor",
         "Model" => "Modelo",
         "Address" => "Dirección",
         "API key" => "Clave de API",
@@ -1366,15 +1566,9 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Usa tu sesión de Antigravity CLI (agy). Los mensajes y las capturas solicitadas se envían a Google Antigravity."
         }
         "no model chosen" => "ningún modelo elegido",
-        "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
-            "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
-        }
         "Stopping after this step…" => "Deteniendo tras este paso…",
-        "Working in the project…" => "Trabajando en el proyecto…",
         "Thinking…" => "Pensando…",
-        "Message the assistant (Enter sends)" => "Escribe al asistente (Intro envía)",
         "Send" => "Enviar",
-        "Changes can be undone with Undo." => "Los cambios se pueden deshacer con Deshacer.",
         "The assistant stopped unexpectedly." => "El asistente se detuvo de forma inesperada.",
         "Reading the scene" => "Leyendo la escena",
         "Looking up commands" => "Buscando comandos",
@@ -1389,15 +1583,12 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Opening an attached file" => "Abriendo un archivo adjunto",
         "Look at the attached files." => "Mira los archivos adjuntos.",
         "Drop the files here to attach them" => "Suelta aquí los archivos para adjuntarlos",
-        "Attach…" => "Adjuntar…",
         "Pictures, PDFs, text, CSV tables and DXF or SVG patterns. You can also drop files here or paste a picture with Cmd+V." => {
             "Imágenes, PDF, texto, tablas CSV y patrones DXF o SVG. También puedes soltar archivos aquí o pegar una imagen con Cmd+V."
         }
         "Attach files" => "Adjuntar archivos",
         "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
         "All files" => "Todos los archivos",
-        "Paused for your review after" => "En pausa para que revises, tras",
-        "steps." => "pasos.",
         "Continue" => "Continuar",
         "Continue." => "Continúa.",
         "Go on from where it paused, with everything so far" => {
@@ -1405,7 +1596,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Review" => "Revisión",
         "Pause every" => "Pausar cada",
-        " steps" => " pasos",
         "Stop after this many steps so you can look before it goes on (off: it works until the job is done)" => {
             "Parar tras estos pasos para que mires antes de seguir (apagado: trabaja hasta terminar)"
         }
@@ -2310,7 +2500,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "pins" => "alfileres",
         "tack" => "hilván",
         "tacks" => "hilvanes",
-        "What should we make?" => "¿Qué hacemos hoy?",
         "Assign" => "Asignar",
         "Copy fabric" => "Copiar tejido",
         "Assign fabric" => "Asignar tejido",

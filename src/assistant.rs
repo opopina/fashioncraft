@@ -86,8 +86,9 @@ How to work
 warnings); piece_detail before editing a piece. When the person's message ends with a note from \
 FashionCraft that the scene is unchanged since your last scene_summary, or with what changed, \
 you already know the scene: do not call it again.
-2. Plan the steps. Ask only when something essential is missing; otherwise choose sensibly and \
-say what you chose.
+2. Plan the steps; for a job of several steps show them with plan, and call it again as they \
+finish. Ask only when something essential is missing; otherwise choose sensibly and say what \
+you chose.
 3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
 set_segment_length, add_point, add_dart, add_pleats, piece_edit, sew, seam_edit, place_piece, \
 set_fabric, set_fabric_parameters, set_color, set_avatar, set_pose, grading. command_list shows \
@@ -210,6 +211,29 @@ impl Provider {
             Self::Local => "Local model (Ollama, LM Studio…)",
         }
     }
+    /// The short name the Assistant's header shows.
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Anthropic => "Claude",
+            Self::OpenAi => "ChatGPT",
+            Self::CodexCli => "Codex",
+            Self::ClaudeCli => "Claude Code",
+            Self::Gemini => "Gemini",
+            Self::GeminiCli => "Gemini CLI",
+            Self::AntigravityCli => "Antigravity",
+            Self::Local => "Local model",
+        }
+    }
+    /// Models the Assistant's model menu offers, besides the provider's default and whatever
+    /// was typed in the connection settings.
+    pub fn suggested_models(self) -> &'static [&'static str] {
+        match self {
+            Self::Anthropic => &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+            // Claude Code takes these aliases for its current models.
+            Self::ClaudeCli => &["opus", "sonnet", "haiku"],
+            _ => &[],
+        }
+    }
     /// The model used when the preferences name none.
     pub fn default_model(self) -> &'static str {
         match self {
@@ -290,12 +314,12 @@ impl Settings {
     /// What is missing before a message can be sent, if anything.
     pub fn missing(&self) -> Option<String> {
         if !self.provider.is_cli() && self.model().is_empty() {
-            return Some("Choose a model under Connection, at the top of this window".into());
+            return Some("Choose a model in the Assistant's settings, under Connection".into());
         }
         if self.provider.needs_key() && self.api_key.trim().is_empty() {
             let variable = self.provider.key_variable().unwrap_or("the API key");
             return Some(format!(
-                "Add your {} API key under Connection, at the top of this window (or set {variable})",
+                "Add your {} API key in the Assistant's settings, under Connection (or set {variable})",
                 self.provider.label()
             ));
         }
@@ -439,6 +463,55 @@ pub fn usage_of(provider: Provider, model: &str, answer: &Value) -> Option<Usage
         limit,
         context_window: price.map(|p| p.4),
     })
+}
+
+/// Whether a request needs the larger model when the model is picked by the size of the task:
+/// a conversation's first request, one with files, a long one, or one that draws, adds to or
+/// fixes a garment. Changing a colour or a fabric, simulating or saving does not.
+pub fn large_task(text: &str, attachments: usize, first: bool) -> bool {
+    if first || attachments > 0 || text.chars().count() > 160 {
+        return true;
+    }
+    let text = text.to_lowercase();
+    const LARGE: &[&str] = &[
+        // English
+        "draft", "make", "create", "design", "new", "fix", "repair", "why", "add", "pattern",
+        "garment", "shirt", "skirt", "trousers", "pants", "dress", "jacket", "coat", "sleeve",
+        "pocket", "collar", "dart", "pleat", "hood", "cuff", "fit", // Spanish
+        "dibuja", "haz", "crea", "diseñ", "nuev", "arregl", "repar", "por qué", "añad", "agreg",
+        "patrón", "prenda", "camis", "falda", "pantal", "vestido", "chaqueta", "abrigo", "manga",
+        "bolsillo", "cuello", "pinza", "pliegue", "capucha", "puño", "ajust", "entalla",
+    ];
+    LARGE.iter().any(|word| text.contains(word))
+}
+
+/// A model id as people say it: "claude-sonnet-5-5" Sonnet 5.5, "opus" Opus; others as they are.
+pub fn model_name(id: &str) -> String {
+    let id = id.trim();
+    let capital = |w: &str| {
+        let mut c = w.chars();
+        c.next()
+            .map(|f| f.to_uppercase().chain(c).collect::<String>())
+            .unwrap_or_default()
+    };
+    if let Some(rest) = id.strip_prefix("claude-") {
+        let mut parts = rest.split('-');
+        if let Some(family) = parts.next() {
+            // "5-5", not a date stamp after it.
+            let version: Vec<&str> = parts
+                .take_while(|p| p.len() <= 2 && p.chars().all(|c| c.is_ascii_digit()))
+                .collect();
+            return if version.is_empty() {
+                capital(family)
+            } else {
+                format!("{} {}", capital(family), version.join("."))
+            };
+        }
+    }
+    match id {
+        "opus" | "sonnet" | "haiku" => capital(id),
+        _ => id.to_owned(),
+    }
 }
 
 /// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
@@ -1101,6 +1174,43 @@ pub fn describe_error(status: u16, body: &Value) -> String {
         _ => "",
     };
     format!("HTTP {status}: {message}.{hint}")
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    #[test]
+    fn small_requests_take_the_small_model() {
+        assert!(!large_task("ponlo en rojo", 0, false));
+        assert!(!large_task("simula 5 s más", 0, false));
+        assert!(!large_task("change the colour to navy", 0, false));
+        assert!(large_task("hazle una camisa para esa falda", 0, false));
+        assert!(large_task("add a pocket to the front", 0, false));
+        assert!(
+            large_task("ponlo en rojo", 1, false),
+            "files need the larger model"
+        );
+        assert!(
+            large_task("ponlo en rojo", 0, true),
+            "so does the first request"
+        );
+    }
+
+    #[test]
+    fn models_are_named_as_people_say_them() {
+        assert_eq!(model_name("claude-sonnet-5-5"), "Sonnet 5.5");
+        assert_eq!(model_name("claude-opus-5-5"), "Opus 5.5");
+        assert_eq!(model_name("claude-haiku-5-5-20261101"), "Haiku 5.5");
+        assert_eq!(model_name("opus"), "Opus");
+        assert_eq!(model_name("gpt-6.2-sol"), "gpt-6.2-sol");
+        assert_eq!(Provider::ClaudeCli.short_label(), "Claude Code");
+        assert!(
+            Provider::Anthropic
+                .suggested_models()
+                .contains(&"claude-sonnet-5-5")
+        );
+    }
 }
 
 #[cfg(test)]

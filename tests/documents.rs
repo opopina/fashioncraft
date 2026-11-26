@@ -76,3 +76,20 @@ fn templates_saved_with_the_earlier_tag_still_open() {
     let template: GarmentTemplate = serde_json::from_str(&unknown).unwrap();
     assert!(template.compile().is_err());
 }
+
+#[test]
+fn assistant_notes_are_kept_with_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("notes.json");
+    let mut p = project();
+    p.save(&file).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert!(
+        json.get("assistant_notes").is_none(),
+        "absent when there are none"
+    );
+    p.assistant_notes = vec!["School uniform; sizes 8 to 14.".into()];
+    p.save(&file).unwrap();
+    let loaded = FittingProject::load(&file).unwrap();
+    assert_eq!(loaded.assistant_notes, p.assistant_notes);
+}

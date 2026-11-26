@@ -306,10 +306,20 @@ pub(super) enum Icon {
     Gem,
     /// A solid disc: plain colour.
     Swatch,
+    /// A speech bubble: the Assistant.
+    Chat,
+    /// Two sliders: the Assistant's settings.
+    Sliders,
+    /// An arrow turning back: restore to an earlier moment.
+    Restore,
+    /// A paperclip: attach files.
+    Paperclip,
+    /// A filled square: stop.
+    Stop,
 }
 
 #[cfg(test)]
-const ALL: [Icon; 151] = [
+const ALL: [Icon; 156] = [
     Icon::Select,
     Icon::Edit,
     Icon::Pen,
@@ -461,6 +471,11 @@ const ALL: [Icon; 151] = [
     Icon::Bolt,
     Icon::Gem,
     Icon::Swatch,
+    Icon::Chat,
+    Icon::Sliders,
+    Icon::Restore,
+    Icon::Paperclip,
+    Icon::Stop,
 ];
 
 // ---------------------------------------------------------------------------
@@ -1722,6 +1737,54 @@ pub(super) fn geometry(icon: Icon) -> Vec<Prim> {
             path(&[[0.60, 0.16], [0.64, 0.36], [0.50, 0.86]]),
         ],
         Icon::Swatch => vec![dot([0.50, 0.50], 0.30)],
+        Icon::Chat => vec![
+            closed(&[
+                [0.10, 0.16],
+                [0.90, 0.16],
+                [0.90, 0.66],
+                [0.44, 0.66],
+                [0.24, 0.86],
+                [0.26, 0.66],
+                [0.10, 0.66],
+            ]),
+            dot([0.32, 0.41], 0.045),
+            dot([0.50, 0.41], 0.045),
+            dot([0.68, 0.41], 0.045),
+        ],
+        Icon::Sliders => vec![
+            seg([0.10, 0.30], [0.52, 0.30]),
+            seg([0.72, 0.30], [0.90, 0.30]),
+            circle([0.62, 0.30], 0.10),
+            seg([0.10, 0.72], [0.28, 0.72]),
+            seg([0.48, 0.72], [0.90, 0.72]),
+            circle([0.38, 0.72], 0.10),
+        ],
+        Icon::Restore => vec![
+            arc([0.54, 0.54], 0.32, 200.0, 495.0, 24),
+            path(&[[0.16, 0.22], [0.18, 0.46], [0.40, 0.42]]),
+        ],
+        Icon::Paperclip => vec![path(&[
+            [0.78, 0.46],
+            [0.46, 0.80],
+            [0.30, 0.84],
+            [0.18, 0.72],
+            [0.22, 0.56],
+            [0.58, 0.20],
+            [0.72, 0.16],
+            [0.82, 0.26],
+            [0.78, 0.40],
+            [0.44, 0.74],
+            [0.36, 0.72],
+            [0.34, 0.64],
+            [0.64, 0.34],
+        ])],
+        // Nested squares read as a filled one at icon size.
+        // A filled square: outlines inside each other at a small size.
+        Icon::Stop => vec![
+            stroke_rect([0.12, 0.12], [0.88, 0.88]),
+            stroke_rect([0.25, 0.25], [0.75, 0.75]),
+            stroke_rect([0.38, 0.38], [0.62, 0.62]),
+        ],
         Icon::Lock => vec![
             stroke_rect([0.24, 0.46], [0.76, 0.86]),
             arc([0.50, 0.32], 0.15, 180.0, 360.0, 12),
@@ -2246,7 +2309,7 @@ mod tests {
         // Recorded per icon. If a glyph silently loses its geometry (or gains a
         // stray primitive), the count changes and this fails instead of the
         // blank button reaching the user.
-        let expected: [(Icon, usize); 151] = [
+        let expected: [(Icon, usize); 156] = [
             (Icon::Select, 1),
             (Icon::Edit, 3),
             (Icon::Pen, 3),
@@ -2398,6 +2461,11 @@ mod tests {
             (Icon::Bolt, 1),
             (Icon::Gem, 4),
             (Icon::Swatch, 1),
+            (Icon::Chat, 4),
+            (Icon::Sliders, 6),
+            (Icon::Restore, 2),
+            (Icon::Paperclip, 1),
+            (Icon::Stop, 3),
         ];
         // A new variant without a recorded count is itself a regression.
         assert_eq!(expected.len(), ALL.len());

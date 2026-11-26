@@ -20,7 +20,7 @@ pub(super) struct DocumentUi {
     dxf_aama: dxf_aama_ui::DxfAamaUi,
     svg_import: svg_import_ui::ImportUi,
     staged_avatar: Option<fashioncraft::avatar_import::StagedAvatar>,
-    path: Option<PathBuf>,
+    pub(super) path: Option<PathBuf>,
     pub dirty: bool,
     last_recovery: Instant,
     recovery: PathBuf,
@@ -579,7 +579,7 @@ impl Atelier {
         self.pending = false;
         self.submit(ctx, false);
     }
-    fn snapshot_document(&self) -> FittingProject {
+    pub(super) fn snapshot_document(&self) -> FittingProject {
         let mut project = self.project.clone();
         project.prearrange = false;
         project.simulation = Some(self.settings.clone());

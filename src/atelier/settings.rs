@@ -92,6 +92,19 @@ pub(super) struct AiPrefs {
     pub(super) base_url: String,
     /// Pause the Assistant for a review every this many steps (0: never, the default).
     pub(super) pause_every: usize,
+    /// Pick the model by the size of each request: `model_small` for simple steps,
+    /// `model_large` for new garments and fixes (Settings › Connection › Automatic).
+    pub(super) model_auto: bool,
+    pub(super) model_small: String,
+    pub(super) model_large: String,
+    /// The person's own instructions, at the start of every conversation.
+    pub(super) instructions: String,
+    /// What the Assistant may do without asking, by kind of action.
+    pub(super) permissions: Permissions,
+    /// A picture after each simulation, not only when one is needed.
+    pub(super) picture_after_simulating: bool,
+    /// With an API key, stop a conversation once it has cost this many US dollars (0: no cap).
+    pub(super) spend_cap_usd: f64,
 }
 
 impl Default for AiPrefs {
@@ -102,6 +115,53 @@ impl Default for AiPrefs {
             model: String::new(),
             base_url: String::new(),
             pause_every: 0,
+            model_auto: false,
+            model_small: String::new(),
+            model_large: String::new(),
+            instructions: String::new(),
+            permissions: Permissions::default(),
+            picture_after_simulating: false,
+            spend_cap_usd: 0.,
+        }
+    }
+}
+
+/// Whether the Assistant may do a kind of action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Permission {
+    /// Without asking.
+    Free,
+    /// It asks first, in the chat.
+    Ask,
+    Never,
+}
+
+/// The kinds of action, as Settings › Permissions lists them. Changes inside the project are
+/// undone with Undo; what leaves the project (saving, files) is not, so it asks by default.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(super) struct Permissions {
+    /// Drawing, sewing, fabrics and colours.
+    pub(super) edit: Permission,
+    /// Simulating and taking pictures.
+    pub(super) simulate: Permission,
+    /// Opening what the person attached.
+    pub(super) read: Permission,
+    /// Saving the project file.
+    pub(super) save: Permission,
+    /// Exporting and writing other files.
+    pub(super) export: Permission,
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self {
+            edit: Permission::Free,
+            simulate: Permission::Free,
+            read: Permission::Free,
+            save: Permission::Ask,
+            export: Permission::Ask,
         }
     }
 }

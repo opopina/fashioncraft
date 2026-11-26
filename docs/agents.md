@@ -15,7 +15,8 @@ only into your `Documents/FashionCraft` folder, and they never open file dialogs
 
 ## The Assistant
 
-Open **Window › Assistant** and press **Connection** to set it up:
+Open the Assistant (its toolbar button, or **Window › Assistant**) and press the settings icon in
+its header. **Connection** sets it up:
 
 | Provider | Model | Address | Key |
 |---|---|---|---|
@@ -62,16 +63,59 @@ isolated working directory. Run `agy models` to see available model IDs, or leav
 your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
 stay off.
 
-**Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
-model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
-after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
-Cmd+V (Ctrl+V on Windows and Linux) while the Assistant is open, wherever the focus is.
+**Using it.** **Assistant** in the main toolbar opens and closes it; while it is closed, a fuchsia
+dot on the button means it is working and an amber one that it waits for you. Type a request and
+press Enter; Shift+Enter starts a new line. The header shows who answers, the model (a menu of
+that provider's models), what the conversation has used, and copy, settings and new chat. Each
+answer folds the tools it ran into one line ("5 steps in the project · 3 s") that opens to each
+step with its result and screenshots; a plan the model shows (the `plan` tool) and the check after
+simulating (`check_garment`) show as cards. **Back to before this message**, under each of your
+messages, puts the project back as it was when you sent it (Undo brings the work back) and tells
+the model so with your next message. With pieces selected, the message box shows **This piece:
+…**: the message is about them, and × takes them off until the selection changes. While it works,
+the step in progress shows its time (a simulation, how far it got of its seconds), and what you
+write then waits above the box and goes when the turn ends (× takes it back to change it).
+**Stop** ends the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
+Linux) while the Assistant is open, wherever the focus is.
+
+**A new chat** says what the project holds and offers requests that fit it (a garment to go with
+the one there, a check of seams, strain and pressure, sizes, one from a photo, which first asks
+for the picture); a click sends it. Under them, **Remembered for this project** lists the notes
+kept in the project file (`assistant_notes`): the person edits them there or in Settings › Own
+instructions, the model with `project_notes`, and they go at the start of every conversation.
+
+**Settings.** The settings icon in the Assistant's header opens its own window:
+
+- **Connection**: who answers, whether it is ready, and the model. With providers that suggest
+  models (Claude), **Automatic** picks a small model for simple steps (a colour, a fabric,
+  simulating again) and a larger one for new garments, fixes, files and a conversation's first
+  request (`large_task` in `src/assistant.rs`); **Always the same** uses one. The header's model
+  menu has Automatic too, and shows the model the last message went to.
+- **Own instructions**: text that goes at the start of every conversation, in every project.
+- **Permissions**: see below.
+- **Limits and usage**: the plan's limit or the context, this conversation's tokens and money, the
+  review pause, pictures (**Only when needed**, or **After each simulation**) and, with an API
+  key, a spend cap per conversation: past it, the turn stops after its step and new messages wait
+  for a new chat or a higher cap.
+
+**Defaults** puts permissions, the pause, pictures, the cap and Automatic back as they come; the
+connection and your instructions stay.
+
+**Asking first.** What the Assistant does inside the project is undone with Undo; what leaves it
+is not. So by default it asks before saving the project and before exporting or writing files
+(`save_project`, `export_garment`, `render`): a card in the chat shows the file and **Allow**,
+**Always in this project** (until FashionCraft closes) and **No**; the window's dot and the
+toolbar's turn amber while it waits. Writing something else instead says no and stops the turn
+after that step; the message goes then. **Settings › Permissions** sets each kind of step
+(editing, simulating and pictures, opening attachments, saving, exporting) to **Without asking**,
+**Ask first** or **Never**; looking (summaries, measures, the plan) never asks.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
-**Connection › Review › Pause every N steps** (off by default): it stops after that many steps and
-**Continue** goes on with everything so far.
+**Settings › Limits and usage › Review › Pause every N steps** (off by default): it stops after that many steps; the
+card says so, **Continue** goes on with everything so far and **Back to before the pause** puts the
+project back as it was before those steps.
 
 **Usage.** Beside the provider's name the panel shows what this conversation has used, kept in
 memory only: new input, output and cached input tokens (12.4k in · 3.1k out · 40k cached), the
@@ -142,7 +186,7 @@ Some requests to try:
 - "Set up sizes S, M, L and XL with M as the base and show me the size chart."
 - "Save this as summer-tee and export it as GLB."
 
-**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
+**Attaching files.** Press **Attach**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
 Windows and Linux) while the Assistant is open, wherever the focus is, with a picture or files on
 the clipboard; text still pastes as text into the field that has the focus. On Linux under
 Wayland FashionCraft reads the clipboard with `wl-paste` (the wl-clipboard package) when it is
@@ -317,6 +361,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 |---|---|
 | `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. It answers ok, the problems and the counts; `details: true` adds every number. A sleeve cap eased into its armhole on purpose is not a problem. |
 | `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
+| `project_notes` | Adds or removes one of the notes kept with the project (who it is for, sizes, fabrics, the workshop's rules); they go to the model at the start of every conversation and show in the Assistant's new chat. |
 
 `fashioncraft-cli tools` prints the tools with their input schemas.
 

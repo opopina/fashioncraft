@@ -84,7 +84,10 @@ fn assistant_notes_are_kept_with_the_project() {
     let mut p = project();
     p.save(&file).unwrap();
     let json: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
-    assert!(json.get("assistant_notes").is_none(), "absent when there are none");
+    assert!(
+        json.get("assistant_notes").is_none(),
+        "absent when there are none"
+    );
     p.assistant_notes = vec!["School uniform; sizes 8 to 14.".into()];
     p.save(&file).unwrap();
     let loaded = FittingProject::load(&file).unwrap();

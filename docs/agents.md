@@ -220,7 +220,7 @@ goes away.
 
 | Tool | What it does |
 |---|---|
-| `scene_summary` | Every piece (size, segments with ids, lengths and the side they face, internal lines, placement), every seam (the length of each side, and after a simulation its gap in mm and whether it closed), the fabrics with their physical parameters, the avatar's measurements, pose and arrangement points, the sizes, the current selection, warnings (unequal seams, open seams, missed target lengths, pieces sewn to nothing), and the simulation state. |
+| `scene_summary` | Every piece (size, segments with ids, lengths and the side they face, internal lines, placement), every seam (the length of each side, and after a simulation its gap in mm and whether it closed), the fabrics with their physical parameters, the avatar's measurements, pose and arrangement points, the sizes, the current selection, warnings (unequal seams, open seams, missed target lengths, pieces sewn to nothing), and the simulation state. The avatar's arrangement points and the avatar, pose and fabric presets come as counts; `lists: true` names them. |
 | `piece_detail` | One piece in full: numbered outline points (cm, x right, y down), each segment's end points, length, curve, target length, seam allowance, notches and seams, its internal lines and placement. |
 | `size_chart` | The sizes and every point of measure in every size. |
 | `screenshot` | A PNG of the 3D view (drawn for the purpose, whatever the window's state), or of the whole window (shown). |
@@ -237,7 +237,7 @@ goes away.
 
 | Tool | What it does |
 |---|---|
-| `draft_garment` | A base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. `mode` `add` (the default) wears it over the garment there, which keeps its pieces and drape: it must be draped first; the new garment keeps its arrangement around the avatar, goes on an outer layer, moves up to 8 cm out where it would start inside or within 3 mm of the other cloth, and its pieces are named after it ("t-shirt front"), in one undo step. `replace` drafts it instead of everything there. It warns when a piece starts touching the body. |
+| `draft_garment` | A base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. `mode` `add` (the default) wears it over the garment there, which keeps its pieces and drape: it must be draped first; the new garment keeps its arrangement around the avatar, goes on an outer layer, moves up to 8 cm out where it would start inside or within 3 mm of the other cloth, and its pieces are named after it ("t-shirt front"), in one undo step. `replace` drafts it instead of everything there. It warns when a piece starts touching the body. Each base is cut from a fitting fabric (a t-shirt in jersey, the others in light woven cotton), its own even when added over a garment of the same preset, and the reply names it. |
 | `create_piece` | A new piece from a rectangle or an outline of points, named. |
 | `move_points` | Moves outline points by an offset in cm. |
 | `set_segment_length` | Makes a straight segment a given length, keeping its start, end or middle. |
@@ -313,7 +313,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 
 | Tool | What it does |
 |---|---|
-| `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. |
+| `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. It answers ok, the problems and the counts; `details: true` adds every number. A sleeve cap eased into its armhole on purpose is not a problem. |
 | `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
 
 `fashioncraft-cli tools` prints the tools with their input schemas.

@@ -1063,94 +1063,234 @@ impl Atelier {
         self.assistant_log(line);
     }
 
-    /// Tokens, money and the limit this conversation has used, beside the provider's name.
-    fn assistant_usage_readout(&self, ui: &mut egui::Ui) {
+    /// The header under the window's title: a dot (green ready, fuchsia working, amber
+    /// waiting), who answers, the model (a menu while idle), then the usage ring with this
+    /// conversation's tokens, and copy, settings and new chat while idle.
+    fn assistant_header(&mut self, ui: &mut egui::Ui, settings: &Settings, busy: bool) {
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        let state = self.assistant_state();
+        let visuals = ui.visuals().clone();
+        let accent = super::workspace::accent(&visuals);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.;
+            let colour = match state {
+                AssistantState::Working => accent,
+                AssistantState::Waiting => visuals.warn_fg_color,
+                AssistantState::Idle if settings.missing().is_some() => visuals.warn_fg_color,
+                AssistantState::Idle => Color32::from_rgb(0x57, 0xab, 0x5a),
+            };
+            let (dot, _) = ui.allocate_exact_size(egui::vec2(7., 7.), egui::Sense::hover());
+            ui.painter().circle_filled(dot.center(), 3.5, colour);
+            ui.label(
+                egui::RichText::new(settings.provider.short_label())
+                    .strong()
+                    .size(12.5),
+            )
+            .on_hover_text(settings.provider.label());
+            let model = match settings.model().trim() {
+                "" => tr("Default").to_owned(),
+                id => fashioncraft::assistant::model_name(id),
+            };
+            if state == AssistantState::Waiting {
+                ui.label(
+                    egui::RichText::new(tr("waiting for your answer"))
+                        .size(12.)
+                        .color(visuals.warn_fg_color),
+                );
+            } else if busy {
+                egui::Frame::new()
+                    .fill(visuals.widgets.inactive.bg_fill)
+                    .corner_radius(3.)
+                    .inner_margin(egui::Margin::symmetric(8, 3))
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new(&model).size(12.).weak());
+                    });
+            } else {
+                self.assistant_model_menu(ui, settings, &model);
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 2.;
+                if !busy {
+                    if super::icons::icon_only(
+                        ui,
+                        super::icons::Icon::PagePlus,
+                        28.,
+                        false,
+                        tr("New chat"),
+                    )
+                    .clicked()
+                    {
+                        self.assistant_new_conversation();
+                    }
+                    if super::icons::icon_only(
+                        ui,
+                        super::icons::Icon::Sliders,
+                        28.,
+                        self.assistant.show_connection,
+                        tr("Assistant settings"),
+                    )
+                    .clicked()
+                    {
+                        self.assistant.show_connection = !self.assistant.show_connection;
+                    }
+                    if !self.assistant.entries.is_empty()
+                        && super::icons::icon_only(
+                            ui,
+                            super::icons::Icon::Duplicate,
+                            28.,
+                            false,
+                            tr("Copy the conversation"),
+                        )
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(self.assistant_transcript());
+                        self.status = tr("Conversation copied").into();
+                    }
+                }
+                self.assistant_usage_ring(ui);
+            });
+        });
+    }
+
+    /// The model menu: the provider's default, the models it suggests, the one set by hand,
+    /// and Other… for the connection settings.
+    fn assistant_model_menu(&mut self, ui: &mut egui::Ui, settings: &Settings, shown: &str) {
+        let lang = self.prefs.language;
+        let current = self.prefs.ai.model.trim().to_owned();
+        let mut options: Vec<String> = vec![String::new()];
+        options.extend(
+            settings
+                .provider
+                .suggested_models()
+                .iter()
+                .map(|m| (*m).to_owned()),
+        );
+        if !options.contains(&current) {
+            options.push(current.clone());
+        }
+        let mut chosen = None;
+        let mut other = false;
+        egui::ComboBox::from_id_salt("assistant.model")
+            .selected_text(egui::RichText::new(shown).size(12.))
+            .width(0.)
+            .show_ui(ui, |ui| {
+                for id in &options {
+                    let name = if id.is_empty() {
+                        i18n::tr(lang, "Default").to_owned()
+                    } else {
+                        fashioncraft::assistant::model_name(id)
+                    };
+                    if ui.selectable_label(*id == current, name).clicked() {
+                        chosen = Some(id.clone());
+                    }
+                }
+                ui.separator();
+                if ui
+                    .selectable_label(false, i18n::tr(lang, "Other…"))
+                    .clicked()
+                {
+                    other = true;
+                }
+            })
+            .response
+            .on_hover_text(i18n::tr(lang, "Model"));
+        if let Some(id) = chosen.filter(|id| *id != current) {
+            self.prefs.ai.model = id;
+            self.prefs_dirty = true;
+        }
+        if other {
+            self.assistant.show_connection = true;
+        }
+    }
+
+    /// A ring for the plan's limit (or, where the provider does not report one, how full the
+    /// context is) and this conversation's tokens in thousands; details on hover.
+    fn assistant_usage_ring(&self, ui: &mut egui::Ui) {
         use fashioncraft::assistant::short_count;
         let lang = self.prefs.language;
         let u = &self.assistant.usage;
-        if u.input + u.output == 0 {
+        let total = u.input + u.output;
+        let share = match (&u.limit, u.context) {
+            (Some(limit), _) => Some(limit.used_percent / 100.),
+            (None, Some((used, window))) => Some(used as f64 / window.max(1) as f64),
+            _ => None,
+        };
+        if total == 0 && share.is_none() {
             return;
         }
-        let mut text = format!(
-            "{} {} · {} {}",
+        let decimal = |text: String| {
+            if lang == i18n::Language::Spanish {
+                text.replace('.', ",")
+            } else {
+                text
+            }
+        };
+        let text = if total > 0 {
+            decimal(short_count(total))
+        } else {
+            format!("{:.0} %", share.unwrap_or(0.) * 100.)
+        };
+        let mut hover = format!(
+            "{} {} · {} {} · {} {}",
             short_count(u.input - u.cached.min(u.input)),
             i18n::tr(lang, "in"),
             short_count(u.output),
-            i18n::tr(lang, "out")
+            i18n::tr(lang, "out"),
+            short_count(u.cached),
+            i18n::tr(lang, "cached")
         );
-        if u.cached > 0 {
-            text.push_str(&format!(
-                " · {} {}",
-                short_count(u.cached),
-                i18n::tr(lang, "cached")
-            ));
-        }
         if u.priced {
-            text.push_str(&format!(" · ≈ ${:.2}", u.cost));
+            hover.push_str(&format!(" · ≈ ${:.2}", u.cost));
         }
-        ui.label(egui::RichText::new(text).weak().size(11.))
-            .on_hover_text(i18n::tr(
-                lang,
-                "This conversation's tokens, as the provider reported them: new input, output and \
-             input read from its cache. Money is estimated from published prices, where they are \
-             known (≈).",
-            ));
-        // The plan's limit where the provider reports it; otherwise how full the context is.
-        let (share, hover) = match (&u.limit, u.context) {
-            (Some(limit), _) => (
-                limit.used_percent / 100.,
-                format!(
-                    "{:.0} % {} ({})",
-                    limit.used_percent,
-                    i18n::tr(lang, "of the usage limit used, as the provider reports it"),
-                    limit.what
-                ),
-            ),
-            (None, Some((used, window))) => (
-                used as f64 / window.max(1) as f64,
-                format!(
-                    "{} {} / {} ({})",
-                    i18n::tr(lang, "Context:"),
-                    short_count(used),
-                    short_count(window),
-                    i18n::tr(
-                        lang,
-                        "how full the model's context window is; not the plan's limit, which \
-                         this provider does not report"
-                    )
-                ),
-            ),
-            _ => return,
-        };
-        let (rect, response) = ui.allocate_exact_size(egui::vec2(14., 14.), egui::Sense::hover());
+        match (&u.limit, u.context) {
+            (Some(limit), _) => hover.push_str(&format!(
+                "\n{:.0} % {} ({})",
+                limit.used_percent,
+                i18n::tr(lang, "of the usage limit used, as the provider reports it"),
+                limit.what
+            )),
+            (None, Some((used, window))) => hover.push_str(&format!(
+                "\n{} {} / {}",
+                i18n::tr(lang, "Context:"),
+                short_count(used),
+                short_count(window)
+            )),
+            _ => {}
+        }
+        ui.label(
+            egui::RichText::new(text)
+                .size(12.)
+                .color(ui.visuals().weak_text_color()),
+        )
+        .on_hover_text(&hover);
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(16., 16.), egui::Sense::hover());
         let painter = ui.painter();
-        let c = rect.center();
-        let r = 5.5;
+        let (c, r) = (rect.center(), 6.);
         painter.circle_stroke(
             c,
             r,
-            egui::Stroke::new(2., ui.visuals().widgets.inactive.bg_fill),
+            egui::Stroke::new(2.2, ui.visuals().widgets.inactive.bg_fill),
         );
-        let share = share.clamp(0., 1.) as f32;
-        let colour = if share > 0.85 {
-            ui.visuals().warn_fg_color
-        } else {
-            super::workspace::accent(ui.visuals())
-        };
-        let points: Vec<egui::Pos2> = (0..=32)
-            .map(|k| {
-                let a =
-                    -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * share * k as f32 / 32.;
-                c + r * egui::vec2(a.cos(), a.sin())
-            })
-            .collect();
+        let share = share.unwrap_or(0.).clamp(0., 1.) as f32;
         if share > 0. {
-            painter.add(egui::Shape::line(points, egui::Stroke::new(2., colour)));
+            let colour = if share > 0.85 {
+                ui.visuals().warn_fg_color
+            } else {
+                super::workspace::accent(ui.visuals())
+            };
+            let points: Vec<egui::Pos2> = (0..=32)
+                .map(|k| {
+                    let a = -std::f32::consts::FRAC_PI_2
+                        + std::f32::consts::TAU * share * k as f32 / 32.;
+                    c + r * egui::vec2(a.cos(), a.sin())
+                })
+                .collect();
+            painter.add(egui::Shape::line(points, egui::Stroke::new(2.2, colour)));
         }
         response.on_hover_text(hover);
     }
 
-    /// A turn is running (for the demo mode).
     /// What the Assistant is doing now.
     pub(super) fn assistant_state(&self) -> AssistantState {
         if self.assistant_waiting() {
@@ -1273,87 +1413,7 @@ impl Atelier {
                 ui.style_mut().interaction.selectable_labels = true;
                 let settings = self.assistant_settings();
                 let accent = super::workspace::accent(ui.visuals());
-                // Who answers, with a dot that is green when ready and FashionCraft's colour
-                // while a turn runs; the connection and a new chat as icons at the right.
-                ui.horizontal(|ui| {
-                    let model = match settings.model() {
-                        "" if settings.provider == Provider::ClaudeCli => tr("Claude Code default"),
-                        "" if settings.provider == Provider::CodexCli => tr("Codex default"),
-                        "" if settings.provider == Provider::GeminiCli => tr("Gemini CLI default"),
-                        "" if settings.provider == Provider::AntigravityCli => {
-                            tr("Antigravity default")
-                        }
-                        "" => tr("no model chosen"),
-                        _ => settings.model(),
-                    };
-                    let (dot, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
-                    ui.painter().circle_filled(
-                        dot.center(),
-                        3.5,
-                        if busy {
-                            accent
-                        } else if settings.missing().is_some() {
-                            ui.visuals().warn_fg_color
-                        } else {
-                            Color32::from_rgb(0x57, 0xab, 0x5a)
-                        },
-                    );
-                    ui.label(
-                        egui::RichText::new(settings.provider.label())
-                            .strong()
-                            .size(12.5),
-                    );
-                    self.assistant_usage_readout(ui);
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(model).weak().size(12.)).truncate(),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let new_chat = ui.add_enabled_ui(!busy, |ui| {
-                            super::icons::icon_only(
-                                ui,
-                                super::icons::Icon::PagePlus,
-                                24.,
-                                false,
-                                tr("New chat"),
-                            )
-                        });
-                        if new_chat.inner.clicked() {
-                            self.assistant.entries.clear();
-                            self.assistant.usage = Totals::default();
-                            self.assistant.log = None;
-                            *self
-                                .assistant
-                                .conversation
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner()) =
-                                Conversation::new(settings.provider);
-                        }
-                        if super::icons::icon_only(
-                            ui,
-                            super::icons::Icon::Settings,
-                            24.,
-                            self.assistant.show_connection,
-                            tr("Connection"),
-                        )
-                        .clicked()
-                        {
-                            self.assistant.show_connection = !self.assistant.show_connection;
-                        }
-                        if !self.assistant.entries.is_empty()
-                            && super::icons::icon_only(
-                                ui,
-                                super::icons::Icon::Duplicate,
-                                24.,
-                                false,
-                                tr("Copy conversation"),
-                            )
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(self.assistant_transcript());
-                            self.status = tr("Conversation copied").into();
-                        }
-                    });
-                });
+                self.assistant_header(ui, &settings, busy);
                 if self.assistant.show_connection || settings.missing().is_some() {
                     ui.add_space(2.);
                     egui::Frame::new()

@@ -210,6 +210,29 @@ impl Provider {
             Self::Local => "Local model (Ollama, LM Studio…)",
         }
     }
+    /// The short name the Assistant's header shows.
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Anthropic => "Claude",
+            Self::OpenAi => "ChatGPT",
+            Self::CodexCli => "Codex",
+            Self::ClaudeCli => "Claude Code",
+            Self::Gemini => "Gemini",
+            Self::GeminiCli => "Gemini CLI",
+            Self::AntigravityCli => "Antigravity",
+            Self::Local => "Local model",
+        }
+    }
+    /// Models the Assistant's model menu offers, besides the provider's default and whatever
+    /// was typed in the connection settings.
+    pub fn suggested_models(self) -> &'static [&'static str] {
+        match self {
+            Self::Anthropic => &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+            // Claude Code takes these aliases for its current models.
+            Self::ClaudeCli => &["opus", "sonnet", "haiku"],
+            _ => &[],
+        }
+    }
     /// The model used when the preferences name none.
     pub fn default_model(self) -> &'static str {
         match self {
@@ -442,6 +465,35 @@ pub fn usage_of(provider: Provider, model: &str, answer: &Value) -> Option<Usage
 }
 
 /// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
+/// A model id as people say it: "claude-sonnet-5-5" Sonnet 5.5, "opus" Opus; others as they are.
+pub fn model_name(id: &str) -> String {
+    let id = id.trim();
+    let capital = |w: &str| {
+        let mut c = w.chars();
+        c.next()
+            .map(|f| f.to_uppercase().chain(c).collect::<String>())
+            .unwrap_or_default()
+    };
+    if let Some(rest) = id.strip_prefix("claude-") {
+        let mut parts = rest.split('-');
+        if let Some(family) = parts.next() {
+            // "5-5", not a date stamp after it.
+            let version: Vec<&str> = parts
+                .take_while(|p| p.len() <= 2 && p.chars().all(|c| c.is_ascii_digit()))
+                .collect();
+            return if version.is_empty() {
+                capital(family)
+            } else {
+                format!("{} {}", capital(family), version.join("."))
+            };
+        }
+    }
+    match id {
+        "opus" | "sonnet" | "haiku" => capital(id),
+        _ => id.to_owned(),
+    }
+}
+
 pub fn short_count(n: u64) -> String {
     match n {
         0..1_000 => n.to_string(),
@@ -1101,6 +1153,26 @@ pub fn describe_error(status: u16, body: &Value) -> String {
         _ => "",
     };
     format!("HTTP {status}: {message}.{hint}")
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    #[test]
+    fn models_are_named_as_people_say_them() {
+        assert_eq!(model_name("claude-sonnet-5-5"), "Sonnet 5.5");
+        assert_eq!(model_name("claude-opus-5-5"), "Opus 5.5");
+        assert_eq!(model_name("claude-haiku-5-5-20261101"), "Haiku 5.5");
+        assert_eq!(model_name("opus"), "Opus");
+        assert_eq!(model_name("gpt-6.2-sol"), "gpt-6.2-sol");
+        assert_eq!(Provider::ClaudeCli.short_label(), "Claude Code");
+        assert!(
+            Provider::Anthropic
+                .suggested_models()
+                .contains(&"claude-sonnet-5-5")
+        );
+    }
 }
 
 #[cfg(test)]

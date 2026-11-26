@@ -494,6 +494,12 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Smooth curve" => "Suavizar curva",
         "Cut and extend" => "Cortar y extender",
         "Create" => "Crear",
+        "Back to before this message" => "Volver a antes de este mensaje",
+        "Put the project back as it was before this message (Undo brings it back)" => {
+            "Deja el proyecto como estaba antes de este mensaje (Deshacer lo recupera)"
+        }
+        "Project put back to before" => "Proyecto devuelto a antes de",
+        "Project put back to before that message" => "Proyecto devuelto a antes de ese mensaje",
         "Checking the garment" => "Revisando la prenda",
         "Turning the view" => "Girando la vista",
         "Setting a sleeve" => "Montando una manga",

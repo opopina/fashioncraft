@@ -579,7 +579,7 @@ impl Atelier {
         self.pending = false;
         self.submit(ctx, false);
     }
-    fn snapshot_document(&self) -> FittingProject {
+    pub(super) fn snapshot_document(&self) -> FittingProject {
         let mut project = self.project.clone();
         project.prearrange = false;
         project.simulation = Some(self.settings.clone());

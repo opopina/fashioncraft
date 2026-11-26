@@ -65,6 +65,11 @@ pub(super) struct AssistantUi {
     text_pasted: bool,
     /// What this conversation has used so far (kept in memory only).
     usage: Totals,
+    /// The project as it was before each message of the person's, by the message's place
+    /// in the chat: "Back to before this message" puts it back.
+    restore_points: std::collections::BTreeMap<usize, FittingProject>,
+    /// A note for the model with the next message (the project was put back).
+    pending_note: Option<String>,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
     log: Option<PathBuf>,
 }
@@ -129,6 +134,8 @@ impl Default for AssistantUi {
             attach_note: None,
             text_pasted: false,
             usage: Totals::default(),
+            restore_points: Default::default(),
+            pending_note: None,
             log: None,
         }
     }
@@ -150,6 +157,9 @@ enum Entry {
         started: std::time::Instant,
         /// How long it took, once it ended.
         seconds: Option<f32>,
+        /// The pieces' names by id when a check ended, so its card reads the same after the
+        /// project changes or is put back.
+        names: Vec<(String, String)>,
     },
     Notice(String),
     Problem(String),
@@ -706,6 +716,7 @@ impl Atelier {
                         pictures: Vec::new(),
                         started: std::time::Instant::now(),
                         seconds: None,
+                        names: Vec::new(),
                     });
                 }
                 Update::Event(Event::ToolFinished {
@@ -727,12 +738,14 @@ impl Atelier {
                             picture(ctx, data, format!("assistant-{count}-{i}"))
                         })
                         .collect();
+                    let template = &self.project.template;
                     if let Some(Entry::Tool {
                         name: began,
                         outcome,
                         pictures,
                         started,
                         seconds,
+                        names,
                         ..
                     }) = self.assistant.entries.last_mut()
                         && *began == name
@@ -741,6 +754,13 @@ impl Atelier {
                         *outcome = Some((is_error, text));
                         *pictures = shown;
                         *seconds = Some(started.elapsed().as_secs_f32());
+                        if name == "check_garment" {
+                            *names = template
+                                .panels
+                                .iter()
+                                .map(|p| (p.id.clone(), p.name.clone()))
+                                .collect();
+                        }
                     }
                 }
                 Update::Done(result) => {
@@ -774,7 +794,33 @@ impl Atelier {
         self.assistant.failure = None;
         self.assistant.sent.clear();
         self.assistant.usage = Totals::default();
+        self.assistant.restore_points.clear();
+        self.assistant.pending_note = None;
         self.assistant.log = None;
+    }
+
+    /// Puts the project back as it was before the message at `at` in the chat (an undo
+    /// step, as opening a project is), says so, and tells the model with the next message.
+    fn assistant_restore(&mut self, at: usize) {
+        let lang = self.prefs.language;
+        let Some(project) = self.assistant.restore_points.get(&at).cloned() else {
+            return;
+        };
+        let said = match self.assistant.entries.get(at) {
+            Some(Entry::You(text)) => text.chars().take(60).collect::<String>(),
+            _ => String::new(),
+        };
+        if self.load(project) {
+            self.assistant.entries.push(Entry::Notice(format!(
+                "{} «{said}»",
+                i18n::tr(lang, "Project put back to before")
+            )));
+            self.assistant.pending_note = Some(format!(
+                "the person put the project back as it was before their message \"{said}\": \
+                 what was done from then on is undone"
+            ));
+            self.status = i18n::tr(lang, "Project put back to before that message").into();
+        }
     }
 
     /// Send `text` as if typed in the Assistant's box.
@@ -825,12 +871,19 @@ impl Atelier {
             ));
             self.assistant.sent.extend(attached.iter().cloned());
         }
+        let at = self.assistant.entries.len();
+        let before = self.snapshot_document();
+        self.assistant.restore_points.insert(at, before);
         self.assistant.entries.push(Entry::You(text.clone()));
         self.assistant_log(json!({
             "you": text,
             "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
             "scene_note": note,
         }));
+        let note = match (self.assistant.pending_note.take(), note) {
+            (Some(put_back), Some(scene)) => Some(format!("{put_back}; {scene}")),
+            (put_back, scene) => put_back.or(scene),
+        };
         if let Some(note) = &note {
             text = fashioncraft::assistant::with_note(&text, note);
         }
@@ -1478,6 +1531,7 @@ impl Atelier {
                 // conversation above takes exactly the rest and the window never grows.
                 let input_height_id = egui::Id::new("assistant.input_height");
                 let mut resume = false;
+                let mut restore = None;
                 let input_height = ui
                     .ctx()
                     .data(|d| d.get_temp::<f32>(input_height_id))
@@ -1507,7 +1561,7 @@ impl Atelier {
                                 );
                             });
                         }
-                        self.assistant_turns(ui, busy);
+                        restore = self.assistant_turns(ui, busy);
                         if !busy && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
                         {
                             ui.vertical_centered(|ui| {
@@ -1544,6 +1598,9 @@ impl Atelier {
                             });
                         }
                     });
+                if let Some(at) = restore {
+                    self.assistant_restore(at);
+                }
                 if resume {
                     self.assistant.input = tr("Continue.").to_owned();
                     self.assistant_send(ctx);
@@ -1671,13 +1728,22 @@ impl Atelier {
     /// The chat turn by turn: the person's messages as they are; each answer under the
     /// assistant's name once, with what it said before acting, its plan, its steps folded into
     /// one line, the check after simulating, and what it said at the end.
-    fn assistant_turns(&self, ui: &mut egui::Ui, busy: bool) {
+    /// Returns the place of a message whose "Back to before this message" was clicked.
+    fn assistant_turns(&self, ui: &mut egui::Ui, busy: bool) -> Option<usize> {
         let entries = &self.assistant.entries;
         let answers = |e: &Entry| matches!(e, Entry::Model(_) | Entry::Tool { .. });
+        let mut restore = None;
         let mut i = 0;
         while i < entries.len() {
             if !answers(&entries[i]) {
                 self.assistant_entry(ui, &entries[i]);
+                if !busy
+                    && matches!(entries[i], Entry::You(_))
+                    && self.assistant.restore_points.contains_key(&i)
+                    && self.assistant_restore_button(ui)
+                {
+                    restore = Some(i);
+                }
                 i += 1;
                 continue;
             }
@@ -1687,6 +1753,46 @@ impl Atelier {
             self.assistant_answer(ui, i, &entries[i..end], busy && end == entries.len());
             i = end;
         }
+        restore
+    }
+
+    /// "Back to before this message", under a message of the person's, at the right.
+    fn assistant_restore_button(&self, ui: &mut egui::Ui) -> bool {
+        let lang = self.prefs.language;
+        let mut clicked = false;
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            let label = i18n::tr(lang, "Back to before this message");
+            let weak = ui.visuals().weak_text_color();
+            let galley = ui.painter().layout_no_wrap(
+                label.to_owned(),
+                egui::FontId::proportional(11.5),
+                weak,
+            );
+            let size = egui::vec2(12. + 5. + galley.size().x + 8., 22.);
+            let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+            let ink = if response.hovered() {
+                ui.visuals().text_color()
+            } else {
+                weak
+            };
+            let icon = egui::Rect::from_center_size(
+                egui::pos2(rect.left() + 10., rect.center().y),
+                egui::vec2(12., 12.),
+            );
+            super::icons::glyph(ui.painter(), icon, super::icons::Icon::Restore, ink, 1.3);
+            ui.painter().galley_with_override_text_color(
+                egui::pos2(icon.right() + 5., rect.center().y - galley.size().y / 2.),
+                galley,
+                ink,
+            );
+            clicked = response
+                .on_hover_text(i18n::tr(
+                    lang,
+                    "Put the project back as it was before this message (Undo brings it back)",
+                ))
+                .clicked();
+        });
+        clicked
     }
 
     /// One answer: `key` tells its folded steps apart; `running` while its turn goes on.
@@ -1724,15 +1830,7 @@ impl Atelier {
             plan_card(ui, lang, plan, running);
         }
         self.assistant_steps(ui, key, &answer[first..=last], running);
-        let template = &self.project.template;
-        let piece_name = |id: &str| {
-            template
-                .panels
-                .iter()
-                .find(|p| p.id == id)
-                .map_or_else(|| id.to_owned(), |p| p.name.clone())
-        };
-        check_card(ui, lang, answer, &piece_name);
+        check_card(ui, lang, answer);
         for entry in &answer[last + 1..] {
             self.assistant_said(ui, entry);
         }
@@ -2202,21 +2300,23 @@ fn short_problem(
 /// The check after simulating, when the answer ran check_garment: its last picture of the
 /// garment (from the check's view, the camera or a screenshot) beside the results: seams
 /// closed, nothing inside the body, and each other problem.
-fn check_card(
-    ui: &mut egui::Ui,
-    lang: i18n::Language,
-    answer: &[Entry],
-    piece_name: &dyn Fn(&str) -> String,
-) {
-    let Some(text) = answer.iter().rev().find_map(|e| match e {
+fn check_card(ui: &mut egui::Ui, lang: i18n::Language, answer: &[Entry]) {
+    let Some((text, names)) = answer.iter().rev().find_map(|e| match e {
         Entry::Tool {
             name,
             outcome: Some((false, text)),
+            names,
             ..
-        } if name == "check_garment" => Some(text),
+        } if name == "check_garment" => Some((text, names)),
         _ => None,
     }) else {
         return;
+    };
+    let piece_name = |id: &str| {
+        names
+            .iter()
+            .find(|(known, _)| known == id)
+            .map_or_else(|| id.to_owned(), |(_, name)| name.clone())
     };
     let Some(report) = text
         .find('{')
@@ -2258,7 +2358,7 @@ fn check_card(
         lines.push((true, i18n::tr(lang, "Nothing inside the body").to_owned()));
     }
     for p in problems.iter().filter(|p| !p.starts_with("Seam ")) {
-        lines.push((false, short_problem(lang, p, piece_name)));
+        lines.push((false, short_problem(lang, p, &piece_name)));
     }
     egui::Frame::new()
         .fill(visuals.extreme_bg_color)

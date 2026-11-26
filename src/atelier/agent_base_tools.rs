@@ -67,6 +67,7 @@ impl Atelier {
             return Ok(answer);
         }
         let result = match name {
+            "project_notes" => self.agent_project_notes(args),
             "edit" => self.agent_generic_edit(args),
             "transform_piece" => self.agent_transform(args),
             "bend_segment" => agent_build::bend_segment(&self.project.template, args)

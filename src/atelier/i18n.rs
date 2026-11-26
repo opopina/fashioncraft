@@ -496,6 +496,44 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "What shall we do?" => "¿Qué hacemos?",
+        "there is no garment yet" => "aún no hay prenda",
+        "there is a garment of" => "hay una prenda de",
+        "there is a skirt of" => "hay una falda de",
+        "there are trousers of" => "hay un pantalón de",
+        "there is a shirt of" => "hay una camisa de",
+        "In" => "En",
+        "this project" => "este proyecto",
+        "on the avatar" => "en el avatar",
+        "Ask for a change, a new garment or a check." => {
+            "Pide un cambio, una prenda nueva o una revisión."
+        }
+        "For this project" => "Para este proyecto",
+        "Draft a skirt for this avatar" => "Traza una falda para este avatar",
+        "Draft a shirt for this avatar" => "Traza una camisa para este avatar",
+        "Make a garment from a photo" => "Haz una prenda a partir de una foto",
+        "What can you do here?" => "¿Qué puedes hacer aquí?",
+        "Make a shirt to go with this skirt" => "Hazle una camisa que vaya con esta falda",
+        "Make a shirt to go with these trousers" => "Hazle una camisa que vaya con este pantalón",
+        "Make a skirt to go with this shirt" => "Hazle una falda que vaya con esta camisa",
+        "Make a garment to go with this one" => "Hazle una prenda que vaya con esta",
+        "Check seams, strain and pressure" => "Revisa costuras, tensión y presión",
+        "Grade it to sizes S, M and L" => "Pásala a talla S, M y L",
+        "Show me the size chart" => "Muéstrame la tabla de tallas",
+        "Make it from a photo" => "Hazla a partir de una foto",
+        "Remembered for this project" => "Recuerda de este proyecto",
+        "One note per line: who it is for, sizes, fabrics, the workshop's rules" => {
+            "Una nota por línea: para quién es, tallas, telas, las reglas del taller"
+        }
+        "Save notes" => "Guardar notas",
+        "Nothing yet. What you or the assistant note here goes to every conversation about this project." => {
+            "Nada aún. Lo que anotéis aquí tú o el asistente va a cada conversación de este proyecto."
+        }
+        "Edit project notes" => "Editar notas del proyecto",
+        "Each project also keeps its own notes, read at the start too." => {
+            "Además, cada proyecto guarda sus propias notas, que también se leen al empezar."
+        }
+        "Noting for the project" => "Anotando en el proyecto",
         "Who answers" => "Quién responde",
         "Ready to use" => "Listo para usar",
         "Automatic" => "Automático",
@@ -1527,9 +1565,6 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Usa tu sesión de Antigravity CLI (agy). Los mensajes y las capturas solicitadas se envían a Google Antigravity."
         }
         "no model chosen" => "ningún modelo elegido",
-        "Ask for something to do in this project, for example: \"Draft a denim skirt for this avatar, simulate it and show me how it falls.\"" => {
-            "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
-        }
         "Stopping after this step…" => "Deteniendo tras este paso…",
         "Thinking…" => "Pensando…",
         "Send" => "Enviar",
@@ -2464,7 +2499,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "pins" => "alfileres",
         "tack" => "hilván",
         "tacks" => "hilvanes",
-        "What should we make?" => "¿Qué hacemos hoy?",
         "Assign" => "Asignar",
         "Copy fabric" => "Copiar tejido",
         "Assign fabric" => "Asignar tejido",

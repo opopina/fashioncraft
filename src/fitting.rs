@@ -71,6 +71,10 @@ pub struct FittingProject {
     /// recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub animation_take: Option<AnimationTake>,
+    /// What the Assistant keeps of this project for every conversation (sizes, fabrics, the
+    /// workshop), one note each; the person sees and edits them. Absent when there are none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assistant_notes: Vec<String>,
 }
 
 /// Where a recorded take's point cache is kept and the frame rate it was recorded at.
@@ -665,6 +669,7 @@ impl FittingProject {
             scene_objects: Vec::new(),
             avatar_animation: None,
             animation_take: None,
+            assistant_notes: Vec::new(),
         }
     }
     pub fn load(path: &Path) -> Result<Self, String> {

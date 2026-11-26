@@ -78,6 +78,12 @@ write then waits above the box and goes when the turn ends (× takes it back to 
 **Stop** ends the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
 Linux) while the Assistant is open, wherever the focus is.
 
+**A new chat** says what the project holds and offers requests that fit it (a garment to go with
+the one there, a check of seams, strain and pressure, sizes, one from a photo, which first asks
+for the picture); a click sends it. Under them, **Remembered for this project** lists the notes
+kept in the project file (`assistant_notes`): the person edits them there or in Settings › Own
+instructions, the model with `project_notes`, and they go at the start of every conversation.
+
 **Settings.** The settings icon in the Assistant's header opens its own window:
 
 - **Connection**: who answers, whether it is ready, and the model. With providers that suggest
@@ -355,6 +361,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 |---|---|
 | `check_garment` | After simulating: a short list of problems, each with where it is (piece, area, nearest segment, height): open seams with their gaps, strained cloth, tight spots pressing on the body, cloth inside the body, and a drape that has not settled; with `view`, a picture from that view. The shared prompt tells agents to call it every time they simulate. It answers ok, the problems and the counts; `details: true` adds every number. A sleeve cap eased into its armhole on purpose is not a problem. |
 | `guide` | Short notes on pattern making and sewing (grain, ease, seam allowance, notches, darts, set-in sleeves…) and how FashionCraft does each. |
+| `project_notes` | Adds or removes one of the notes kept with the project (who it is for, sizes, fabrics, the workshop's rules); they go to the model at the start of every conversation and show in the Assistant's new chat. |
 
 `fashioncraft-cli tools` prints the tools with their input schemas.
 

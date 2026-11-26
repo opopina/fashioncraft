@@ -213,6 +213,7 @@ impl Selection {
             avatar_animation: current.avatar_animation.clone(),
             // A take belongs to the garment it was recorded on.
             animation_take: None,
+            assistant_notes: current.assistant_notes.clone(),
         };
         let scene = project.compile()?;
         Ok(Prepared { project, scene })

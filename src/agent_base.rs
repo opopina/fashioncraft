@@ -455,6 +455,21 @@ pub fn tools() -> Vec<Tool> {
             false,
         ),
         tool(
+            "project_notes",
+            "Notes kept with this project and read at the start of every conversation; the \
+             person sees and edits them. Add one when they tell you something to keep for this \
+             project (who it is for, sizes, fabrics, the workshop's rules); remove one by its \
+             number when it no longer holds. Returns the notes, numbered from 1.",
+            object(
+                json!({
+                    "add": {"type": "string", "description": "One short note, in the person's words."},
+                    "remove": {"type": "integer", "minimum": 1}
+                }),
+                &[],
+            ),
+            false,
+        ),
+        tool(
             "guide",
             "Short knowledge on demand: pattern making and sewing basics and how FashionCraft \
              does each. Topics: workflow, grain, ease, seam_allowance, notches, darts, \

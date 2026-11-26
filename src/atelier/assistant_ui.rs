@@ -81,6 +81,8 @@ pub(super) struct AssistantUi {
     asked_at: Option<std::time::Instant>,
     /// The model the last message went to (with Automatic, the one picked for it).
     last_model: String,
+    /// The project notes being edited in the new chat, one per line.
+    notes_edit: Option<String>,
     /// Settings › the section last chosen, and one to scroll to.
     settings_section: usize,
     settings_jump: Option<usize>,
@@ -158,6 +160,7 @@ impl Default for AssistantUi {
             asking: None,
             asked_at: None,
             last_model: String::new(),
+            notes_edit: None,
             settings_section: 0,
             settings_jump: None,
             always: Default::default(),
@@ -290,6 +293,12 @@ enum Choice {
 
 const CHOICE: &str = "assistant.choice";
 
+/// A request picked in the new chat; with `photo`, a picture is attached first.
+struct Suggestion {
+    text: String,
+    photo: bool,
+}
+
 struct Worker {
     stop: Arc<AtomicBool>,
     updates: mpsc::Receiver<Update>,
@@ -409,6 +418,7 @@ fn tool_label(name: &str) -> &'static str {
         "render" => "Rendering",
         "open_attachment" => "Opening an attached file",
         "check_garment" => "Checking the garment",
+        "project_notes" => "Noting for the project",
         "camera" => "Turning the view",
         "set_sleeve" => "Setting a sleeve",
         "add_detail" => "Adding a detail",
@@ -1052,6 +1062,230 @@ impl Atelier {
 
     /// Puts the project back as it was before the message at `at` in the chat (an undo
     /// step, as opening a project is), says so, and tells the model with the next message.
+    /// The chat before its first message: what this project holds, requests that fit it, and
+    /// the notes kept with it. Returns the request picked.
+    fn assistant_new_chat(&mut self, ui: &mut egui::Ui) -> Option<Suggestion> {
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        let visuals = ui.visuals().clone();
+        let template = &self.project.template;
+        let pieces = template.panels.len();
+        let name = self
+            .document
+            .path
+            .as_ref()
+            .and_then(|p| p.file_stem())
+            .map(|n| n.to_string_lossy().into_owned());
+        let words = |names: &[&str]| {
+            let all = template.name.to_lowercase()
+                + " "
+                + &template
+                    .panels
+                    .iter()
+                    .map(|p| p.name.to_lowercase())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+            names.iter().any(|w| all.contains(w))
+        };
+        let bottom = words(&["skirt", "falda"]);
+        let trousers = words(&["trouser", "pant", "pantal"]);
+        let top = words(&["shirt", "tee", "top", "blouse", "camis", "blusa"]);
+        let graded = template.grading.is_some();
+        let mut picked = None;
+        egui::Frame::new()
+            .inner_margin(egui::Margin {
+                left: 8,
+                right: 8,
+                top: 28,
+                bottom: 8,
+            })
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 6.;
+                ui.label(
+                    egui::RichText::new(tr("What shall we do?"))
+                        .size(22.)
+                        .strong()
+                        .color(visuals.strong_text_color()),
+                );
+                let holds = if pieces == 0 {
+                    tr("there is no garment yet").to_owned()
+                } else {
+                    format!(
+                        "{} {pieces} {}",
+                        tr(if bottom {
+                            "there is a skirt of"
+                        } else if trousers {
+                            "there are trousers of"
+                        } else if top {
+                            "there is a shirt of"
+                        } else {
+                            "there is a garment of"
+                        }),
+                        tr(if pieces == 1 { "piece" } else { "pieces" })
+                    )
+                };
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.;
+                    let weak = |t: &str| {
+                        egui::RichText::new(t.to_owned()).color(visuals.weak_text_color())
+                    };
+                    ui.label(weak(&format!("{} ", tr("In"))));
+                    ui.label(name.as_deref().unwrap_or(tr("this project")));
+                    ui.label(weak(&format!(
+                        " {holds} {}. {}",
+                        tr("on the avatar"),
+                        tr("Ask for a change, a new garment or a check.")
+                    )));
+                });
+                ui.add_space(12.);
+                ui.label(
+                    egui::RichText::new(tr("For this project"))
+                        .size(11.5)
+                        .strong()
+                        .color(visuals.weak_text_color()),
+                );
+                use super::icons::Icon;
+                let mut offers: Vec<(Icon, &str, bool)> = Vec::new();
+                if pieces == 0 {
+                    offers.push((Icon::Garment, "Draft a skirt for this avatar", false));
+                    offers.push((Icon::Garment, "Draft a shirt for this avatar", false));
+                    offers.push((Icon::Graphic, "Make a garment from a photo", true));
+                    offers.push((Icon::Info, "What can you do here?", false));
+                } else {
+                    offers.push((
+                        Icon::Garment,
+                        if bottom {
+                            "Make a shirt to go with this skirt"
+                        } else if trousers {
+                            "Make a shirt to go with these trousers"
+                        } else if top {
+                            "Make a skirt to go with this shirt"
+                        } else {
+                            "Make a garment to go with this one"
+                        },
+                        false,
+                    ));
+                    offers.push((Icon::Seam, "Check seams, strain and pressure", false));
+                    offers.push(if !graded {
+                        (Icon::Gradient, "Grade it to sizes S, M and L", false)
+                    } else {
+                        (Icon::Gradient, "Show me the size chart", false)
+                    });
+                    offers.push((Icon::Graphic, "Make it from a photo", true));
+                }
+                for (icon, text, photo) in offers {
+                    if suggestion_button(ui, icon, tr(text)).clicked() {
+                        picked = Some(Suggestion {
+                            text: tr(text).to_owned(),
+                            photo,
+                        });
+                    }
+                }
+                ui.add_space(10.);
+                self.assistant_notes_block(ui);
+            });
+        picked
+    }
+
+    /// The notes kept with this project: listed, with Edit project notes, or being edited.
+    fn assistant_notes_block(&mut self, ui: &mut egui::Ui) {
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        let visuals = ui.visuals().clone();
+        ui.label(
+            egui::RichText::new(tr("Remembered for this project"))
+                .size(11.5)
+                .strong()
+                .color(visuals.weak_text_color()),
+        );
+        if let Some(text) = &mut self.assistant.notes_edit {
+            ui.add(
+                egui::TextEdit::multiline(text)
+                    .hint_text(tr("One note per line: who it is for, sizes, fabrics, the \
+                         workshop's rules"))
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY),
+            );
+            let (save, cancel) = ui
+                .horizontal(|ui| {
+                    (
+                        card_button(ui, tr("Save notes"), true).clicked(),
+                        card_button(ui, tr("Cancel"), false).clicked(),
+                    )
+                })
+                .inner;
+            if save {
+                let notes: Vec<String> = text
+                    .lines()
+                    .map(|l| l.trim().trim_start_matches(['·', '-', '•']).trim())
+                    .filter(|l| !l.is_empty())
+                    .map(|l| l.chars().take(200).collect())
+                    .collect();
+                if notes != self.project.assistant_notes {
+                    self.project.assistant_notes = notes;
+                    self.document.dirty = true;
+                }
+            }
+            if save || cancel {
+                self.assistant.notes_edit = None;
+            }
+        } else {
+            if self.project.assistant_notes.is_empty() {
+                ui.label(
+                    egui::RichText::new(tr(
+                        "Nothing yet. What you or the assistant note here goes to every \
+                         conversation about this project.",
+                    ))
+                    .size(12.)
+                    .weak(),
+                );
+            }
+            for note in &self.project.assistant_notes {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("·").weak());
+                    ui.label(egui::RichText::new(note).size(12.5));
+                });
+            }
+            if ui.link(tr("Edit project notes")).clicked() {
+                self.assistant.notes_edit = Some(self.project.assistant_notes.join("\n"));
+            }
+        }
+    }
+
+    /// project_notes: adds or removes one of the notes kept with the project.
+    pub(super) fn agent_project_notes(&mut self, args: &Value) -> Result<ToolResult, String> {
+        let notes = &mut self.project.assistant_notes;
+        if let Some(k) = args.get("remove").and_then(Value::as_u64) {
+            let k = k as usize;
+            if k == 0 || k > notes.len() {
+                return Err(format!("There is no note {k}: there are {}", notes.len()));
+            }
+            notes.remove(k - 1);
+            self.document.dirty = true;
+        }
+        if let Some(add) = args
+            .get("add")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
+            if notes.len() >= 20 {
+                return Err("A project keeps at most 20 notes: remove one first".into());
+            }
+            let add: String = add.chars().take(200).collect();
+            if !notes.contains(&add) {
+                notes.push(add);
+                self.document.dirty = true;
+            }
+        }
+        let numbered: Vec<String> = notes
+            .iter()
+            .enumerate()
+            .map(|(k, n)| format!("{}. {n}", k + 1))
+            .collect();
+        Ok(ToolResult::json(&json!({ "notes": numbered })))
+    }
+
     fn assistant_restore(&mut self, at: usize) {
         let lang = self.prefs.language;
         let Some(project) = self.assistant.restore_points.get(&at).cloned() else {
@@ -1145,6 +1379,18 @@ impl Atelier {
         if first && !own.is_empty() {
             opening.push(format!(
                 "the person's own instructions, for every conversation: \"{own}\""
+            ));
+        }
+        let notes = &self.project.assistant_notes;
+        if first && !notes.is_empty() {
+            let numbered: Vec<String> = notes
+                .iter()
+                .enumerate()
+                .map(|(k, n)| format!("{}. {n}", k + 1))
+                .collect();
+            opening.push(format!(
+                "notes kept with this project (project_notes changes them): {}",
+                numbered.join(" ")
             ));
         }
         if first && self.prefs.ai.picture_after_simulating {
@@ -1636,6 +1882,14 @@ impl Atelier {
                 .desired_rows(4)
                 .desired_width(f32::INFINITY),
         );
+        ui.label(
+            egui::RichText::new(tr(
+                "Each project also keeps its own notes, read at the start too.",
+            ))
+            .size(12.)
+            .weak(),
+        );
+        self.assistant_notes_block(ui);
     }
 
     /// Settings › Permissions: what the Assistant may do without asking, by kind of step.
@@ -2390,6 +2644,7 @@ impl Atelier {
                 let input_height_id = egui::Id::new("assistant.input_height");
                 let mut resume = false;
                 let mut restore = None;
+                let mut suggestion = None;
                 let input_height = ui
                     .ctx()
                     .data(|d| d.get_temp::<f32>(input_height_id))
@@ -2401,23 +2656,7 @@ impl Atelier {
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 6.;
                         if self.assistant.entries.is_empty() {
-                            ui.add_space(24.);
-                            ui.vertical_centered(|ui| {
-                                ui.label(
-                                    egui::RichText::new(tr("What should we make?"))
-                                        .size(15.)
-                                        .color(accent),
-                                );
-                                ui.add_space(4.);
-                                ui.label(
-                                    egui::RichText::new(tr(
-                                        "Ask for something to do in this project, for example: \
-                                         \"Draft a denim skirt for this avatar, simulate it and \
-                                         show me how it falls.\"",
-                                    ))
-                                    .weak(),
-                                );
-                            });
+                            suggestion = self.assistant_new_chat(ui);
                         }
                         restore = self.assistant_turns(ui, busy);
                         // The step in progress shows in the answer's steps; this line says when
@@ -2463,6 +2702,22 @@ impl Atelier {
                 if resume {
                     self.assistant.input = tr("Continue.").to_owned();
                     self.assistant_send(ctx);
+                }
+                if let Some(Suggestion { text, photo }) = suggestion {
+                    self.assistant.input = text;
+                    if photo {
+                        // A photo first: it goes when the person sends.
+                        if let Some(paths) = rfd::FileDialog::new()
+                            .set_title(tr("Attach files"))
+                            .add_filter(tr("Pictures"), &["png", "jpg", "jpeg", "bmp", "tga"])
+                            .pick_files()
+                        {
+                            self.assistant_attach_paths(paths);
+                        }
+                        ctx.memory_mut(|m| m.request_focus(input_id));
+                    } else {
+                        self.assistant_send(ctx);
+                    }
                 }
                 let below_top = ui.cursor().top();
                 ui.add_space(6.);
@@ -3423,6 +3678,49 @@ fn ring(ui: &egui::Ui, centre: egui::Pos2, radius: f32, width: f32, share: f32) 
             .collect();
         painter.add(egui::Shape::line(points, egui::Stroke::new(width, colour)));
     }
+}
+
+/// One of the new chat's requests: an icon and its words, on a sunken row 44 points high.
+fn suggestion_button(ui: &mut egui::Ui, icon: super::icons::Icon, text: &str) -> egui::Response {
+    let visuals = ui.visuals().clone();
+    let width = ui.available_width();
+    let galley = ui.painter().layout(
+        text.to_owned(),
+        egui::FontId::proportional(13.),
+        visuals.text_color(),
+        width - 48.,
+    );
+    let height = (galley.size().y + 16.).max(44.);
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+    let stroke = if response.hovered() {
+        visuals.widgets.inactive.bg_stroke
+    } else {
+        visuals.widgets.noninteractive.bg_stroke
+    };
+    ui.painter().rect(
+        rect,
+        6.,
+        visuals.extreme_bg_color,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+    let mark = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 20., rect.center().y),
+        egui::vec2(16., 16.),
+    );
+    super::icons::glyph(
+        ui.painter(),
+        mark,
+        icon,
+        super::workspace::accent(&visuals),
+        1.3,
+    );
+    ui.painter().galley(
+        egui::pos2(rect.left() + 38., rect.center().y - galley.size().y / 2.),
+        galley,
+        visuals.text_color(),
+    );
+    response
 }
 
 /// Remembers a click in the chat for the window to act on once the chat is drawn.

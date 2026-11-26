@@ -1779,10 +1779,11 @@ pub(super) fn geometry(icon: Icon) -> Vec<Prim> {
             [0.64, 0.34],
         ])],
         // Nested squares read as a filled one at icon size.
+        // A filled square: outlines inside each other at a small size.
         Icon::Stop => vec![
-            stroke_rect([0.26, 0.26], [0.74, 0.74]),
-            stroke_rect([0.34, 0.34], [0.66, 0.66]),
-            stroke_rect([0.42, 0.42], [0.58, 0.58]),
+            stroke_rect([0.12, 0.12], [0.88, 0.88]),
+            stroke_rect([0.25, 0.25], [0.75, 0.75]),
+            stroke_rect([0.38, 0.38], [0.62, 0.62]),
         ],
         Icon::Lock => vec![
             stroke_rect([0.24, 0.46], [0.76, 0.86]),

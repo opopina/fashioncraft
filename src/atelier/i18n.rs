@@ -496,6 +496,17 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "Write the next instruction; it goes when this ends" => {
+            "Escribe la siguiente indicación; sale cuando termine"
+        }
+        "Stop ends after the step in progress; what is done is undone with ⌘Z." => {
+            "Detener para después del paso en curso; lo hecho se deshace con ⌘Z."
+        }
+        "Stop ends after the step in progress; what is done is undone with Ctrl+Z." => {
+            "Detener para después del paso en curso; lo hecho se deshace con Ctrl+Z."
+        }
+        "Next, when this ends:" => "Después, al terminar:",
+        "Take it back into the box" => "Devolverlo a la caja",
         "These pieces" => "Estas piezas",
         "Take the piece off the message" => "Quitar la pieza del mensaje",
         "Write, or paste a picture with ⌘V (Enter sends)" => {
@@ -1425,7 +1436,6 @@ fn spanish(text: &str) -> Option<&'static str> {
             "Pide algo para hacer en este proyecto, por ejemplo: «Traza una falda de denim para este avatar, simúlala y muéstrame cómo cae»."
         }
         "Stopping after this step…" => "Deteniendo tras este paso…",
-        "Working in the project…" => "Trabajando en el proyecto…",
         "Thinking…" => "Pensando…",
         "Send" => "Enviar",
         "The assistant stopped unexpectedly." => "El asistente se detuvo de forma inesperada.",

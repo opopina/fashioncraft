@@ -71,8 +71,10 @@ step with its result and screenshots; a plan the model shows (the `plan` tool) a
 simulating (`check_garment`) show as cards. **Back to before this message**, under each of your
 messages, puts the project back as it was when you sent it (Undo brings the work back) and tells
 the model so with your next message. With pieces selected, the message box shows **This piece:
-…**: the message is about them, and × takes them off until the selection changes. **Stop** ends
-the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
+…**: the message is about them, and × takes them off until the selection changes. While it works,
+the step in progress shows its time (a simulation, how far it got of its seconds), and what you
+write then waits above the box and goes when the turn ends (× takes it back to change it).
+**Stop** ends the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
 Linux) while the Assistant is open, wherever the focus is.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its

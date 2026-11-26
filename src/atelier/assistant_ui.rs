@@ -73,6 +73,8 @@ pub(super) struct AssistantUi {
     /// The selection whose "This piece" chip the person took off the message: it comes back
     /// when the selection changes.
     piece_dismissed: Vec<String>,
+    /// The next message, written while the assistant works: it goes when the turn ends.
+    queued: Option<String>,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
     log: Option<PathBuf>,
 }
@@ -140,6 +142,7 @@ impl Default for AssistantUi {
             restore_points: Default::default(),
             pending_note: None,
             piece_dismissed: Vec::new(),
+            queued: None,
             log: None,
         }
     }
@@ -319,8 +322,17 @@ fn step_detail(arguments: &Value) -> String {
     }
     match arguments {
         Value::Object(fields) => fields
-            .values()
-            .map(plain)
+            .iter()
+            .map(|(key, v)| {
+                let text = plain(v);
+                // Times and lengths with their unit, as the menus show them.
+                match key.as_str() {
+                    _ if text.is_empty() || !v.is_number() => text,
+                    k if k == "seconds" || k.ends_with("_seconds") => format!("{text} s"),
+                    k if k.ends_with("_cm") => format!("{text} cm"),
+                    _ => text,
+                }
+            })
             .filter(|v| !v.is_empty())
             .collect::<Vec<_>>()
             .join(" · "),
@@ -710,6 +722,7 @@ impl Atelier {
         for update in &updates {
             self.assistant_log_update(update);
         }
+        let ended_now = ended || updates.iter().any(|u| matches!(u, Update::Done(_)));
         for update in updates {
             match update {
                 Update::Event(Event::Text(text)) => {
@@ -804,6 +817,28 @@ impl Atelier {
                 i18n::tr(self.prefs.language, "The assistant stopped unexpectedly.").into(),
             ));
         }
+        if ended_now && self.assistant.worker.is_none() {
+            // The selection the assistant leaves is not the person's: no chip for it.
+            self.assistant.piece_dismissed = self.selected_panels();
+        }
+        // The message written while it worked goes now; after a failure it goes back into the
+        // box instead, so it is not lost.
+        if self.assistant.worker.is_none()
+            && let Some(next) = self.assistant.queued.take()
+        {
+            let failed = matches!(self.assistant.entries.last(), Some(Entry::Problem(_)));
+            let typed = std::mem::replace(&mut self.assistant.input, next.clone());
+            if !failed {
+                self.assistant_send(ctx);
+            }
+            self.assistant.input = if self.assistant.worker.is_some() {
+                typed
+            } else if typed.trim().is_empty() {
+                next
+            } else {
+                format!("{next}\n{typed}")
+            };
+        }
     }
 
     /// Start a new conversation, forgetting the transcript.
@@ -822,6 +857,7 @@ impl Atelier {
         self.assistant.usage = Totals::default();
         self.assistant.restore_points.clear();
         self.assistant.pending_note = None;
+        self.assistant.queued = None;
         self.assistant.log = None;
     }
 
@@ -1620,22 +1656,22 @@ impl Atelier {
                                 }
                             });
                         }
-                        if busy {
+                        // The step in progress shows in the answer's steps; this line says when
+                        // the model thinks between steps, or that it stops.
+                        let running = matches!(
+                            self.assistant.entries.last(),
+                            Some(Entry::Tool { outcome: None, .. })
+                        );
+                        let stopping = self
+                            .assistant
+                            .worker
+                            .as_ref()
+                            .is_some_and(|w| w.stop.load(Ordering::Relaxed));
+                        if busy && (stopping || !running) {
                             ui.horizontal(|ui| {
                                 ui.add(egui::Spinner::new().size(12.).color(accent));
-                                let running = matches!(
-                                    self.assistant.entries.last(),
-                                    Some(Entry::Tool { outcome: None, .. })
-                                );
-                                let stopping = self
-                                    .assistant
-                                    .worker
-                                    .as_ref()
-                                    .is_some_and(|w| w.stop.load(Ordering::Relaxed));
                                 ui.weak(if stopping {
                                     tr("Stopping after this step…")
-                                } else if running {
-                                    tr("Working in the project…")
                                 } else {
                                     tr("Thinking…")
                                 });
@@ -1673,7 +1709,12 @@ impl Atelier {
                                     .color(accent),
                             );
                         }
-                        let pieces = self.assistant_chip_pieces();
+                        // Not while it works: the selection is then the assistant's.
+                        let pieces = if busy {
+                            Vec::new()
+                        } else {
+                            self.assistant_chip_pieces()
+                        };
                         if !pieces.is_empty() {
                             let names: Vec<String> =
                                 pieces.iter().map(|(_, name)| name.clone()).collect();
@@ -1693,6 +1734,17 @@ impl Atelier {
                                     .truncate(),
                             );
                         }
+                        if let Some(next) = &self.assistant.queued
+                            && queued_row(ui, lang, next)
+                        {
+                            // × takes it back into the box, to change or delete.
+                            let next = self.assistant.queued.take().unwrap_or_default();
+                            self.assistant.input = if self.assistant.input.trim().is_empty() {
+                                next
+                            } else {
+                                format!("{next}\n{}", self.assistant.input)
+                            };
+                        }
                         // A long message scrolls inside the box instead of growing it.
                         let field = egui::ScrollArea::vertical()
                             .id_salt("assistant.input_scroll")
@@ -1703,7 +1755,9 @@ impl Atelier {
                                     egui::TextEdit::multiline(&mut self.assistant.input)
                                         .id(input_id)
                                         .frame(egui::Frame::NONE)
-                                        .hint_text(tr(if cfg!(target_os = "macos") {
+                                        .hint_text(tr(if busy {
+                                            "Write the next instruction; it goes when this ends"
+                                        } else if cfg!(target_os = "macos") {
                                             "Write, or paste a picture with ⌘V (Enter sends)"
                                         } else {
                                             "Write, or paste a picture with Ctrl+V (Enter sends)"
@@ -1742,10 +1796,24 @@ impl Atelier {
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if busy {
-                                        if ui.button(tr("Stop")).clicked()
+                                        let stop = ui.add(|ui: &mut egui::Ui| {
+                                            outline_button(ui, super::icons::Icon::Stop, tr("Stop"))
+                                        });
+                                        super::demo::mark(ui.ctx(), "assistant.stop", stop.rect);
+                                        if stop.clicked()
                                             && let Some(worker) = &self.assistant.worker
                                         {
                                             worker.stop.store(true, Ordering::Relaxed);
+                                        }
+                                        // Enter keeps the message for when this turn ends.
+                                        let next = self.assistant.input.trim().to_owned();
+                                        if enter && !next.is_empty() {
+                                            self.assistant.queued =
+                                                Some(match self.assistant.queued.take() {
+                                                    Some(before) => format!("{before}\n{next}"),
+                                                    None => next,
+                                                });
+                                            self.assistant.input.clear();
                                         }
                                     } else {
                                         let ready = !self.assistant.input.trim().is_empty()
@@ -1773,13 +1841,18 @@ impl Atelier {
                         });
                     });
                 ui.label(
-                    egui::RichText::new(tr(if cfg!(target_os = "macos") {
-                        "Every change is undone with Undo (⌘Z)."
-                    } else {
-                        "Every change is undone with Undo (Ctrl+Z)."
+                    egui::RichText::new(tr(match (busy, cfg!(target_os = "macos")) {
+                        (true, true) => {
+                            "Stop ends after the step in progress; what is done is undone with ⌘Z."
+                        }
+                        (true, false) => {
+                            "Stop ends after the step in progress; what is done is undone with Ctrl+Z."
+                        }
+                        (false, true) => "Every change is undone with Undo (⌘Z).",
+                        (false, false) => "Every change is undone with Undo (Ctrl+Z).",
                     }))
-                        .small()
-                        .weak(),
+                    .small()
+                    .weak(),
                 );
                 let _ = input_box;
                 let used = ui.cursor().top() - below_top;
@@ -2016,9 +2089,52 @@ impl Atelier {
                                     detail,
                                     outcome,
                                     pictures,
+                                    started,
                                     ..
                                 } => {
+                                    let progress = outcome
+                                        .is_none()
+                                        .then(|| self.assistant_progress(name, *started));
                                     ui.horizontal(|ui| {
+                                        if let Some((text, _)) = &progress {
+                                            // The step in progress: its time at the right.
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| {
+                                                    ui.label(
+                                                        egui::RichText::new(text)
+                                                            .size(11.)
+                                                            .monospace()
+                                                            .weak(),
+                                                    );
+                                                    ui.with_layout(
+                                                        egui::Layout::left_to_right(
+                                                            egui::Align::Center,
+                                                        ),
+                                                        |ui| {
+                                                            ui.add(
+                                                                egui::Spinner::new()
+                                                                    .size(11.)
+                                                                    .color(
+                                                                        super::workspace::accent(
+                                                                            &visuals,
+                                                                        ),
+                                                                    ),
+                                                            );
+                                                            ui.label(
+                                                                egui::RichText::new(i18n::tr(
+                                                                    lang,
+                                                                    tool_label(name),
+                                                                ))
+                                                                .size(12.)
+                                                                .strong(),
+                                                            );
+                                                        },
+                                                    );
+                                                },
+                                            );
+                                            return;
+                                        }
                                         match outcome {
                                             None => {
                                                 ui.add(
@@ -2056,6 +2172,27 @@ impl Atelier {
                                             );
                                         }
                                     });
+                                    if let Some((_, Some(share))) = progress {
+                                        let (bar, _) = ui.allocate_exact_size(
+                                            egui::vec2(ui.available_width(), 4.),
+                                            egui::Sense::hover(),
+                                        );
+                                        ui.painter().rect_filled(
+                                            bar,
+                                            2.,
+                                            Color32::from_white_alpha(26),
+                                        );
+                                        let mut filled = bar;
+                                        filled.set_width(bar.width() * share.clamp(0., 1.));
+                                        ui.painter().rect_filled(
+                                            filled,
+                                            2.,
+                                            super::workspace::accent(&visuals),
+                                        );
+                                        ui.ctx().request_repaint_after(
+                                            std::time::Duration::from_millis(100),
+                                        );
+                                    }
                                     if let Some((true, text)) = outcome {
                                         let shown: String = text.chars().take(400).collect();
                                         ui.add(
@@ -2087,6 +2224,39 @@ impl Atelier {
                         }
                     });
             });
+    }
+
+    /// How far the step in progress is: "1,8 de 3,0 s" and the share done while it simulates
+    /// for a set time, else its seconds so far.
+    fn assistant_progress(&self, name: &str, started: std::time::Instant) -> (String, Option<f32>) {
+        let lang = self.prefs.language;
+        let number = |n: f64| {
+            let text = format!("{n:.1}");
+            if lang == i18n::Language::Spanish {
+                text.replace('.', ",")
+            } else {
+                text
+            }
+        };
+        if name == "simulate"
+            && let Some((_, super::agent_hub::Pending::Simulate { until, seconds })) =
+                &self.agent.running
+        {
+            let left = until
+                .saturating_duration_since(std::time::Instant::now())
+                .as_secs_f64();
+            let done = (seconds - left).clamp(0., *seconds);
+            return (
+                format!(
+                    "{} {} {} s",
+                    number(done),
+                    i18n::tr(lang, "of"),
+                    number(*seconds)
+                ),
+                Some((done / seconds.max(0.01)) as f32),
+            );
+        }
+        (format!("{:.0} s", started.elapsed().as_secs_f32()), None)
     }
 
     fn assistant_entry(&self, ui: &mut egui::Ui, entry: &Entry) {
@@ -2279,6 +2449,72 @@ fn ghost_button(ui: &mut egui::Ui, icon: super::icons::Icon, label: &str) -> egu
         ink,
     );
     response
+}
+
+/// A button with a thin outline: an icon and a label (Stop while the assistant works).
+fn outline_button(ui: &mut egui::Ui, icon: super::icons::Icon, label: &str) -> egui::Response {
+    let ink = ui.visuals().text_color();
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), egui::FontId::proportional(12.5), ink);
+    let size = egui::vec2(12. + 12. + 6. + galley.size().x + 12., 28.);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 3., ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    ui.painter().rect_stroke(
+        rect.shrink(0.5),
+        3.,
+        ui.visuals().widgets.inactive.bg_stroke,
+        egui::StrokeKind::Inside,
+    );
+    let mark = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 18., rect.center().y),
+        egui::vec2(12., 12.),
+    );
+    super::icons::glyph(ui.painter(), mark, icon, ink, 1.3);
+    ui.painter().galley_with_override_text_color(
+        egui::pos2(mark.right() + 6., rect.center().y - galley.size().y / 2.),
+        galley,
+        ink,
+    );
+    response
+}
+
+/// The message written while the assistant works, above the box's field: it goes when the
+/// turn ends. Returns whether its × was pressed.
+fn queued_row(ui: &mut egui::Ui, lang: i18n::Language, next: &str) -> bool {
+    let mut take_back = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.;
+        ui.label(
+            egui::RichText::new(i18n::tr(lang, "Next, when this ends:"))
+                .size(11.5)
+                .weak(),
+        );
+        let first: String = next.lines().next().unwrap_or("").to_owned();
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width() - 24.);
+            ui.add(egui::Label::new(egui::RichText::new(first).size(11.5)).truncate());
+        });
+        let (rect, x) = ui.allocate_exact_size(egui::vec2(18., 18.), egui::Sense::click());
+        let ink = if x.hovered() {
+            ui.visuals().text_color()
+        } else {
+            ui.visuals().weak_text_color()
+        };
+        let r = rect.shrink(5.);
+        let stroke = egui::Stroke::new(1.5, ink);
+        ui.painter()
+            .line_segment([r.left_top(), r.right_bottom()], stroke);
+        ui.painter()
+            .line_segment([r.right_top(), r.left_bottom()], stroke);
+        take_back = x
+            .on_hover_text(i18n::tr(lang, "Take it back into the box"))
+            .clicked();
+    });
+    take_back
 }
 
 /// "This piece: left sleeve", or "These pieces: …" with the first three names.
@@ -2904,7 +3140,8 @@ mod tests {
         use serde_json::json;
         assert_eq!(super::step_detail(&json!({})), "");
         assert_eq!(super::step_detail(&json!({"kind": "shirt"})), "shirt");
-        assert_eq!(super::step_detail(&json!({"seconds": 8.0})), "8");
+        assert_eq!(super::step_detail(&json!({"seconds": 8.0})), "8 s");
+        assert_eq!(super::step_detail(&json!({"width_cm": 2.5})), "2.5 cm");
         assert_eq!(
             super::step_detail(&json!({"pieces": ["panel_1", "panel_2"], "rgb": [239, 236, 230]})),
             "panel_1, panel_2 · 239, 236, 230"

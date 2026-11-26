@@ -441,6 +441,20 @@ pub fn tools() -> Vec<Tool> {
             false,
         ),
         tool(
+            "plan",
+            "Show the person your plan for a job of several steps, as a short checklist in \
+             their words, and call it again as steps finish (done: how many are done, from the \
+             first). Not for a small change.",
+            object(
+                json!({
+                    "steps": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 12},
+                    "done": {"type": "integer", "minimum": 0}
+                }),
+                &["steps"],
+            ),
+            false,
+        ),
+        tool(
             "guide",
             "Short knowledge on demand: pattern making and sewing basics and how FashionCraft \
              does each. Topics: workflow, grain, ease, seam_allowance, notches, darts, \
@@ -667,6 +681,7 @@ pub const CORE: &[&str] = &[
     "command_run",
     "edit",
     "guide",
+    "plan",
 ];
 
 /// `more_tools` and `use_tool`: the way to the tools outside [`CORE`].
@@ -836,6 +851,14 @@ pub fn answer_without_window(name: &str, args: &Value) -> Option<crate::agent::T
                 .unwrap_or_default();
             Some(ToolResult::json(&more_tools(&names)))
         }
+        // The Assistant's window shows it as a checklist; the model only needs to hear it came.
+        "plan" => Some(ToolResult::text(format!(
+            "Plan shown to the person: {} of {} done.",
+            args.get("done").and_then(Value::as_u64).unwrap_or(0),
+            args.get("steps")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        ))),
         "guide" => Some(ToolResult::text(crate::agent_guide::guide(
             args.get("topic").and_then(Value::as_str).unwrap_or(""),
         ))),

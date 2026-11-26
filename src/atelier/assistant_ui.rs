@@ -142,9 +142,14 @@ enum Entry {
     Tool {
         name: String,
         detail: String,
+        /// The call's arguments (a plan's steps).
+        arguments: Value,
         /// None while it runs.
         outcome: Option<(bool, String)>,
         pictures: Vec<egui::TextureHandle>,
+        started: std::time::Instant,
+        /// How long it took, once it ended.
+        seconds: Option<f32>,
     },
     Notice(String),
     Problem(String),
@@ -264,7 +269,46 @@ fn tool_label(name: &str) -> &'static str {
         "size_chart" => "Reading the size chart",
         "render" => "Rendering",
         "open_attachment" => "Opening an attached file",
+        "check_garment" => "Checking the garment",
+        "camera" => "Turning the view",
+        "set_sleeve" => "Setting a sleeve",
+        "add_detail" => "Adding a detail",
+        "add_buttons" => "Adding buttons",
+        "add_internal_line" => "Adding a line",
+        "bend_segment" => "Bending a segment",
+        "transform_piece" => "Moving a piece",
+        "measure" => "Measuring",
+        "guide" => "Reading the guide",
+        "more_tools" => "Looking up tools",
+        "edit" => "Editing the pattern",
         _ => "Using a tool",
+    }
+}
+
+/// A step's arguments as the folded steps show them: the values, not the JSON
+/// ({"kind":"shirt"} is "shirt", {"seconds":8.0} "8", lists joined with commas).
+fn step_detail(arguments: &Value) -> String {
+    fn plain(v: &Value) -> String {
+        match v {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.as_f64().map_or_else(
+                || n.to_string(),
+                |x| format!("{}", (x * 100.).round() / 100.),
+            ),
+            Value::Bool(b) => b.to_string(),
+            Value::Array(items) => items.iter().map(plain).collect::<Vec<_>>().join(", "),
+            Value::Null => String::new(),
+            Value::Object(_) => v.to_string(),
+        }
+    }
+    match arguments {
+        Value::Object(fields) => fields
+            .values()
+            .map(plain)
+            .filter(|v| !v.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · "),
+        other => plain(other),
     }
 }
 
@@ -650,17 +694,18 @@ impl Atelier {
                         arguments: arguments.clone(),
                         is_error: false,
                     });
-                    let mut detail = arguments.to_string();
-                    if detail == "{}" {
-                        detail.clear();
-                    } else if detail.chars().count() > 90 {
+                    let mut detail = step_detail(&arguments);
+                    if detail.chars().count() > 90 {
                         detail = detail.chars().take(89).collect::<String>() + "…";
                     }
                     self.assistant.entries.push(Entry::Tool {
                         name,
                         detail,
+                        arguments,
                         outcome: None,
                         pictures: Vec::new(),
+                        started: std::time::Instant::now(),
+                        seconds: None,
                     });
                 }
                 Update::Event(Event::ToolFinished {
@@ -683,16 +728,19 @@ impl Atelier {
                         })
                         .collect();
                     if let Some(Entry::Tool {
-                        name: started,
+                        name: began,
                         outcome,
                         pictures,
+                        started,
+                        seconds,
                         ..
                     }) = self.assistant.entries.last_mut()
-                        && *started == name
+                        && *began == name
                         && outcome.is_none()
                     {
                         *outcome = Some((is_error, text));
                         *pictures = shown;
+                        *seconds = Some(started.elapsed().as_secs_f32());
                     }
                 }
                 Update::Done(result) => {
@@ -1405,7 +1453,7 @@ impl Atelier {
                 (screen.right() - 420.).max(screen.left()),
                 screen.top() + 80.,
             ))
-            .default_size([400., 560.])
+            .default_size([420., (screen.height() - 140.).clamp(560., 860.)])
             .min_width(320.)
             .resizable(true)
             .show(ctx, |ui| {
@@ -1459,9 +1507,7 @@ impl Atelier {
                                 );
                             });
                         }
-                        for entry in &self.assistant.entries {
-                            self.assistant_entry(ui, entry);
-                        }
+                        self.assistant_turns(ui, busy);
                         if !busy && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
                         {
                             ui.vertical_centered(|ui| {
@@ -1622,6 +1668,258 @@ impl Atelier {
         self.assistant.open &= open;
     }
 
+    /// The chat turn by turn: the person's messages as they are; each answer under the
+    /// assistant's name once, with what it said before acting, its plan, its steps folded into
+    /// one line, the check after simulating, and what it said at the end.
+    fn assistant_turns(&self, ui: &mut egui::Ui, busy: bool) {
+        let entries = &self.assistant.entries;
+        let answers = |e: &Entry| matches!(e, Entry::Model(_) | Entry::Tool { .. });
+        let mut i = 0;
+        while i < entries.len() {
+            if !answers(&entries[i]) {
+                self.assistant_entry(ui, &entries[i]);
+                i += 1;
+                continue;
+            }
+            let end = (i..entries.len())
+                .find(|&k| matches!(entries[k], Entry::You(_) | Entry::Attached(_)))
+                .unwrap_or(entries.len());
+            self.assistant_answer(ui, i, &entries[i..end], busy && end == entries.len());
+            i = end;
+        }
+    }
+
+    /// One answer: `key` tells its folded steps apart; `running` while its turn goes on.
+    fn assistant_answer(&self, ui: &mut egui::Ui, key: usize, answer: &[Entry], running: bool) {
+        let lang = self.prefs.language;
+        let accent = super::workspace::accent(ui.visuals());
+        ui.label(
+            egui::RichText::new(i18n::tr(lang, "Assistant"))
+                .size(11.)
+                .strong()
+                .color(accent),
+        );
+        let tools: Vec<usize> = answer
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| matches!(e, Entry::Tool { .. }))
+            .map(|(k, _)| k)
+            .collect();
+        let (Some(&first), Some(&last)) = (tools.first(), tools.last()) else {
+            for entry in answer {
+                self.assistant_said(ui, entry);
+            }
+            return;
+        };
+        for entry in &answer[..first] {
+            self.assistant_said(ui, entry);
+        }
+        let plan = answer.iter().rev().find_map(|e| match e {
+            Entry::Tool {
+                name, arguments, ..
+            } if name == "plan" => Some(arguments),
+            _ => None,
+        });
+        if let Some(plan) = plan {
+            plan_card(ui, lang, plan, running);
+        }
+        self.assistant_steps(ui, key, &answer[first..=last], running);
+        let template = &self.project.template;
+        let piece_name = |id: &str| {
+            template
+                .panels
+                .iter()
+                .find(|p| p.id == id)
+                .map_or_else(|| id.to_owned(), |p| p.name.clone())
+        };
+        check_card(ui, lang, answer, &piece_name);
+        for entry in &answer[last + 1..] {
+            self.assistant_said(ui, entry);
+        }
+    }
+
+    /// What the assistant wrote, without its name (the answer shows it once), or a notice.
+    fn assistant_said(&self, ui: &mut egui::Ui, entry: &Entry) {
+        match entry {
+            Entry::Model(text) => {
+                ui.add(egui::Label::new(text).wrap().selectable(true));
+            }
+            other => self.assistant_entry(ui, other),
+        }
+    }
+
+    /// An answer's steps in the project, folded into "7 steps in the project · 14 s"; a click
+    /// opens them: each with its mark, name and detail, a failure's message, what the model
+    /// said between them, and their pictures. Open while the turn runs.
+    fn assistant_steps(&self, ui: &mut egui::Ui, key: usize, span: &[Entry], running: bool) {
+        let lang = self.prefs.language;
+        let visuals = ui.visuals().clone();
+        let steps: Vec<&Entry> = span
+            .iter()
+            .filter(|e| matches!(e, Entry::Tool { name, .. } if name != "plan"))
+            .collect();
+        if steps.is_empty() {
+            return;
+        }
+        let seconds: f32 = steps
+            .iter()
+            .map(|e| match e {
+                Entry::Tool {
+                    seconds, started, ..
+                } => seconds.unwrap_or_else(|| started.elapsed().as_secs_f32()),
+                _ => 0.,
+            })
+            .sum();
+        let id = egui::Id::new(("assistant.steps", key));
+        let open = ui.ctx().data(|d| d.get_temp::<bool>(id)).unwrap_or(running);
+        let green = Color32::from_rgb(0x7c, 0xc4, 0x7f);
+        egui::Frame::new()
+            .fill(visuals.extreme_bg_color)
+            .stroke(visuals.widgets.noninteractive.bg_stroke)
+            .corner_radius(6.)
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let (rect, header) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 30.),
+                    egui::Sense::click(),
+                );
+                let painter = ui.painter();
+                let c = egui::pos2(rect.left() + 16., rect.center().y);
+                let chevron = if open {
+                    vec![
+                        c + egui::vec2(-4., -2.),
+                        c + egui::vec2(0., 2.),
+                        c + egui::vec2(4., -2.),
+                    ]
+                } else {
+                    vec![
+                        c + egui::vec2(-2., -4.),
+                        c + egui::vec2(2., 0.),
+                        c + egui::vec2(-2., 4.),
+                    ]
+                };
+                painter.add(egui::Shape::line(
+                    chevron,
+                    egui::Stroke::new(1.6, visuals.weak_text_color()),
+                ));
+                let label = format!(
+                    "{} {}",
+                    steps.len(),
+                    i18n::tr(
+                        lang,
+                        if steps.len() == 1 {
+                            "step in the project"
+                        } else {
+                            "steps in the project"
+                        }
+                    )
+                );
+                painter.text(
+                    egui::pos2(rect.left() + 28., rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    label,
+                    egui::FontId::proportional(12.),
+                    visuals.text_color(),
+                );
+                painter.text(
+                    egui::pos2(rect.right() - 10., rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    format!("{seconds:.0} s"),
+                    egui::FontId::proportional(12.),
+                    visuals.weak_text_color(),
+                );
+                if header.clicked() {
+                    ui.ctx().data_mut(|d| d.insert_temp(id, !open));
+                }
+                if !open {
+                    return;
+                }
+                ui.add(egui::Separator::default().spacing(0.));
+                egui::Frame::new()
+                    .inner_margin(egui::Margin::symmetric(10, 4))
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.;
+                        for entry in span {
+                            match entry {
+                                Entry::Tool { name, .. } if name == "plan" => {}
+                                Entry::Tool {
+                                    name,
+                                    detail,
+                                    outcome,
+                                    pictures,
+                                    ..
+                                } => {
+                                    ui.horizontal(|ui| {
+                                        match outcome {
+                                            None => {
+                                                ui.add(
+                                                    egui::Spinner::new()
+                                                        .size(11.)
+                                                        .color(super::workspace::accent(&visuals)),
+                                                );
+                                            }
+                                            Some((false, _)) => {
+                                                ui.label(
+                                                    egui::RichText::new("✓").color(green).strong(),
+                                                );
+                                            }
+                                            Some((true, _)) => {
+                                                ui.label(
+                                                    egui::RichText::new("✗")
+                                                        .color(visuals.error_fg_color)
+                                                        .strong(),
+                                                );
+                                            }
+                                        }
+                                        ui.label(
+                                            egui::RichText::new(i18n::tr(lang, tool_label(name)))
+                                                .size(12.),
+                                        );
+                                        if !detail.is_empty() {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(detail)
+                                                        .size(11.)
+                                                        .monospace()
+                                                        .weak(),
+                                                )
+                                                .truncate(),
+                                            );
+                                        }
+                                    });
+                                    if let Some((true, text)) = outcome {
+                                        let shown: String = text.chars().take(400).collect();
+                                        ui.add(
+                                            egui::Label::new(
+                                                egui::RichText::new(shown)
+                                                    .size(11.)
+                                                    .color(visuals.error_fg_color),
+                                            )
+                                            .wrap(),
+                                        );
+                                    }
+                                    if !pictures.is_empty() {
+                                        ui.horizontal(|ui| {
+                                            for texture in pictures {
+                                                ui.add(
+                                                    egui::Image::new(texture)
+                                                        .max_height(64.)
+                                                        .corner_radius(4.),
+                                                );
+                                            }
+                                        });
+                                    }
+                                }
+                                Entry::Model(text) => {
+                                    ui.label(egui::RichText::new(text).size(11.5).italics().weak());
+                                }
+                                other => self.assistant_entry(ui, other),
+                            }
+                        }
+                    });
+            });
+    }
+
     fn assistant_entry(&self, ui: &mut egui::Ui, entry: &Entry) {
         let lang = self.prefs.language;
         let tr = |text| i18n::tr(lang, text);
@@ -1685,6 +1983,7 @@ impl Atelier {
                 detail,
                 outcome,
                 pictures,
+                ..
             } => {
                 let (mark, color) = match outcome {
                     None => ("…", ui.visuals().weak_text_color()),
@@ -1776,6 +2075,229 @@ impl Atelier {
             }
         }
     }
+}
+
+/// The plan the model showed (its latest plan call): each step ticked when done, the next
+/// one marked while the turn runs, and how many are done.
+fn plan_card(ui: &mut egui::Ui, lang: i18n::Language, plan: &Value, running: bool) {
+    let steps: Vec<&str> = plan["steps"]
+        .as_array()
+        .map(|s| s.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if steps.is_empty() {
+        return;
+    }
+    let done = (plan["done"].as_u64().unwrap_or(0) as usize).min(steps.len());
+    let visuals = ui.visuals().clone();
+    let green = Color32::from_rgb(0x7c, 0xc4, 0x7f);
+    egui::Frame::new()
+        .fill(visuals.extreme_bg_color)
+        .stroke(visuals.widgets.noninteractive.bg_stroke)
+        .corner_radius(6.)
+        .inner_margin(egui::Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 6.;
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(i18n::tr(lang, "Plan"))
+                        .size(11.5)
+                        .strong()
+                        .weak(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let all = done == steps.len();
+                    let text = if all {
+                        format!(
+                            "{done} {} {} {}",
+                            i18n::tr(lang, "of"),
+                            steps.len(),
+                            i18n::tr(lang, "done")
+                        )
+                    } else {
+                        format!("{done} {} {}", i18n::tr(lang, "of"), steps.len())
+                    };
+                    ui.label(egui::RichText::new(text).size(11.5).color(if all {
+                        green
+                    } else {
+                        visuals.weak_text_color()
+                    }));
+                });
+            });
+            for (k, step) in steps.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if k < done {
+                        ui.label(egui::RichText::new("✓").color(green).strong());
+                        ui.add(egui::Label::new(*step).wrap());
+                    } else if k == done && running {
+                        ui.add(
+                            egui::Spinner::new()
+                                .size(11.)
+                                .color(super::workspace::accent(&visuals)),
+                        );
+                        ui.add(egui::Label::new(egui::RichText::new(*step).strong()).wrap());
+                    } else {
+                        ui.label(egui::RichText::new("○").weak());
+                        ui.add(egui::Label::new(egui::RichText::new(*step).weak()).wrap());
+                    }
+                });
+            }
+        });
+}
+
+/// One of check_garment's problems as the check card says it: short, with the piece's name,
+/// the common kinds in the interface's language ("Strained 14.6 %: panel_1 middle left near
+/// armhole-left, 129 cm up (…)" is "Tensión 14,6 % en camisa delantero").
+fn short_problem(
+    lang: i18n::Language,
+    problem: &str,
+    piece_name: &dyn Fn(&str) -> String,
+) -> String {
+    let tr = |t| i18n::tr(lang, t);
+    let number = |n: &str| {
+        if lang == i18n::Language::Spanish {
+            n.replace('.', ",")
+        } else {
+            n.to_owned()
+        }
+    };
+    // The piece: the first word of the place, a piece's id.
+    let piece = |rest: &str| {
+        let id = rest.split_whitespace().next().unwrap_or("");
+        piece_name(id.trim_end_matches(','))
+    };
+    if let Some(rest) = problem.strip_prefix("Strained ")
+        && let Some((share, place)) = rest.split_once(" %: ")
+    {
+        return format!(
+            "{} {} % {} {}",
+            tr("Strain"),
+            number(share),
+            tr("on"),
+            piece(place)
+        );
+    }
+    if let Some(rest) = problem.strip_prefix("Tight: ")
+        && let Some((kpa, place)) = rest.split_once(" kPa on the body at ")
+    {
+        return format!(
+            "{} {} kPa {} {}",
+            tr("Tight:"),
+            number(kpa),
+            tr("on"),
+            piece(place)
+        );
+    }
+    if problem.starts_with("Still moving") {
+        return tr("Still moving: simulate longer").to_owned();
+    }
+    let short: String = problem.chars().take(60).collect();
+    if problem.chars().count() > 60 {
+        format!("{short}…")
+    } else {
+        short
+    }
+}
+
+/// The check after simulating, when the answer ran check_garment: its last picture of the
+/// garment (from the check's view, the camera or a screenshot) beside the results: seams
+/// closed, nothing inside the body, and each other problem.
+fn check_card(
+    ui: &mut egui::Ui,
+    lang: i18n::Language,
+    answer: &[Entry],
+    piece_name: &dyn Fn(&str) -> String,
+) {
+    let Some(text) = answer.iter().rev().find_map(|e| match e {
+        Entry::Tool {
+            name,
+            outcome: Some((false, text)),
+            ..
+        } if name == "check_garment" => Some(text),
+        _ => None,
+    }) else {
+        return;
+    };
+    let Some(report) = text
+        .find('{')
+        .zip(text.rfind('}'))
+        .and_then(|(a, b)| serde_json::from_str::<Value>(&text[a..=b]).ok())
+    else {
+        return;
+    };
+    let picture = answer.iter().rev().find_map(|e| match e {
+        Entry::Tool { pictures, .. } => pictures.last(),
+        _ => None,
+    });
+    let visuals = ui.visuals().clone();
+    let green = Color32::from_rgb(0x7c, 0xc4, 0x7f);
+    let amber = visuals.warn_fg_color;
+    let total = report["seams"]["total"].as_u64().unwrap_or(0);
+    let open = report["seams"]["open"]
+        .as_u64()
+        .or_else(|| report["seams"]["open"].as_array().map(|a| a.len() as u64))
+        .unwrap_or(0);
+    let problems: Vec<&str> = report["problems"]
+        .as_array()
+        .map(|p| p.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let mut lines: Vec<(bool, String)> = Vec::new();
+    if total > 0 {
+        lines.push((
+            open == 0,
+            format!(
+                "{} {} {total} {}",
+                total - open.min(total),
+                i18n::tr(lang, "of"),
+                i18n::tr(lang, "seams closed")
+            ),
+        ));
+    }
+    let inside = problems.iter().any(|p| p.contains("inside the body"));
+    if !inside {
+        lines.push((true, i18n::tr(lang, "Nothing inside the body").to_owned()));
+    }
+    for p in problems.iter().filter(|p| !p.starts_with("Seam ")) {
+        lines.push((false, short_problem(lang, p, piece_name)));
+    }
+    egui::Frame::new()
+        .fill(visuals.extreme_bg_color)
+        .stroke(visuals.widgets.noninteractive.bg_stroke)
+        .corner_radius(6.)
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                if let Some(texture) = picture {
+                    ui.add(
+                        egui::Image::new(texture)
+                            .max_size(egui::vec2(112., 140.))
+                            .corner_radius(4.),
+                    );
+                }
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 5.;
+                    ui.label(
+                        egui::RichText::new(i18n::tr(lang, "Review after simulating"))
+                            .size(11.5)
+                            .strong()
+                            .weak(),
+                    );
+                    for (good, line) in &lines {
+                        ui.horizontal(|ui| {
+                            let colour = if *good { green } else { amber };
+                            ui.label(
+                                egui::RichText::new(if *good { "✓" } else { "⚠" }).color(colour),
+                            );
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(line).size(12.).color(colour))
+                                    .wrap(),
+                            );
+                        });
+                    }
+                });
+            });
+        });
 }
 
 /// What a desktop clipboard tool found: files copied in the file manager, or a picture's
@@ -2052,6 +2574,51 @@ mod tests {
             &mut seen,
             false
         ));
+    }
+
+    #[test]
+    fn check_problems_read_short_with_the_piece_name() {
+        use super::{i18n::Language, short_problem};
+        let name = |id: &str| {
+            if id == "panel_1" {
+                "shirt front".to_owned()
+            } else {
+                id.to_owned()
+            }
+        };
+        let es = |p: &str| short_problem(Language::Spanish, p, &name);
+        assert_eq!(
+            es(
+                "Strained 14.6 %: panel_1 middle left near armhole-left, 129 cm up (1.2 % of the piece over 8 %)"
+            ),
+            "Tensión 14,6 % en shirt front"
+        );
+        assert_eq!(
+            es("Tight: 6.4 kPa on the body at panel_1 top right near armhole-right, 144 cm up"),
+            "Aprieta 6,4 kPa en shirt front"
+        );
+        assert_eq!(
+            es("Still moving (16.0 cm/s on average): simulate longer"),
+            "Aún se mueve: simula más"
+        );
+        let long = "x".repeat(80);
+        assert_eq!(es(&long).chars().count(), 61);
+        assert_eq!(
+            short_problem(Language::English, "Strained 9.0 %: panel_2 top", &name),
+            "Strain 9.0 % on panel_2"
+        );
+    }
+
+    #[test]
+    fn step_details_read_as_values() {
+        use serde_json::json;
+        assert_eq!(super::step_detail(&json!({})), "");
+        assert_eq!(super::step_detail(&json!({"kind": "shirt"})), "shirt");
+        assert_eq!(super::step_detail(&json!({"seconds": 8.0})), "8");
+        assert_eq!(
+            super::step_detail(&json!({"pieces": ["panel_1", "panel_2"], "rgb": [239, 236, 230]})),
+            "panel_1, panel_2 · 239, 236, 230"
+        );
     }
 
     #[test]

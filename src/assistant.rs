@@ -86,8 +86,9 @@ How to work
 warnings); piece_detail before editing a piece. When the person's message ends with a note from \
 FashionCraft that the scene is unchanged since your last scene_summary, or with what changed, \
 you already know the scene: do not call it again.
-2. Plan the steps. Ask only when something essential is missing; otherwise choose sensibly and \
-say what you chose.
+2. Plan the steps; for a job of several steps show them with plan, and call it again as they \
+finish. Ask only when something essential is missing; otherwise choose sensibly and say what \
+you chose.
 3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
 set_segment_length, add_point, add_dart, add_pleats, piece_edit, sew, seam_edit, place_piece, \
 set_fabric, set_fabric_parameters, set_color, set_avatar, set_pose, grading. command_list shows \

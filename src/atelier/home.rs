@@ -465,7 +465,10 @@ impl Atelier {
             Start::Trousers => Some("trousers"),
             _ => None,
         }
-        .is_some_and(|kind| self.agent_draft(kind, true, &Default::default()).is_ok());
+        .is_some_and(|kind| {
+            self.agent_draft(kind, true, &Default::default(), false)
+                .is_ok()
+        });
         let loaded = drafted
             || match project(start, &self.project) {
                 Ok(project) => self.load(project),

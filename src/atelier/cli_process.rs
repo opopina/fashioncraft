@@ -9,6 +9,24 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// The reasoning effort FashionCraft asks of a small request (`reasoning_effort` in the body),
+/// for the CLIs that take one. Low, medium or high only: anything else is not passed on.
+pub(super) fn effort(body: &Value) -> Option<&str> {
+    body["reasoning_effort"]
+        .as_str()
+        .filter(|e| ["low", "medium", "high"].contains(e))
+}
+
+/// The conversation as a CLI's prompt carries it: the request without FashionCraft's hints to
+/// the CLI itself, which go on its command line.
+pub(super) fn history(body: &Value) -> Value {
+    let mut history = body.clone();
+    if let Some(fields) = history.as_object_mut() {
+        fields.remove("reasoning_effort");
+    }
+    history
+}
+
 pub(super) fn schema() -> Value {
     json!({"type":"object","properties":{
             "text":{"type":"string"},"tool":{"type":"string"},"arguments":{"type":"string"}
@@ -351,6 +369,100 @@ pub(super) fn json_errors(output: &mut File) -> Option<String> {
         }
     }
     (!found.is_empty()).then(|| found.join(" · "))
+}
+
+/// Two turns through a CLI stand-in, the second must carry the first: a short first job (one
+/// tool call) and a long one (more steps than are sent whole). The stand-in saves every prompt
+/// it is given and asks for a colour change until `rounds` prompts have come, then replies.
+/// `cli_output` prints (or writes) `$answer` in the CLI's own form; `transport` runs the
+/// stand-in as the real CLI would be.
+#[cfg(all(test, unix))]
+pub(super) fn check_two_turns(
+    provider: fashioncraft::assistant::Provider,
+    effort_option: Option<&str>,
+    cli_output: &str,
+    transport: &mut dyn FnMut(PathBuf) -> Box<dyn fashioncraft::assistant::Transport>,
+) {
+    use fashioncraft::agent::ToolResult;
+    use fashioncraft::assistant::{Conversation, Settings};
+    use std::os::unix::fs::PermissionsExt;
+    for rounds in [1, 45] {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("cli");
+        let script = format!(
+            r#"#!/bin/sh
+d=$(dirname "$0")
+n=$(ls "$d" | grep -c '^prompt-')
+cat > "$d/prompt-$n.txt"
+printf '%s\n' "$@" > "$d/args-$n.txt"
+if [ "$n" -ge {rounds} ]; then
+  answer='{{"text":"Done: the shirt is red.","tool":"","arguments":"{{}}"}}'
+else
+  answer='{{"text":"","tool":"set_color","arguments":"{{\"rgb\":[200,0,0]}}"}}'
+fi
+{cli_output}
+"#
+        );
+        std::fs::write(&exe, script).unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let settings = Settings {
+            provider,
+            model: String::new(),
+            base_url: String::new(),
+            api_key: String::new(),
+            pause_every: 0,
+        };
+        let mut conversation = Conversation::new(provider);
+        for text in ["Make the shirt red", "Now make it blue"] {
+            conversation
+                .turn(
+                    &settings,
+                    text,
+                    transport(exe.clone()).as_mut(),
+                    &mut |_, _| ToolResult::text("Coloured it red: rgb(200, 0, 0)"),
+                    &mut |_| {},
+                    &|| false,
+                )
+                .unwrap();
+        }
+        // A small request: low effort for the first steps, on the command line, never in
+        // the prompt.
+        let args =
+            |n: usize| std::fs::read_to_string(dir.path().join(format!("args-{n}.txt"))).unwrap();
+        if let Some(option) = effort_option {
+            assert!(args(0).contains(option), "{provider:?}: {}", args(0));
+            if rounds > fashioncraft::assistant::LIGHT_ROUNDS {
+                assert!(!args(rounds).contains(option));
+            }
+        }
+        assert!(
+            !std::fs::read_to_string(dir.path().join("prompt-0.txt"))
+                .unwrap()
+                .contains("reasoning_effort")
+        );
+        // Turn 1 took `rounds` tool calls and a reply; the last prompt is turn 2's.
+        let prompts = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .is_ok_and(|e| e.file_name().to_string_lossy().starts_with("prompt-"))
+            })
+            .count();
+        assert_eq!(prompts, rounds + 2);
+        let second =
+            std::fs::read_to_string(dir.path().join(format!("prompt-{}.txt", rounds + 1))).unwrap();
+        for carried in [
+            "Make the shirt red",
+            "Coloured it red",
+            "Done: the shirt is red.",
+            "Now make it blue",
+        ] {
+            assert!(
+                second.contains(carried),
+                "{provider:?}, {rounds} steps: turn 2 lacks {carried:?}"
+            );
+        }
+    }
 }
 
 #[cfg(test)]

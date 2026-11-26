@@ -36,7 +36,7 @@ fn executable() -> PathBuf {
 }
 
 fn prompt(dir: &Path, body: &Value, command: &mut Command) -> io::Result<File> {
-    let mut history = body.clone();
+    let mut history = super::cli_process::history(body);
     let mut n = 0;
     for msg in history["messages"].as_array_mut().into_iter().flatten() {
         for part in msg["content"].as_array_mut().into_iter().flatten() {
@@ -103,6 +103,11 @@ impl Cli<'_> {
             .arg(&answer);
         if let Some(model) = body["model"].as_str().filter(|s| !s.is_empty()) {
             command.arg("--model").arg(model);
+        }
+        if let Some(effort) = super::cli_process::effort(body) {
+            command
+                .arg("-c")
+                .arg(format!("model_reasoning_effort=\"{effort}\""));
         }
         let input = prompt(dir.path(), body, &mut command)?;
         let mut errors = tempfile::tempfile()?;
@@ -185,6 +190,17 @@ fi
         assert_eq!(
             conversation.messages().last().unwrap()["content"],
             "Two pieces"
+        );
+    }
+
+    #[test]
+    fn the_second_turn_remembers_the_first() {
+        super::super::cli_process::check_two_turns(
+            fashioncraft::assistant::Provider::CodexCli,
+            Some("model_reasoning_effort=\"low\""),
+            r#"while [ "$1" != "--output-last-message" ]; do shift || exit 2; done
+echo "$answer" > "$2""#,
+            &mut |exe| Box::new(StandIn(exe)),
         );
     }
 }

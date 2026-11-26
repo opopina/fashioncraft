@@ -252,9 +252,11 @@ impl PatternClipboard {
             created.push(copy.id.clone());
             target.panels.push(copy);
         }
+        let mut seams = BTreeMap::new();
         for s in &self.template.seams {
             let mut copy = s.clone();
             copy.id = unused_id("seam", target.seams.iter().map(|s| s.id.clone()));
+            seams.insert(s.id.clone(), copy.id.clone());
             for r in copy.references_mut() {
                 r.panel = panels[&r.panel].clone();
             }
@@ -281,10 +283,90 @@ impl PatternClipboard {
                     axis: link.axis,
                 });
         }
+        self.carry_settings(target, &panels, &seams);
         if target.panels.iter().any(|p| p.polygon.is_some()) {
             target.version = 2;
         }
         Ok(created)
+    }
+
+    /// The pieces' and seams' own settings go with them, under their new ids: a sleeve's wrap
+    /// around the arm (without it a pasted set-in sleeve starts flat and its armpit corner
+    /// never closes), layers, pressure, shrink, strengthening, flipped faces, locks, elastics
+    /// and tapes, line folds, tacks, seam folds and zippers. Holds (pins, frozen, deactivated
+    /// or solidified pieces) stay behind: they belong to the drape the pieces came from.
+    fn carry_settings(
+        &self,
+        target: &mut GarmentTemplate,
+        panels: &BTreeMap<String, String>,
+        seams: &BTreeMap<String, String>,
+    ) {
+        let source = &self.template;
+        let panel = |id: &String| panels.get(id).cloned();
+        for (id, wrap) in &source.panel_wraps {
+            if let Some(new) = panel(id) {
+                target.panel_wraps.insert(new, *wrap);
+            }
+        }
+        for (id, layer) in &source.panel_layers {
+            if let Some(new) = panel(id) {
+                target.panel_layers.insert(new, *layer);
+            }
+        }
+        for (id, pressure) in &source.panel_pressure {
+            if let Some(new) = panel(id) {
+                target.panel_pressure.insert(new, *pressure);
+            }
+        }
+        for (id, shrink) in &source.panel_shrink {
+            if let Some(new) = panel(id) {
+                target.panel_shrink.insert(new, *shrink);
+            }
+        }
+        for set in [
+            (&source.strengthened_panels, &mut target.strengthened_panels),
+            (&source.flipped_panels, &mut target.flipped_panels),
+            (&source.locked_panels, &mut target.locked_panels),
+        ] {
+            set.1.extend(set.0.iter().filter_map(panel));
+        }
+        for spring in &source.line_springs {
+            if let Some(new) = panel(&spring.panel) {
+                target
+                    .line_springs
+                    .push(crate::garment::template::LineSpring {
+                        panel: new,
+                        ..spring.clone()
+                    });
+            }
+        }
+        for fold in &source.line_folds {
+            if let Some(new) = panel(&fold.panel) {
+                target.line_folds.push(crate::garment::template::LineFold {
+                    panel: new,
+                    ..fold.clone()
+                });
+            }
+        }
+        for tack in &source.tacks {
+            if let (Some(a), Some(b)) = (panel(&tack.a.panel), panel(&tack.b.panel)) {
+                let mut copy = tack.clone();
+                copy.id = unused_id("tack", target.tacks.iter().map(|t| t.id.clone()));
+                copy.a.panel = a;
+                copy.b.panel = b;
+                target.tacks.push(copy);
+            }
+        }
+        for (id, fold) in &source.seam_folds {
+            if let Some(new) = seams.get(id) {
+                target.seam_folds.insert(new.clone(), fold.clone());
+            }
+        }
+        for (id, zipper) in &source.seam_zippers {
+            if let Some(new) = seams.get(id) {
+                target.seam_zippers.insert(new.clone(), zipper.clone());
+            }
+        }
     }
 }
 

@@ -74,7 +74,7 @@ fn executable() -> PathBuf {
 }
 
 fn input(body: &Value) -> io::Result<File> {
-    let mut history = body.clone();
+    let mut history = super::cli_process::history(body);
     let mut images = Vec::new();
     for msg in history["messages"].as_array_mut().into_iter().flatten() {
         for part in msg["content"].as_array_mut().into_iter().flatten() {
@@ -167,6 +167,9 @@ impl Cli<'_> {
         if let Some(model) = body["model"].as_str().filter(|s| !s.is_empty()) {
             cmd.arg("--model").arg(model);
         }
+        if let Some(effort) = cli_process::effort(body) {
+            cmd.arg("--effort").arg(effort);
+        }
         let mut child = cmd.stdin(input(body)?).stdout(output.try_clone()?).stderr(errors.try_clone()?).spawn()
             .map_err(|e| io::Error::other(format!("Could not start Claude Code: {e}. Set FASHIONCRAFT_CLAUDE to the Claude Code executable.")))?;
         if let Err(error) = cli_process::wait(&mut child, &mut errors, self.0, "Claude Code") {
@@ -252,5 +255,35 @@ echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structur
             .push(json!({"role":"tool","content":"actual shirt panels"}));
         let next = cli.run(&exe, &body).unwrap();
         assert_eq!(next["choices"][0]["message"]["content"], "Front and back");
+    }
+
+    #[cfg(unix)]
+    mod two_turns {
+        use super::*;
+
+        struct TwoTurns(PathBuf);
+        impl Transport for TwoTurns {
+            fn post(
+                &mut self,
+                _: &str,
+                _: &[(&str, String)],
+                body: &Value,
+            ) -> Result<Value, String> {
+                Cli(&AtomicBool::new(false))
+                    .run(&self.0, body)
+                    .map_err(|e| e.to_string())
+            }
+        }
+
+        #[test]
+        fn the_second_turn_remembers_the_first() {
+            super::super::super::cli_process::check_two_turns(
+                fashioncraft::assistant::Provider::ClaudeCli,
+                Some("--effort\nlow\n"),
+                r#"echo '{"type":"system","subtype":"init"}'
+    echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"structured_output\":$answer}""#,
+                &mut |exe| Box::new(TwoTurns(exe)),
+            );
+        }
     }
 }

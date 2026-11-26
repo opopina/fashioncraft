@@ -494,6 +494,19 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Smooth curve" => "Suavizar curva",
         "Cut and extend" => "Cortar y extender",
         "Create" => "Crear",
+        "Replace" => "Reemplazar",
+        "Wear it over the garment on the board, which stays (simulate that one first)" => {
+            "Ponerla encima de la prenda del tablero, que se queda (simula esa primero)"
+        }
+        "This takes every piece off the board; unsaved changes are lost." => {
+            "Esto quita todas las piezas del tablero; los cambios sin guardar se pierden."
+        }
+        "The garment on the board is still laid out flat: simulate it first, then add this one over it" => {
+            "La prenda del tablero sigue extendida en plano: simúlala primero y luego añade esta encima"
+        }
+        "Added over the garment on the board, on an outer layer: simulate to drape it" => {
+            "Añadida encima de la prenda del tablero, en una capa exterior: simula para que caiga"
+        }
         "Polygon" => "Polígono",
         "Freehand" => "A mano alzada",
         "Rectangle" => "Rectángulo",
@@ -1383,12 +1396,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Attach files" => "Adjuntar archivos",
         "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
         "All files" => "Todos los archivos",
-        "Attach the picture or files on the clipboard" => {
-            "Adjuntar la imagen o los archivos del portapapeles"
-        }
-        "The clipboard holds no picture or file." => {
-            "El portapapeles no tiene ninguna imagen ni archivo."
-        }
         "Paused for your review after" => "En pausa para que revises, tras",
         "steps." => "pasos.",
         "Continue" => "Continuar",

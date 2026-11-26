@@ -12,9 +12,6 @@ use glam::{DVec2, DVec3};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
-/// Marks the screenshots these tools ask for among the window's screenshots.
-struct BaseShot;
-
 /// A base tool that finishes over later frames.
 pub(super) enum BasePending {
     /// The avatar moves into a new pose while the cloth simulates along, until done.
@@ -27,13 +24,9 @@ pub(super) enum BasePending {
         name: String,
         pieces: Vec<String>,
     },
-    /// A picture of the 3D view once the camera has moved: frames waited, when it was asked
-    /// for, and the text that goes with it.
-    Shot {
-        frames: u32,
-        asked: Option<Instant>,
-        text: String,
-    },
+    /// A picture of the 3D view once the camera has moved: frames waited, and the text that
+    /// goes with it.
+    Shot { frames: u32, text: String },
 }
 
 fn cm(m: f64) -> f64 {
@@ -142,14 +135,18 @@ impl Atelier {
             "points_of_measure" => self.agent_points_of_measure(args),
             "measure" => self.agent_measure(args),
             "check_garment" => {
-                let report = self.garment_check();
+                let full = self.garment_check();
+                let report = if args.get("details").and_then(Value::as_bool) == Some(true) {
+                    full
+                } else {
+                    agent_check::brief(&full)
+                };
                 match args.get("view").and_then(Value::as_str) {
                     Some(view) => match self.turn_to(ctx, view) {
                         Ok(()) => {
                             return Err(Pending::Base(BasePending::Shot {
                                 frames: 0,
-                                asked: None,
-                                text: serde_json::to_string_pretty(&report).unwrap_or_default(),
+                                text: report.to_string(),
                             }));
                         }
                         Err(e) => Err(e),
@@ -222,7 +219,6 @@ impl Atelier {
                     pending,
                     BasePending::Shot {
                         frames: 0,
-                        asked: Some(Instant::now()),
                         text: String::new(),
                     },
                 )
@@ -238,51 +234,15 @@ impl Atelier {
                     .unwrap_or_else(ToolResult::error),
                 )
             }
-            BasePending::Shot {
-                frames,
-                asked,
-                text,
-            } => {
-                let Some(when) = *asked else {
-                    // Let the view draw the new camera before taking it.
-                    *frames += 1;
-                    ctx.request_repaint();
-                    if *frames >= 3 {
-                        if ctx.input(|i| i.viewport().visible() == Some(false))
-                            || self.authoring.selection.garment_rect.is_none()
-                        {
-                            return Some(ToolResult::text(format!(
-                                "{text}\n(No picture: the 3D view is not on screen.)"
-                            )));
-                        }
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                            egui::UserData::new(BaseShot),
-                        ));
-                        *asked = Some(Instant::now());
-                    }
+            BasePending::Shot { frames, text } => {
+                // Let the view take the new camera first (a framing waits for a frame).
+                *frames += 1;
+                ctx.request_repaint();
+                if *frames < 3 {
                     return None;
-                };
-                let shot = ctx.input(|i| {
-                    i.events.iter().find_map(|event| match event {
-                        egui::Event::Screenshot {
-                            user_data, image, ..
-                        } if user_data
-                            .data
-                            .as_ref()
-                            .is_some_and(|d| d.downcast_ref::<BaseShot>().is_some()) =>
-                        {
-                            Some(image.clone())
-                        }
-                        _ => None,
-                    })
-                });
-                let Some(image) = shot else {
-                    return (when.elapsed() > Duration::from_secs(10))
-                        .then(|| ToolResult::text(format!("{text}\n(No picture came back.)")));
-                };
-                let mut result = self
-                    .screenshot_result(ctx, &image, false)
-                    .unwrap_or_else(ToolResult::error);
+                }
+                // Drawn for the purpose, so the window may be minimised or covered.
+                let mut result = self.view_picture(ctx).unwrap_or_else(ToolResult::error);
                 if !text.is_empty() {
                     result
                         .content
@@ -296,6 +256,48 @@ impl Atelier {
     /// scene_summary: whole the first time in a conversation (or with full: true), then only
     /// what changed since the last one, which keeps every request of a long job short.
     pub(super) fn agent_scene_summary(&mut self, ctx: &egui::Context, args: &Value) -> Value {
+        let mut answer = self.scene_summary_diffed(ctx, args);
+        if args.get("lists").and_then(Value::as_bool) == Some(true) {
+            answer["lists"] = json!({
+                "arrangement_points": self.arrangement_anchor_ids(),
+                "library_presets": fashioncraft::agent::avatar_preset_ids(),
+                "pose_presets": fashioncraft::avatar_rig::PRESETS,
+                "fabric_presets": fashioncraft::fabrics::PRESETS
+                    .iter()
+                    .map(|p| json!({"id": p.id, "name": p.name}))
+                    .collect::<Vec<_>>(),
+            });
+        }
+        answer
+    }
+
+    /// The warnings a simulation's result carries: not the open seams (its seams list has
+    /// them), nor the note that a seam allowed to ease has no gathering model (ease there is
+    /// meant).
+    pub(super) fn simulate_warnings(&self, summary: &Value) -> Vec<Value> {
+        let eased: Vec<&str> = self
+            .project
+            .template
+            .seams
+            .iter()
+            .filter(|s| s.allow_ease)
+            .map(|s| s.id.as_str())
+            .collect();
+        summary["warnings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|w| {
+                let w = w.as_str().unwrap_or_default();
+                !(w.starts_with("Seam ") && w.contains(" open after simulating"))
+                    && !(w.contains("no physical gathering model")
+                        && eased.iter().any(|id| w.starts_with(&format!("{id}:"))))
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn scene_summary_diffed(&mut self, ctx: &egui::Context, args: &Value) -> Value {
         let now = self.scene_summary();
         let id = egui::Id::new("agent.last_scene_summary");
         let epoch = fashioncraft::assistant::conversation_epoch();
@@ -306,6 +308,20 @@ impl Atelier {
             Some((e, before)) if e == epoch && !full => agent_base::scene_diff(&before, &now),
             _ => now,
         }
+    }
+
+    /// A note for the person's next message to the Assistant about the scene the model last
+    /// saw (see [`agent_base::scene_note`]).
+    pub(super) fn agent_scene_note(&mut self, ctx: &egui::Context) -> Option<String> {
+        let id = egui::Id::new("agent.last_scene_summary");
+        let epoch = fashioncraft::assistant::conversation_epoch();
+        let last: (u64, Value) = ctx.data(|d| d.get_temp(id))?;
+        let now = self.scene_summary();
+        let (note, known) = agent_base::scene_note(&last, epoch, &now)?;
+        if known {
+            ctx.data_mut(|d| d.insert_temp(id, (epoch, now)));
+        }
+        Some(note)
     }
 
     /// Pieces lying on top of each other on the board move apart (a drafted garment's front and
@@ -1050,7 +1066,6 @@ impl Atelier {
         if args.get("screenshot").and_then(Value::as_bool) == Some(true) {
             return Ok(Some(Pending::Base(BasePending::Shot {
                 frames: 0,
-                asked: None,
                 text: serde_json::to_string(&self.camera_json()).unwrap_or_default(),
             })));
         }

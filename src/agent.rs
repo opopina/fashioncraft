@@ -127,8 +127,9 @@ impl ToolResult {
             is_error: false,
         }
     }
+    /// A JSON result, compact: indentation would double what the model reads.
     pub fn json(value: &Value) -> Self {
-        Self::text(serde_json::to_string_pretty(value).unwrap_or_default())
+        Self::text(serde_json::to_string(value).unwrap_or_default())
     }
     pub fn error(text: impl Into<String>) -> Self {
         Self {
@@ -222,7 +223,13 @@ pub fn tools() -> Vec<Tool> {
              parameters, the avatar's measurements and pose, sizes and grading, the current \
              selection, warnings and the simulation state. Call it first and after changes; \
              after the first call it gives only what changed (full: true for everything).",
-            object(json!({"full": {"type": "boolean"}}), &[]),
+            object(
+                json!({
+                    "full": {"type": "boolean"},
+                    "lists": {"type": "boolean", "description": "Also name the avatar's arrangement points (for place_piece) and the avatar, pose and fabric presets; otherwise only their counts."}
+                }),
+                &[],
+            ),
             false,
         ),
         tool(
@@ -282,14 +289,20 @@ pub fn tools() -> Vec<Tool> {
         ),
         tool(
             "draft_garment",
-            "Replace the garment with a base drafted from measurements, sewn and placed around \
-             the avatar: tshirt (kimono sleeves), shirt (set-in sleeves), dress (sleeveless \
-             A-line), skirt or trousers. With from_avatar (default) the measurements come from \
-             the avatar; measurements_cm overrides any of them and the reply lists them all. \
-             Unsaved work is replaced: save_project first if it matters.",
+            "Draft a garment from measurements, sewn and placed around the avatar: tshirt (kimono \
+             sleeves), shirt (set-in sleeves), dress (sleeveless A-line), skirt or trousers. \
+             mode add (the default) wears it over the garment already there, which stays as it \
+             is (a shirt with a skirt): it goes on an outer layer, a little out where needed to \
+             start clear, its pieces named after it; the garment there must be draped first \
+             (simulate it). mode replace removes every piece first: \
+             only when the person asks for it instead of the current garment, after saying so \
+             (unsaved work is lost: save_project first if it matters). With from_avatar \
+             (default) the measurements come from the avatar; measurements_cm overrides any of \
+             them and the reply lists them all.",
             object(
                 json!({
                     "kind": {"type": "string", "enum": GARMENT_KINDS},
+                    "mode": {"type": "string", "enum": ["add", "replace"], "description": "add (default): over the garment there; replace: instead of it."},
                     "from_avatar": {"type": "boolean", "description": "Measure the avatar first (default true)."},
                     "measurements_cm": {
                         "type": "object",
@@ -439,7 +452,7 @@ pub fn tools() -> Vec<Tool> {
         ),
         tool(
             "place_piece",
-            "Place a piece on the avatar at an arrangement point (scene_summary lists them, \
+            "Place a piece on the avatar at an arrangement point (scene_summary with lists true names them, \
              such as torso-middle-front or upper-arm-left-outer), clearance_cm from the skin, \
              wrapped around the body unless wrap is false. It is checked to start clear of the \
              body. Simulate afterwards.",
@@ -584,7 +597,9 @@ pub fn tools() -> Vec<Tool> {
             "screenshot",
             "A PNG picture of the 3D view as it is now, to look at the garment; or of the whole \
              window, panels included. Turn the view first with command_run 'view.front', \
-             'view.back', 'view.avatar_left'…",
+             'view.back', 'view.avatar_left'… A picture costs time and 1-2k tokens: take one \
+             only to verify a finished result, compare with the person's picture, place a \
+             problem the numbers cannot, or when asked.",
             object(
                 json!({"area": {"type": "string", "enum": ["view", "window"],
                     "description": "The 3D view (the default) or the whole window."}}),

@@ -319,3 +319,82 @@ fn group_layout_moves_once_and_preserves_all_physical_data() {
         assert_eq!(authoring::layout(&edit.template, i), *origin + delta);
     }
 }
+
+#[test]
+fn pasted_pieces_keep_their_own_settings_under_their_new_ids() {
+    use fashioncraft::garment::template::{LineSpring, SeamFold, Tack, TackPoint};
+    // A shirt: its sleeves are wrapped round the arms; give its pieces and seams the other
+    // settings a piece or seam can carry.
+    let mut t = presets::shirt_around(&Default::default(), 1, None).unwrap();
+    assert_eq!(t.panel_wraps.len(), 2);
+    t.panel_layers.insert("front".into(), 2);
+    t.panel_pressure.insert("back".into(), 150.);
+    t.panel_shrink.insert("back".into(), [97., 98.]);
+    t.strengthened_panels.insert("front".into());
+    t.flipped_panels.insert("back".into());
+    t.locked_panels.insert("sleeve-left".into());
+    t.line_springs
+        .push(LineSpring::elastic("sleeve-right", "hem"));
+    t.tacks.push(Tack {
+        id: "tack_1".into(),
+        a: TackPoint {
+            panel: "front".into(),
+            uv: DVec2::new(0.1, 0.1),
+        },
+        b: TackPoint {
+            panel: "back".into(),
+            uv: DVec2::new(0.1, 0.1),
+        },
+    });
+    let seam = t.seams[0].id.clone();
+    t.seam_folds.insert(seam.clone(), SeamFold::default());
+    let ids: Vec<String> = t.panels.iter().map(|p| p.id.clone()).collect();
+    let clip = PatternClipboard::capture(&t, &ids).unwrap();
+    let pasted = authoring::apply(
+        &t,
+        Command::Paste {
+            clipboard: clip,
+            center: DVec2::new(2., 0.),
+        },
+    )
+    .unwrap()
+    .template;
+    // The copy of each piece, by its name.
+    let copy = |id: &str| {
+        let name = &t.panels.iter().find(|p| p.id == id).unwrap().name;
+        pasted
+            .panels
+            .iter()
+            .skip(t.panels.len())
+            .find(|p| p.name.starts_with(name.as_str()))
+            .unwrap()
+            .id
+            .clone()
+    };
+    for sleeve in ["sleeve-right", "sleeve-left"] {
+        assert_eq!(
+            pasted.panel_wraps.get(&copy(sleeve)),
+            t.panel_wraps.get(sleeve)
+        );
+    }
+    assert_eq!(pasted.panel_layers.get(&copy("front")), Some(&2));
+    assert_eq!(pasted.panel_pressure.get(&copy("back")), Some(&150.));
+    assert_eq!(pasted.panel_shrink.get(&copy("back")), Some(&[97., 98.]));
+    assert!(pasted.strengthened_panels.contains(&copy("front")));
+    assert!(pasted.flipped_panels.contains(&copy("back")));
+    assert!(pasted.locked_panels.contains(&copy("sleeve-left")));
+    assert!(
+        pasted
+            .line_springs
+            .iter()
+            .any(|s| s.panel == copy("sleeve-right") && s.line == "hem")
+    );
+    let tack = pasted.tacks.last().unwrap();
+    assert!(tack.id != "tack_1" && tack.a.panel == copy("front") && tack.b.panel == copy("back"));
+    let new_seam = &pasted.seams[t.seams.len()].id;
+    assert!(pasted.seam_folds.contains_key(new_seam));
+    // The originals keep theirs.
+    assert_eq!(pasted.panel_wraps.len(), 4);
+    assert!(pasted.seam_folds.contains_key(&seam));
+    pasted.compile().unwrap();
+}

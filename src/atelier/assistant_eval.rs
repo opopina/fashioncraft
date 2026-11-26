@@ -191,7 +191,7 @@ impl Atelier {
             self.install_avatar_file(avatar)?;
         }
         if case.start != "current" {
-            self.agent_draft(&case.start, true, &BTreeMap::new())?;
+            self.agent_draft(&case.start, true, &BTreeMap::new(), false)?;
         }
         Ok(self.scene_summary())
     }

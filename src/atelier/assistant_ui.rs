@@ -61,6 +61,8 @@ pub(super) struct AssistantUi {
     thumbs: std::collections::HashMap<String, egui::TextureHandle>,
     /// Why the last attach or paste found nothing, shown under the chips.
     attach_note: Option<String>,
+    /// A text paste came since the paste key was last let go (see [`paste_asked`]).
+    text_pasted: bool,
     /// What this conversation has used so far (kept in memory only).
     usage: Totals,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
@@ -125,6 +127,7 @@ impl Default for AssistantUi {
             sent: Vec::new(),
             thumbs: Default::default(),
             attach_note: None,
+            text_pasted: false,
             usage: Totals::default(),
             log: None,
         }
@@ -329,10 +332,30 @@ impl Atelier {
         }
     }
 
-    /// Attach the clipboard's files or picture; false when it holds neither.
-    fn assistant_paste(&mut self) -> bool {
-        let Ok(mut clipboard) = arboard::Clipboard::new() else {
-            return false;
+    /// Attach the clipboard's files or picture; false when it holds neither. With `tell`, a
+    /// clipboard that cannot be read says why under the chips (not after a text paste, which
+    /// egui reads on its own).
+    fn assistant_paste(&mut self, tell: bool) -> bool {
+        // Under Wayland the desktop's own clipboard first: arboard reaches it only through
+        // XWayland, which may not carry pictures (wl-paste comes with wl-clipboard).
+        let wayland = cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some();
+        if wayland && let Some(clip) = clip_by_command(true, &mut run_clipboard_tool) {
+            return self.assistant_attach_clip(clip);
+        }
+        let mut clipboard = match arboard::Clipboard::new() {
+            Ok(clipboard) => clipboard,
+            Err(e) => {
+                if cfg!(target_os = "linux")
+                    && let Some(clip) = clip_by_command(wayland, &mut run_clipboard_tool)
+                {
+                    return self.assistant_attach_clip(clip);
+                }
+                if tell {
+                    self.assistant.attach_note =
+                        Some(format!("The clipboard could not be read: {e}"));
+                }
+                return false;
+            }
         };
         if let Ok(files) = clipboard.get().file_list()
             && !files.is_empty()
@@ -340,19 +363,47 @@ impl Atelier {
             self.assistant_attach_paths(files);
             return true;
         }
-        if let Ok(image) = clipboard.get_image() {
-            match attachments::from_rgba(
-                "pasted.png",
-                image.width as u32,
-                image.height as u32,
-                image.bytes.into_owned(),
-            ) {
-                Ok(a) => self.assistant_attach(a),
-                Err(e) => self.assistant.attach_note = Some(e),
+        match clipboard.get_image() {
+            Ok(image) => {
+                match attachments::from_rgba(
+                    "pasted.png",
+                    image.width as u32,
+                    image.height as u32,
+                    image.bytes.into_owned(),
+                ) {
+                    Ok(a) => self.assistant_attach(a),
+                    Err(e) => self.assistant.attach_note = Some(e),
+                }
+                return true;
             }
-            return true;
+            // Text only (it pastes as text) or nothing.
+            Err(arboard::Error::ContentNotAvailable) => {}
+            Err(e) => {
+                if tell {
+                    self.assistant.attach_note = Some(format!(
+                        "The picture on the clipboard could not be read: {e}"
+                    ))
+                }
+            }
+        }
+        // X11 without a picture arboard could read: xclip, when it is there.
+        if cfg!(target_os = "linux")
+            && !wayland
+            && let Some(clip) = clip_by_command(false, &mut run_clipboard_tool)
+        {
+            return self.assistant_attach_clip(clip);
         }
         false
+    }
+
+    fn assistant_attach_clip(&mut self, clip: Clip) -> bool {
+        match clip {
+            Clip::Files(paths) => self.assistant_attach_paths(paths),
+            Clip::Image(bytes) => {
+                self.assistant_attach(attachments::from_bytes("pasted.png", &bytes))
+            }
+        }
+        true
     }
 
     /// Files dropped on the window, a paste into the message and the thumbnails of what is
@@ -363,9 +414,19 @@ impl Atelier {
         for file in dropped {
             self.assistant_attach(attachments::from_path(file.path()));
         }
-        let focused = ctx.memory(|m| m.has_focus(input_id));
-        let pasted = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
-        if focused && (paste_key || pasted) && self.assistant_paste() {
+        let asked = ctx.input(|i| {
+            paste_asked(
+                &i.events,
+                &mut self.assistant.text_pasted,
+                cfg!(target_os = "macos"),
+            )
+        });
+        let text_came = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
+        // ⌘V / Ctrl+V attaches a picture or files wherever the focus is while this window is
+        // open: nothing else takes them. Text still pastes as text, and a text paste into
+        // another field (a piece's name, say) is left to that field.
+        let other_field = text_came && ctx.memory(|m| m.focused().is_some_and(|id| id != input_id));
+        if !other_field && (paste_key || asked) && self.assistant_paste(!text_came) {
             ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Paste(_))));
         }
         for a in self.assistant.pending.iter().chain(&self.assistant.sent) {
@@ -491,6 +552,7 @@ impl Atelier {
                     self.assistant.entries.push(Entry::Paused(steps))
                 }
                 Update::Event(Event::Usage(usage)) => self.assistant.usage.add(&usage),
+                Update::Event(Event::Answered { .. }) => {}
                 Update::Event(Event::ToolStarted { name, arguments }) => {
                     self.assistant.calls.push(fashioncraft::agent_eval::Call {
                         name: name.clone(),
@@ -615,6 +677,8 @@ impl Atelier {
                 *conversation = Conversation::new(settings.provider);
             }
         }
+        // What the model knows of the scene, so a small request needs no scene_summary first.
+        let note = self.agent_scene_note(ctx);
         let attached = std::mem::take(&mut self.assistant.pending);
         if !attached.is_empty() {
             self.assistant.entries.push(Entry::Attached(
@@ -626,7 +690,11 @@ impl Atelier {
         self.assistant_log(json!({
             "you": text,
             "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+            "scene_note": note,
         }));
+        if let Some(note) = &note {
+            text = fashioncraft::assistant::with_note(&text, note);
+        }
         self.assistant.input.clear();
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
@@ -881,6 +949,9 @@ impl Atelier {
             Update::Event(Event::Text(t)) => json!({"assistant": t}),
             Update::Event(Event::Notice(t)) => json!({"notice": t}),
             Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
+            Update::Event(Event::Answered { seconds }) => {
+                json!({"model_seconds": (seconds * 10.).round() / 10.})
+            }
             Update::Event(Event::Usage(u)) => json!({"usage": {
                 "input": u.input, "cached": u.cached, "output": u.output, "cost_usd": u.cost_usd,
             }}),
@@ -1311,15 +1382,6 @@ impl Atelier {
                             {
                                 self.assistant_attach_paths(paths);
                             }
-                            if ui
-                                .small_button(tr("Paste"))
-                                .on_hover_text(tr("Attach the picture or files on the clipboard"))
-                                .clicked()
-                                && !self.assistant_paste()
-                            {
-                                self.assistant.attach_note =
-                                    Some(tr("The clipboard holds no picture or file.").into());
-                            }
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -1524,6 +1586,148 @@ impl Atelier {
     }
 }
 
+/// What a desktop clipboard tool found: files copied in the file manager, or a picture's
+/// bytes (PNG, JPEG…).
+#[derive(Debug, PartialEq)]
+enum Clip {
+    Files(Vec<PathBuf>),
+    Image(Vec<u8>),
+}
+
+/// The clipboard through the desktop's own tool, for Linux: `wl-paste` under Wayland, `xclip`
+/// under X11. Files (text/uri-list) first, then a picture (PNG first). `run` runs a command
+/// line and gives its output; None when the tool is missing, fails or has nothing.
+fn clip_by_command(wayland: bool, run: &mut dyn FnMut(&[&str]) -> Option<Vec<u8>>) -> Option<Clip> {
+    let get = |kind: &str| -> Vec<String> {
+        if wayland {
+            ["wl-paste", "--no-newline", "--type", kind]
+                .map(String::from)
+                .to_vec()
+        } else {
+            ["xclip", "-selection", "clipboard", "-t", kind, "-o"]
+                .map(String::from)
+                .to_vec()
+        }
+    };
+    let listed = if wayland {
+        run(&["wl-paste", "--list-types"])?
+    } else {
+        run(&["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"])?
+    };
+    let listed = String::from_utf8_lossy(&listed).into_owned();
+    let kinds: Vec<&str> = listed.lines().map(str::trim).collect();
+    let mut fetch = |kind: &str| {
+        let args = get(kind);
+        run(&args.iter().map(String::as_str).collect::<Vec<_>>()).filter(|b| !b.is_empty())
+    };
+    if kinds.contains(&"text/uri-list")
+        && let Some(list) = fetch("text/uri-list")
+    {
+        let files = file_uris(&String::from_utf8_lossy(&list));
+        if !files.is_empty() {
+            return Some(Clip::Files(files));
+        }
+    }
+    let picture = kinds
+        .iter()
+        .find(|k| **k == "image/png")
+        .or_else(|| kinds.iter().find(|k| k.starts_with("image/")))?;
+    fetch(picture).map(Clip::Image)
+}
+
+/// The local files a text/uri-list names (file:// URIs, percent-escapes decoded).
+fn file_uris(list: &str) -> Vec<PathBuf> {
+    list.lines()
+        .map(str::trim)
+        .filter_map(|line| line.strip_prefix("file://"))
+        // file://host/path: a local file's host is empty or localhost.
+        .map(|rest| rest.strip_prefix("localhost").unwrap_or(rest))
+        .map(|path| {
+            let bytes = path.as_bytes();
+            let mut out = Vec::with_capacity(bytes.len());
+            let mut i = 0;
+            while i < bytes.len() {
+                let hex = |b: u8| (b as char).to_digit(16);
+                match (bytes[i], bytes.get(i + 1), bytes.get(i + 2)) {
+                    (b'%', Some(a), Some(b)) if hex(*a).is_some() && hex(*b).is_some() => {
+                        out.push((hex(*a).unwrap() * 16 + hex(*b).unwrap()) as u8);
+                        i += 3;
+                    }
+                    (b, ..) => {
+                        out.push(b);
+                        i += 1;
+                    }
+                }
+            }
+            PathBuf::from(String::from_utf8_lossy(&out).into_owned())
+        })
+        .collect()
+}
+
+/// Runs a clipboard tool for at most 2 seconds; its output when it succeeds.
+fn run_clipboard_tool(args: &[&str]) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let (program, rest) = args.split_first()?;
+    let mut child = std::process::Command::new(program)
+        .args(rest)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdout = child.stdout.take()?;
+    let (send, read) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = send.send(stdout.read_to_end(&mut bytes).map(|_| bytes));
+    });
+    let bytes = read.recv_timeout(std::time::Duration::from_secs(2));
+    if bytes.is_err() {
+        let _ = child.kill();
+    }
+    let status = child.wait().ok()?;
+    bytes.ok()?.ok().filter(|_| status.success())
+}
+
+/// Whether this frame's input asks for a paste the Assistant should look at for pictures and
+/// files. A text paste does ([`egui::Event::Paste`]). On Linux and Windows egui-winit makes
+/// Ctrl+V (Shift+Insert on Windows, a Paste key) a text paste only when the clipboard holds
+/// text, and swallows the key press, so a clipboard with only a picture or files gives nothing
+/// but the key's release: that release asks too, unless a text paste came with its press
+/// (`text_pasted`). On macOS the AppKit key monitor tells instead ([`super::native_menu`]).
+fn paste_asked(events: &[egui::Event], text_pasted: &mut bool, mac: bool) -> bool {
+    let pasted = events.iter().any(|e| matches!(e, egui::Event::Paste(_)));
+    *text_pasted |= pasted;
+    if mac {
+        return pasted;
+    }
+    let paste_key = |key: egui::Key, modifiers: egui::Modifiers| {
+        (key == egui::Key::V && modifiers.command)
+            || key == egui::Key::Paste
+            || (cfg!(windows) && key == egui::Key::Insert && modifiers.shift)
+    };
+    let released: Vec<(egui::Key, egui::Modifiers)> = events
+        .iter()
+        .filter_map(|e| match e {
+            egui::Event::Key {
+                key,
+                pressed: false,
+                modifiers,
+                ..
+            } => Some((*key, *modifiers)),
+            _ => None,
+        })
+        .collect();
+    let asked = released.iter().any(|&(k, m)| paste_key(k, m));
+    // The key's release ends this paste either way, even with Ctrl let go first.
+    let ended = asked
+        || released
+            .iter()
+            .any(|&(k, _)| matches!(k, egui::Key::V | egui::Key::Insert));
+    let by_text = ended && std::mem::take(text_pasted);
+    pasted || (asked && !by_text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::tidy;
@@ -1541,6 +1745,121 @@ mod tests {
                 "{mark} has no glyph"
             );
         }
+    }
+
+    #[test]
+    fn linux_clipboard_tools_give_files_first_then_a_picture() {
+        use super::{Clip, clip_by_command, file_uris};
+        use std::path::PathBuf;
+        // A fake wl-paste / xclip: what the clipboard offers, and each kind's bytes.
+        let clipboard = |offers: &'static [(&'static str, &'static [u8])]| {
+            move |args: &[&str]| -> Option<Vec<u8>> {
+                let asked = args.join(" ");
+                if asked.contains("--list-types") || asked.contains("TARGETS") {
+                    return Some(
+                        offers
+                            .iter()
+                            .map(|(k, _)| *k)
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                            .into_bytes(),
+                    );
+                }
+                offers
+                    .iter()
+                    .find(|(k, _)| asked.contains(&format!(" {k}")))
+                    .map(|(_, b)| b.to_vec())
+            }
+        };
+        let png: &[u8] = b"\x89PNG...";
+        for wayland in [true, false] {
+            let mut picture = clipboard(&[("text/html", b"<img>"), ("image/png", b"\x89PNG...")]);
+            assert_eq!(
+                clip_by_command(wayland, &mut picture),
+                Some(Clip::Image(png.to_vec()))
+            );
+            let mut files = clipboard(&[
+                ("text/uri-list", b"# copied\nfile:///home/ana/Fotos/vestido%20azul.jpg\nfile://localhost/tmp/patr\xc3\xb3n.dxf\n"),
+                ("text/plain", b"/home/ana/Fotos/vestido azul.jpg"),
+            ]);
+            assert_eq!(
+                clip_by_command(wayland, &mut files),
+                Some(Clip::Files(vec![
+                    PathBuf::from("/home/ana/Fotos/vestido azul.jpg"),
+                    PathBuf::from("/tmp/patrón.dxf")
+                ]))
+            );
+            let mut text = clipboard(&[("text/plain", b"hola")]);
+            assert_eq!(clip_by_command(wayland, &mut text), None);
+            // No tool, or nothing copied.
+            assert_eq!(clip_by_command(wayland, &mut |_: &[&str]| None), None);
+            let mut jpeg = clipboard(&[("image/jpeg", b"\xff\xd8")]);
+            assert_eq!(
+                clip_by_command(wayland, &mut jpeg),
+                Some(Clip::Image(b"\xff\xd8".to_vec()))
+            );
+        }
+        assert_eq!(
+            file_uris("https://x.org/a.png\nfile:///a%2Fb"),
+            vec![PathBuf::from("/a/b")]
+        );
+    }
+
+    #[test]
+    fn ctrl_v_with_a_picture_or_files_is_seen_on_linux_and_windows() {
+        use eframe::egui::{Event, Key, Modifiers};
+        let release = |modifiers| Event::Key {
+            key: Key::V,
+            physical_key: Some(Key::V),
+            pressed: false,
+            repeat: false,
+            modifiers,
+        };
+        let text = || Event::Paste("a.png".into());
+        let mut seen = false;
+        // Only a picture on the clipboard: the press gives nothing, the release asks.
+        assert!(super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        // Text: the paste asks once, its release does not ask again (same frame or the next).
+        assert!(super::paste_asked(&[text()], &mut seen, false));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        assert!(super::paste_asked(
+            &[text(), release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
+        assert!(!seen);
+        // A V typed without Ctrl, or any key on macOS (its key monitor tells), asks nothing.
+        assert!(!super::paste_asked(
+            &[release(Modifiers::NONE)],
+            &mut seen,
+            false
+        ));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            true
+        ));
+        // Ctrl let go before V after a text paste: the next picture paste still asks.
+        let mut seen = false;
+        assert!(super::paste_asked(&[text()], &mut seen, false));
+        assert!(!super::paste_asked(
+            &[release(Modifiers::NONE)],
+            &mut seen,
+            false
+        ));
+        assert!(super::paste_asked(
+            &[release(Modifiers::COMMAND)],
+            &mut seen,
+            false
+        ));
     }
 
     #[test]

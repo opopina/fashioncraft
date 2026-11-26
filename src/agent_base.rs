@@ -277,7 +277,8 @@ pub fn tools() -> Vec<Tool> {
             "camera",
             "Turn the 3D view: a named view, or yaw/pitch in degrees (yaw 0 looks at the \
              avatar's front), distance_cm, target_cm, fov_degrees, orthographic, frame (fit \
-             everything). With screenshot true it returns a picture of the view afterwards.",
+             everything). With screenshot true it returns a picture of the view afterwards (see \
+             screenshot for when one is worth it).",
             object(
                 json!({
                     "view": {"type": "string", "enum": VIEWS},
@@ -428,8 +429,15 @@ pub fn tools() -> Vec<Tool> {
             "Check the garment after simulating, and call it every time you simulate: a short \
              list of problems with where each is (open seams and their gaps, strained cloth, \
              tight spots pressing on the body, cloth inside the body, a drape still moving), \
-             plus the numbers. ok true means none. With view it adds a picture from that view.",
-            object(json!({"view": {"type": "string", "enum": VIEWS}}), &[]),
+             plus the numbers. ok true means none. With view it adds a picture from that view: only \
+             when the result needs looking at, not on every check.",
+            object(
+                json!({
+                    "view": {"type": "string", "enum": VIEWS},
+                    "details": {"type": "boolean", "description": "Every number: seam gaps, strain and pressure spots with their locations, settling. Otherwise ok, the problems and the counts."}
+                }),
+                &[],
+            ),
             false,
         ),
         tool(
@@ -730,6 +738,34 @@ pub fn more_tools(names: &[String]) -> Value {
     json!({"tools": found, "unknown": unknown, "note": "Run one with use_tool {name, arguments}"})
 }
 
+/// The longest change a scene note tells; past it the model calls scene_summary itself.
+pub const SCENE_NOTE_CHARS: usize = 2500;
+
+/// A note for the person's next message, once the model has had a scene_summary in this
+/// conversation (`last`: the conversation it was in and the summary): that nothing changed
+/// since, or what did (the person may have worked by hand), so a small request needs no
+/// scene_summary first. With the note, whether `now` is what the model knows from then on.
+/// None before the first summary, or when the change is too long for a note.
+pub fn scene_note(last: &(u64, Value), epoch: u64, now: &Value) -> Option<(String, bool)> {
+    let (seen, before) = last;
+    if *seen != epoch {
+        return None;
+    }
+    if now == before {
+        return Some((
+            "the scene is as your last scene_summary showed it.".into(),
+            false,
+        ));
+    }
+    let changed = scene_diff(before, now).to_string();
+    (changed.chars().count() <= SCENE_NOTE_CHARS).then(|| {
+        (
+            format!("since your last scene_summary the scene changed: {changed}"),
+            true,
+        )
+    })
+}
+
 /// What changed between two scene summaries, for `scene_summary` after its first call: top-level
 /// fields that changed (whole), and for the lists of pieces and seams only the entries added,
 /// changed or removed (by id). Unchanged fields are named, not repeated.
@@ -824,6 +860,25 @@ pub fn answer_without_window(name: &str, args: &Value) -> Option<crate::agent::T
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_model_is_told_whether_the_scene_changed_since_it_looked() {
+        let seen = json!({"pieces": [{"id": "front", "colour": "white"}, {"id": "back", "colour": "white"}],
+                          "avatar": "female"});
+        let last = (7, seen.clone());
+        // Another conversation's summary says nothing about this one.
+        assert!(scene_note(&last, 8, &seen).is_none());
+        let (note, known) = scene_note(&last, 7, &seen).unwrap();
+        assert!(note.contains("as your last scene_summary") && !known);
+        let mut now = seen.clone();
+        now["pieces"][0]["colour"] = json!("red");
+        let (note, known) = scene_note(&last, 7, &now).unwrap();
+        assert!(note.contains("\"red\"") && note.contains("front") && known);
+        assert!(!note.contains("back"), "only what changed: {note}");
+        // Too much to tell: the model looks for itself.
+        now["avatar"] = json!("x".repeat(SCENE_NOTE_CHARS));
+        assert!(scene_note(&last, 7, &now).is_none());
+    }
+
     use super::*;
 
     #[test]

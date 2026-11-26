@@ -79,6 +79,11 @@ pub(super) struct AssistantUi {
     /// wait does not count in the step's time).
     asking: Option<mpsc::Sender<bool>>,
     asked_at: Option<std::time::Instant>,
+    /// The model the last message went to (with Automatic, the one picked for it).
+    last_model: String,
+    /// Settings › the section last chosen, and one to scroll to.
+    settings_section: usize,
+    settings_jump: Option<usize>,
     /// Kinds of step allowed without asking, by project file ("" before it is saved), for
     /// this session ("Always in this project").
     always: std::collections::HashSet<(String, Kind)>,
@@ -152,6 +157,9 @@ impl Default for AssistantUi {
             queued: None,
             asking: None,
             asked_at: None,
+            last_model: String::new(),
+            settings_section: 0,
+            settings_jump: None,
             always: Default::default(),
             log: None,
         }
@@ -789,6 +797,36 @@ impl Atelier {
             .collect()
     }
 
+    /// The spend cap in US dollars, when one is set and the provider bills an API key whose
+    /// cost FashionCraft knows.
+    fn assistant_spend_cap(&self) -> Option<f64> {
+        let cap = self.prefs.ai.spend_cap_usd;
+        (cap > 0. && self.assistant_provider().needs_key() && self.assistant.usage.priced)
+            .then_some(cap)
+    }
+
+    /// Automatic's small and large models: the ones chosen in Settings, else the provider's
+    /// smallest and middle suggestions.
+    fn assistant_auto_models(&self, suggested: &[&str]) -> (String, String) {
+        let pick = |chosen: &str, fallback: &str| {
+            if suggested.contains(&chosen) {
+                chosen.to_owned()
+            } else {
+                fallback.to_owned()
+            }
+        };
+        let small = suggested.last().copied().unwrap_or("");
+        let large = suggested
+            .get(1)
+            .or(suggested.first())
+            .copied()
+            .unwrap_or("");
+        (
+            pick(&self.prefs.ai.model_small, small),
+            pick(&self.prefs.ai.model_large, large),
+        )
+    }
+
     fn assistant_provider(&self) -> Provider {
         Provider::from_id(&self.prefs.ai.provider).unwrap_or(Provider::Anthropic)
     }
@@ -847,7 +885,20 @@ impl Atelier {
                 Update::Event(Event::Paused { steps }) => {
                     self.assistant.entries.push(Entry::Paused(steps))
                 }
-                Update::Event(Event::Usage(usage)) => self.assistant.usage.add(&usage),
+                Update::Event(Event::Usage(usage)) => {
+                    self.assistant.usage.add(&usage);
+                    if let Some(cap) = self.assistant_spend_cap()
+                        && self.assistant.usage.cost >= cap
+                        && let Some(worker) = &self.assistant.worker
+                        && !worker.stop.swap(true, Ordering::Relaxed)
+                    {
+                        self.assistant.entries.push(Entry::Notice(format!(
+                            "{} (${cap:.2}): {}",
+                            i18n::tr(self.prefs.language, "Spend cap reached"),
+                            i18n::tr(self.prefs.language, "it stops after this step.")
+                        )));
+                    }
+                }
                 Update::Event(Event::Answered { .. }) => {}
                 Update::Event(Event::ToolStarted { name, arguments }) => {
                     self.assistant.calls.push(fashioncraft::agent_eval::Call {
@@ -1039,14 +1090,30 @@ impl Atelier {
         if text.is_empty() {
             text = i18n::tr(self.prefs.language, "Look at the attached files.").to_owned();
         }
-        let settings = self.assistant_settings();
+        let mut settings = self.assistant_settings();
         if let Some(missing) = settings.missing() {
             self.assistant.failure = Some(missing.clone());
             self.assistant.entries.push(Entry::Problem(missing));
             self.assistant.show_connection = true;
             return;
         }
+        if let Some(cap) = self.assistant_spend_cap()
+            && self.assistant.usage.cost >= cap
         {
+            self.assistant.entries.push(Entry::Problem(format!(
+                "{} (${cap:.2}). {}",
+                i18n::tr(
+                    self.prefs.language,
+                    "This conversation reached its spend cap"
+                ),
+                i18n::tr(
+                    self.prefs.language,
+                    "Start a new chat, or raise the cap in Settings › Limits and usage."
+                )
+            )));
+            return;
+        }
+        let first = {
             let mut conversation = self
                 .assistant
                 .conversation
@@ -1061,6 +1128,29 @@ impl Atelier {
                 }
                 *conversation = Conversation::new(settings.provider);
             }
+            conversation.is_empty()
+        };
+        // Automatic: the small model for simple steps, the large one for new garments and fixes.
+        let suggested = settings.provider.suggested_models();
+        if self.prefs.ai.model_auto && !suggested.is_empty() {
+            let (small, large) = self.assistant_auto_models(suggested);
+            let large_task =
+                fashioncraft::assistant::large_task(&text, self.assistant.pending.len(), first);
+            settings.model = if large_task { large } else { small };
+        }
+        self.assistant.last_model = settings.model().to_owned();
+        // At a conversation's start: the person's own instructions and how they like pictures.
+        let mut opening = Vec::new();
+        let own = self.prefs.ai.instructions.trim();
+        if first && !own.is_empty() {
+            opening.push(format!(
+                "the person's own instructions, for every conversation: \"{own}\""
+            ));
+        }
+        if first && self.prefs.ai.picture_after_simulating {
+            opening.push(
+                "the person wants one picture of the garment after each simulation".to_owned(),
+            );
         }
         // What the model knows of the scene, so a small request needs no scene_summary first.
         let note = self.agent_scene_note(ctx);
@@ -1083,6 +1173,7 @@ impl Atelier {
         self.assistant.entries.push(Entry::You(text.clone()));
         self.assistant_log(json!({
             "you": text,
+            "model": self.assistant.last_model,
             "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
             "scene_note": note,
         }));
@@ -1097,8 +1188,10 @@ impl Atelier {
                 pieces.join(", ")
             )
         });
-        let note = [self.assistant.pending_note.take(), about, note]
+        let note = opening
             .into_iter()
+            .map(Some)
+            .chain([self.assistant.pending_note.take(), about, note])
             .flatten()
             .reduce(|a, b| format!("{a}; {b}"));
         if let Some(note) = &note {
@@ -1195,17 +1288,18 @@ impl Atelier {
         let lang = self.prefs.language;
         let tr = |text| i18n::tr(lang, text);
         let provider = self.assistant_provider();
-        super::workspace::group_title(ui, tr("Connection"));
-        super::workspace::prop_row(ui, tr("Provider"), |ui| {
+        settings_row(ui, tr("Who answers"), |ui| {
             egui::ComboBox::from_id_salt("assistant.provider")
                 .selected_text(provider.label())
-                .width(ui.available_width().min(230.))
+                .width(ui.available_width().min(260.))
                 .show_ui(ui, |ui| {
                     for p in Provider::ALL {
                         if ui.selectable_label(p == provider, p.label()).clicked() && p != provider
                         {
                             self.prefs.ai.provider = p.id().into();
                             self.prefs.ai.model.clear();
+                            self.prefs.ai.model_small.clear();
+                            self.prefs.ai.model_large.clear();
                             self.prefs.ai.base_url.clear();
                             self.assistant.key_message = None;
                         }
@@ -1213,12 +1307,90 @@ impl Atelier {
                 });
         });
         let provider = self.assistant_provider();
-        super::workspace::prop_row(ui, tr("Model"), |ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut self.prefs.ai.model)
-                    .hint_text(provider.model_hint())
-                    .desired_width(ui.available_width().min(230.)),
-            );
+        let missing = self.assistant_settings().missing();
+        settings_row(ui, "", |ui| {
+            let (colour, text) = match &missing {
+                None => (
+                    Color32::from_rgb(0x57, 0xab, 0x5a),
+                    tr("Ready to use").to_owned(),
+                ),
+                Some(what) => (ui.visuals().warn_fg_color, what.clone()),
+            };
+            let (dot, _) = ui.allocate_exact_size(egui::vec2(7., 7.), egui::Sense::hover());
+            ui.painter().circle_filled(dot.center(), 3.5, colour);
+            ui.add(egui::Label::new(egui::RichText::new(text).size(12.).weak()).wrap());
+        });
+        let suggested = provider.suggested_models();
+        settings_row(ui, tr("Model"), |ui| {
+            ui.vertical(|ui| {
+                if !suggested.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.;
+                        for (auto, label) in [(true, "Automatic"), (false, "Always the same")] {
+                            if ui
+                                .selectable_label(self.prefs.ai.model_auto == auto, tr(label))
+                                .clicked()
+                            {
+                                self.prefs.ai.model_auto = auto;
+                                self.prefs_dirty = true;
+                            }
+                        }
+                    });
+                }
+                if self.prefs.ai.model_auto && !suggested.is_empty() {
+                    let (small, large) = self.assistant_auto_models(suggested);
+                    egui::Grid::new("assistant.auto_models")
+                        .num_columns(2)
+                        .spacing([10., 6.])
+                        .show(ui, |ui| {
+                            for (label, chosen, field) in [
+                                ("Simple steps", small, 0),
+                                ("New garments and fixes", large, 1),
+                            ] {
+                                ui.label(egui::RichText::new(tr(label)).size(12.).weak());
+                                egui::ComboBox::from_id_salt(("assistant.auto_model", field))
+                                    .selected_text(fashioncraft::assistant::model_name(&chosen))
+                                    .show_ui(ui, |ui| {
+                                        for id in suggested {
+                                            if ui
+                                                .selectable_label(
+                                                    *id == chosen,
+                                                    fashioncraft::assistant::model_name(id),
+                                                )
+                                                .clicked()
+                                            {
+                                                let slot = if field == 0 {
+                                                    &mut self.prefs.ai.model_small
+                                                } else {
+                                                    &mut self.prefs.ai.model_large
+                                                };
+                                                *slot = (*id).to_owned();
+                                                self.prefs_dirty = true;
+                                            }
+                                        }
+                                    });
+                                ui.end_row();
+                            }
+                        });
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(tr(
+                                "Changing a colour does not need the large model; drawing a \
+                                 garment does.",
+                            ))
+                            .size(11.5)
+                            .weak(),
+                        )
+                        .wrap(),
+                    );
+                } else {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.prefs.ai.model)
+                            .hint_text(provider.model_hint())
+                            .desired_width(ui.available_width().min(260.)),
+                    );
+                }
+            });
         });
         if provider == Provider::ClaudeCli {
             ui.small(tr(
@@ -1242,7 +1414,7 @@ impl Atelier {
             ));
             return;
         }
-        super::workspace::prop_row(ui, tr("Address"), |ui| {
+        settings_row(ui, tr("Address"), |ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.prefs.ai.base_url)
                     .hint_text(provider.default_base_url())
@@ -1250,7 +1422,7 @@ impl Atelier {
             );
         });
         if provider.needs_key() {
-            super::workspace::prop_row(ui, tr("API key"), |ui| {
+            settings_row(ui, tr("API key"), |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.assistant.key_input)
                         .password(true)
@@ -1307,7 +1479,287 @@ impl Atelier {
             .small()
             .weak(),
         );
-        super::workspace::prop_row(ui, tr("Review"), |ui| {
+    }
+
+    /// Settings › the Assistant's own window: Connection, own instructions, permissions, and
+    /// limits and usage, with the sections at the left.
+    fn assistant_settings_window(&mut self, ctx: &egui::Context) {
+        if !self.assistant.show_connection {
+            return;
+        }
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        let mut open = true;
+        let before = self.prefs.ai.clone();
+        let screen = ctx.content_rect();
+        let sections = [
+            "Connection",
+            "Instructions",
+            "Permissions",
+            "Limits and usage",
+        ];
+        egui::Window::new(tr("Assistant settings"))
+            .id(egui::Id::new("assistant.settings"))
+            .open(&mut open)
+            .collapsible(false)
+            .default_pos(egui::pos2(
+                (screen.right() - 1040.).max(screen.left() + 20.),
+                screen.top() + 60.,
+            ))
+            .fixed_size([600., (screen.height() - 200.).clamp(380., 680.)])
+            .resizable(false)
+            .show(ctx, |ui| {
+                let footer = 44.;
+                let body = ((screen.height() - 200.).clamp(380., 680.) - footer).max(160.);
+                ui.horizontal_top(|ui| {
+                    // The sections, at the left.
+                    ui.vertical(|ui| {
+                        ui.set_width(140.);
+                        ui.spacing_mut().item_spacing.y = 2.;
+                        for (k, name) in sections.iter().enumerate() {
+                            let chosen = self.assistant.settings_section == k;
+                            let accent = super::workspace::accent(ui.visuals());
+                            let (rect, response) =
+                                ui.allocate_exact_size(egui::vec2(140., 30.), egui::Sense::click());
+                            if chosen {
+                                ui.painter()
+                                    .rect_filled(rect, 3., accent.gamma_multiply(0.2));
+                            } else if response.hovered() {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    3.,
+                                    ui.visuals().widgets.hovered.weak_bg_fill,
+                                );
+                            }
+                            ui.painter().text(
+                                egui::pos2(rect.left() + 10., rect.center().y),
+                                egui::Align2::LEFT_CENTER,
+                                tr(name),
+                                egui::FontId::proportional(12.5),
+                                ui.visuals().text_color(),
+                            );
+                            if response.clicked() {
+                                self.assistant.settings_section = k;
+                                self.assistant.settings_jump = Some(k);
+                            }
+                        }
+                    });
+                    ui.separator();
+                    let width = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, body),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("assistant.settings.scroll")
+                                .max_height(body)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.set_width(width - 16.);
+                                    ui.spacing_mut().item_spacing.y = 10.;
+                                    let jump = self.assistant.settings_jump.take();
+                                    for (k, name) in sections.iter().enumerate() {
+                                        if k > 0 {
+                                            ui.add_space(12.);
+                                        }
+                                        let heading = ui.label(
+                                            egui::RichText::new(tr(if k == 1 {
+                                                "Own instructions"
+                                            } else {
+                                                name
+                                            }))
+                                            .strong()
+                                            .size(13.)
+                                            .color(super::workspace::accent(ui.visuals())),
+                                        );
+                                        if jump == Some(k) {
+                                            heading.scroll_to_me(Some(egui::Align::TOP));
+                                        }
+                                        match k {
+                                            0 => self.assistant_connection(ui),
+                                            1 => self.assistant_instructions(ui),
+                                            2 => self.assistant_permissions(ui),
+                                            _ => self.assistant_limits(ui),
+                                        }
+                                    }
+                                });
+                        },
+                    );
+                });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if card_button(ui, tr("Done"), true).clicked() {
+                            self.assistant.show_connection = false;
+                        }
+                        if card_button(ui, tr("Defaults"), false)
+                            .on_hover_text(tr(
+                                "Permissions, review, pictures, spend cap and Automatic as they \
+                                 come; the connection and your instructions stay",
+                            ))
+                            .clicked()
+                        {
+                            let ai = &mut self.prefs.ai;
+                            let fresh = super::settings::AiPrefs::default();
+                            ai.permissions = fresh.permissions;
+                            ai.pause_every = fresh.pause_every;
+                            ai.picture_after_simulating = fresh.picture_after_simulating;
+                            ai.spend_cap_usd = fresh.spend_cap_usd;
+                            ai.model_auto = fresh.model_auto;
+                        }
+                    });
+                });
+            });
+        self.assistant.show_connection &= open;
+        if self.prefs.ai != before {
+            self.prefs_dirty = true;
+        }
+    }
+
+    /// Settings › Own instructions: at the start of every conversation, in every project.
+    fn assistant_instructions(&mut self, ui: &mut egui::Ui) {
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        ui.label(
+            egui::RichText::new(tr(
+                "They go at the start of every conversation, in every project.",
+            ))
+            .size(12.)
+            .weak(),
+        );
+        ui.add(
+            egui::TextEdit::multiline(&mut self.prefs.ai.instructions)
+                .hint_text(tr(
+                    "For example: I work for a school uniform workshop. Measure in centimetres \
+                     and use sizes by age. Ask me the size before exporting.",
+                ))
+                .desired_rows(4)
+                .desired_width(f32::INFINITY),
+        );
+    }
+
+    /// Settings › Permissions: what the Assistant may do without asking, by kind of step.
+    fn assistant_permissions(&mut self, ui: &mut egui::Ui) {
+        use super::settings::Permission;
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(tr(
+                    "What it does inside the project is undone with Undo. What leaves the \
+                     project is not.",
+                ))
+                .size(12.)
+                .weak(),
+            )
+            .wrap(),
+        );
+        let p = &mut self.prefs.ai.permissions;
+        let rows: [(&str, &str, &mut Permission); 5] = [
+            (
+                "Edit patterns and garments",
+                "Drawing, sewing, changing fabrics and colours",
+                &mut p.edit,
+            ),
+            (
+                "Simulate and take pictures",
+                "Moves the cloth; does not change the pattern",
+                &mut p.simulate,
+            ),
+            (
+                "Read what you attach",
+                "Photos, tables, PDF, DXF and SVG",
+                &mut p.read,
+            ),
+            (
+                "Save the project",
+                "Overwrites the project's file",
+                &mut p.save,
+            ),
+            (
+                "Export and write files",
+                "OBJ, glTF, pictures, outside the project",
+                &mut p.export,
+            ),
+        ];
+        for (k, (name, hint, value)) in rows.into_iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_width((ui.available_width() - 170.).max(120.));
+                    ui.spacing_mut().item_spacing.y = 0.;
+                    ui.label(egui::RichText::new(tr(name)).size(12.5));
+                    ui.label(egui::RichText::new(tr(hint)).size(11.5).weak());
+                });
+                let label = |p: Permission| match p {
+                    Permission::Free => tr("Without asking"),
+                    Permission::Ask => tr("Ask first"),
+                    Permission::Never => tr("Never"),
+                };
+                egui::ComboBox::from_id_salt(("assistant.permission", k))
+                    .selected_text(label(*value))
+                    .width(150.)
+                    .show_ui(ui, |ui| {
+                        for choice in [Permission::Free, Permission::Ask, Permission::Never] {
+                            ui.selectable_value(value, choice, label(choice));
+                        }
+                    });
+            });
+        }
+    }
+
+    /// Settings › Limits and usage: the plan's limit or the context, the review pause,
+    /// pictures, and the spend cap for API keys.
+    fn assistant_limits(&mut self, ui: &mut egui::Ui) {
+        use fashioncraft::assistant::short_count;
+        let lang = self.prefs.language;
+        let tr = |text| i18n::tr(lang, text);
+        let u = &self.assistant.usage;
+        let decimal = |text: String| {
+            if lang == i18n::Language::Spanish {
+                text.replace('.', ",")
+            } else {
+                text
+            }
+        };
+        let (headline, share) = match (&u.limit, u.context) {
+            (Some(limit), _) => (
+                format!(
+                    "{:.0} % {} ({})",
+                    limit.used_percent,
+                    tr("of your plan's limit"),
+                    limit.what
+                ),
+                Some(limit.used_percent / 100.),
+            ),
+            (None, Some((used, window))) => (
+                format!(
+                    "{:.0} % {}",
+                    used as f64 * 100. / window.max(1) as f64,
+                    tr("of the model's context")
+                ),
+                Some(used as f64 / window.max(1) as f64),
+            ),
+            _ => (tr("Nothing used yet in this conversation").to_owned(), None),
+        };
+        let mut detail = format!(
+            "{}: {} {}",
+            tr("This conversation"),
+            decimal(short_count(u.input + u.output)),
+            tr("tokens")
+        );
+        if u.priced {
+            detail.push_str(&format!(" · ≈ ${:.2}", u.cost));
+        }
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(28., 28.), egui::Sense::hover());
+            ring(ui, rect.center(), 11., 3., share.unwrap_or(0.) as f32);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.;
+                ui.label(egui::RichText::new(headline).size(12.5));
+                ui.label(egui::RichText::new(detail).size(11.5).weak());
+            });
+        });
+        settings_row(ui, tr("Review"), |ui| {
             let mut on = self.prefs.ai.pause_every > 0;
             if ui
                 .checkbox(&mut on, tr("Pause every"))
@@ -1317,15 +1769,54 @@ impl Atelier {
                 ))
                 .changed()
             {
-                self.prefs.ai.pause_every = if on { 20 } else { 0 };
+                self.prefs.ai.pause_every = if on { 10 } else { 0 };
             }
+            // Off keeps 0: the field then shows what turning it on gives.
+            let mut every = if on { self.prefs.ai.pause_every } else { 10 };
+            ui.add_enabled(on, egui::DragValue::new(&mut every).range(1..=500));
             if on {
-                ui.add(
-                    egui::DragValue::new(&mut self.prefs.ai.pause_every)
-                        .range(1..=500)
-                        .suffix(tr(" steps")),
-                );
+                self.prefs.ai.pause_every = every;
             }
+            ui.label(tr("steps"));
+        });
+        settings_row(ui, tr("Pictures"), |ui| {
+            let label = |after: bool| {
+                if after {
+                    tr("After each simulation")
+                } else {
+                    tr("Only when needed")
+                }
+            };
+            egui::ComboBox::from_id_salt("assistant.pictures")
+                .selected_text(label(self.prefs.ai.picture_after_simulating))
+                .show_ui(ui, |ui| {
+                    for after in [false, true] {
+                        ui.selectable_value(
+                            &mut self.prefs.ai.picture_after_simulating,
+                            after,
+                            label(after),
+                        );
+                    }
+                });
+        });
+        let keyed = self.assistant_provider().needs_key();
+        settings_row(ui, tr("Spend cap"), |ui| {
+            ui.add_enabled(
+                keyed,
+                egui::DragValue::new(&mut self.prefs.ai.spend_cap_usd)
+                    .range(0.0..=1000.0)
+                    .speed(0.1)
+                    .fixed_decimals(2)
+                    .prefix("$ "),
+            );
+            ui.label(
+                egui::RichText::new(tr("per conversation · API key only"))
+                    .size(11.5)
+                    .weak(),
+            )
+            .on_hover_text(tr(
+                "It stops a conversation once it has cost this much, from published prices; 0: no cap",
+            ));
         });
     }
 
@@ -1462,7 +1953,16 @@ impl Atelier {
                     .size(12.5),
             )
             .on_hover_text(settings.provider.label());
+            let auto = self.prefs.ai.model_auto && !settings.provider.suggested_models().is_empty();
             let model = match settings.model().trim() {
+                _ if auto => match self.assistant.last_model.as_str() {
+                    "" => tr("Automatic").to_owned(),
+                    last => format!(
+                        "{} · {}",
+                        tr("Auto"),
+                        fashioncraft::assistant::model_name(last)
+                    ),
+                },
                 "" => tr("Default").to_owned(),
                 id => fashioncraft::assistant::model_name(id),
             };
@@ -1545,17 +2045,31 @@ impl Atelier {
         }
         let mut chosen = None;
         let mut other = false;
+        let suggested = !settings.provider.suggested_models().is_empty();
+        let auto = self.prefs.ai.model_auto && suggested;
+        let mut pick_auto = false;
         egui::ComboBox::from_id_salt("assistant.model")
             .selected_text(egui::RichText::new(shown).size(12.))
             .width(0.)
             .show_ui(ui, |ui| {
+                if suggested
+                    && ui
+                        .selectable_label(auto, i18n::tr(lang, "Automatic"))
+                        .on_hover_text(i18n::tr(
+                            lang,
+                            "A small model for simple steps, a large one for new garments and fixes",
+                        ))
+                        .clicked()
+                {
+                    pick_auto = true;
+                }
                 for id in &options {
                     let name = if id.is_empty() {
                         i18n::tr(lang, "Default").to_owned()
                     } else {
                         fashioncraft::assistant::model_name(id)
                     };
-                    if ui.selectable_label(*id == current, name).clicked() {
+                    if ui.selectable_label(!auto && *id == current, name).clicked() {
                         chosen = Some(id.clone());
                     }
                 }
@@ -1569,8 +2083,13 @@ impl Atelier {
             })
             .response
             .on_hover_text(i18n::tr(lang, "Model"));
-        if let Some(id) = chosen.filter(|id| *id != current) {
+        if pick_auto {
+            self.prefs.ai.model_auto = true;
+            self.prefs_dirty = true;
+        }
+        if let Some(id) = chosen.filter(|id| *id != current || auto) {
             self.prefs.ai.model = id;
+            self.prefs.ai.model_auto = false;
             self.prefs_dirty = true;
         }
         if other {
@@ -1809,6 +2328,9 @@ impl Atelier {
                 }
             ))
         );
+        if !shooting {
+            self.assistant_settings_window(ctx);
+        }
         if !self.assistant.open || shooting {
             return;
         }
@@ -1838,15 +2360,28 @@ impl Atelier {
                 let settings = self.assistant_settings();
                 let accent = super::workspace::accent(ui.visuals());
                 self.assistant_header(ui, &settings, busy);
-                if self.assistant.show_connection || settings.missing().is_some() {
+                if let Some(missing) = settings.missing() {
+                    // What is missing, and the way to the settings that fix it.
                     ui.add_space(2.);
                     egui::Frame::new()
-                        .fill(ui.visuals().extreme_bg_color)
-                        .corner_radius(8.)
+                        .fill(ui.visuals().warn_fg_color.gamma_multiply(0.12))
+                        .corner_radius(6.)
                         .inner_margin(egui::Margin::symmetric(10, 8))
                         .show(ui, |ui| {
                             ui.set_width(ui.available_width());
-                            self.assistant_connection(ui);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&missing)
+                                        .size(12.)
+                                        .color(ui.visuals().warn_fg_color),
+                                )
+                                .wrap(),
+                            );
+                            if ui.link(tr("Open the Assistant's settings")).clicked() {
+                                self.assistant.show_connection = true;
+                                self.assistant.settings_section = 0;
+                                self.assistant.settings_jump = Some(0);
+                            }
                         });
                 }
                 ui.add_space(4.);
@@ -2845,6 +3380,48 @@ impl Atelier {
                     });
             }
         }
+    }
+}
+
+/// A row of the Assistant's settings: its name in a column 130 points wide, then its controls.
+fn settings_row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+    ui.horizontal_top(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(130., 22.), egui::Sense::hover());
+        ui.painter().text(
+            egui::pos2(rect.left(), rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(12.5),
+            ui.visuals().weak_text_color(),
+        );
+        add(ui);
+    });
+}
+
+/// A ring at `centre`: the track, and the share used in FashionCraft's colour (amber past
+/// 85 %).
+fn ring(ui: &egui::Ui, centre: egui::Pos2, radius: f32, width: f32, share: f32) {
+    let painter = ui.painter();
+    painter.circle_stroke(
+        centre,
+        radius,
+        egui::Stroke::new(width, ui.visuals().widgets.inactive.bg_fill),
+    );
+    let share = share.clamp(0., 1.);
+    if share > 0. {
+        let colour = if share > 0.85 {
+            ui.visuals().warn_fg_color
+        } else {
+            super::workspace::accent(ui.visuals())
+        };
+        let points: Vec<egui::Pos2> = (0..=48)
+            .map(|k| {
+                let a =
+                    -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * share * k as f32 / 48.;
+                centre + radius * egui::vec2(a.cos(), a.sin())
+            })
+            .collect();
+        painter.add(egui::Shape::line(points, egui::Stroke::new(width, colour)));
     }
 }
 

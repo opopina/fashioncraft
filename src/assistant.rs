@@ -314,12 +314,12 @@ impl Settings {
     /// What is missing before a message can be sent, if anything.
     pub fn missing(&self) -> Option<String> {
         if !self.provider.is_cli() && self.model().is_empty() {
-            return Some("Choose a model under Connection, at the top of this window".into());
+            return Some("Choose a model in the Assistant's settings, under Connection".into());
         }
         if self.provider.needs_key() && self.api_key.trim().is_empty() {
             let variable = self.provider.key_variable().unwrap_or("the API key");
             return Some(format!(
-                "Add your {} API key under Connection, at the top of this window (or set {variable})",
+                "Add your {} API key in the Assistant's settings, under Connection (or set {variable})",
                 self.provider.label()
             ));
         }
@@ -465,7 +465,26 @@ pub fn usage_of(provider: Provider, model: &str, answer: &Value) -> Option<Usage
     })
 }
 
-/// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
+/// Whether a request needs the larger model when the model is picked by the size of the task:
+/// a conversation's first request, one with files, a long one, or one that draws, adds to or
+/// fixes a garment. Changing a colour or a fabric, simulating or saving does not.
+pub fn large_task(text: &str, attachments: usize, first: bool) -> bool {
+    if first || attachments > 0 || text.chars().count() > 160 {
+        return true;
+    }
+    let text = text.to_lowercase();
+    const LARGE: &[&str] = &[
+        // English
+        "draft", "make", "create", "design", "new", "fix", "repair", "why", "add", "pattern",
+        "garment", "shirt", "skirt", "trousers", "pants", "dress", "jacket", "coat", "sleeve",
+        "pocket", "collar", "dart", "pleat", "hood", "cuff", "fit", // Spanish
+        "dibuja", "haz", "crea", "diseñ", "nuev", "arregl", "repar", "por qué", "añad", "agreg",
+        "patrón", "prenda", "camis", "falda", "pantal", "vestido", "chaqueta", "abrigo", "manga",
+        "bolsillo", "cuello", "pinza", "pliegue", "capucha", "puño", "ajust", "entalla",
+    ];
+    LARGE.iter().any(|word| text.contains(word))
+}
+
 /// A model id as people say it: "claude-sonnet-5-5" Sonnet 5.5, "opus" Opus; others as they are.
 pub fn model_name(id: &str) -> String {
     let id = id.trim();
@@ -495,6 +514,7 @@ pub fn model_name(id: &str) -> String {
     }
 }
 
+/// A count of tokens as the panel shows it: 950, 12.4k, 3.1M.
 pub fn short_count(n: u64) -> String {
     match n {
         0..1_000 => n.to_string(),
@@ -1159,6 +1179,23 @@ pub fn describe_error(status: u16, body: &Value) -> String {
 #[cfg(test)]
 mod name_tests {
     use super::*;
+
+    #[test]
+    fn small_requests_take_the_small_model() {
+        assert!(!large_task("ponlo en rojo", 0, false));
+        assert!(!large_task("simula 5 s más", 0, false));
+        assert!(!large_task("change the colour to navy", 0, false));
+        assert!(large_task("hazle una camisa para esa falda", 0, false));
+        assert!(large_task("add a pocket to the front", 0, false));
+        assert!(
+            large_task("ponlo en rojo", 1, false),
+            "files need the larger model"
+        );
+        assert!(
+            large_task("ponlo en rojo", 0, true),
+            "so does the first request"
+        );
+    }
 
     #[test]
     fn models_are_named_as_people_say_them() {

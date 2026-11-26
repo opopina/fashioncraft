@@ -496,6 +496,71 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "Who answers" => "Quién responde",
+        "Ready to use" => "Listo para usar",
+        "Automatic" => "Automático",
+        "Always the same" => "Siempre el mismo",
+        "Simple steps" => "Pasos simples",
+        "New garments and fixes" => "Prendas nuevas y arreglos",
+        "Changing a colour does not need the large model; drawing a garment does." => {
+            "Cambiar un color no necesita el modelo grande; dibujar una prenda sí."
+        }
+        "Instructions" => "Instrucciones",
+        "Permissions" => "Permisos",
+        "Limits and usage" => "Límites y uso",
+        "Own instructions" => "Instrucciones propias",
+        "Defaults" => "Valores por defecto",
+        "Permissions, review, pictures, spend cap and Automatic as they come; the connection and your instructions stay" => {
+            "Permisos, revisión, capturas, tope de gasto y Automático como vienen; la conexión y tus instrucciones se quedan"
+        }
+        "They go at the start of every conversation, in every project." => {
+            "Van al principio de cada conversación, en todos los proyectos."
+        }
+        "For example: I work for a school uniform workshop. Measure in centimetres and use sizes by age. Ask me the size before exporting." => {
+            "Por ejemplo: trabajo para un taller de uniformes escolares. Mide en centímetros y usa tallas por edad. Pregúntame la talla antes de exportar."
+        }
+        "What it does inside the project is undone with Undo. What leaves the project is not." => {
+            "Lo que hace dentro del proyecto se deshace con Deshacer. Lo que sale del proyecto, no."
+        }
+        "Edit patterns and garments" => "Editar patrones y prendas",
+        "Drawing, sewing, changing fabrics and colours" => {
+            "Dibujar, coser, cambiar telas y colores"
+        }
+        "Simulate and take pictures" => "Simular y hacer capturas",
+        "Moves the cloth; does not change the pattern" => "Mueve la tela; no cambia el patrón",
+        "Read what you attach" => "Leer lo que adjuntas",
+        "Photos, tables, PDF, DXF and SVG" => "Fotos, tablas, PDF, DXF y SVG",
+        "Save the project" => "Guardar el proyecto",
+        "Overwrites the project's file" => "Sobrescribe el archivo del proyecto",
+        "Export and write files" => "Exportar y escribir archivos",
+        "OBJ, glTF, pictures, outside the project" => "OBJ, glTF, imágenes, fuera del proyecto",
+        "Without asking" => "Sin preguntar",
+        "Ask first" => "Preguntar antes",
+        "Never" => "Nunca",
+        "of your plan's limit" => "del límite de tu plan",
+        "of the model's context" => "del contexto del modelo",
+        "Nothing used yet in this conversation" => "Nada usado aún en esta conversación",
+        "This conversation" => "Esta conversación",
+        "tokens" => "tokens",
+        "Pictures" => "Capturas",
+        "After each simulation" => "Después de cada simulación",
+        "Only when needed" => "Solo cuando hacen falta",
+        "Spend cap" => "Tope de gasto",
+        "per conversation · API key only" => "por conversación · solo con clave de API",
+        "It stops a conversation once it has cost this much, from published prices; 0: no cap" => {
+            "Detiene la conversación cuando ha costado esto, según los precios publicados; 0: sin tope"
+        }
+        "Open the Assistant's settings" => "Abrir los ajustes del asistente",
+        "Auto" => "Auto",
+        "A small model for simple steps, a large one for new garments and fixes" => {
+            "Un modelo pequeño para pasos simples, uno grande para prendas nuevas y arreglos"
+        }
+        "This conversation reached its spend cap" => "Esta conversación llegó a su tope de gasto",
+        "Start a new chat, or raise the cap in Settings › Limits and usage." => {
+            "Empieza un chat nuevo o sube el tope en Ajustes › Límites y uso."
+        }
+        "Spend cap reached" => "Tope de gasto alcanzado",
+        "it stops after this step." => "se detiene tras este paso.",
         "Change the project" => "Cambiar el proyecto",
         "Simulate or take a picture" => "Simular o hacer una captura",
         "Open what you attached" => "Abrir lo que adjuntaste",
@@ -1425,7 +1490,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "You" => "Tú",
         "Connection" => "Conexión",
         "New chat" => "Nuevo chat",
-        "Provider" => "Proveedor",
         "Model" => "Modelo",
         "Address" => "Dirección",
         "API key" => "Clave de API",
@@ -1496,7 +1560,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         }
         "Review" => "Revisión",
         "Pause every" => "Pausar cada",
-        " steps" => " pasos",
         "Stop after this many steps so you can look before it goes on (off: it works until the job is done)" => {
             "Parar tras estos pasos para que mires antes de seguir (apagado: trabaja hasta terminar)"
         }

@@ -15,7 +15,8 @@ only into your `Documents/FashionCraft` folder, and they never open file dialogs
 
 ## The Assistant
 
-Open **Window › Assistant** and press **Connection** to set it up:
+Open the Assistant (its toolbar button, or **Window › Assistant**) and press the settings icon in
+its header. **Connection** sets it up:
 
 | Provider | Model | Address | Key |
 |---|---|---|---|
@@ -77,6 +78,23 @@ write then waits above the box and goes when the turn ends (× takes it back to 
 **Stop** ends the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
 Linux) while the Assistant is open, wherever the focus is.
 
+**Settings.** The settings icon in the Assistant's header opens its own window:
+
+- **Connection**: who answers, whether it is ready, and the model. With providers that suggest
+  models (Claude), **Automatic** picks a small model for simple steps (a colour, a fabric,
+  simulating again) and a larger one for new garments, fixes, files and a conversation's first
+  request (`large_task` in `src/assistant.rs`); **Always the same** uses one. The header's model
+  menu has Automatic too, and shows the model the last message went to.
+- **Own instructions**: text that goes at the start of every conversation, in every project.
+- **Permissions**: see below.
+- **Limits and usage**: the plan's limit or the context, this conversation's tokens and money, the
+  review pause, pictures (**Only when needed**, or **After each simulation**) and, with an API
+  key, a spend cap per conversation: past it, the turn stops after its step and new messages wait
+  for a new chat or a higher cap.
+
+**Defaults** puts permissions, the pause, pictures, the cap and Automatic back as they come; the
+connection and your instructions stay.
+
 **Asking first.** What the Assistant does inside the project is undone with Undo; what leaves it
 is not. So by default it asks before saving the project and before exporting or writing files
 (`save_project`, `export_garment`, `render`): a card in the chat shows the file and **Allow**,
@@ -89,7 +107,7 @@ after that step; the message goes then. **Settings › Permissions** sets each k
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
-**Connection › Review › Pause every N steps** (off by default): it stops after that many steps; the
+**Settings › Limits and usage › Review › Pause every N steps** (off by default): it stops after that many steps; the
 card says so, **Continue** goes on with everything so far and **Back to before the pause** puts the
 project back as it was before those steps.
 

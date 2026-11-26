@@ -496,6 +496,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "more in the steps" => "más en los pasos",
         "What shall we do?" => "¿Qué hacemos?",
         "there is no garment yet" => "aún no hay prenda",
         "there is a garment of" => "hay una prenda de",

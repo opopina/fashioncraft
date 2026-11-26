@@ -3293,6 +3293,9 @@ impl Atelier {
     /// for a set time, else its seconds so far.
     fn assistant_progress(&self, name: &str, started: std::time::Instant) -> (String, Option<f32>) {
         let lang = self.prefs.language;
+        if self.assistant.asking.is_some() {
+            return (i18n::tr(lang, "waiting for your answer").to_owned(), None);
+        }
         let number = |n: f64| {
             let text = format!("{n:.1}");
             if lang == i18n::Language::Spanish {
@@ -4092,9 +4095,15 @@ fn check_card(ui: &mut egui::Ui, lang: i18n::Language, answer: &[Entry]) {
     if !inside {
         lines.push((true, i18n::tr(lang, "Nothing inside the body").to_owned()));
     }
-    for p in problems.iter().filter(|p| !p.starts_with("Seam ")) {
+    // The first three problems; the rest are in the steps (check_garment's result).
+    let others: Vec<&&str> = problems
+        .iter()
+        .filter(|p| !p.starts_with("Seam "))
+        .collect();
+    for p in others.iter().take(3) {
         lines.push((false, short_problem(lang, p, &piece_name)));
     }
+    let more = others.len().saturating_sub(3);
     egui::Frame::new()
         .fill(visuals.extreme_bg_color)
         .stroke(visuals.widgets.noninteractive.bg_stroke)
@@ -4129,6 +4138,16 @@ fn check_card(ui: &mut egui::Ui, lang: i18n::Language, answer: &[Entry]) {
                                     .wrap(),
                             );
                         });
+                    }
+                    if more > 0 {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "+{more} {}",
+                                i18n::tr(lang, "more in the steps")
+                            ))
+                            .size(11.5)
+                            .weak(),
+                        );
                     }
                 });
             });

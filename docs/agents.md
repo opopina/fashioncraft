@@ -77,11 +77,21 @@ write then waits above the box and goes when the turn ends (× takes it back to 
 **Stop** ends the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
 Linux) while the Assistant is open, wherever the focus is.
 
+**Asking first.** What the Assistant does inside the project is undone with Undo; what leaves it
+is not. So by default it asks before saving the project and before exporting or writing files
+(`save_project`, `export_garment`, `render`): a card in the chat shows the file and **Allow**,
+**Always in this project** (until FashionCraft closes) and **No**; the window's dot and the
+toolbar's turn amber while it waits. Writing something else instead says no and stops the turn
+after that step; the message goes then. **Settings › Permissions** sets each kind of step
+(editing, simulating and pictures, opening attachments, saving, exporting) to **Without asking**,
+**Ask first** or **Never**; looking (summaries, measures, the plan) never asks.
+
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
-**Connection › Review › Pause every N steps** (off by default): it stops after that many steps and
-**Continue** goes on with everything so far.
+**Connection › Review › Pause every N steps** (off by default): it stops after that many steps; the
+card says so, **Continue** goes on with everything so far and **Back to before the pause** puts the
+project back as it was before those steps.
 
 **Usage.** Beside the provider's name the panel shows what this conversation has used, kept in
 memory only: new input, output and cached input tokens (12.4k in · 3.1k out · 40k cached), the

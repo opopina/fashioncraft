@@ -196,6 +196,11 @@ impl Atelier {
         Ok(self.scene_summary())
     }
 
+    /// While the evaluation runs nobody answers: steps that ask first are allowed.
+    pub(super) fn assistant_eval_running(&self) -> bool {
+        self.assistant.eval.run.is_some()
+    }
+
     fn assistant_provider_id(&self) -> &str {
         &self.prefs.ai.provider
     }

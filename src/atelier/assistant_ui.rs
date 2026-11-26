@@ -75,6 +75,13 @@ pub(super) struct AssistantUi {
     piece_dismissed: Vec<String>,
     /// The next message, written while the assistant works: it goes when the turn ends.
     queued: Option<String>,
+    /// Where to answer the step that asks first while its card waits, and since when (the
+    /// wait does not count in the step's time).
+    asking: Option<mpsc::Sender<bool>>,
+    asked_at: Option<std::time::Instant>,
+    /// Kinds of step allowed without asking, by project file ("" before it is saved), for
+    /// this session ("Always in this project").
+    always: std::collections::HashSet<(String, Kind)>,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
     log: Option<PathBuf>,
 }
@@ -143,6 +150,9 @@ impl Default for AssistantUi {
             pending_note: None,
             piece_dismissed: Vec::new(),
             queued: None,
+            asking: None,
+            asked_at: None,
+            always: Default::default(),
             log: None,
         }
     }
@@ -174,7 +184,103 @@ enum Entry {
     Problem(String),
     /// Paused for a review after this many steps; Continue resumes.
     Paused(usize),
+    /// A step that asked first (Settings › Permissions), and what the person said: none while
+    /// it waits.
+    Asked {
+        kind: Kind,
+        /// The file it writes, or the step's details.
+        detail: String,
+        answer: Option<Answer>,
+    },
 }
+
+/// What the person said to a step that asked first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Answer {
+    Allowed,
+    /// Allowed, and this kind of step no longer asks in this project.
+    Always,
+    Refused,
+}
+
+/// The kinds of step Settings › Permissions sets apart. Looking (summaries, measures, the plan)
+/// never asks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Kind {
+    Look,
+    Edit,
+    Simulate,
+    Read,
+    Save,
+    Export,
+}
+
+impl Kind {
+    fn of(tool: &str) -> Self {
+        match tool {
+            "scene_summary" | "piece_detail" | "size_chart" | "command_list" | "measure"
+            | "measure_fabric" | "points_of_measure" | "guide" | "more_tools" | "plan"
+            | "select" => Kind::Look,
+            "simulate" | "screenshot" | "camera" | "check_garment" => Kind::Simulate,
+            "open_attachment" => Kind::Read,
+            "save_project" => Kind::Save,
+            "export_garment" | "render" => Kind::Export,
+            _ => Kind::Edit,
+        }
+    }
+
+    fn permission(self, p: &super::settings::Permissions) -> super::settings::Permission {
+        match self {
+            Kind::Look => super::settings::Permission::Free,
+            Kind::Edit => p.edit,
+            Kind::Simulate => p.simulate,
+            Kind::Read => p.read,
+            Kind::Save => p.save,
+            Kind::Export => p.export,
+        }
+    }
+
+    /// What the card asking for it says.
+    fn asking(self) -> &'static str {
+        match self {
+            Kind::Look | Kind::Edit => "Change the project",
+            Kind::Simulate => "Simulate or take a picture",
+            Kind::Read => "Open what you attached",
+            Kind::Save => "Save the project on your computer",
+            Kind::Export => "Save a file on your computer",
+        }
+    }
+}
+
+/// The file a step that leaves the project writes, as the card shows it; else its details.
+fn asked_detail(tool: &str, arguments: &Value) -> String {
+    let name = arguments["name"].as_str().unwrap_or("");
+    let file = match tool {
+        "save_project" => format!("{}.json", name.trim_end_matches(".json")),
+        "export_garment" => format!("{name}.{}", arguments["format"].as_str().unwrap_or("obj")),
+        "render" => format!("{name}.png"),
+        _ => return step_detail(arguments),
+    };
+    let dir = fashioncraft::agent::documents_dir();
+    let shown = std::env::var_os("HOME")
+        .and_then(|home| {
+            dir.strip_prefix(home)
+                .ok()
+                .map(|d| std::path::Path::new("~").join(d))
+        })
+        .unwrap_or(dir);
+    shown.join(file).display().to_string()
+}
+
+/// A click in the chat that needs the window: a step's permission, or the review pause.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Choice {
+    Permission(Answer),
+    Continue,
+    BackBeforePause,
+}
+
+const CHOICE: &str = "assistant.choice";
 
 struct Worker {
     stop: Arc<AtomicBool>,
@@ -183,6 +289,12 @@ struct Worker {
 
 enum Update {
     Event(Event),
+    /// A step that asks first: true on `answer` runs it.
+    Permission {
+        tool: String,
+        arguments: Value,
+        answer: mpsc::Sender<bool>,
+    },
     Done(Result<(), String>),
 }
 
@@ -802,6 +914,31 @@ impl Atelier {
                         }
                     }
                 }
+                Update::Permission {
+                    tool,
+                    arguments,
+                    answer,
+                } => {
+                    let kind = Kind::of(&tool);
+                    if self.assistant_eval_running()
+                        || self
+                            .assistant
+                            .always
+                            .contains(&(self.assistant_project_key(), kind))
+                    {
+                        let _ = answer.send(true);
+                    } else {
+                        self.assistant.entries.push(Entry::Asked {
+                            kind,
+                            detail: asked_detail(&tool, &arguments),
+                            answer: None,
+                        });
+                        self.assistant.asking = Some(answer);
+                        self.assistant.asked_at = Some(std::time::Instant::now());
+                        // The window may be closed: the toolbar's dot turns amber.
+                        ctx.request_repaint();
+                    }
+                }
                 Update::Done(result) => {
                     if let Err(e) = result {
                         self.assistant.failure = Some(e.clone());
@@ -818,6 +955,7 @@ impl Atelier {
             ));
         }
         if ended_now && self.assistant.worker.is_none() {
+            self.assistant_answer_asked(Answer::Refused);
             // The selection the assistant leaves is not the person's: no chip for it.
             self.assistant.piece_dismissed = self.selected_panels();
         }
@@ -969,6 +1107,7 @@ impl Atelier {
         self.assistant.input.clear();
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
+        let permissions = self.prefs.ai.permissions.clone();
         let (conversation, sender, ctx, stopped) = (
             self.assistant.conversation.clone(),
             self.agent.sender(),
@@ -991,7 +1130,46 @@ impl Atelier {
                     &text,
                     &attached,
                     transport.as_mut(),
-                    &mut |name, arguments| run_in_window(&sender, &ctx, name, arguments),
+                    &mut |name, arguments| {
+                        use super::settings::Permission;
+                        let kind = Kind::of(name);
+                        match kind.permission(&permissions) {
+                            Permission::Free => run_in_window(&sender, &ctx, name, arguments),
+                            Permission::Never => ToolResult::error(format!(
+                                "Not allowed: the person set \"{}\" to Never in the Assistant's \
+                                 Settings › Permissions. Do not try it another way; say what \
+                                 you would have done.",
+                                kind.asking()
+                            )),
+                            Permission::Ask => {
+                                let (answer, said) = mpsc::channel();
+                                let asked = updates.send(Update::Permission {
+                                    tool: name.to_owned(),
+                                    arguments: arguments.clone(),
+                                    answer,
+                                });
+                                ctx.request_repaint();
+                                // As long as the person takes, unless the turn is stopped.
+                                let allowed = asked.is_ok()
+                                    && loop {
+                                        match said.recv_timeout(Duration::from_millis(200)) {
+                                            Ok(yes) => break yes,
+                                            Err(mpsc::RecvTimeoutError::Timeout)
+                                                if !stopped.load(Ordering::Relaxed) => {}
+                                            Err(_) => break false,
+                                        }
+                                    };
+                                if allowed {
+                                    run_in_window(&sender, &ctx, name, arguments)
+                                } else {
+                                    ToolResult::error(
+                                        "The person did not allow this step: nothing was done. \
+                                         Do not try it another way unless they ask.",
+                                    )
+                                }
+                            }
+                        }
+                    },
                     &mut |event| {
                         let _ = updates.send(Update::Event(event));
                         ctx.request_repaint();
@@ -1180,6 +1358,20 @@ impl Atelier {
                 }
                 Entry::Notice(t) | Entry::Problem(t) => out.push_str(&format!("({t})\n\n")),
                 Entry::Paused(steps) => out.push_str(&format!("(Paused after {steps} steps)\n\n")),
+                Entry::Asked {
+                    kind,
+                    detail,
+                    answer,
+                } => out.push_str(&format!(
+                    "(Asked first: {} {detail}: {})\n\n",
+                    kind.asking(),
+                    match answer {
+                        None => "waiting",
+                        Some(Answer::Allowed) => "allowed",
+                        Some(Answer::Always) => "allowed in this project",
+                        Some(Answer::Refused) => "not allowed",
+                    }
+                )),
             }
         }
         out
@@ -1238,6 +1430,7 @@ impl Atelier {
             }) => {
                 json!({"result": name, "error": is_error, "text": text, "pictures": images.len()})
             }
+            Update::Permission { tool, .. } => json!({"asks_first": tool}),
             Update::Done(Err(e)) => json!({"failed": e}),
             Update::Done(Ok(())) => json!({"turn": "ended"}),
         };
@@ -1483,9 +1676,57 @@ impl Atelier {
         }
     }
 
-    /// The Assistant waits for the person: paused for a review.
+    /// The Assistant waits for the person: paused for a review, or a step asks first.
     fn assistant_waiting(&self) -> bool {
-        !self.assistant_busy() && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
+        self.assistant.asking.is_some()
+            || (!self.assistant_busy()
+                && matches!(self.assistant.entries.last(), Some(Entry::Paused(_))))
+    }
+
+    /// This project, for "Always in this project": its file, or "" before it is saved.
+    fn assistant_project_key(&self) -> String {
+        self.document
+            .path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Answers the step whose card waits, and marks the card.
+    fn assistant_answer_asked(&mut self, answer: Answer) {
+        let Some(reply) = self.assistant.asking.take() else {
+            return;
+        };
+        let _ = reply.send(answer != Answer::Refused);
+        if let Some(asked) = self.assistant.asked_at.take()
+            && let Some(Entry::Tool { started, .. }) = self
+                .assistant
+                .entries
+                .iter_mut()
+                .rev()
+                .find(|e| matches!(e, Entry::Tool { outcome: None, .. }))
+        {
+            *started += asked.elapsed();
+        }
+        let mut asked_kind = None;
+        if let Some(Entry::Asked {
+            kind, answer: said, ..
+        }) = self
+            .assistant
+            .entries
+            .iter_mut()
+            .rev()
+            .find(|e| matches!(e, Entry::Asked { answer: None, .. }))
+        {
+            *said = Some(answer);
+            asked_kind = Some(*kind);
+        }
+        if answer == Answer::Always
+            && let Some(kind) = asked_kind
+        {
+            let key = self.assistant_project_key();
+            self.assistant.always.insert((key, kind));
+        }
     }
 
     /// The main toolbar's Assistant button; a click opens or closes the window.
@@ -1575,6 +1816,8 @@ impl Atelier {
         let tr = |text| i18n::tr(lang, text);
         let mut open = true;
         let busy = self.assistant.worker.is_some();
+        let asking = self.assistant.asking.is_some();
+        let waiting = self.assistant_waiting();
         let input_id = egui::Id::new("assistant.input");
         self.assistant_take_files(ctx, input_id, paste_key);
         let dragging_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
@@ -1642,20 +1885,6 @@ impl Atelier {
                             });
                         }
                         restore = self.assistant_turns(ui, busy);
-                        if !busy && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
-                        {
-                            ui.vertical_centered(|ui| {
-                                if ui
-                                    .button(tr("Continue"))
-                                    .on_hover_text(tr(
-                                        "Go on from where it paused, with everything so far",
-                                    ))
-                                    .clicked()
-                                {
-                                    resume = true;
-                                }
-                            });
-                        }
                         // The step in progress shows in the answer's steps; this line says when
                         // the model thinks between steps, or that it stops.
                         let running = matches!(
@@ -1667,7 +1896,7 @@ impl Atelier {
                             .worker
                             .as_ref()
                             .is_some_and(|w| w.stop.load(Ordering::Relaxed));
-                        if busy && (stopping || !running) {
+                        if busy && !asking && (stopping || !running) {
                             ui.horizontal(|ui| {
                                 ui.add(egui::Spinner::new().size(12.).color(accent));
                                 ui.weak(if stopping {
@@ -1680,6 +1909,21 @@ impl Atelier {
                     });
                 if let Some(at) = restore {
                     self.assistant_restore(at);
+                }
+                let choice = ctx.data_mut(|d| {
+                    let choice = d.get_temp::<Choice>(egui::Id::new(CHOICE));
+                    d.remove::<Choice>(egui::Id::new(CHOICE));
+                    choice
+                });
+                match choice {
+                    Some(Choice::Permission(answer)) => self.assistant_answer_asked(answer),
+                    Some(Choice::Continue) => resume = true,
+                    Some(Choice::BackBeforePause) => {
+                        if let Some(&at) = self.assistant.restore_points.keys().next_back() {
+                            self.assistant_restore(at);
+                        }
+                    }
+                    None => {}
                 }
                 if resume {
                     self.assistant.input = tr("Continue.").to_owned();
@@ -1755,7 +1999,9 @@ impl Atelier {
                                     egui::TextEdit::multiline(&mut self.assistant.input)
                                         .id(input_id)
                                         .frame(egui::Frame::NONE)
-                                        .hint_text(tr(if busy {
+                                        .hint_text(tr(if waiting {
+                                            "Or tell it something else (Enter sends)"
+                                        } else if busy {
                                             "Write the next instruction; it goes when this ends"
                                         } else if cfg!(target_os = "macos") {
                                             "Write, or paste a picture with ⌘V (Enter sends)"
@@ -1795,7 +2041,31 @@ impl Atelier {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if busy {
+                                    if asking {
+                                        // Something else instead: the step is refused, the
+                                        // turn stops after it, and the message goes then.
+                                        let next = self.assistant.input.trim().to_owned();
+                                        let send = ui.add_enabled(
+                                            !next.is_empty(),
+                                            egui::Button::new(
+                                                egui::RichText::new(tr("Send"))
+                                                    .strong()
+                                                    .color(Color32::from_rgb(0x1b, 0x1b, 0x1f)),
+                                            )
+                                            .fill(accent)
+                                            .stroke(egui::Stroke::NONE)
+                                            .corner_radius(3.)
+                                            .min_size(egui::vec2(0., 28.)),
+                                        );
+                                        if (send.clicked() || enter) && !next.is_empty() {
+                                            if let Some(worker) = &self.assistant.worker {
+                                                worker.stop.store(true, Ordering::Relaxed);
+                                            }
+                                            self.assistant_answer_asked(Answer::Refused);
+                                            self.assistant.queued = Some(next);
+                                            self.assistant.input.clear();
+                                        }
+                                    } else if busy {
                                         let stop = ui.add(|ui: &mut egui::Ui| {
                                             outline_button(ui, super::icons::Icon::Stop, tr("Stop"))
                                         });
@@ -1842,6 +2112,9 @@ impl Atelier {
                     });
                 ui.label(
                     egui::RichText::new(tr(match (busy, cfg!(target_os = "macos")) {
+                        _ if asking => {
+                            "What it may do without asking is chosen in Settings › Permissions."
+                        }
                         (true, true) => {
                             "Stop ends after the step in progress; what is done is undone with ⌘Z."
                         }
@@ -2387,17 +2660,170 @@ impl Atelier {
                     ui.label(egui::RichText::new(text).small().italics().weak());
                 });
             }
+            // A review pause: a card, with Continue and Back while it is the last thing said.
             Entry::Paused(steps) => {
-                ui.vertical_centered(|ui| {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} {steps} {}",
-                            i18n::tr(lang, "Paused for your review after"),
-                            i18n::tr(lang, "steps.")
-                        ))
-                        .small()
-                        .italics()
-                        .weak(),
+                let waiting = !self.assistant_busy()
+                    && self
+                        .assistant
+                        .entries
+                        .last()
+                        .is_some_and(|last| std::ptr::eq(last, entry));
+                let visuals = ui.visuals().clone();
+                egui::Frame::new()
+                    .fill(visuals.extreme_bg_color)
+                    .stroke(visuals.widgets.noninteractive.bg_stroke)
+                    .corner_radius(6.)
+                    .inner_margin(egui::Margin::same(12))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.spacing_mut().item_spacing.y = 8.;
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} {steps} {}",
+                                tr("Paused after"),
+                                tr("steps")
+                            ))
+                            .strong(),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(tr(
+                                    "Look at how it goes in the 3D view. You can go on, tell it \
+                                     something else or go back.",
+                                ))
+                                .size(12.)
+                                .weak(),
+                            )
+                            .wrap(),
+                        );
+                        if waiting {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.;
+                                if card_button(ui, tr("Continue"), true)
+                                    .on_hover_text(tr(
+                                        "Go on from where it paused, with everything so far",
+                                    ))
+                                    .clicked()
+                                {
+                                    choose(ui, Choice::Continue);
+                                }
+                                if card_button(ui, tr("Back to before the pause"), false)
+                                    .on_hover_text(tr(
+                                        "Put the project back as it was before these steps (Undo \
+                                         brings them back)",
+                                    ))
+                                    .clicked()
+                                {
+                                    choose(ui, Choice::BackBeforePause);
+                                }
+                            });
+                        }
+                    });
+            }
+            // A step that asks first: a card with the answers while it waits, then one line.
+            Entry::Asked {
+                kind,
+                detail,
+                answer,
+            } => {
+                let visuals = ui.visuals().clone();
+                let amber = visuals.warn_fg_color;
+                let Some(answer) = answer else {
+                    egui::Frame::new()
+                        .fill(visuals.extreme_bg_color)
+                        .stroke(egui::Stroke::new(1., amber.gamma_multiply(0.55)))
+                        .corner_radius(6.)
+                        .inner_margin(egui::Margin::same(12))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.spacing_mut().item_spacing.y = 10.;
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = 10.;
+                                let (tile, _) = ui.allocate_exact_size(
+                                    egui::vec2(30., 30.),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter()
+                                    .rect_filled(tile, 4., amber.gamma_multiply(0.14));
+                                super::icons::glyph(
+                                    ui.painter(),
+                                    egui::Rect::from_center_size(
+                                        tile.center(),
+                                        egui::vec2(16., 16.),
+                                    ),
+                                    match kind {
+                                        Kind::Save | Kind::Export => super::icons::Icon::Export,
+                                        _ => super::icons::Icon::Warning,
+                                    },
+                                    amber,
+                                    1.4,
+                                );
+                                ui.vertical(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 2.;
+                                    ui.label(egui::RichText::new(tr(kind.asking())).strong());
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(detail)
+                                                .size(11.5)
+                                                .monospace()
+                                                .weak(),
+                                        )
+                                        .wrap(),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(tr(match kind {
+                                            Kind::Save | Kind::Export => {
+                                                "Outside the project: Undo does not delete it."
+                                            }
+                                            _ => "Undo takes it back.",
+                                        }))
+                                        .size(12.)
+                                        .weak(),
+                                    );
+                                });
+                            });
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.;
+                                if card_button(ui, tr("Allow"), true).clicked() {
+                                    choose(ui, Choice::Permission(Answer::Allowed));
+                                }
+                                if card_button(ui, tr("Always in this project"), false)
+                                    .on_hover_text(tr(
+                                        "It stops asking for this kind of step in this project \
+                                         until FashionCraft closes",
+                                    ))
+                                    .clicked()
+                                {
+                                    choose(ui, Choice::Permission(Answer::Always));
+                                }
+                                if card_button(ui, tr("No"), false).clicked() {
+                                    choose(ui, Choice::Permission(Answer::Refused));
+                                }
+                            });
+                        });
+                    return;
+                };
+                let (mark, colour, said) = match answer {
+                    Answer::Allowed => ("✓", Color32::from_rgb(0x7c, 0xc4, 0x7f), tr("Allowed")),
+                    Answer::Always => (
+                        "✓",
+                        Color32::from_rgb(0x7c, 0xc4, 0x7f),
+                        tr("Allowed in this project"),
+                    ),
+                    Answer::Refused => ("✗", visuals.weak_text_color(), tr("Not allowed")),
+                };
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(mark).color(colour).strong());
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "{said}: {} · {detail}",
+                                tr(kind.asking())
+                            ))
+                            .size(12.)
+                            .color(colour),
+                        )
+                        .truncate(),
                     );
                 });
             }
@@ -2420,6 +2846,29 @@ impl Atelier {
             }
         }
     }
+}
+
+/// Remembers a click in the chat for the window to act on once the chat is drawn.
+fn choose(ui: &egui::Ui, choice: Choice) {
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new(CHOICE), choice));
+}
+
+/// A card's button, 30 points high: filled in FashionCraft's colour for the answer it
+/// suggests, else outlined.
+fn card_button(ui: &mut egui::Ui, label: &str, filled: bool) -> egui::Response {
+    let accent = super::workspace::accent(ui.visuals());
+    let text = egui::RichText::new(label).size(12.5);
+    let button = if filled {
+        egui::Button::new(text.strong().color(Color32::from_rgb(0x1b, 0x1b, 0x1f)))
+            .fill(accent)
+            .stroke(egui::Stroke::NONE)
+    } else {
+        egui::Button::new(text)
+            .fill(Color32::TRANSPARENT)
+            .stroke(ui.visuals().widgets.inactive.bg_stroke)
+    };
+    ui.add(button.corner_radius(3.).min_size(egui::vec2(0., 30.)))
 }
 
 /// A button without a frame: an icon and a label in the muted colour, brighter on hover (the
@@ -3085,6 +3534,45 @@ mod tests {
             &mut seen,
             false
         ));
+    }
+
+    #[test]
+    fn what_leaves_the_project_asks_first_by_default() {
+        use super::Kind;
+        use super::settings::{Permission, Permissions};
+        let p = Permissions::default();
+        assert_eq!(Kind::of("save_project").permission(&p), Permission::Ask);
+        assert_eq!(Kind::of("export_garment").permission(&p), Permission::Ask);
+        assert_eq!(Kind::of("render").permission(&p), Permission::Ask);
+        assert_eq!(Kind::of("draft_garment").permission(&p), Permission::Free);
+        assert_eq!(Kind::of("simulate").permission(&p), Permission::Free);
+        // Looking never asks, whatever the settings.
+        let never = Permissions {
+            edit: Permission::Never,
+            simulate: Permission::Never,
+            read: Permission::Never,
+            save: Permission::Never,
+            export: Permission::Never,
+        };
+        assert_eq!(
+            Kind::of("scene_summary").permission(&never),
+            Permission::Free
+        );
+        assert_eq!(Kind::of("plan").permission(&never), Permission::Free);
+        assert_eq!(Kind::of("sew").permission(&never), Permission::Never);
+    }
+
+    #[test]
+    fn an_asked_step_shows_the_file_it_writes() {
+        use serde_json::json;
+        let saved = super::asked_detail("save_project", &json!({"name": "falda"}));
+        assert!(saved.ends_with("falda.json"), "{saved}");
+        let exported = super::asked_detail(
+            "export_garment",
+            &json!({"name": "camisa", "format": "glb"}),
+        );
+        assert!(exported.ends_with("camisa.glb"), "{exported}");
+        assert_eq!(super::asked_detail("sew", &json!({"seam": "s1"})), "s1");
     }
 
     #[test]

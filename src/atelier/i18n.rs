@@ -496,6 +496,37 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "Change the project" => "Cambiar el proyecto",
+        "Simulate or take a picture" => "Simular o hacer una captura",
+        "Open what you attached" => "Abrir lo que adjuntaste",
+        "Save the project on your computer" => "Guardar el proyecto en tu ordenador",
+        "Save a file on your computer" => "Guardar un archivo en tu ordenador",
+        "Outside the project: Undo does not delete it." => {
+            "Fuera del proyecto: Deshacer no lo borra."
+        }
+        "Undo takes it back." => "Deshacer lo revierte.",
+        "Allow" => "Permitir",
+        "Always in this project" => "Siempre en este proyecto",
+        "It stops asking for this kind of step in this project until FashionCraft closes" => {
+            "Deja de preguntar por este tipo de paso en este proyecto hasta que cierres FashionCraft"
+        }
+        "No" => "No",
+        "Allowed" => "Permitido",
+        "Allowed in this project" => "Permitido en este proyecto",
+        "Not allowed" => "No permitido",
+        "Paused after" => "Pausa después de",
+        "steps" => "pasos",
+        "Look at how it goes in the 3D view. You can go on, tell it something else or go back." => {
+            "Mira cómo va en la vista 3D. Puedes seguir, decirle otra cosa o volver atrás."
+        }
+        "Back to before the pause" => "Volver a antes de la pausa",
+        "Put the project back as it was before these steps (Undo brings them back)" => {
+            "Devuelve el proyecto a como estaba antes de estos pasos (Deshacer los recupera)"
+        }
+        "Or tell it something else (Enter sends)" => "O dile otra cosa (Intro envía)",
+        "What it may do without asking is chosen in Settings › Permissions." => {
+            "Qué puede hacer sin preguntar se elige en Ajustes › Permisos."
+        }
         "Write the next instruction; it goes when this ends" => {
             "Escribe la siguiente indicación; sale cuando termine"
         }
@@ -1458,8 +1489,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Attach files" => "Adjuntar archivos",
         "Pictures, documents, tables and patterns" => "Imágenes, documentos, tablas y patrones",
         "All files" => "Todos los archivos",
-        "Paused for your review after" => "En pausa para que revises, tras",
-        "steps." => "pasos.",
         "Continue" => "Continuar",
         "Continue." => "Continúa.",
         "Go on from where it paused, with everything so far" => {

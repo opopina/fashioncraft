@@ -315,6 +315,97 @@ fn unique_name(name: &str, taken: &dyn Fn(&str) -> bool) -> String {
         .unwrap_or_default()
 }
 
+/// What the Assistant is doing, for its button in the main toolbar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AssistantState {
+    Idle,
+    Working,
+    /// Waiting for the person: paused for a review, or asking to be let do something.
+    Waiting,
+}
+
+/// The main toolbar's Assistant button: a chat bubble and "Assistant" (the bubble alone when
+/// the window is narrow), marked while the window is open; closed, a dot says it is working
+/// (fuchsia) or waiting for an answer (amber).
+fn toolbar_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    open: bool,
+    state: AssistantState,
+    compact: bool,
+    tip: &str,
+) -> egui::Response {
+    let visuals = ui.visuals().clone();
+    let accent = super::workspace::accent(&visuals);
+    let font = egui::FontId::proportional(12.5);
+    let galley = (!compact).then(|| {
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), font.clone(), visuals.text_color())
+    });
+    let icon = 15.;
+    let width = match &galley {
+        Some(g) => 8. + icon + 6. + g.size().x + 10.,
+        None => 28.,
+    };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 28.), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let (fill, stroke, ink) = if open {
+            (
+                accent.linear_multiply(0.24),
+                egui::Stroke::new(1., accent),
+                visuals.strong_text_color(),
+            )
+        } else {
+            let fill = if response.hovered() {
+                visuals.widgets.hovered.weak_bg_fill
+            } else {
+                Color32::TRANSPARENT
+            };
+            (
+                fill,
+                egui::Stroke::new(
+                    1.,
+                    visuals
+                        .widgets
+                        .noninteractive
+                        .fg_stroke
+                        .color
+                        .gamma_multiply(0.35),
+                ),
+                visuals.text_color(),
+            )
+        };
+        painter.rect(rect, 3., fill, stroke, egui::StrokeKind::Inside);
+        let icon_rect = egui::Rect::from_center_size(
+            egui::pos2(
+                if compact {
+                    rect.center().x
+                } else {
+                    rect.left() + 8. + icon / 2.
+                },
+                rect.center().y,
+            ),
+            egui::vec2(icon, icon),
+        );
+        super::icons::glyph(painter, icon_rect, super::icons::Icon::Chat, ink, 1.4);
+        if let Some(g) = galley {
+            let at = egui::pos2(icon_rect.right() + 6., rect.center().y - g.size().y / 2.);
+            painter.galley_with_override_text_color(at, g, ink);
+        }
+        if !open && state != AssistantState::Idle {
+            let dot = if state == AssistantState::Working {
+                accent
+            } else {
+                visuals.warn_fg_color
+            };
+            let at = rect.right_top() + egui::vec2(-3., 4.);
+            painter.circle(at, 5., dot, egui::Stroke::new(2., visuals.panel_fill));
+        }
+    }
+    response.on_hover_text(tip)
+}
+
 impl Atelier {
     /// Put a file with the next message.
     pub(super) fn assistant_attach(&mut self, mut attachment: Attachment) {
@@ -1060,6 +1151,47 @@ impl Atelier {
     }
 
     /// A turn is running (for the demo mode).
+    /// What the Assistant is doing now.
+    pub(super) fn assistant_state(&self) -> AssistantState {
+        if self.assistant_waiting() {
+            AssistantState::Waiting
+        } else if self.assistant_busy() {
+            AssistantState::Working
+        } else {
+            AssistantState::Idle
+        }
+    }
+
+    /// The Assistant waits for the person: paused for a review.
+    fn assistant_waiting(&self) -> bool {
+        !self.assistant_busy() && matches!(self.assistant.entries.last(), Some(Entry::Paused(_)))
+    }
+
+    /// The main toolbar's Assistant button; a click opens or closes the window.
+    pub(super) fn assistant_toolbar_button(
+        &self,
+        ui: &mut egui::Ui,
+        compact: bool,
+    ) -> egui::Response {
+        let lang = self.prefs.language;
+        let open = self.assistant.open;
+        let state = self.assistant_state();
+        let tip = match (open, state) {
+            (true, _) => "Close the Assistant",
+            (false, AssistantState::Working) => "Open the Assistant; it is working",
+            (false, AssistantState::Waiting) => "Open the Assistant; it is waiting for your answer",
+            (false, AssistantState::Idle) => "Open the Assistant",
+        };
+        toolbar_button(
+            ui,
+            i18n::tr(lang, "Assistant"),
+            open,
+            state,
+            compact,
+            i18n::tr(lang, tip),
+        )
+    }
+
     pub(super) fn assistant_busy(&self) -> bool {
         self.assistant.worker.is_some()
     }

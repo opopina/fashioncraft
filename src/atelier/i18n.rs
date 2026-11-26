@@ -494,6 +494,12 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Smooth curve" => "Suavizar curva",
         "Cut and extend" => "Cortar y extender",
         "Create" => "Crear",
+        "Close the Assistant" => "Cerrar el asistente",
+        "Open the Assistant" => "Abrir el asistente",
+        "Open the Assistant; it is working" => "Abrir el asistente; está trabajando",
+        "Open the Assistant; it is waiting for your answer" => {
+            "Abrir el asistente; espera tu respuesta"
+        }
         "Replace" => "Reemplazar",
         "Wear it over the garment on the board, which stays (simulate that one first)" => {
             "Ponerla encima de la prenda del tablero, que se queda (simula esa primero)"

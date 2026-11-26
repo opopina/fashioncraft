@@ -1882,6 +1882,12 @@ impl eframe::App for Atelier {
                             self.invoke_command(id, &ctx);
                         }
                     }
+                    ui.add(egui::Separator::default().vertical().spacing(6.));
+                    let assistant = self.assistant_toolbar_button(ui, compact);
+                    demo::mark(&ctx, "toolbar.assistant", assistant.rect);
+                    if assistant.clicked() {
+                        self.invoke_command(commands::CommandId::ToggleAssistant, &ctx);
+                    }
                     // The command search sits in the middle of the room left between them, and
                     // only when there is room: in a narrow window it would cover the menus.
                     let search = ui.available_width().clamp(120., 340.);

@@ -431,7 +431,13 @@ pub fn tools() -> Vec<Tool> {
              tight spots pressing on the body, cloth inside the body, a drape still moving), \
              plus the numbers. ok true means none. With view it adds a picture from that view: only \
              when the result needs looking at, not on every check.",
-            object(json!({"view": {"type": "string", "enum": VIEWS}}), &[]),
+            object(
+                json!({
+                    "view": {"type": "string", "enum": VIEWS},
+                    "details": {"type": "boolean", "description": "Every number: seam gaps, strain and pressure spots with their locations, settling. Otherwise ok, the problems and the counts."}
+                }),
+                &[],
+            ),
             false,
         ),
         tool(

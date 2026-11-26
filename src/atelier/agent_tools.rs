@@ -185,7 +185,7 @@ impl Atelier {
                     "problem": problem,
                     "garment": summary["garment"],
                     "seams": {"total": seams.len(), "closed": seams.len() - open.len(), "open": open},
-                    "warnings": summary["warnings"],
+                    "warnings": self.simulate_warnings(&summary),
                     "status": self.status,
                     "next": "check_garment",
                 }));
@@ -368,9 +368,11 @@ impl Atelier {
                 "measurements_cm": body.as_ref().ok(),
                 "measurements_note": body.err(),
                 "posed": self.project.avatar_pose.as_ref().is_some_and(|p| !p.pose.is_empty()),
-                "arrangement_points": self.arrangement_anchor_ids(),
-                "library_presets": fashioncraft::agent::avatar_preset_ids(),
-                "pose_presets": fashioncraft::avatar_rig::PRESETS,
+                // Counts: the names are fixed lists (set_avatar, set_pose and set_fabric give
+                // theirs as options); scene_summary with lists true names them.
+                "arrangement_points": self.arrangement_anchor_ids().len(),
+                "library_presets": fashioncraft::agent::avatar_preset_ids().len(),
+                "pose_presets": fashioncraft::avatar_rig::PRESETS.len(),
             })
         };
         let template = &self.project.template;
@@ -426,7 +428,7 @@ impl Atelier {
             "simulation_running": self.playing,
             "unsaved_changes": self.document.dirty,
             "can_undo": self.authoring.history.can_undo(),
-            "fabric_presets": fashioncraft::fabrics::PRESETS.iter().map(|p| json!({"id": p.id, "name": p.name})).collect::<Vec<_>>(),
+            "fabric_presets": fashioncraft::fabrics::PRESETS.len(),
             "units": "cm; 2D board coordinates: x right, y down",
         })
     }

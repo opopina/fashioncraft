@@ -135,13 +135,18 @@ impl Atelier {
             "points_of_measure" => self.agent_points_of_measure(args),
             "measure" => self.agent_measure(args),
             "check_garment" => {
-                let report = self.garment_check();
+                let full = self.garment_check();
+                let report = if args.get("details").and_then(Value::as_bool) == Some(true) {
+                    full
+                } else {
+                    agent_check::brief(&full)
+                };
                 match args.get("view").and_then(Value::as_str) {
                     Some(view) => match self.turn_to(ctx, view) {
                         Ok(()) => {
                             return Err(Pending::Base(BasePending::Shot {
                                 frames: 0,
-                                text: serde_json::to_string_pretty(&report).unwrap_or_default(),
+                                text: report.to_string(),
                             }));
                         }
                         Err(e) => Err(e),
@@ -251,6 +256,48 @@ impl Atelier {
     /// scene_summary: whole the first time in a conversation (or with full: true), then only
     /// what changed since the last one, which keeps every request of a long job short.
     pub(super) fn agent_scene_summary(&mut self, ctx: &egui::Context, args: &Value) -> Value {
+        let mut answer = self.scene_summary_diffed(ctx, args);
+        if args.get("lists").and_then(Value::as_bool) == Some(true) {
+            answer["lists"] = json!({
+                "arrangement_points": self.arrangement_anchor_ids(),
+                "library_presets": fashioncraft::agent::avatar_preset_ids(),
+                "pose_presets": fashioncraft::avatar_rig::PRESETS,
+                "fabric_presets": fashioncraft::fabrics::PRESETS
+                    .iter()
+                    .map(|p| json!({"id": p.id, "name": p.name}))
+                    .collect::<Vec<_>>(),
+            });
+        }
+        answer
+    }
+
+    /// The warnings a simulation's result carries: not the open seams (its seams list has
+    /// them), nor the note that a seam allowed to ease has no gathering model (ease there is
+    /// meant).
+    pub(super) fn simulate_warnings(&self, summary: &Value) -> Vec<Value> {
+        let eased: Vec<&str> = self
+            .project
+            .template
+            .seams
+            .iter()
+            .filter(|s| s.allow_ease)
+            .map(|s| s.id.as_str())
+            .collect();
+        summary["warnings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|w| {
+                let w = w.as_str().unwrap_or_default();
+                !(w.starts_with("Seam ") && w.contains(" open after simulating"))
+                    && !(w.contains("no physical gathering model")
+                        && eased.iter().any(|id| w.starts_with(&format!("{id}:"))))
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn scene_summary_diffed(&mut self, ctx: &egui::Context, args: &Value) -> Value {
         let now = self.scene_summary();
         let id = egui::Id::new("agent.last_scene_summary");
         let epoch = fashioncraft::assistant::conversation_epoch();

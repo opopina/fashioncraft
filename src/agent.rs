@@ -127,8 +127,9 @@ impl ToolResult {
             is_error: false,
         }
     }
+    /// A JSON result, compact: indentation would double what the model reads.
     pub fn json(value: &Value) -> Self {
-        Self::text(serde_json::to_string_pretty(value).unwrap_or_default())
+        Self::text(serde_json::to_string(value).unwrap_or_default())
     }
     pub fn error(text: impl Into<String>) -> Self {
         Self {
@@ -222,7 +223,13 @@ pub fn tools() -> Vec<Tool> {
              parameters, the avatar's measurements and pose, sizes and grading, the current \
              selection, warnings and the simulation state. Call it first and after changes; \
              after the first call it gives only what changed (full: true for everything).",
-            object(json!({"full": {"type": "boolean"}}), &[]),
+            object(
+                json!({
+                    "full": {"type": "boolean"},
+                    "lists": {"type": "boolean", "description": "Also name the avatar's arrangement points (for place_piece) and the avatar, pose and fabric presets; otherwise only their counts."}
+                }),
+                &[],
+            ),
             false,
         ),
         tool(
@@ -445,7 +452,7 @@ pub fn tools() -> Vec<Tool> {
         ),
         tool(
             "place_piece",
-            "Place a piece on the avatar at an arrangement point (scene_summary lists them, \
+            "Place a piece on the avatar at an arrangement point (scene_summary with lists true names them, \
              such as torso-middle-front or upper-arm-left-outer), clearance_cm from the skin, \
              wrapped around the body unless wrap is false. It is checked to start clear of the \
              body. Simulate afterwards.",

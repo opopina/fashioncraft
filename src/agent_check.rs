@@ -41,6 +41,29 @@ pub struct Input<'a> {
     pub body_cm: Option<[f64; 6]>,
 }
 
+/// check_garment's answer unless details are asked for: ok, one list of problems, each with
+/// where it is, and the counts. The full report repeats those problems as seams, strain and
+/// pressure entries with their numbers, which costs a long job thousands of tokens.
+pub fn brief(report: &Value) -> Value {
+    let mut out = serde_json::json!({
+        "ok": report["ok"],
+        "simulated": report["simulated"],
+        "problems": report["problems"],
+        "seams": {
+            "total": report["seams"]["total"],
+            "open": report["seams"]["open"].as_array().map_or(0, Vec::len),
+        },
+        "settled": report["settling"]["settled"],
+    });
+    if report.get("simulation_paused").is_some() {
+        out["simulation_paused"] = report["simulation_paused"].clone();
+    }
+    if report["ok"] != Value::Bool(true) {
+        out["details"] = "check_garment with details true gives every number and location".into();
+    }
+    out
+}
+
 /// Pattern choices that rarely make sense, found by the segments' names (drafted pieces and
 /// pieces named like them): a bodice side seam so short the armhole runs to the waist, an
 /// armhole far deeper or shallower than the body, a neckline that drops very low. Sizes scale
@@ -395,9 +418,20 @@ pub fn check(input: &Input) -> Value {
 
     problems.extend(pattern_checks(input.template, input.body_cm));
 
-    // What the document itself says is wrong, beyond what is above.
+    // What the document itself says is wrong, beyond what is above. A seam allowed to ease (a
+    // sleeve cap) is meant to join unequal lengths: the note that no gathering is modelled is
+    // not a problem, and it would keep a shirt with set-in sleeves from ever being ok.
+    let eased: Vec<&str> = input
+        .template
+        .seams
+        .iter()
+        .filter(|s| s.allow_ease)
+        .map(|s| s.id.as_str())
+        .collect();
     for w in agent_ops::warnings(input.template, Some(&input.live)) {
-        if !w.contains("open") && !problems.contains(&w) {
+        let meant = w.contains("no physical gathering model")
+            && eased.iter().any(|id| w.starts_with(&format!("{id}:")));
+        if !w.contains("open") && !meant && !problems.contains(&w) {
             problems.push(w);
         }
     }
@@ -472,6 +506,30 @@ pub fn garment_girth(x: &[DVec3], triangles: &[[usize; 3]], at: DVec3, reach: f6
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_brief_answer_lists_each_problem_once_with_its_place() {
+        let full = json!({
+            "ok": false, "simulated": true,
+            "problems": ["Seam seam_7 is open: 75.0 mm gap between …",
+                         "Strained 126.0 %: panel_3 bottom right near underarm-right, 122 cm up"],
+            "seams": {"total": 14, "open": [{"seam": "seam_7", "gap_mm": 75.0}]},
+            "strain_over_limit": [{"piece": "panel_3", "worst": 126.0, "where": {"area": "bottom right"}}],
+            "pressure_over_limit": [], "small_spots": [], "inside_body": [],
+            "settling": {"settled": false, "rms_speed_cm_s": 4.4},
+        });
+        let short = brief(&full);
+        assert_eq!(short["problems"], full["problems"]);
+        assert_eq!(short["seams"], json!({"total": 14, "open": 1}));
+        assert_eq!(short["settled"], json!(false));
+        assert!(short.get("strain_over_limit").is_none());
+        assert!(short["details"].as_str().unwrap().contains("details true"));
+        assert!(short.to_string().len() < full.to_string().len());
+        // All well: no pointer to details.
+        let ok = brief(&json!({"ok": true, "simulated": true, "problems": [],
+            "seams": {"total": 4, "open": []}, "settling": {"settled": true}}));
+        assert!(ok.get("details").is_none());
+    }
+
     use super::*;
 
     #[test]

@@ -19,15 +19,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-windows-x64.msi"><img alt="Download for Windows" height="36" src="https://img.shields.io/badge/Windows-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
+  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-windows-x64.msi"><img alt="Download for Windows" height="36" src="https://img.shields.io/badge/Windows-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
   &nbsp;
-  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-macos-universal.dmg"><img alt="Download for macOS" height="36" src="https://img.shields.io/badge/macOS-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
+  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-macos-universal.dmg"><img alt="Download for macOS" height="36" src="https://img.shields.io/badge/macOS-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
   &nbsp;
-  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-linux-x86_64.AppImage"><img alt="Download for Linux" height="36" src="https://img.shields.io/badge/Linux-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
+  <a href="https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-linux-x86_64.AppImage"><img alt="Download for Linux" height="36" src="https://img.shields.io/badge/Linux-Download-dd2cce?style=for-the-badge&amp;labelColor=2c2d31&amp;logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDN2MTIiLz48cGF0aCBkPSJNNyAxMGw1IDUgNS01Ii8+PHBhdGggZD0iTTQgMTd2M2gxNnYtMyIvPjwvc3ZnPg=="></a>
 </p>
 
 <p align="center">
-  <sub>Version 0.2.2 · Windows 10 and 11 (64-bit) · macOS 11 or newer, Apple silicon and Intel · Linux x86-64<br>
+  <sub>Version 0.2.3 · Windows 10 and 11 (64-bit) · macOS 11 or newer, Apple silicon and Intel · Linux x86-64<br>
   <a href="#download">Other files and first-launch notes</a> · <a href="https://github.com/opopina/fashioncraft/releases">All releases</a></sub>
 </p>
 
@@ -85,16 +85,16 @@ were.
 
 ## Download
 
-The buttons above download version 0.2.2. Every file is in the
+The buttons above download version 0.2.3. Every file is in the
 [latest release](https://github.com/opopina/fashioncraft/releases/latest):
 
 | System | File | How to install |
 |---|---|---|
-| **Windows** 10 and 11 (64-bit) | [`fashioncraft-0.2.2-windows-x64.msi`](https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-windows-x64.msi) | Run it. It installs for your user, needs no administrator, and adds FashionCraft to the Start menu; uninstall it from Settings › Apps. |
-| | [`fashioncraft-0.2.2-windows-x64-portable.zip`](https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-windows-x64-portable.zip) | No installation: unzip it anywhere and open `fashioncraft.exe`. |
-| **macOS** 11 or newer (Apple silicon and Intel) | [`fashioncraft-0.2.2-macos-universal.dmg`](https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-macos-universal.dmg) | Open it and drag FashionCraft to Applications. |
-| **Linux** (x86-64) | [`fashioncraft-0.2.2-linux-x86_64.AppImage`](https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-linux-x86_64.AppImage) | Make it executable (`chmod +x`) and run it; works on most distributions. Also listed in the [AppImage catalog](https://appimage.github.io/FashionCraft/). |
-| | [`fashioncraft-0.2.2-linux-x86_64.tar.gz`](https://github.com/opopina/fashioncraft/releases/download/v0.2.2/fashioncraft-0.2.2-linux-x86_64.tar.gz) | Unpack it and run `bin/fashioncraft`. |
+| **Windows** 10 and 11 (64-bit) | [`fashioncraft-0.2.3-windows-x64.msi`](https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-windows-x64.msi) | Run it. It installs for your user, needs no administrator, and adds FashionCraft to the Start menu; uninstall it from Settings › Apps. |
+| | [`fashioncraft-0.2.3-windows-x64-portable.zip`](https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-windows-x64-portable.zip) | No installation: unzip it anywhere and open `fashioncraft.exe`. |
+| **macOS** 11 or newer (Apple silicon and Intel) | [`fashioncraft-0.2.3-macos-universal.dmg`](https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-macos-universal.dmg) | Open it and drag FashionCraft to Applications. |
+| **Linux** (x86-64) | [`fashioncraft-0.2.3-linux-x86_64.AppImage`](https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-linux-x86_64.AppImage) | Make it executable (`chmod +x`) and run it; works on most distributions. Also listed in the [AppImage catalog](https://appimage.github.io/FashionCraft/). |
+| | [`fashioncraft-0.2.3-linux-x86_64.tar.gz`](https://github.com/opopina/fashioncraft/releases/download/v0.2.3/fashioncraft-0.2.3-linux-x86_64.tar.gz) | Unpack it and run `bin/fashioncraft`. |
 
 `SHA256SUMS.txt` in each release lets you check the files.
 

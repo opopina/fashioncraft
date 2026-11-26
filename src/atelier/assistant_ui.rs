@@ -70,6 +70,9 @@ pub(super) struct AssistantUi {
     restore_points: std::collections::BTreeMap<usize, FittingProject>,
     /// A note for the model with the next message (the project was put back).
     pending_note: Option<String>,
+    /// The selection whose "This piece" chip the person took off the message: it comes back
+    /// when the selection changes.
+    piece_dismissed: Vec<String>,
     /// This conversation's log in the session folder (assistant-logs/), once it has begun.
     log: Option<PathBuf>,
 }
@@ -136,6 +139,7 @@ impl Default for AssistantUi {
             usage: Totals::default(),
             restore_points: Default::default(),
             pending_note: None,
+            piece_dismissed: Vec::new(),
             log: None,
         }
     }
@@ -145,6 +149,8 @@ enum Entry {
     You(String),
     /// The files sent with the next message, by name.
     Attached(Vec<String>),
+    /// The pieces the next message is about (its "This piece" chip), by name.
+    About(Vec<String>),
     Model(String),
     Tool {
         name: String,
@@ -639,6 +645,26 @@ impl Atelier {
         }
     }
 
+    /// The selected pieces as (id, name), for the "This piece" chip on the next message;
+    /// none once the person took the chip off, until the selection changes.
+    fn assistant_chip_pieces(&mut self) -> Vec<(String, String)> {
+        let ids = self.selected_panels();
+        if ids != self.assistant.piece_dismissed {
+            self.assistant.piece_dismissed.clear();
+        }
+        if ids.is_empty() || !self.assistant.piece_dismissed.is_empty() {
+            return Vec::new();
+        }
+        // In the project's order, as the Object Browser lists them.
+        self.project
+            .template
+            .panels
+            .iter()
+            .filter(|p| ids.contains(&p.id))
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect()
+    }
+
     fn assistant_provider(&self) -> Provider {
         Provider::from_id(&self.prefs.ai.provider).unwrap_or(Provider::Anthropic)
     }
@@ -864,12 +890,18 @@ impl Atelier {
         }
         // What the model knows of the scene, so a small request needs no scene_summary first.
         let note = self.agent_scene_note(ctx);
+        let about = self.assistant_chip_pieces();
         let attached = std::mem::take(&mut self.assistant.pending);
         if !attached.is_empty() {
             self.assistant.entries.push(Entry::Attached(
                 attached.iter().map(|a| a.name.clone()).collect(),
             ));
             self.assistant.sent.extend(attached.iter().cloned());
+        }
+        if !about.is_empty() {
+            self.assistant.entries.push(Entry::About(
+                about.iter().map(|(_, name)| name.clone()).collect(),
+            ));
         }
         let at = self.assistant.entries.len();
         let before = self.snapshot_document();
@@ -880,10 +912,21 @@ impl Atelier {
             "attached": attached.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
             "scene_note": note,
         }));
-        let note = match (self.assistant.pending_note.take(), note) {
-            (Some(put_back), Some(scene)) => Some(format!("{put_back}; {scene}")),
-            (put_back, scene) => put_back.or(scene),
-        };
+        let about = (!about.is_empty()).then(|| {
+            let pieces: Vec<String> = about
+                .iter()
+                .map(|(id, name)| format!("\"{name}\" ({id})"))
+                .collect();
+            format!(
+                "this message is about the selected {} {}",
+                if pieces.len() == 1 { "piece" } else { "pieces" },
+                pieces.join(", ")
+            )
+        });
+        let note = [self.assistant.pending_note.take(), about, note]
+            .into_iter()
+            .flatten()
+            .reduce(|a, b| format!("{a}; {b}"));
         if let Some(note) = &note {
             text = fashioncraft::assistant::with_note(&text, note);
         }
@@ -1082,6 +1125,7 @@ impl Atelier {
                 Entry::Attached(names) => {
                     out.push_str(&format!("Attached: {}\n\n", names.join(", ")))
                 }
+                Entry::About(names) => out.push_str(&format!("About: {}\n\n", names.join(", "))),
                 Entry::Model(t) => out.push_str(&format!("Assistant: {t}\n\n")),
                 Entry::Tool {
                     name,
@@ -1615,12 +1659,12 @@ impl Atelier {
                 let stroke = if focused {
                     egui::Stroke::new(1., accent.gamma_multiply(0.8))
                 } else {
-                    ui.visuals().widgets.noninteractive.bg_stroke
+                    ui.visuals().widgets.inactive.bg_stroke
                 };
                 let input_box = egui::Frame::new()
                     .fill(ui.visuals().extreme_bg_color)
                     .stroke(stroke)
-                    .corner_radius(10.)
+                    .corner_radius(6.)
                     .inner_margin(egui::Margin::symmetric(10, 8))
                     .show(ui, |ui| {
                         if dragging_files {
@@ -1628,6 +1672,17 @@ impl Atelier {
                                 egui::RichText::new(tr("Drop the files here to attach them"))
                                     .color(accent),
                             );
+                        }
+                        let pieces = self.assistant_chip_pieces();
+                        if !pieces.is_empty() {
+                            let names: Vec<String> =
+                                pieces.iter().map(|(_, name)| name.clone()).collect();
+                            if piece_chip(ui, lang, &piece_chip_label(lang, &names))
+                                .is_some_and(|x| x.clicked())
+                            {
+                                self.assistant.piece_dismissed =
+                                    pieces.into_iter().map(|(id, _)| id).collect();
+                            }
                         }
                         if !self.assistant.pending.is_empty() {
                             self.assistant_chips(ui);
@@ -1648,7 +1703,11 @@ impl Atelier {
                                     egui::TextEdit::multiline(&mut self.assistant.input)
                                         .id(input_id)
                                         .frame(egui::Frame::NONE)
-                                        .hint_text(tr("Message the assistant (Enter sends)"))
+                                        .hint_text(tr(if cfg!(target_os = "macos") {
+                                            "Write, or paste a picture with ⌘V (Enter sends)"
+                                        } else {
+                                            "Write, or paste a picture with Ctrl+V (Enter sends)"
+                                        }))
                                         .desired_rows(2)
                                         .desired_width(f32::INFINITY),
                                 )
@@ -1657,7 +1716,9 @@ impl Atelier {
                         super::demo::mark(ui.ctx(), "assistant.input", field.rect);
                         ui.horizontal(|ui| {
                             let attach = ui
-                                .small_button(tr("Attach…"))
+                                .add(|ui: &mut egui::Ui| {
+                                    ghost_button(ui, super::icons::Icon::Paperclip, tr("Attach"))
+                                })
                                 .on_hover_text(tr(
                                     "Pictures, PDFs, text, CSV tables and DXF or SVG patterns. You can also drop files here or paste a picture with Cmd+V.",
                                 ));
@@ -1698,7 +1759,8 @@ impl Atelier {
                                             )
                                             .fill(accent)
                                             .stroke(egui::Stroke::NONE)
-                                            .corner_radius(7.),
+                                            .corner_radius(3.)
+                                            .min_size(egui::vec2(0., 28.)),
                                         );
                                         super::demo::mark(ui.ctx(), "assistant.send", send.rect);
                                         if (send.clicked() || enter) && ready {
@@ -1711,7 +1773,11 @@ impl Atelier {
                         });
                     });
                 ui.label(
-                    egui::RichText::new(tr("Changes can be undone with Undo."))
+                    egui::RichText::new(tr(if cfg!(target_os = "macos") {
+                        "Every change is undone with Undo (⌘Z)."
+                    } else {
+                        "Every change is undone with Undo (Ctrl+Z)."
+                    }))
                         .small()
                         .weak(),
                 );
@@ -1748,7 +1814,12 @@ impl Atelier {
                 continue;
             }
             let end = (i..entries.len())
-                .find(|&k| matches!(entries[k], Entry::You(_) | Entry::Attached(_)))
+                .find(|&k| {
+                    matches!(
+                        entries[k],
+                        Entry::You(_) | Entry::Attached(_) | Entry::About(_)
+                    )
+                })
                 .unwrap_or(entries.len());
             self.assistant_answer(ui, i, &entries[i..end], busy && end == entries.len());
             i = end;
@@ -2042,6 +2113,12 @@ impl Atelier {
                         });
                 });
             }
+            // The pieces the message is about, at the right above it, as the chip was.
+            Entry::About(names) => {
+                ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                    piece_chip(ui, lang, &piece_chip_label(lang, names));
+                });
+            }
             // The files sent, at the right above the message: pictures as thumbnails.
             Entry::Attached(names) => {
                 ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
@@ -2173,6 +2250,104 @@ impl Atelier {
             }
         }
     }
+}
+
+/// A button without a frame: an icon and a label in the muted colour, brighter on hover (the
+/// message box's Attach).
+fn ghost_button(ui: &mut egui::Ui, icon: super::icons::Icon, label: &str) -> egui::Response {
+    let weak = ui.visuals().weak_text_color();
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), egui::FontId::proportional(12.), weak);
+    let size = egui::vec2(8. + 14. + 5. + galley.size().x + 8., 28.);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let ink = if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 3., ui.visuals().widgets.hovered.weak_bg_fill);
+        ui.visuals().text_color()
+    } else {
+        weak
+    };
+    let mark = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 15., rect.center().y),
+        egui::vec2(14., 14.),
+    );
+    super::icons::glyph(ui.painter(), mark, icon, ink, 1.3);
+    ui.painter().galley_with_override_text_color(
+        egui::pos2(mark.right() + 5., rect.center().y - galley.size().y / 2.),
+        galley,
+        ink,
+    );
+    response
+}
+
+/// "This piece: left sleeve", or "These pieces: …" with the first three names.
+fn piece_chip_label(lang: i18n::Language, names: &[String]) -> String {
+    match names {
+        [one] => format!("{}: {one}", i18n::tr(lang, "This piece")),
+        _ => {
+            let mut shown = names.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            if names.len() > 3 {
+                shown.push_str(&format!(" +{}", names.len() - 3));
+            }
+            format!("{}: {shown}", i18n::tr(lang, "These pieces"))
+        }
+    }
+}
+
+/// A piece chip, in FashionCraft's colour: on the message box with an × that takes it off
+/// (the returned response), or in the chat above a sent message (`None` there).
+fn piece_chip(ui: &mut egui::Ui, lang: i18n::Language, label: &str) -> Option<egui::Response> {
+    let accent = super::workspace::accent(ui.visuals());
+    let mut removed = None;
+    let removable = ui.layout().horizontal_align() != egui::Align::Max;
+    egui::Frame::new()
+        .fill(accent.gamma_multiply(0.16))
+        .stroke(egui::Stroke::new(1., accent.gamma_multiply(0.45)))
+        .corner_radius(3.)
+        .inner_margin(egui::Margin {
+            left: 8,
+            right: if removable { 2 } else { 8 },
+            top: 0,
+            bottom: 0,
+        })
+        .show(ui, |ui| {
+            ui.set_height(24.);
+            ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.;
+                let icon = |ui: &mut egui::Ui| {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(12., 12.), egui::Sense::hover());
+                    super::icons::glyph(ui.painter(), rect, super::icons::Icon::Piece, accent, 1.3);
+                };
+                // In the chat the row runs from the right: the icon still comes first.
+                if ui.layout().prefer_right_to_left() {
+                    ui.label(egui::RichText::new(label).size(11.5));
+                    icon(ui);
+                } else {
+                    icon(ui);
+                    ui.label(egui::RichText::new(label).size(11.5));
+                }
+                if removable {
+                    let (rect, x) =
+                        ui.allocate_exact_size(egui::vec2(18., 18.), egui::Sense::click());
+                    let ink = if x.hovered() {
+                        ui.visuals().text_color()
+                    } else {
+                        ui.visuals().weak_text_color()
+                    };
+                    let r = rect.shrink(5.);
+                    let stroke = egui::Stroke::new(1.5, ink);
+                    ui.painter()
+                        .line_segment([r.left_top(), r.right_bottom()], stroke);
+                    ui.painter()
+                        .line_segment([r.right_top(), r.left_bottom()], stroke);
+                    removed =
+                        Some(x.on_hover_text(i18n::tr(lang, "Take the piece off the message")));
+                }
+            });
+        });
+    removed
 }
 
 /// The plan the model showed (its latest plan call): each step ticked when done, the next
@@ -2674,6 +2849,21 @@ mod tests {
             &mut seen,
             false
         ));
+    }
+
+    #[test]
+    fn piece_chips_name_one_piece_or_the_first_three() {
+        use super::{i18n::Language, piece_chip_label};
+        let names = |n: &[&str]| n.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let es = Language::Spanish;
+        assert_eq!(
+            piece_chip_label(es, &names(&["manga izquierda"])),
+            "Esta pieza: manga izquierda"
+        );
+        assert_eq!(
+            piece_chip_label(es, &names(&["a", "b", "c", "d", "e"])),
+            "Estas piezas: a, b, c +2"
+        );
     }
 
     #[test]

@@ -62,10 +62,18 @@ isolated working directory. Run `agy models` to see available model IDs, or leav
 your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
 stay off.
 
-**Using it.** Type a request and press Enter; Shift+Enter starts a new line. You see each tool the
-model runs, with its result, and a thumbnail of each screenshot it takes. **Stop** ends the turn
-after the current step. **New chat** starts a fresh conversation. Paste a picture or files with
-Cmd+V (Ctrl+V on Windows and Linux) while the Assistant is open, wherever the focus is.
+**Using it.** **Assistant** in the main toolbar opens and closes it; while it is closed, a fuchsia
+dot on the button means it is working and an amber one that it waits for you. Type a request and
+press Enter; Shift+Enter starts a new line. The header shows who answers, the model (a menu of
+that provider's models), what the conversation has used, and copy, settings and new chat. Each
+answer folds the tools it ran into one line ("5 steps in the project · 3 s") that opens to each
+step with its result and screenshots; a plan the model shows (the `plan` tool) and the check after
+simulating (`check_garment`) show as cards. **Back to before this message**, under each of your
+messages, puts the project back as it was when you sent it (Undo brings the work back) and tells
+the model so with your next message. With pieces selected, the message box shows **This piece:
+…**: the message is about them, and × takes them off until the selection changes. **Stop** ends
+the turn after the current step. Paste a picture or files with Cmd+V (Ctrl+V on Windows and
+Linux) while the Assistant is open, wherever the focus is.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
@@ -142,7 +150,7 @@ Some requests to try:
 - "Set up sizes S, M, L and XL with M as the base and show me the size chart."
 - "Save this as summer-tee and export it as GLB."
 
-**Attaching files.** Press **Attach…**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
+**Attaching files.** Press **Attach**, drop files on the Assistant, or press Cmd+V (Ctrl+V on
 Windows and Linux) while the Assistant is open, wherever the focus is, with a picture or files on
 the clipboard; text still pastes as text into the field that has the focus. On Linux under
 Wayland FashionCraft reads the clipboard with `wl-paste` (the wl-clipboard package) when it is

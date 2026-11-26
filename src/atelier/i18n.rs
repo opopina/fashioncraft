@@ -495,6 +495,20 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Cut and extend" => "Cortar y extender",
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
+        "This piece" => "Esta pieza",
+        "These pieces" => "Estas piezas",
+        "Take the piece off the message" => "Quitar la pieza del mensaje",
+        "Write, or paste a picture with ⌘V (Enter sends)" => {
+            "Escribe, o pega una imagen con ⌘V (Intro envía)"
+        }
+        "Write, or paste a picture with Ctrl+V (Enter sends)" => {
+            "Escribe, o pega una imagen con Ctrl+V (Intro envía)"
+        }
+        "Every change is undone with Undo (⌘Z)." => "Cada cambio se deshace con Deshacer (⌘Z).",
+        "Every change is undone with Undo (Ctrl+Z)." => {
+            "Cada cambio se deshace con Deshacer (Ctrl+Z)."
+        }
+        "Attach" => "Adjuntar",
         "Put the project back as it was before this message (Undo brings it back)" => {
             "Deja el proyecto como estaba antes de este mensaje (Deshacer lo recupera)"
         }
@@ -1413,9 +1427,7 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Stopping after this step…" => "Deteniendo tras este paso…",
         "Working in the project…" => "Trabajando en el proyecto…",
         "Thinking…" => "Pensando…",
-        "Message the assistant (Enter sends)" => "Escribe al asistente (Intro envía)",
         "Send" => "Enviar",
-        "Changes can be undone with Undo." => "Los cambios se pueden deshacer con Deshacer.",
         "The assistant stopped unexpectedly." => "El asistente se detuvo de forma inesperada.",
         "Reading the scene" => "Leyendo la escena",
         "Looking up commands" => "Buscando comandos",
@@ -1430,7 +1442,6 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Opening an attached file" => "Abriendo un archivo adjunto",
         "Look at the attached files." => "Mira los archivos adjuntos.",
         "Drop the files here to attach them" => "Suelta aquí los archivos para adjuntarlos",
-        "Attach…" => "Adjuntar…",
         "Pictures, PDFs, text, CSV tables and DXF or SVG patterns. You can also drop files here or paste a picture with Cmd+V." => {
             "Imágenes, PDF, texto, tablas CSV y patrones DXF o SVG. También puedes soltar archivos aquí o pegar una imagen con Cmd+V."
         }

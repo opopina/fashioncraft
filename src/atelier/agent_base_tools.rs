@@ -1100,7 +1100,13 @@ impl Atelier {
         use fashioncraft::avatar_look::{self, LookChoice};
         use fashioncraft::avatar_maker::MEASURES;
         let (current, current_look) = self.authoring.avatar_maker.current();
-        let body = agent_base::macro_body(args, current)?;
+        let mut body = agent_base::macro_body(args, current)?;
+        let targets = fashioncraft::avatar_maker::MacroTargets::bundled()?;
+        // A height in cm: the setting that reaches it with the others as given.
+        if let Some(cm) = args.get("height_cm").and_then(Value::as_f64) {
+            body.height = targets.height_for(&body, cm)?;
+        }
+        let height_cm = (targets.height_cm(&body)? * 10.).round() / 10.;
         let mut look: LookChoice = current_look;
         if let Some(l) = args.get("look").and_then(Value::as_object) {
             let choose = |key: &str,
@@ -1143,6 +1149,7 @@ impl Atelier {
             }
         }
         let settings = json!({
+            "height_cm": height_cm,
             "gender": body.gender, "age_years": body.age_years, "muscle": body.muscle,
             "weight": body.weight, "height": body.height, "proportions": body.proportions,
             "cupsize": body.cupsize, "firmness": body.firmness,

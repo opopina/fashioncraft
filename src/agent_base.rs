@@ -321,7 +321,9 @@ pub fn tools() -> Vec<Tool> {
             "avatar_maker",
             "Make a new body with the avatar maker (MakeHuman shapes, Anny settings) and use \
              it: gender (0 female to 1 male), age_years, muscle, weight, height, proportions, \
-             cupsize, firmness (0 to 1), african/asian/european shares, measures (local \
+             cupsize, firmness (settings from 0 to 1, not centimetres: for a height in cm give \
+             height_cm, which finds the setting; every answer says the body's height_cm), \
+             african/asian/european shares, measures (local \
              adjustments -1 to 1 by name, such as waist-circ or upperarm-length), and its look \
              (skin, eyes, hair…). start: typical (for the gender and age, the default), \
              current (the maker's last settings) or random_realistic with seed. Without \
@@ -333,7 +335,9 @@ pub fn tools() -> Vec<Tool> {
                     "seed": {"type": "integer", "minimum": 0},
                     "gender": {"type": "number"}, "age_years": {"type": "number"},
                     "muscle": {"type": "number"}, "weight": {"type": "number"},
-                    "height": {"type": "number"}, "proportions": {"type": "number"},
+                    "height": {"type": "number", "description": "0 shortest to 1 tallest for the gender and age; not cm"},
+                    "height_cm": {"type": "number", "minimum": 50, "maximum": 250, "description": "The body's height in cm: sets height to reach it, with the other settings as given"},
+                    "proportions": {"type": "number"},
                     "cupsize": {"type": "number"}, "firmness": {"type": "number"},
                     "african": {"type": "number"}, "asian": {"type": "number"}, "european": {"type": "number"},
                     "measures": {"type": "object", "additionalProperties": {"type": "number"}},

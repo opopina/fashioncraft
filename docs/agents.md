@@ -355,7 +355,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `simulation_settings` | Simulation properties: quality, GPU, iterations, damping, friction, collision distance, gravity, wind, floor, particle distance. |
 | `camera` | Camera properties and the View menu; with `screenshot` it returns a picture of the view. |
 | `render_settings` | The photoreal render's settings and the 3D view's style. |
-| `avatar_maker` | Create avatar (MakeHuman · Anny): settings, local measures and look. |
+| `avatar_maker` | Create avatar (MakeHuman · Anny): settings (0–1, not centimetres), local measures and look; `height_cm` finds the height setting for a height in cm, and every answer gives the body's `height_cm`. |
 | `pose_joints` | The pose editor's joints, in degrees. |
 | `measure_fabric` | Measure fabric: fits a fabric's parameters to tests on the real cloth and gives it to pieces. |
 | `points_of_measure` | Points of measure of the size chart. |

@@ -244,3 +244,17 @@ fn a_made_body_has_the_joints_the_anchors_are_built_on() {
         set.evaluate(&frame, &landmarks, &anchor.id).unwrap();
     }
 }
+
+#[test]
+fn a_height_in_centimetres_sets_the_height_slider() {
+    let t = targets();
+    let woman = MacroBody::typical(0., 24.);
+    let h = t.height_for(&woman, 175.).unwrap();
+    let mut made = woman;
+    made.height = h;
+    let cm = t.height_cm(&made).unwrap();
+    assert!((cm - 175.).abs() < 0.2, "{cm} cm");
+    // Out of reach: it says the range.
+    let error = t.height_for(&woman, 260.).unwrap_err();
+    assert!(error.contains("out of reach"), "{error}");
+}

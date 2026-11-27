@@ -2183,12 +2183,7 @@ picture the person attached",
         // Once: it goes again and the turn ends well, with a notice.
         let mut transport = Canned::new(vec![busy(), reply("Done.")]);
         let mut conversation = Conversation::new(Provider::OpenAi);
-        let (result, events, _) = run(
-            &mut conversation,
-            &openai,
-            &mut transport,
-            "Hello",
-        );
+        let (result, events, _) = run(&mut conversation, &openai, &mut transport, "Hello");
         assert!(result.is_ok(), "{result:?}");
         assert!(
             events
@@ -2199,23 +2194,13 @@ picture the person attached",
         // Three times: the turn fails, plainly.
         let mut transport = Canned::new(vec![busy(), busy(), busy()]);
         let mut conversation = Conversation::new(Provider::OpenAi);
-        let (result, _, _) = run(
-            &mut conversation,
-            &openai,
-            &mut transport,
-            "Hello",
-        );
+        let (result, _, _) = run(&mut conversation, &openai, &mut transport, "Hello");
         let error = result.unwrap_err();
         assert!(error.starts_with(UNREACHABLE), "{error}");
         // A wrong key is not sent again.
         let mut transport = Canned::new(vec![Err("HTTP 401: invalid key.".into())]);
         let mut conversation = Conversation::new(Provider::OpenAi);
-        let (result, _, _) = run(
-            &mut conversation,
-            &openai,
-            &mut transport,
-            "Hello",
-        );
+        let (result, _, _) = run(&mut conversation, &openai, &mut transport, "Hello");
         assert_eq!(result.unwrap_err(), "HTTP 401: invalid key.");
     }
 

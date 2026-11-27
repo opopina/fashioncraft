@@ -89,7 +89,12 @@ you already know the scene: do not call it again.
 2. Plan the steps; for a job of several steps show them with plan, and call it again as they \
 finish. Ask only when something essential is missing; otherwise choose sensibly and say what \
 you chose.
-3. Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
+3. A garment from a photo or a description: draft the closest base with draft_garment, simulate \
+it and show it within about ten steps, then adapt it (neckline, shoulders, length, hem) and add \
+the details, simulating between; guide('dress_recipes') has a halter, a high-low hem and a ruffle. \
+Never delete a drafted front or back to draw it again by coordinates: create_piece is for small \
+extra pieces. When a detail fights you after two tries, leave it out and say so.
+Act with the most specific tool: draft_garment for a new base, then create_piece, move_points, \
 set_segment_length, add_point, add_dart, add_pleats, piece_edit, sew, seam_edit, place_piece, \
 set_fabric, set_fabric_parameters, set_color, set_avatar, set_pose, grading. command_list shows \
 the menu commands an agent can run; command_run runs one, with target to select first. Let \
@@ -361,6 +366,124 @@ pub enum Event {
     /// How long the provider took to answer one request, in seconds (the model's thinking
     /// and writing, and for a CLI its start).
     Answered { seconds: f64 },
+    /// The job is getting long: `steps` rounds of tools and `minutes` of the model's time in
+    /// this turn, `unsimulated` of those rounds since the garment was last simulated. The
+    /// window offers the person a simpler way; the model gets [`LONG_JOB_NOTE`] too.
+    LongJob {
+        steps: usize,
+        minutes: f64,
+        unsimulated: usize,
+    },
+    /// A request failed for a moment (the network, a busy service) and is sent again:
+    /// `attempt` of `of` retries, after what went wrong, readable.
+    Retrying {
+        attempt: usize,
+        of: usize,
+        error: String,
+    },
+}
+
+/// Every this many rounds of tools without a simulation, the model is told to put what there
+/// is on the body ([`LONG_JOB_NOTE`]).
+pub const UNSIMULATED_ROUNDS: usize = 15;
+/// Every this many rounds of tools in one turn, or this many minutes of the model's time, the
+/// person is told the job is getting long ([`Event::LongJob`]). There is no limit: they decide.
+pub const LONG_JOB_ROUNDS: usize = 30;
+pub const LONG_JOB_MINUTES: f64 = 15.;
+/// What the model is told when it has worked a while without simulating.
+pub const LONG_JOB_NOTE: &str = "(Note from FashionCraft: {n} steps without simulating. Put what \
+     there is on the body now: simulate, check_garment and show the person; go on from what you \
+     see. Adapt the drafted base (move_points, add_point, bend_segment, set_segment_length, \
+     add_detail) rather than deleting it to draw pieces by coordinates, and when a detail fights \
+     you, leave it out and say so.)";
+
+/// How many times a request that failed for a moment is sent again, and how long to wait
+/// before each.
+pub const NETWORK_RETRIES: usize = 2;
+const RETRY_WAIT_SECONDS: [u64; NETWORK_RETRIES] = [3, 10];
+
+/// What a turn's error starts with when the provider could not be reached after the
+/// retries; the window translates it.
+pub const UNREACHABLE: &str = "Could not reach the model after 3 tries:";
+
+/// Whether a failed request is worth sending again: the connection or the service failed for
+/// a moment (the CLI says so, or the network or a busy server does), not a login, a key, a
+/// limit or the request itself.
+pub fn retryable(error: &str) -> bool {
+    let e = error.to_lowercase().replace(": ", ":");
+    if e.contains("\"retryable\":true") {
+        return true;
+    }
+    if e.contains("\"retryable\":false") || e.contains("request too large") {
+        return false;
+    }
+    const SIGNS: &[&str] = &[
+        "network issue",
+        "network error",
+        "network is unreachable",
+        "timed out",
+        "connection reset",
+        "connection refused",
+        "connection closed",
+        "connection aborted",
+        "broken pipe",
+        "temporarily unavailable",
+        "no such host",
+        "dial tcp",
+        "stream disconnected",
+        "unexpected eof",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+        "http 529",
+        "overloaded",
+        "service unavailable",
+        "bad gateway",
+    ];
+    SIGNS.iter().any(|sign| e.contains(sign))
+}
+
+/// A failed request as a person reads it: without the JSON a CLI appends ("AGY_ERROR: {…}"),
+/// without the same sentence twice, at most about 300 characters.
+pub fn readable_error(error: &str) -> String {
+    let mut text = error.split("AGY_ERROR:").next().unwrap_or(error).to_owned();
+    // JSON objects in the text go: they are for programs.
+    while let Some(start) = text.find('{') {
+        let mut depth = 0usize;
+        let mut end = None;
+        for (k, c) in text[start..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(start + k + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        match end {
+            Some(end) => text.replace_range(start..end, ""),
+            None => text.truncate(start),
+        }
+    }
+    let mut text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    // A CLI's own message repeated in its exit line: keep the first.
+    if let Some(cut) = text.find(" (") {
+        let first = text[..cut].trim_end_matches('.').to_lowercase();
+        if first.len() > 12 && text[cut..].to_lowercase().contains(&first) {
+            text.truncate(cut);
+        }
+    }
+    let text = text.trim_end_matches(['(', ' ', ':']).to_owned();
+    if text.chars().count() > 300 {
+        format!("{}…", text.chars().take(299).collect::<String>())
+    } else {
+        text
+    }
 }
 
 /// What one request used, as the provider reported it.
@@ -615,6 +738,11 @@ impl Conversation {
         let mut failures = 0usize;
         // The round of the last picture a tool returned in this turn.
         let mut last_picture: Option<usize> = None;
+        // How long the job is: rounds since the last simulation, the model's time, and when
+        // the person was last told.
+        let mut unsimulated = 0usize;
+        let mut model_seconds = 0f64;
+        let mut told_at = (0usize, 0f64);
         loop {
             if stop() {
                 events(Event::Notice("Stopped.".into()));
@@ -628,13 +756,54 @@ impl Conversation {
                 return Ok(());
             }
             let asked = std::time::Instant::now();
-            let calls = match self.provider {
-                Provider::Anthropic => self.anthropic_step(settings, transport, events)?,
-                _ => {
-                    let low = light && rounds < LIGHT_ROUNDS;
-                    self.openai_step(settings, transport, events, low)?
+            // A request that fails for a moment goes again, twice, after a short wait.
+            let mut retries = 0;
+            let calls = loop {
+                let step = match self.provider {
+                    Provider::Anthropic => self.anthropic_step(settings, transport, events),
+                    _ => {
+                        let effort = if light && rounds < LIGHT_ROUNDS {
+                            Some("low")
+                        } else if self.provider == Provider::AntigravityCli && rounds > 0 {
+                            // Antigravity thinks hard by default, minutes a step: the plan in
+                            // the first step keeps that, the steps after it think less.
+                            Some("medium")
+                        } else {
+                            None
+                        };
+                        self.openai_step(settings, transport, events, effort)
+                    }
+                };
+                match step {
+                    Ok(calls) => break calls,
+                    Err(e) if retries < NETWORK_RETRIES && retryable(&e) && !stop() => {
+                        retries += 1;
+                        events(Event::Retrying {
+                            attempt: retries,
+                            of: NETWORK_RETRIES,
+                            error: readable_error(&e),
+                        });
+                        let wait = if cfg!(test) {
+                            std::time::Duration::from_millis(5)
+                        } else {
+                            std::time::Duration::from_secs(RETRY_WAIT_SECONDS[retries - 1])
+                        };
+                        let until = std::time::Instant::now() + wait;
+                        while std::time::Instant::now() < until && !stop() {
+                            std::thread::sleep(std::time::Duration::from_millis(100).min(wait));
+                        }
+                    }
+                    Err(e) if retries > 0 => {
+                        return Err(format!(
+                            "{UNREACHABLE} {}. Check the connection, then write \"continue\" to \
+                             go on from here.",
+                            readable_error(&e).trim_end_matches('.')
+                        ));
+                    }
+                    Err(e) => return Err(readable_error(&e)),
                 }
             };
+            model_seconds += asked.elapsed().as_secs_f64();
             events(Event::Answered {
                 seconds: asked.elapsed().as_secs_f64(),
             });
@@ -710,6 +879,25 @@ impl Conversation {
                 }
                 results.push((call, result));
             }
+            // A job that goes on without putting anything on the body is told so, every
+            // UNSIMULATED_ROUNDS rounds, in its last result.
+            let simulated = results.iter().any(|(call, result)| {
+                !result.is_error && matches!(call.name.as_str(), "simulate" | "check_garment")
+                    || call.name == "use_tool"
+                        && call
+                            .arguments
+                            .as_ref()
+                            .is_ok_and(|a| a["name"] == "simulate")
+            });
+            unsimulated = if simulated { 0 } else { unsimulated + 1 };
+            if unsimulated > 0
+                && unsimulated.is_multiple_of(UNSIMULATED_ROUNDS)
+                && let Some((_, last)) = results.last_mut()
+            {
+                last.content.push(Content::Text {
+                    text: LONG_JOB_NOTE.replace("{n}", &unsimulated.to_string()),
+                });
+            }
             match self.provider {
                 Provider::Anthropic => self.push_anthropic_results(results),
                 _ => self.push_openai_results(results),
@@ -723,6 +911,18 @@ impl Conversation {
                 return Ok(());
             }
             rounds += 1;
+            // The person hears of a long job, every LONG_JOB_ROUNDS rounds or LONG_JOB_MINUTES
+            // of the model's time, whichever comes first.
+            if rounds >= told_at.0 + LONG_JOB_ROUNDS
+                || model_seconds >= told_at.1 + LONG_JOB_MINUTES * 60.
+            {
+                told_at = (rounds, model_seconds);
+                events(Event::LongJob {
+                    steps: rounds,
+                    minutes: model_seconds / 60.,
+                    unsimulated,
+                });
+            }
             if settings.pause_every > 0 && rounds.is_multiple_of(settings.pause_every) {
                 events(Event::Paused { steps: rounds });
                 return Ok(());
@@ -847,20 +1047,22 @@ impl Conversation {
             .push(json!({"role": "user", "content": blocks}));
     }
 
-    /// One request in the chat-completions form. `low_effort` asks a CLI for low reasoning
-    /// effort (`reasoning_effort` in the body, which each CLI turns into its own option and
-    /// leaves out of the prompt); servers on the network never get it, since models without
-    /// reasoning refuse the field.
+    /// One request in the chat-completions form. `effort` asks a CLI for a reasoning effort
+    /// (`reasoning_effort` in the body, which each CLI turns into its own option and leaves out
+    /// of the prompt); servers on the network never get it, since models without reasoning
+    /// refuse the field.
     fn openai_step(
         &mut self,
         settings: &Settings,
         transport: &mut dyn Transport,
         events: &mut dyn FnMut(Event),
-        low_effort: bool,
+        effort: Option<&str>,
     ) -> Result<Vec<Call>, String> {
         let mut body = openai_request(settings, &self.messages);
-        if low_effort && self.provider.is_cli() {
-            body["reasoning_effort"] = json!("low");
+        if let Some(effort) = effort
+            && self.provider.is_cli()
+        {
+            body["reasoning_effort"] = json!(effort);
         }
         let mut headers = Vec::new();
         if !settings.api_key.trim().is_empty() {
@@ -1179,6 +1381,27 @@ pub fn describe_error(status: u16, body: &Value) -> String {
 #[cfg(test)]
 mod name_tests {
     use super::*;
+
+    #[test]
+    fn network_failures_are_retried_and_read_plainly() {
+        let agy = "There was a network issue connecting to the server, please try again. \
+                   (Antigravity CLI exited with exit status: 3: error: There was a network issue \
+                   connecting to the server, please try again.\nAGY_ERROR: {\"short_error\":\"agent \
+                   executor error\",\"retryable\": true})";
+        assert!(retryable(agy));
+        assert_eq!(
+            readable_error(agy),
+            "There was a network issue connecting to the server, please try again."
+        );
+        assert!(retryable("HTTP 529: Overloaded."));
+        assert!(!retryable(
+            "HTTP 401: invalid x-api-key. Check the API key."
+        ));
+        assert!(!retryable(
+            "Codex exited with exit status: 1: ERROR: stream disconnected: request too large"
+        ));
+        assert!(!retryable("HTTP 429: Too many requests or no credit left"));
+    }
 
     #[test]
     fn small_requests_take_the_small_model() {
@@ -1660,6 +1883,30 @@ picture the person attached",
             );
             assert_eq!(timed, 6);
         }
+        // Antigravity: its usual effort for the plan, medium for every step after it.
+        let mut transport = Canned::new(job(Provider::AntigravityCli, 3, "Done."));
+        let mut conversation = Conversation::new(Provider::AntigravityCli);
+        let (result, _, _) = run(
+            &mut conversation,
+            &settings(Provider::AntigravityCli),
+            &mut transport,
+            "Make a dress like the one in the photo, fitted at the waist, with a ruffle at the hem.",
+        );
+        assert!(result.is_ok(), "{result:?}");
+        let efforts: Vec<&Value> = transport
+            .sent
+            .iter()
+            .map(|s| &s.2["reasoning_effort"])
+            .collect();
+        assert_eq!(
+            efforts,
+            [
+                &Value::Null,
+                &json!("medium"),
+                &json!("medium"),
+                &json!("medium")
+            ]
+        );
     }
 
     #[test]
@@ -1878,8 +2125,9 @@ picture the person attached",
 
     #[test]
     fn a_failed_request_leaves_a_conversation_that_can_go_on() {
+        // A failure that is not sent again (a busy service is: see the test above).
         let mut transport = Canned::new(vec![
-            Err("HTTP 529: Overloaded.".into()),
+            Err("HTTP 400: The request was not accepted.".into()),
             Ok(json!({"content": [{"type": "text", "text": "Hi"}], "stop_reason": "end_turn"})),
         ]);
         let mut conversation = Conversation::new(Provider::Anthropic);
@@ -2018,6 +2266,76 @@ picture the person attached",
             .unwrap()
             .clone();
         assert_eq!(last["role"], "tool");
+    }
+
+    #[test]
+    fn a_long_job_is_told_so_and_the_person_hears_of_it() {
+        let mut transport = Canned::new(job(Provider::OpenAi, LONG_JOB_ROUNDS + 1, "Done."));
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let mut s = settings(Provider::OpenAi);
+        s.model = "test-model".into();
+        let (result, events, _) = run(&mut conversation, &s, &mut transport, "Make a dress");
+        assert!(result.is_ok(), "{result:?}");
+        // The person: once, at LONG_JOB_ROUNDS, nothing simulated all along.
+        let told: Vec<&Event> = events
+            .iter()
+            .filter(|e| matches!(e, Event::LongJob { .. }))
+            .collect();
+        assert_eq!(told.len(), 1, "{told:?}");
+        assert!(matches!(
+            told[0],
+            Event::LongJob {
+                steps: LONG_JOB_ROUNDS,
+                unsimulated: LONG_JOB_ROUNDS,
+                ..
+            }
+        ));
+        // The model: in the results of rounds 15 and 30.
+        let noted = transport.sent.iter().last().unwrap().2["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| {
+                m["content"]
+                    .to_string()
+                    .contains("steps without simulating")
+            })
+            .count();
+        assert_eq!(noted, 2);
+    }
+
+    #[test]
+    fn a_request_that_fails_for_a_moment_goes_again() {
+        let reply = |text: &str| {
+            Ok(
+                json!({"choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}),
+            )
+        };
+        let busy = || Err("HTTP 503: The service is busy.".to_owned());
+        let mut openai = settings(Provider::OpenAi);
+        openai.model = "test-model".into();
+        // Once: it goes again and the turn ends well, with a notice.
+        let mut transport = Canned::new(vec![busy(), reply("Done.")]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, events, _) = run(&mut conversation, &openai, &mut transport, "Hello");
+        assert!(result.is_ok(), "{result:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Retrying { attempt: 1, .. }))
+        );
+        assert_eq!(transport.sent.len(), 2);
+        // Three times: the turn fails, plainly.
+        let mut transport = Canned::new(vec![busy(), busy(), busy()]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, _, _) = run(&mut conversation, &openai, &mut transport, "Hello");
+        let error = result.unwrap_err();
+        assert!(error.starts_with(UNREACHABLE), "{error}");
+        // A wrong key is not sent again.
+        let mut transport = Canned::new(vec![Err("HTTP 401: invalid key.".into())]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, _, _) = run(&mut conversation, &openai, &mut transport, "Hello");
+        assert_eq!(result.unwrap_err(), "HTTP 401: invalid key.");
     }
 
     #[test]

@@ -79,6 +79,9 @@ pub(super) struct AssistantUi {
     /// wait does not count in the step's time).
     asking: Option<mpsc::Sender<bool>>,
     asked_at: Option<std::time::Instant>,
+    /// When each message of the person's was sent and when its turn ended, by the message's
+    /// place in the chat: the steps' line says how long the turn took.
+    turn_times: std::collections::BTreeMap<usize, (std::time::Instant, Option<std::time::Instant>)>,
     /// The model the last message went to (with Automatic, the one picked for it).
     last_model: String,
     /// The project notes being edited in the new chat, one per line.
@@ -159,6 +162,7 @@ impl Default for AssistantUi {
             queued: None,
             asking: None,
             asked_at: None,
+            turn_times: Default::default(),
             last_model: String::new(),
             notes_edit: None,
             settings_section: 0,
@@ -195,6 +199,13 @@ enum Entry {
     Problem(String),
     /// Paused for a review after this many steps; Continue resumes.
     Paused(usize),
+    /// The job is getting long (see [`Event::LongJob`]); `answered` once the person chose.
+    LongJob {
+        steps: usize,
+        minutes: f64,
+        unsimulated: usize,
+        answered: bool,
+    },
     /// A step that asked first (Settings › Permissions), and what the person said: none while
     /// it waits.
     Asked {
@@ -264,13 +275,13 @@ impl Kind {
 }
 
 /// The file a step that leaves the project writes, as the card shows it; else its details.
-fn asked_detail(tool: &str, arguments: &Value) -> String {
+fn asked_detail(tool: &str, arguments: &Value) -> Option<String> {
     let name = arguments["name"].as_str().unwrap_or("");
     let file = match tool {
         "save_project" => format!("{}.json", name.trim_end_matches(".json")),
         "export_garment" => format!("{name}.{}", arguments["format"].as_str().unwrap_or("obj")),
         "render" => format!("{name}.png"),
-        _ => return step_detail(arguments),
+        _ => return None,
     };
     let dir = fashioncraft::agent::documents_dir();
     let shown = std::env::var_os("HOME")
@@ -280,7 +291,7 @@ fn asked_detail(tool: &str, arguments: &Value) -> String {
                 .map(|d| std::path::Path::new("~").join(d))
         })
         .unwrap_or(dir);
-    shown.join(file).display().to_string()
+    Some(shown.join(file).display().to_string())
 }
 
 /// A click in the chat that needs the window: a step's permission, or the review pause.
@@ -289,6 +300,8 @@ enum Choice {
     Permission(Answer),
     Continue,
     BackBeforePause,
+    /// On a long job: ask for a simpler way (true), or let it go on (false).
+    Simpler(bool),
 }
 
 const CHOICE: &str = "assistant.choice";
@@ -436,38 +449,176 @@ fn tool_label(name: &str) -> &'static str {
 
 /// A step's arguments as the folded steps show them: the values, not the JSON
 /// ({"kind":"shirt"} is "shirt", {"seconds":8.0} "8", lists joined with commas).
-fn step_detail(arguments: &Value) -> String {
-    fn plain(v: &Value) -> String {
-        match v {
-            Value::String(s) => s.clone(),
-            Value::Number(n) => n.as_f64().map_or_else(
-                || n.to_string(),
-                |x| format!("{}", (x * 100.).round() / 100.),
-            ),
-            Value::Bool(b) => b.to_string(),
-            Value::Array(items) => items.iter().map(plain).collect::<Vec<_>>().join(", "),
-            Value::Null => String::new(),
-            Value::Object(_) => v.to_string(),
+fn step_detail(
+    arguments: &Value,
+    lang: i18n::Language,
+    piece: &dyn Fn(&str) -> Option<String>,
+) -> String {
+    let tr = |text| i18n::tr(lang, text);
+    let number = |x: f64| {
+        let text = format!("{}", (x * 100.).round() / 100.);
+        if lang == i18n::Language::Spanish {
+            text.replace('.', ",")
+        } else {
+            text
         }
-    }
-    match arguments {
-        Value::Object(fields) => fields
-            .iter()
-            .map(|(key, v)| {
-                let text = plain(v);
-                // Times and lengths with their unit, as the menus show them.
-                match key.as_str() {
-                    _ if text.is_empty() || !v.is_number() => text,
-                    k if k == "seconds" || k.ends_with("_seconds") => format!("{text} s"),
-                    k if k.ends_with("_cm") => format!("{text} cm"),
-                    _ => text,
+    };
+    // A piece's id reads as its name; a seam side as the piece and its segment.
+    let named = |v: &Value| -> Option<String> {
+        match v {
+            Value::String(id) => Some(piece(id).unwrap_or_else(|| id.clone())),
+            Value::Object(o) => {
+                let p = o.get("piece")?.as_str()?;
+                let name = piece(p).unwrap_or_else(|| p.to_owned());
+                Some(match o.get("segment").and_then(Value::as_str) {
+                    Some(segment) => format!("{name} {segment}"),
+                    None => name,
+                })
+            }
+            _ => None,
+        }
+    };
+    let Value::Object(fields) = arguments else {
+        return String::new();
+    };
+    // What the step is about first: the kind, the fabric, the piece.
+    const FIRST: &[&str] = &["kind", "preset", "name", "piece", "pieces", "operation"];
+    let mut keys: Vec<&String> = fields.keys().collect();
+    keys.sort_by_key(|k| FIRST.iter().position(|f| f == k).unwrap_or(FIRST.len()));
+    // Switches that say how rather than what.
+    const QUIET: &[&str] = &[
+        "make",
+        "full",
+        "lists",
+        "details",
+        "frame",
+        "screenshot",
+        "clear",
+        "reset",
+        "list",
+        "include_interactive",
+        "ease",
+        "wrap",
+        "space",
+        "done",
+        "start",
+    ];
+    keys.into_iter()
+        .filter(|k| !QUIET.contains(&k.as_str()))
+        .filter_map(|key| {
+            let v = &fields[key];
+            let text = match (key.as_str(), v) {
+                ("from_avatar", Value::Bool(true)) => tr("to the avatar's measurements").to_owned(),
+                (_, Value::Bool(_) | Value::Null) => return None,
+                ("rgb" | "color" | "colour", Value::Array(c)) if c.len() == 3 => {
+                    let c: Vec<u8> = c.iter().map(|x| x.as_f64().unwrap_or(0.) as u8).collect();
+                    tr(colour_name([c[0], c[1], c[2]])).to_owned()
                 }
-            })
-            .filter(|v| !v.is_empty())
-            .collect::<Vec<_>>()
-            .join(" · "),
-        other => plain(other),
+                ("preset", Value::String(id)) => fashioncraft::fabrics::PRESETS
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map_or_else(|| id.clone(), |p| tr(p.name).to_owned()),
+                ("kind", Value::String(kind)) => match kind.as_str() {
+                    "tshirt" => tr("a T-shirt").to_owned(),
+                    "shirt" => tr("a shirt").to_owned(),
+                    "dress" => tr("a dress").to_owned(),
+                    "skirt" => tr("a skirt").to_owned(),
+                    "trousers" => tr("trousers").to_owned(),
+                    other => other.to_owned(),
+                },
+                ("piece" | "pieces" | "a" | "b", _) => match v {
+                    Value::Array(items) => items
+                        .iter()
+                        .filter_map(named)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    other => named(other)?,
+                },
+                (_, Value::Number(n)) => {
+                    let x = number(n.as_f64()?);
+                    match key.as_str() {
+                        k if k == "seconds" || k.ends_with("_seconds") => format!("{x} s"),
+                        k if k.ends_with("_cm") => format!("{x} cm"),
+                        k if k.ends_with("_degrees") => format!("{x}°"),
+                        _ => x,
+                    }
+                }
+                (_, Value::String(text)) => text.clone(),
+                // Outlines and lists of numbers: how many, not each.
+                (_, Value::Array(items)) if items.iter().all(Value::is_array) => {
+                    format!("{} {}", items.len(), tr("points"))
+                }
+                (_, Value::Array(items)) if items.iter().all(Value::is_number) => {
+                    let n: Vec<String> =
+                        items.iter().filter_map(Value::as_f64).map(number).collect();
+                    match key.as_str() {
+                        k if k.ends_with("_cm") => format!("{} cm", n.join(" × ")),
+                        _ => n.join(", "),
+                    }
+                }
+                (_, Value::Array(items)) => items
+                    .iter()
+                    .filter_map(|i| i.as_str().map(str::to_owned).or_else(|| named(i)))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                (_, Value::Object(o)) if o.is_empty() => return None,
+                (_, Value::Object(o)) => format!("{} {}", o.len(), tr("settings")),
+            };
+            (!text.is_empty()).then_some(text)
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// A duration as the chat shows it: 9 s, 3 min 20 s, 1 h 05 min.
+fn duration_text(seconds: f32) -> String {
+    let s = seconds.max(0.).round() as u64;
+    match s {
+        0..60 => format!("{s} s"),
+        60..3600 => format!("{} min {} s", s / 60, s % 60),
+        _ => format!("{} h {:02} min", s / 3600, s % 3600 / 60),
     }
+}
+
+/// The nearest everyday name of a colour, as a pattern maker says it.
+fn colour_name(rgb: [u8; 3]) -> &'static str {
+    const NAMES: &[(&str, [u8; 3])] = &[
+        ("white", [252, 252, 252]),
+        ("ivory", [242, 234, 216]),
+        ("cream", [238, 224, 190]),
+        ("beige", [214, 196, 164]),
+        ("camel", [193, 154, 107]),
+        ("light grey", [200, 200, 202]),
+        ("grey", [128, 128, 130]),
+        ("charcoal", [60, 60, 64]),
+        ("black", [18, 18, 20]),
+        ("navy", [26, 38, 82]),
+        ("blue", [40, 84, 180]),
+        ("light blue", [150, 190, 230]),
+        ("teal", [0, 120, 120]),
+        ("green", [40, 130, 60]),
+        ("olive", [110, 110, 50]),
+        ("khaki", [180, 170, 120]),
+        ("yellow", [240, 210, 60]),
+        ("mustard", [200, 160, 40]),
+        ("orange", [235, 130, 40]),
+        ("red", [200, 30, 40]),
+        ("burgundy", [118, 22, 42]),
+        ("pink", [240, 162, 190]),
+        ("fuchsia", [220, 40, 170]),
+        ("purple", [110, 50, 140]),
+        ("lilac", [190, 162, 210]),
+        ("brown", [110, 70, 40]),
+    ];
+    // Weighted as the eye sees: green counts most, blue least.
+    let distance = |c: [u8; 3]| {
+        let d = |k: usize| (c[k] as f64 - rgb[k] as f64).powi(2);
+        2. * d(0) + 4. * d(1) + 3. * d(2)
+    };
+    NAMES
+        .iter()
+        .min_by(|a, b| distance(a.1).total_cmp(&distance(b.1)))
+        .map_or("colour", |(name, _)| name)
 }
 
 /// Markdown the transcript does not render, made readable: no emphasis marks or heading
@@ -807,6 +958,20 @@ impl Atelier {
             .collect()
     }
 
+    /// A step's details as the chat shows them: pieces by name, fabrics and colours by name,
+    /// in the window's language.
+    fn assistant_step_detail(&self, arguments: &Value) -> String {
+        let template = &self.project.template;
+        let name = |id: &str| {
+            template
+                .panels
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.name.clone())
+        };
+        step_detail(arguments, self.prefs.language, &name)
+    }
+
     /// The spend cap in US dollars, when one is set and the provider bills an API key whose
     /// cost FashionCraft knows.
     fn assistant_spend_cap(&self) -> Option<f64> {
@@ -892,6 +1057,31 @@ impl Atelier {
                 Update::Event(Event::Notice(text)) => {
                     self.assistant.entries.push(Entry::Notice(text))
                 }
+                Update::Event(Event::LongJob {
+                    steps,
+                    minutes,
+                    unsimulated,
+                }) => {
+                    // An earlier card that was not answered gives way to this one.
+                    for e in &mut self.assistant.entries {
+                        if let Entry::LongJob { answered, .. } = e {
+                            *answered = true;
+                        }
+                    }
+                    self.assistant.entries.push(Entry::LongJob {
+                        steps,
+                        minutes,
+                        unsimulated,
+                        answered: false,
+                    });
+                }
+                Update::Event(Event::Retrying { attempt, of, error }) => {
+                    let lang = self.prefs.language;
+                    self.assistant.entries.push(Entry::Notice(format!(
+                        "{} ({attempt}/{of}): {error}",
+                        i18n::tr(lang, "The connection failed; trying again")
+                    )));
+                }
                 Update::Event(Event::Paused { steps }) => {
                     self.assistant.entries.push(Entry::Paused(steps))
                 }
@@ -916,7 +1106,7 @@ impl Atelier {
                         arguments: arguments.clone(),
                         is_error: false,
                     });
-                    let mut detail = step_detail(&arguments);
+                    let mut detail = self.assistant_step_detail(&arguments);
                     if detail.chars().count() > 90 {
                         detail = detail.chars().take(89).collect::<String>() + "…";
                     }
@@ -991,7 +1181,8 @@ impl Atelier {
                     } else {
                         self.assistant.entries.push(Entry::Asked {
                             kind,
-                            detail: asked_detail(&tool, &arguments),
+                            detail: asked_detail(&tool, &arguments)
+                                .unwrap_or_else(|| self.assistant_step_detail(&arguments)),
                             answer: None,
                         });
                         self.assistant.asking = Some(answer);
@@ -1003,9 +1194,31 @@ impl Atelier {
                 Update::Done(result) => {
                     if let Err(e) = result {
                         self.assistant.failure = Some(e.clone());
-                        self.assistant.entries.push(Entry::Problem(e));
+                        // The words FashionCraft adds, in the window's language.
+                        let lang = self.prefs.language;
+                        let shown = match e.strip_prefix(fashioncraft::assistant::UNREACHABLE) {
+                            Some(rest) => {
+                                let (what, _) = rest
+                                    .split_once(". Check the connection")
+                                    .unwrap_or((rest, ""));
+                                format!(
+                                    "{} {}. {}",
+                                    i18n::tr(lang, fashioncraft::assistant::UNREACHABLE),
+                                    what.trim(),
+                                    i18n::tr(
+                                        lang,
+                                        "Check the connection, then write \"continue\" to go on from here."
+                                    )
+                                )
+                            }
+                            None => e,
+                        };
+                        self.assistant.entries.push(Entry::Problem(shown));
                     }
                     self.assistant.worker = None;
+                    if let Some((_, (_, end))) = self.assistant.turn_times.iter_mut().next_back() {
+                        end.get_or_insert_with(std::time::Instant::now);
+                    }
                 }
             }
         }
@@ -1055,6 +1268,7 @@ impl Atelier {
         self.assistant.sent.clear();
         self.assistant.usage = Totals::default();
         self.assistant.restore_points.clear();
+        self.assistant.turn_times.clear();
         self.assistant.pending_note = None;
         self.assistant.queued = None;
         self.assistant.log = None;
@@ -1416,6 +1630,9 @@ impl Atelier {
         let at = self.assistant.entries.len();
         let before = self.snapshot_document();
         self.assistant.restore_points.insert(at, before);
+        self.assistant
+            .turn_times
+            .insert(at, (std::time::Instant::now(), None));
         self.assistant.entries.push(Entry::You(text.clone()));
         self.assistant_log(json!({
             "you": text,
@@ -1737,7 +1954,8 @@ impl Atelier {
         let tr = |text| i18n::tr(lang, text);
         let mut open = true;
         let before = self.prefs.ai.clone();
-        let screen = ctx.content_rect();
+        let room = below_toolbar(ctx);
+        let height = (room.height() - 60.).clamp(300., 680.);
         let sections = [
             "Connection",
             "Instructions",
@@ -1748,15 +1966,16 @@ impl Atelier {
             .id(egui::Id::new("assistant.settings"))
             .open(&mut open)
             .collapsible(false)
+            .constrain_to(room)
             .default_pos(egui::pos2(
-                (screen.right() - 1040.).max(screen.left() + 20.),
-                screen.top() + 60.,
+                (room.right() - 1040.).max(room.left() + 20.),
+                room.top() + 20.,
             ))
-            .fixed_size([600., (screen.height() - 200.).clamp(380., 680.)])
+            .fixed_size([600., height])
             .resizable(false)
             .show(ctx, |ui| {
                 let footer = 44.;
-                let body = ((screen.height() - 200.).clamp(380., 680.) - footer).max(160.);
+                let body = (height - footer).max(160.);
                 ui.horizontal_top(|ui| {
                     // The sections, at the left.
                     ui.vertical(|ui| {
@@ -2103,6 +2322,9 @@ impl Atelier {
                 }
                 Entry::Notice(t) | Entry::Problem(t) => out.push_str(&format!("({t})\n\n")),
                 Entry::Paused(steps) => out.push_str(&format!("(Paused after {steps} steps)\n\n")),
+                Entry::LongJob { steps, minutes, .. } => out.push_str(&format!(
+                    "(A long job: {steps} steps, {minutes:.0} min)\n\n"
+                )),
                 Entry::Asked {
                     kind,
                     detail,
@@ -2157,6 +2379,14 @@ impl Atelier {
         let line = match update {
             Update::Event(Event::Text(t)) => json!({"assistant": t}),
             Update::Event(Event::Notice(t)) => json!({"notice": t}),
+            Update::Event(Event::Retrying { attempt, of, error }) => {
+                json!({"retrying": attempt, "of": of, "error": error})
+            }
+            Update::Event(Event::LongJob {
+                steps,
+                minutes,
+                unsimulated,
+            }) => json!({"long_job": steps, "minutes": minutes, "unsimulated": unsimulated}),
             Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
             Update::Event(Event::Answered { seconds }) => {
                 json!({"model_seconds": (seconds * 10.).round() / 10.})
@@ -2597,15 +2827,18 @@ impl Atelier {
         let input_id = egui::Id::new("assistant.input");
         self.assistant_take_files(ctx, input_id, paste_key);
         let dragging_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
-        // First shown at the right, over the properties rather than the 3D view.
-        let screen = ctx.content_rect();
+        // First shown at the right, over the properties rather than the 3D view, and always
+        // below the toolbar: its Assistant and Simulate buttons stay in reach.
+        let room = below_toolbar(ctx);
         egui::Window::new(tr("Assistant"))
             .open(&mut open)
+            .constrain_to(room)
             .default_pos(egui::pos2(
-                (screen.right() - 420.).max(screen.left()),
-                screen.top() + 80.,
+                (room.right() - 428.).max(room.left()),
+                room.top() + 8.,
             ))
-            .default_size([420., (screen.height() - 140.).clamp(560., 860.)])
+            .default_size([420., (room.height() - 16.).clamp(320., 860.)])
+            .max_height(room.height() - 4.)
             .min_width(320.)
             .resizable(true)
             .show(ctx, |ui| {
@@ -2692,6 +2925,24 @@ impl Atelier {
                 match choice {
                     Some(Choice::Permission(answer)) => self.assistant_answer_asked(answer),
                     Some(Choice::Continue) => resume = true,
+                    Some(Choice::Simpler(simpler)) => {
+                        for e in &mut self.assistant.entries {
+                            if let Entry::LongJob { answered, .. } = e {
+                                *answered = true;
+                            }
+                        }
+                        if simpler {
+                            // It stops after this step and the request goes then.
+                            if let Some(worker) = &self.assistant.worker {
+                                worker.stop.store(true, Ordering::Relaxed);
+                            }
+                            self.assistant.queued = Some(
+                                tr("Do it the simpler way: start from the drafted garment, \
+                                    simulate it and show it to me; we add the details after.")
+                                    .to_owned(),
+                            );
+                        }
+                    }
                     Some(Choice::BackBeforePause) => {
                         if let Some(&at) = self.assistant.restore_points.keys().next_back() {
                             self.assistant_restore(at);
@@ -3037,6 +3288,18 @@ impl Atelier {
             plan_card(ui, lang, plan, running);
         }
         self.assistant_steps(ui, key, &answer[first..=last], running);
+        // A long job's open card stays in sight, out of the folded steps.
+        for entry in &answer[first..=last] {
+            if matches!(
+                entry,
+                Entry::LongJob {
+                    answered: false,
+                    ..
+                }
+            ) {
+                self.assistant_entry(ui, entry);
+            }
+        }
         check_card(ui, lang, answer);
         for entry in &answer[last + 1..] {
             self.assistant_said(ui, entry);
@@ -3066,15 +3329,22 @@ impl Atelier {
         if steps.is_empty() {
             return;
         }
-        let seconds: f32 = steps
-            .iter()
-            .map(|e| match e {
-                Entry::Tool {
-                    seconds, started, ..
-                } => seconds.unwrap_or_else(|| started.elapsed().as_secs_f32()),
-                _ => 0.,
-            })
-            .sum();
+        // The whole turn, the model's thinking included: the steps alone take moments.
+        let seconds: f32 = match self.assistant.turn_times.range(..key).next_back() {
+            Some((_, (start, end))) => end
+                .unwrap_or_else(std::time::Instant::now)
+                .duration_since(*start)
+                .as_secs_f32(),
+            None => steps
+                .iter()
+                .map(|e| match e {
+                    Entry::Tool {
+                        seconds, started, ..
+                    } => seconds.unwrap_or_else(|| started.elapsed().as_secs_f32()),
+                    _ => 0.,
+                })
+                .sum(),
+        };
         let id = egui::Id::new(("assistant.steps", key));
         let open = ui.ctx().data(|d| d.get_temp::<bool>(id)).unwrap_or(running);
         let green = Color32::from_rgb(0x7c, 0xc4, 0x7f);
@@ -3129,7 +3399,7 @@ impl Atelier {
                 painter.text(
                     egui::pos2(rect.right() - 10., rect.center().y),
                     egui::Align2::RIGHT_CENTER,
-                    format!("{seconds:.0} s"),
+                    duration_text(seconds),
                     egui::FontId::proportional(12.),
                     visuals.weak_text_color(),
                 );
@@ -3282,6 +3552,9 @@ impl Atelier {
                                 Entry::Model(text) => {
                                     ui.label(egui::RichText::new(text).size(11.5).italics().weak());
                                 }
+                                Entry::LongJob {
+                                    answered: false, ..
+                                } => {}
                                 other => self.assistant_entry(ui, other),
                             }
                         }
@@ -3513,6 +3786,72 @@ impl Atelier {
                         }
                     });
             }
+            // A long job: what it has taken, and a simpler way, while it goes on.
+            Entry::LongJob {
+                steps,
+                minutes,
+                unsimulated,
+                answered,
+            } => {
+                let visuals = ui.visuals().clone();
+                let mut text = format!(
+                    "{} {steps} {}, {} {}.",
+                    tr("This job is getting long:"),
+                    tr("steps"),
+                    duration_text(*minutes as f32 * 60.),
+                    tr("of the model's time")
+                );
+                if *unsimulated >= *steps {
+                    text.push_str(&format!(" {}", tr("Nothing is on the body yet.")));
+                } else if *unsimulated > 0 {
+                    text.push_str(&format!(
+                        " {} {unsimulated} {}.",
+                        tr("Not simulated for"),
+                        tr("steps")
+                    ));
+                }
+                if *answered {
+                    ui.vertical_centered(|ui| {
+                        ui.label(egui::RichText::new(text).small().italics().weak());
+                    });
+                    return;
+                }
+                egui::Frame::new()
+                    .fill(visuals.extreme_bg_color)
+                    .stroke(visuals.widgets.noninteractive.bg_stroke)
+                    .corner_radius(6.)
+                    .inner_margin(egui::Margin::same(12))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.spacing_mut().item_spacing.y = 8.;
+                        ui.add(egui::Label::new(egui::RichText::new(&text).strong()).wrap());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(tr(
+                                    "A simpler way is often quicker: start from the drafted \
+                                     garment, simulate it and adjust it, the details after.",
+                                ))
+                                .size(12.)
+                                .weak(),
+                            )
+                            .wrap(),
+                        );
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.;
+                            if card_button(ui, tr("Ask for the simpler way"), true)
+                                .on_hover_text(tr(
+                                    "It stops after this step and then gets that request",
+                                ))
+                                .clicked()
+                            {
+                                choose(ui, Choice::Simpler(true));
+                            }
+                            if card_button(ui, tr("Let it go on"), false).clicked() {
+                                choose(ui, Choice::Simpler(false));
+                            }
+                        });
+                    });
+            }
             // A step that asks first: a card with the answers while it waits, then one line.
             Entry::Asked {
                 kind,
@@ -3639,6 +3978,16 @@ impl Atelier {
             }
         }
     }
+}
+
+/// The window's room below the main toolbar, where the Assistant's windows open and stay.
+fn below_toolbar(ctx: &egui::Context) -> egui::Rect {
+    let screen = ctx.content_rect();
+    let top = ctx
+        .data(|d| d.get_temp::<f32>(egui::Id::new(super::TOOLBAR_BOTTOM)))
+        .unwrap_or(screen.top() + 40.)
+        .clamp(screen.top(), screen.bottom() - 200.);
+    egui::Rect::from_min_max(egui::pos2(screen.left(), top), screen.max)
 }
 
 /// A row of the Assistant's settings: its name in a column 130 points wide, then its controls.
@@ -4459,14 +4808,15 @@ mod tests {
     #[test]
     fn an_asked_step_shows_the_file_it_writes() {
         use serde_json::json;
-        let saved = super::asked_detail("save_project", &json!({"name": "falda"}));
+        let saved = super::asked_detail("save_project", &json!({"name": "falda"})).unwrap();
         assert!(saved.ends_with("falda.json"), "{saved}");
         let exported = super::asked_detail(
             "export_garment",
             &json!({"name": "camisa", "format": "glb"}),
-        );
+        )
+        .unwrap();
         assert!(exported.ends_with("camisa.glb"), "{exported}");
-        assert_eq!(super::asked_detail("sew", &json!({"seam": "s1"})), "s1");
+        assert_eq!(super::asked_detail("sew", &json!({"seam": "s1"})), None);
     }
 
     #[test]
@@ -4519,14 +4869,34 @@ mod tests {
 
     #[test]
     fn step_details_read_as_values() {
+        use super::i18n::Language::{English, Spanish};
         use serde_json::json;
-        assert_eq!(super::step_detail(&json!({})), "");
-        assert_eq!(super::step_detail(&json!({"kind": "shirt"})), "shirt");
-        assert_eq!(super::step_detail(&json!({"seconds": 8.0})), "8 s");
-        assert_eq!(super::step_detail(&json!({"width_cm": 2.5})), "2.5 cm");
+        let names = |id: &str| (id == "panel_1").then(|| "bodice front".to_owned());
+        let en = |v: serde_json::Value| super::step_detail(&v, English, &names);
+        let es = |v: serde_json::Value| super::step_detail(&v, Spanish, &names);
+        assert_eq!(en(json!({})), "");
+        assert_eq!(en(json!({"kind": "shirt"})), "a shirt");
         assert_eq!(
-            super::step_detail(&json!({"pieces": ["panel_1", "panel_2"], "rgb": [239, 236, 230]})),
-            "panel_1, panel_2 · 239, 236, 230"
+            es(json!({"from_avatar": true, "kind": "dress"})),
+            "un vestido · a las medidas del avatar"
+        );
+        assert_eq!(es(json!({"rgb": [242, 234, 218]})), "marfil");
+        assert_eq!(en(json!({"preset": "silk"})), "Light silk");
+        assert_eq!(en(json!({"seconds": 8.0})), "8 s");
+        assert_eq!(es(json!({"width_cm": 2.5})), "2,5 cm");
+        assert_eq!(
+            en(json!({"pieces": ["panel_1", "panel_2"], "rgb": [20, 20, 20]})),
+            "bodice front, panel_2 · black"
+        );
+        assert_eq!(
+            en(json!({"name": "skirt", "points_cm": [[0, 0], [10, 0], [10, 20]]})),
+            "skirt · 3 points"
+        );
+        assert_eq!(
+            en(
+                json!({"a": [{"piece": "panel_1", "segment": "edge_2"}], "b": [{"piece": "panel_2", "segment": "edge_4"}], "ease": true})
+            ),
+            "bodice front edge_2 · panel_2 edge_4"
         );
     }
 

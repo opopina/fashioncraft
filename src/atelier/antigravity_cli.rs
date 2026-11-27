@@ -63,8 +63,11 @@ fn input(dir: &Path, body: &Value) -> io::Result<File> {
     } else {
         " Do not inspect files."
     };
+    // Antigravity caches nothing between requests: the conversation goes as plain text, which
+    // says the same as the JSON request in fewer words.
     let prompt = format!(
-        "You are the FashionCraft assistant. Follow the supplied system message. Use the attached conversation and tool catalogue. Return either a final answer (tool empty, arguments \"{{}}\") or one FashionCraft tool request (arguments is a JSON object encoded as a string). The application executes the tool and returns the result. Do not run shell commands, edit files, or search the web.{screenshot_note}\n{history}"
+        "You are the FashionCraft assistant. Follow the system message below. Use the conversation and tool list below. Return either a final answer (tool empty, arguments \"{{}}\") or one FashionCraft tool request (arguments is a JSON object encoded as a string). The application executes the tool and returns the result. Do not run shell commands, edit files, or search the web.{screenshot_note}\n\n{}",
+        super::cli_process::transcript(&history)
     );
     let mut stdin = tempfile::tempfile()?;
     serde_json::to_writer(

@@ -609,6 +609,48 @@ impl MacroTargets {
     }
 
     /// The body for `settings`, in metres, standing on y = 0, with the mannequin's triangles.
+    /// How tall the body these settings make is, in cm: its lowest point to its highest, as
+    /// the avatar's measurements give its height.
+    pub fn height_cm(&self, settings: &MacroBody) -> Result<f64, String> {
+        let made = self.make(settings)?;
+        let (lo, hi) = made
+            .surface
+            .vertices
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| {
+                (lo.min(p.y), hi.max(p.y))
+            });
+        Ok((hi - lo) * 100.)
+    }
+
+    /// The `height` setting (0 shortest … 1 tallest) that makes the body `cm` tall with the
+    /// other settings as they are, to within a millimetre. Gender and age set how tall a body
+    /// can be: outside that range it says the range.
+    pub fn height_for(&self, settings: &MacroBody, cm: f64) -> Result<f64, String> {
+        let at = |h: f64| {
+            let mut s = *settings;
+            s.height = h;
+            self.height_cm(&s)
+        };
+        let (shortest, tallest) = (at(0.)?, at(1.)?);
+        if !(shortest - 0.5..=tallest + 0.5).contains(&cm) {
+            return Err(format!(
+                "A body of these settings is {shortest:.0} to {tallest:.0} cm tall: {cm:.0} cm is \
+                 out of reach (gender and age set the range)"
+            ));
+        }
+        let (mut lo, mut hi) = (0., 1.);
+        for _ in 0..14 {
+            let mid = (lo + hi) / 2.;
+            if at(mid)? < cm {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        Ok((lo + hi) / 2.)
+    }
+
     pub fn make(&self, settings: &MacroBody) -> Result<MadeBody, String> {
         settings.validate()?;
         let mut positions = self.base.clone();

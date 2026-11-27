@@ -37,7 +37,7 @@ pub const VIEWS: [&str; 9] = [
 ];
 
 /// The kinds of detail `add_detail` makes.
-pub const DETAILS: [&str; 3] = ["patch_pocket", "band_collar", "placket"];
+pub const DETAILS: [&str; 4] = ["patch_pocket", "band_collar", "placket", "ruffle"];
 
 pub fn tools() -> Vec<Tool> {
     let piece =
@@ -161,7 +161,10 @@ pub fn tools() -> Vec<Tool> {
              in one undo step (add them before simulating: a piece with a new stitching line \
              is laid out again): patch_pocket (piece, width_cm, height_cm, centre_cm on the \
              piece; stitched on three sides), band_collar (segments: the neckline's segments, \
-             any order, the first where the collar starts; height_cm), placket (piece, segment, width_cm). \
+             any order, the first where the collar starts; height_cm), placket (piece, segment, width_cm), \
+             ruffle (segments: a hem's segments, front and back, the first where it starts; \
+             height_cm deep, fullness 1.6 times the hem by default; gathered, hanging below the \
+             hem: no place_piece). \
              guide('details') has typical sizes.",
             object(
                 json!({
@@ -170,6 +173,7 @@ pub fn tools() -> Vec<Tool> {
                     "segments": {"type": "array", "items": object(json!({"piece": {"type": "string"}, "segment": {"type": "string"}}), &["piece", "segment"])},
                     "width_cm": {"type": "number"}, "height_cm": {"type": "number"},
                     "centre_cm": xy("[x, y] on the piece"),
+                    "fullness": {"type": "number", "minimum": 1, "maximum": 3},
                     "name": {"type": "string"}
                 }),
                 &["kind"],
@@ -321,7 +325,9 @@ pub fn tools() -> Vec<Tool> {
             "avatar_maker",
             "Make a new body with the avatar maker (MakeHuman shapes, Anny settings) and use \
              it: gender (0 female to 1 male), age_years, muscle, weight, height, proportions, \
-             cupsize, firmness (0 to 1), african/asian/european shares, measures (local \
+             cupsize, firmness (settings from 0 to 1, not centimetres: for a height in cm give \
+             height_cm, which finds the setting; every answer says the body's height_cm), \
+             african/asian/european shares, measures (local \
              adjustments -1 to 1 by name, such as waist-circ or upperarm-length), and its look \
              (skin, eyes, hair…). start: typical (for the gender and age, the default), \
              current (the maker's last settings) or random_realistic with seed. Without \
@@ -333,7 +339,9 @@ pub fn tools() -> Vec<Tool> {
                     "seed": {"type": "integer", "minimum": 0},
                     "gender": {"type": "number"}, "age_years": {"type": "number"},
                     "muscle": {"type": "number"}, "weight": {"type": "number"},
-                    "height": {"type": "number"}, "proportions": {"type": "number"},
+                    "height": {"type": "number", "description": "0 shortest to 1 tallest for the gender and age; not cm"},
+                    "height_cm": {"type": "number", "minimum": 50, "maximum": 250, "description": "The body's height in cm: sets height to reach it, with the other settings as given"},
+                    "proportions": {"type": "number"},
                     "cupsize": {"type": "number"}, "firmness": {"type": "number"},
                     "african": {"type": "number"}, "asian": {"type": "number"}, "european": {"type": "number"},
                     "measures": {"type": "object", "additionalProperties": {"type": "number"}},

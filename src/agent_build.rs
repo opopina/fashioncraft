@@ -53,6 +53,17 @@ pub enum Lay {
         starts: Vec<DVec2>,
         height: f64,
     },
+    /// Hanging down from a chain of outline segments, as a ruffle from a hem: the new piece's
+    /// top edge (y = 0) on the chain, `fullness` times longer than it, so it starts already
+    /// gathered in folds `fold` apart (world metres along the chain) and the eased seam only
+    /// holds them.
+    Down {
+        piece: String,
+        chain: Vec<BoundaryRef>,
+        starts: Vec<DVec2>,
+        fullness: f64,
+        fold: f64,
+    },
 }
 
 fn text<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
@@ -743,8 +754,9 @@ pub fn add_detail(template: &GarmentTemplate, args: &Value) -> Result<Build, Str
         "patch_pocket" => patch_pocket(template, args),
         "band_collar" => band_collar(template, args),
         "placket" => placket(template, args),
+        "ruffle" => ruffle(template, args),
         other => Err(format!(
-            "kind '{other}': patch_pocket, band_collar or placket"
+            "kind '{other}': patch_pocket, band_collar, placket or ruffle"
         )),
     }
 }
@@ -1035,6 +1047,112 @@ fn band_collar(template: &GarmentTemplate, args: &Value) -> Result<Build, String
             height,
         }),
     })
+}
+
+/// A ruffle: a strip `fullness` times as long as the segments it hangs from (a hem, a
+/// neckline), `height_cm` deep, gathered onto them with an eased seam and laid hanging below
+/// them already in folds, so it needs no placing.
+fn ruffle(template: &GarmentTemplate, args: &Value) -> Result<Build, String> {
+    let chain = segment_chain(template, args)?;
+    let depth = optional(args, "height_cm").unwrap_or(15.) / 100.;
+    if !(0.03..=0.6).contains(&depth) {
+        return Err("A ruffle is 3 to 60 cm deep".into());
+    }
+    let fullness = optional(args, "fullness").unwrap_or(1.6);
+    if !(1.0..=3.0).contains(&fullness) {
+        return Err("A ruffle's fullness is 1 (flat) to 3 times the hem".into());
+    }
+    let along = chain_length(template, &chain);
+    if along < 0.05 {
+        return Err("Those segments are too short for a ruffle".into());
+    }
+    let length = along * fullness;
+    let fabric = template
+        .panels
+        .iter()
+        .find(|p| p.id == chain[0].panel)
+        .map(|p| p.fabric.clone())
+        .unwrap_or_default();
+    let name = args
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Ruffle")
+        .to_owned();
+    let mut steps = Steps::new(template);
+    let strip = add_rectangle(&mut steps, length, depth, &fabric)?;
+    // Its top runs left to right, from where the chain starts.
+    steps.push(Command::SewChain {
+        seam: None,
+        a: vec![whole(&strip, "edge_1", false)],
+        b: chain.clone(),
+        reverse: false,
+        ease: fullness > 1.,
+    })?;
+    let starts = chain
+        .iter()
+        .map(|r| {
+            template
+                .panels
+                .iter()
+                .find(|p| p.id == r.panel)
+                .and_then(|p| segment(p, r.edge.as_deref()?).ok())
+                .map_or(DVec2::ZERO, |(_, a, _)| a)
+        })
+        .collect();
+    Ok(Build {
+        commands: steps.commands,
+        names: vec![(strip.clone(), name)],
+        done: format!(
+            "Ruffle {strip}: {:.1} cm long ({fullness:.1} times the {:.1} cm it hangs from) and \
+             {:.1} cm deep, gathered onto {}; it starts hanging below them in folds. Simulate, \
+             then check_garment",
+            length * 100.,
+            along * 100.,
+            depth * 100.,
+            chain
+                .iter()
+                .map(|r| format!("{}.{}", r.panel, r.edge.as_deref().unwrap_or("")))
+                .collect::<Vec<_>>()
+                .join(" + ")
+        ),
+        history_name: "Ruffle",
+        lay: Some(Lay::Down {
+            piece: strip,
+            chain,
+            starts,
+            fullness,
+            fold: 0.06,
+        }),
+    })
+}
+
+/// How far a sine wave `fold` long must swing to either side for its path to be `fullness`
+/// times as long as the line it follows.
+fn fold_amplitude(fullness: f64, fold: f64) -> f64 {
+    if fullness <= 1. {
+        return 0.;
+    }
+    let path = |a: f64| {
+        let n = 64;
+        let k = std::f64::consts::TAU * a / fold;
+        (0..n)
+            .map(|i| {
+                let t = (i as f64 + 0.5) / n as f64 * std::f64::consts::TAU;
+                (1. + (k * t.cos()).powi(2)).sqrt()
+            })
+            .sum::<f64>()
+            / n as f64
+    };
+    let (mut lo, mut hi) = (0., fold * 2.);
+    for _ in 0..40 {
+        let mid = (lo + hi) / 2.;
+        if path(mid) < fullness {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo + hi) / 2.
 }
 
 fn placket(template: &GarmentTemplate, args: &Value) -> Result<Build, String> {
@@ -1519,7 +1637,7 @@ pub fn lay(
     axis: DVec3,
 ) -> Vec<(usize, DVec3)> {
     let piece = match lay {
-        Lay::Over { piece, .. } | Lay::Up { piece, .. } => piece,
+        Lay::Over { piece, .. } | Lay::Up { piece, .. } | Lay::Down { piece, .. } => piece,
     };
     let Some(range) = garment.panels.iter().find(|p| &p.id == piece) else {
         return vec![];
@@ -1574,6 +1692,38 @@ pub fn lay(
                     out.y = 0.;
                     let out = out.normalize_or_zero();
                     (*v, p + DVec3::Y * (height - uv.y).max(0.) + out * clearance)
+                })
+                .collect()
+        }
+        Lay::Down {
+            chain,
+            starts,
+            fullness,
+            fold,
+            ..
+        } => {
+            let runs = chain_runs(garment, x, chain, starts);
+            let total: f64 = runs.iter().map(|(_, r)| r).sum();
+            let margin = (2. * clearance).min(total * 0.02);
+            let length = vertices
+                .iter()
+                .map(|v| garment.mesh.uv[*v].x)
+                .fold(0f64, f64::max)
+                .max(1e-9);
+            // The strip follows the chain shortened by its fullness, swinging outward in folds
+            // that take up the rest of its length; never inside the line it hangs from.
+            let amplitude = fold_amplitude(*fullness, *fold);
+            vertices
+                .iter()
+                .map(|v| {
+                    let uv = garment.mesh.uv[*v];
+                    let s = margin + uv.x / length * (total - 2. * margin);
+                    let p = on_chain(&runs, s);
+                    let mut out = p - axis;
+                    out.y = 0.;
+                    let out = out.normalize_or_zero();
+                    let swing = amplitude * (1. + (std::f64::consts::TAU * s / fold).sin());
+                    (*v, p - DVec3::Y * uv.y + out * (clearance + swing))
                 })
                 .collect()
         }
@@ -1747,6 +1897,63 @@ mod tests {
         }
         let gap = seam.max_gap(&x);
         assert!(gap < 0.02, "collar seam starts {gap} m apart");
+    }
+
+    #[test]
+    fn a_ruffle_hangs_gathered_from_the_hem() {
+        let t = crate::garment::presets::dress(&Default::default(), 1).unwrap();
+        let args = json!({"kind": "ruffle", "height_cm": 18, "segments": [
+            {"piece": "front", "segment": "hem"}, {"piece": "back", "segment": "hem"}]});
+        let build = add_detail(&t, &args).unwrap();
+        let spec = build.lay.clone().unwrap();
+        let after = applied(&t, build);
+        let ruffle = after.panels.last().unwrap();
+        let hem: f64 = ["front", "back"]
+            .iter()
+            .map(|p| {
+                let q = t.panels.iter().find(|x| &x.id == p).unwrap();
+                authoring::edge_length(q.polygon.as_ref().unwrap(), "hem").unwrap()
+            })
+            .sum();
+        let size = crate::agent_ops::piece_size(ruffle);
+        assert!((size.x - 1.6 * hem).abs() < 1e-6, "{} vs {hem}", size.x);
+        assert!((size.y - 0.18).abs() < 1e-6);
+        let garment = after.compile().unwrap();
+        let seam = garment
+            .seams
+            .iter()
+            .find(|s| s.id == after.seams.last().unwrap().id)
+            .unwrap();
+        let mut x = garment.initial_state.x.clone();
+        let hem_y = garment
+            .panels
+            .iter()
+            .filter(|p| p.id == "front")
+            .flat_map(|p| p.vertices.clone())
+            .map(|v| x[v].y)
+            .fold(f64::INFINITY, f64::min);
+        let range = garment.panels.iter().find(|p| p.id == ruffle.id).unwrap();
+        for (v, p) in lay(&garment, &x.clone(), &spec, 0.004, DVec3::ZERO) {
+            x[v] = p;
+        }
+        // Its top on the hem, within its folds (the side seams of a garment not yet draped
+        // are open: the ends there are further), the rest below it.
+        let mut gaps: Vec<f64> = seam.probes.iter().map(|p| p.gap(&x).length()).collect();
+        gaps.sort_by(f64::total_cmp);
+        let median = gaps[gaps.len() / 2];
+        assert!(median < 0.045, "ruffle seam starts {median} m apart");
+        let top = range
+            .vertices
+            .clone()
+            .map(|v| x[v].y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!((top - hem_y).abs() < 0.02, "top {top} hem {hem_y}");
+        let bottom = range
+            .vertices
+            .clone()
+            .map(|v| x[v].y)
+            .fold(f64::INFINITY, f64::min);
+        assert!((top - bottom - 0.18).abs() < 0.02, "{top} {bottom}");
     }
 
     #[test]

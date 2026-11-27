@@ -61,14 +61,20 @@ Connection. The assistant runs `agy` in sandboxed headless streaming mode with `
 structured output using your existing Antigravity login, and passes requested screenshots in the
 isolated working directory. Run `agy models` to see available model IDs, or leave Model blank for
 your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
-stay off.
+stay off. Each step is a new `agy` run that keeps and caches nothing from the last, so it gets the
+conversation as plain text (the system message, one line per tool, then each call and result)
+rather than the JSON request: about a quarter fewer tokens. A turn's first step (the plan) uses
+Antigravity's usual reasoning effort and the steps after it `--effort medium`; a small request
+asks for low, as with the other CLIs.
 
-**Using it.** **Assistant** in the main toolbar opens and closes it; while it is closed, a fuchsia
+**Using it.** **Assistant** in the main toolbar opens and closes it (its window stays below the toolbar); while it is closed, a fuchsia
 dot on the button means it is working and an amber one that it waits for you. Type a request and
 press Enter; Shift+Enter starts a new line. The header shows who answers, the model (a menu of
 that provider's models), what the conversation has used, and copy, settings and new chat. Each
-answer folds the tools it ran into one line ("5 steps in the project · 3 s") that opens to each
-step with its result and screenshots; a plan the model shows (the `plan` tool) and the check after
+answer folds the tools it ran into one line ("5 steps in the project · 3 min 20 s", the whole
+turn's time, the model's thinking included) that opens to each step with its result and
+screenshots, the details in words (pieces and fabrics by name, colours by name, "6 points" for an
+outline); a plan the model shows (the `plan` tool) and the check after
 simulating (`check_garment`) show as cards. **Back to before this message**, under each of your
 messages, puts the project back as it was when you sent it (Undo brings the work back) and tells
 the model so with your next message. With pieces selected, the message box shows **This piece:
@@ -110,8 +116,28 @@ after that step; the message goes then. **Settings › Permissions** sets each k
 (editing, simulating and pictures, opening attachments, saving, exporting) to **Without asking**,
 **Ask first** or **Never**; looking (summaries, measures, the plan) never asks.
 
+**When the connection fails.** A request that fails for a moment (the network, a busy service,
+or a CLI error that says it can be retried, as Antigravity's `"retryable": true`) is sent again
+twice, after 3 and 10 seconds, and the chat says so. If it still fails, the turn ends with what
+went wrong in plain words (no JSON) and the work so far stays: write "continue" to go on. A wrong
+key, a model name or a used-up limit is not sent again.
+
+**A garment from a photo.** The system prompt tells the model to draft the closest base, simulate
+and show it within about ten steps, then adapt it, and never to delete a drafted front or back to
+draw it again by coordinates. `guide('dress_recipes')` gives the drafted dress's points and
+segments and three recipes made of existing tools: a halter or cut-in shoulders (`move_points`
+with `pieces [front, back]`, scooped armholes), a high-low hem (a point added in the middle of each
+hem, moved up in front and down behind, rounded with `bend_segment`) and a ruffle (`add_detail`
+ruffle).
+
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
-steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
+steps. It is kept from wandering instead: every 15 steps without a simulation the model is told
+to put what there is on the body (simulate, check it, show it), to adapt the drafted base rather
+than delete it and draw pieces by coordinates, and to leave out a detail that fights it. Every 30
+steps or 15 minutes of the model's time the chat shows a card with what the job has taken (and
+whether anything is on the body yet), with **Ask for the simpler way** (it stops after the current
+step and then asks to start from the drafted garment, simulate it and add the details after) and
+**Let it go on**. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
 **Settings › Limits and usage › Review › Pause every N steps** (off by default): it stops after that many steps; the
 card says so, **Continue** goes on with everything so far and **Back to before the pause** puts the
@@ -285,7 +311,7 @@ goes away.
 |---|---|
 | `draft_garment` | A base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. `mode` `add` (the default) wears it over the garment there, which keeps its pieces and drape: it must be draped first; the new garment keeps its arrangement around the avatar, goes on an outer layer, moves up to 8 cm out where it would start inside or within 3 mm of the other cloth, and its pieces are named after it ("t-shirt front"), in one undo step. `replace` drafts it instead of everything there. It warns when a piece starts touching the body. Each base is cut from a fitting fabric (a t-shirt in jersey, the others in light woven cotton), its own even when added over a garment of the same preset, and the reply names it. |
 | `create_piece` | A new piece from a rectangle or an outline of points, named. |
-| `move_points` | Moves outline points by an offset in cm. |
+| `move_points` | Moves outline points by an offset in cm. With `pieces` instead of `piece` it moves the same points of several pieces in one step (a front and a back), so the seams between them stay equal: moving one side of a sewn segment alone is refused, and the error says to do this. |
 | `set_segment_length` | Makes a straight segment a given length, keeping its start, end or middle. |
 | `add_point` | Splits an unsewn segment. |
 | `add_dart` | An edge dart cut and sewn into a straight unsewn segment, or a diamond dart inside the piece. |
@@ -337,7 +363,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `add_internal_line` | An internal line through points in cm. |
 | `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
 | `set_sleeve` | Sets a sleeve into its armhole as draft_garment's shirt does: the cap sewn to the front and back armholes with ease (a puffed sleeve is gathered), the underarm closed, and the sleeve wrapped round the avatar's arm below the shoulder, clear of the body. Agents never place a sleeve by moving it. On the stock mannequin the armholes close to under 8 mm (`tests/set_sleeve.rs`). |
-| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
+| `add_detail` | A patch pocket, a band collar, a placket or a ruffle from a few numbers (a ruffle: a hem's segments, its depth and fullness, 1.6 times the hem by default; it is gathered on and hangs below the hem, with no placing): cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
 | `pin` | Pins cloth around a point of a piece, removes or moves pins. |
 | `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
 | `trace_on_body` | The 3D pen: a closed line through points on the body becomes a piece laid there. |
@@ -349,7 +375,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `simulation_settings` | Simulation properties: quality, GPU, iterations, damping, friction, collision distance, gravity, wind, floor, particle distance. |
 | `camera` | Camera properties and the View menu; with `screenshot` it returns a picture of the view. |
 | `render_settings` | The photoreal render's settings and the 3D view's style. |
-| `avatar_maker` | Create avatar (MakeHuman · Anny): settings, local measures and look. |
+| `avatar_maker` | Create avatar (MakeHuman · Anny): settings (0–1, not centimetres), local measures and look; `height_cm` finds the height setting for a height in cm, and every answer gives the body's `height_cm`. |
 | `pose_joints` | The pose editor's joints, in degrees. |
 | `measure_fabric` | Measure fabric: fits a fabric's parameters to tests on the real cloth and gives it to pieces. |
 | `points_of_measure` | Points of measure of the size chart. |

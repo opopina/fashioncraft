@@ -588,8 +588,6 @@ fn point_list(panel: &Panel, args: &Value) -> Result<Vec<usize>, String> {
 }
 
 fn move_points(template: &GarmentTemplate, args: &Value) -> Result<Plan, String> {
-    let panel = find_piece(template, text(args, "piece")?)?;
-    let points = point_list(panel, args)?;
     let delta = DVec2::new(
         optional(args, "dx_cm")?.unwrap_or(0.),
         optional(args, "dy_cm")?.unwrap_or(0.),
@@ -600,6 +598,35 @@ fn move_points(template: &GarmentTemplate, args: &Value) -> Result<Plan, String>
     if delta.length() > 2. {
         return Err("A move of more than 2 m is surely a mistake".into());
     }
+    // Several pieces moved alike in one step (a front and a back, so the seams between them
+    // stay equal on the way): their seams along the moved segments may then differ.
+    if let Some(list) = args.get("pieces").and_then(Value::as_array) {
+        let mut moves = Vec::new();
+        for name in list {
+            let panel = find_piece(template, name.as_str().unwrap_or(""))?;
+            moves.push((panel.id.clone(), point_list(panel, args)?, delta));
+        }
+        if moves.is_empty() {
+            return Err("'pieces' names no piece".into());
+        }
+        let names: Vec<String> = moves.iter().map(|m| m.0.clone()).collect();
+        let points = moves[0].1.clone();
+        return Ok(Plan::new(
+            Command::StyleLine {
+                moves,
+                bends: vec![],
+                scales: vec![],
+            },
+            format!(
+                "Moved point(s) {points:?} of {} by ({:.1}, {:.1}) cm, in one step",
+                names.join(" and "),
+                delta.x * 100.,
+                delta.y * 100.
+            ),
+        ));
+    }
+    let panel = find_piece(template, text(args, "piece")?)?;
+    let points = point_list(panel, args)?;
     Ok(Plan::new(
         Command::MovePoints {
             panel: panel.id.clone(),

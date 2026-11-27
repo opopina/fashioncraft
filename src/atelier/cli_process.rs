@@ -27,6 +27,108 @@ pub(super) fn history(body: &Value) -> Value {
     history
 }
 
+/// The conversation as plain text for a CLI that keeps nothing between requests and caches
+/// nothing (Antigravity): the system message, each tool on one line with its arguments, then
+/// who said what and each call with its result. The same as the JSON request in fewer words:
+/// no schemas, ids or escaped arguments.
+pub(super) fn transcript(history: &Value) -> String {
+    let mut out = String::new();
+    let text_of = |content: &Value| -> String {
+        match content {
+            Value::String(s) => s.clone(),
+            Value::Array(parts) => parts
+                .iter()
+                .filter_map(|p| p["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            _ => String::new(),
+        }
+    };
+    let messages = history["messages"].as_array().cloned().unwrap_or_default();
+    for m in messages.iter().filter(|m| m["role"] == "system") {
+        out.push_str("SYSTEM\n");
+        out.push_str(&text_of(&m["content"]));
+        out.push_str("\n\n");
+    }
+    if let Some(tools) = history["tools"].as_array() {
+        out.push_str(
+            "TOOLS (name(arguments): what it does; ? marks an optional argument; give the \
+             arguments as one JSON object)\n",
+        );
+        for t in tools {
+            let f = &t["function"];
+            let required: Vec<&str> = f["parameters"]["required"]
+                .as_array()
+                .map(|r| r.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            let arguments: Vec<String> = f["parameters"]["properties"]
+                .as_object()
+                .map(|props| {
+                    props
+                        .iter()
+                        .map(|(name, spec)| {
+                            let optional = if required.contains(&name.as_str()) {
+                                ""
+                            } else {
+                                "?"
+                            };
+                            let mut kind = type_of(spec);
+                            if let Some(about) = spec["description"].as_str() {
+                                kind.push_str(&format!(" ({about})"));
+                            }
+                            format!("{name}{optional}: {kind}")
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "- {}({}): {}\n",
+                f["name"].as_str().unwrap_or(""),
+                arguments.join(", "),
+                f["description"].as_str().unwrap_or("")
+            ));
+        }
+        out.push('\n');
+    }
+    out.push_str("CONVERSATION\n");
+    for m in messages.iter().filter(|m| m["role"] != "system") {
+        let text = text_of(&m["content"]);
+        match m["role"].as_str() {
+            Some("user") => out.push_str(&format!("PERSON: {text}\n")),
+            Some("tool") => out.push_str(&format!("RESULT: {text}\n")),
+            _ => {
+                if !text.trim().is_empty() {
+                    out.push_str(&format!("ASSISTANT: {text}\n"));
+                }
+                for call in m["tool_calls"].as_array().into_iter().flatten() {
+                    out.push_str(&format!(
+                        "CALL {} {}\n",
+                        call["function"]["name"].as_str().unwrap_or(""),
+                        call["function"]["arguments"].as_str().unwrap_or("{}")
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A JSON schema's type in a few words: string, number, a|b|c, array of number, object.
+fn type_of(spec: &Value) -> String {
+    if let Some(options) = spec["enum"].as_array() {
+        return options
+            .iter()
+            .map(|o| o.as_str().map_or_else(|| o.to_string(), str::to_owned))
+            .collect::<Vec<_>>()
+            .join("|");
+    }
+    match spec["type"].as_str() {
+        Some("array") => format!("array of {}", type_of(&spec["items"])),
+        Some(kind) => kind.to_owned(),
+        None => "value".to_owned(),
+    }
+}
+
 pub(super) fn schema() -> Value {
     json!({"type":"object","properties":{
             "text":{"type":"string"},"tool":{"type":"string"},"arguments":{"type":"string"}
@@ -468,6 +570,35 @@ fi
 #[cfg(test)]
 mod failure_tests {
     use super::*;
+
+    #[test]
+    fn a_transcript_says_the_same_in_fewer_words() {
+        let body = json!({
+            "model": "",
+            "tools": [{"type": "function", "function": {"name": "draft_garment",
+                "description": "Draft a garment.",
+                "parameters": {"type": "object", "required": ["kind"], "properties": {
+                    "kind": {"type": "string", "enum": ["shirt", "dress"]},
+                    "from_avatar": {"type": "boolean", "description": "To the avatar's measurements"}}}}}],
+            "messages": [
+                {"role": "system", "content": "You are FashionCraft's assistant."},
+                {"role": "user", "content": "make a dress"},
+                {"role": "assistant", "content": "", "tool_calls": [{"id": "fc_1", "type": "function",
+                    "function": {"name": "draft_garment", "arguments": "{\"kind\":\"dress\"}"}}]},
+                {"role": "tool", "tool_call_id": "fc_1", "content": "Drafted a dress"},
+                {"role": "assistant", "content": "Done."}
+            ]
+        });
+        let text = transcript(&body);
+        assert!(text.starts_with("SYSTEM\nYou are FashionCraft's assistant."));
+        assert!(text.contains(
+            "- draft_garment(from_avatar?: boolean (To the avatar's measurements), kind: shirt|dress): Draft a garment."
+        ));
+        assert!(text.contains(
+            "PERSON: make a dress\nCALL draft_garment {\"kind\":\"dress\"}\nRESULT: Drafted a dress\nASSISTANT: Done.\n"
+        ));
+        assert!(text.len() < body.to_string().len());
+    }
 
     #[test]
     fn what_each_cli_reports_of_its_usage_is_read() {

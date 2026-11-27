@@ -61,7 +61,11 @@ Connection. The assistant runs `agy` in sandboxed headless streaming mode with `
 structured output using your existing Antigravity login, and passes requested screenshots in the
 isolated working directory. Run `agy models` to see available model IDs, or leave Model blank for
 your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
-stay off.
+stay off. Each step is a new `agy` run that keeps and caches nothing from the last, so it gets the
+conversation as plain text (the system message, one line per tool, then each call and result)
+rather than the JSON request: about a quarter fewer tokens. A turn's first step (the plan) uses
+Antigravity's usual reasoning effort and the steps after it `--effort medium`; a small request
+asks for low, as with the other CLIs.
 
 **Using it.** **Assistant** in the main toolbar opens and closes it (its window stays below the toolbar); while it is closed, a fuchsia
 dot on the button means it is working and an amber one that it waits for you. Type a request and

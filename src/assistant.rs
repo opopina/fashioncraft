@@ -730,8 +730,16 @@ impl Conversation {
                 let step = match self.provider {
                     Provider::Anthropic => self.anthropic_step(settings, transport, events),
                     _ => {
-                        let low = light && rounds < LIGHT_ROUNDS;
-                        self.openai_step(settings, transport, events, low)
+                        let effort = if light && rounds < LIGHT_ROUNDS {
+                            Some("low")
+                        } else if self.provider == Provider::AntigravityCli && rounds > 0 {
+                            // Antigravity thinks hard by default, minutes a step: the plan in
+                            // the first step keeps that, the steps after it think less.
+                            Some("medium")
+                        } else {
+                            None
+                        };
+                        self.openai_step(settings, transport, events, effort)
                     }
                 };
                 match step {
@@ -975,20 +983,22 @@ impl Conversation {
             .push(json!({"role": "user", "content": blocks}));
     }
 
-    /// One request in the chat-completions form. `low_effort` asks a CLI for low reasoning
-    /// effort (`reasoning_effort` in the body, which each CLI turns into its own option and
-    /// leaves out of the prompt); servers on the network never get it, since models without
-    /// reasoning refuse the field.
+    /// One request in the chat-completions form. `effort` asks a CLI for a reasoning effort
+    /// (`reasoning_effort` in the body, which each CLI turns into its own option and leaves out
+    /// of the prompt); servers on the network never get it, since models without reasoning
+    /// refuse the field.
     fn openai_step(
         &mut self,
         settings: &Settings,
         transport: &mut dyn Transport,
         events: &mut dyn FnMut(Event),
-        low_effort: bool,
+        effort: Option<&str>,
     ) -> Result<Vec<Call>, String> {
         let mut body = openai_request(settings, &self.messages);
-        if low_effort && self.provider.is_cli() {
-            body["reasoning_effort"] = json!("low");
+        if let Some(effort) = effort
+            && self.provider.is_cli()
+        {
+            body["reasoning_effort"] = json!(effort);
         }
         let mut headers = Vec::new();
         if !settings.api_key.trim().is_empty() {
@@ -1809,6 +1819,30 @@ picture the person attached",
             );
             assert_eq!(timed, 6);
         }
+        // Antigravity: its usual effort for the plan, medium for every step after it.
+        let mut transport = Canned::new(job(Provider::AntigravityCli, 3, "Done."));
+        let mut conversation = Conversation::new(Provider::AntigravityCli);
+        let (result, _, _) = run(
+            &mut conversation,
+            &settings(Provider::AntigravityCli),
+            &mut transport,
+            "Make a dress like the one in the photo, fitted at the waist, with a ruffle at the hem.",
+        );
+        assert!(result.is_ok(), "{result:?}");
+        let efforts: Vec<&Value> = transport
+            .sent
+            .iter()
+            .map(|s| &s.2["reasoning_effort"])
+            .collect();
+        assert_eq!(
+            efforts,
+            [
+                &Value::Null,
+                &json!("medium"),
+                &json!("medium"),
+                &json!("medium")
+            ]
+        );
     }
 
     #[test]

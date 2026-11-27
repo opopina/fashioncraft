@@ -122,6 +122,14 @@ twice, after 3 and 10 seconds, and the chat says so. If it still fails, the turn
 went wrong in plain words (no JSON) and the work so far stays: write "continue" to go on. A wrong
 key, a model name or a used-up limit is not sent again.
 
+**A garment from a photo.** The system prompt tells the model to draft the closest base, simulate
+and show it within about ten steps, then adapt it, and never to delete a drafted front or back to
+draw it again by coordinates. `guide('dress_recipes')` gives the drafted dress's points and
+segments and three recipes made of existing tools: a halter or cut-in shoulders (`move_points`
+with `pieces [front, back]`, scooped armholes), a high-low hem (a point added in the middle of each
+hem, moved up in front and down behind, rounded with `bend_segment`) and a ruffle (`add_detail`
+ruffle).
+
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. It is kept from wandering instead: every 15 steps without a simulation the model is told
 to put what there is on the body (simulate, check it, show it), to adapt the drafted base rather
@@ -303,7 +311,7 @@ goes away.
 |---|---|
 | `draft_garment` | A base drafted from the avatar's measurements (or the defaults), with overrides in cm: `tshirt` (kimono sleeves), `shirt` (front, back and two set-in sleeves wrapped around the arms, each cap half eased into the armhole it faces), `dress` (sleeveless A-line), `skirt`, `trousers`. `mode` `add` (the default) wears it over the garment there, which keeps its pieces and drape: it must be draped first; the new garment keeps its arrangement around the avatar, goes on an outer layer, moves up to 8 cm out where it would start inside or within 3 mm of the other cloth, and its pieces are named after it ("t-shirt front"), in one undo step. `replace` drafts it instead of everything there. It warns when a piece starts touching the body. Each base is cut from a fitting fabric (a t-shirt in jersey, the others in light woven cotton), its own even when added over a garment of the same preset, and the reply names it. |
 | `create_piece` | A new piece from a rectangle or an outline of points, named. |
-| `move_points` | Moves outline points by an offset in cm. |
+| `move_points` | Moves outline points by an offset in cm. With `pieces` instead of `piece` it moves the same points of several pieces in one step (a front and a back), so the seams between them stay equal: moving one side of a sewn segment alone is refused, and the error says to do this. |
 | `set_segment_length` | Makes a straight segment a given length, keeping its start, end or middle. |
 | `add_point` | Splits an unsewn segment. |
 | `add_dart` | An edge dart cut and sewn into a straight unsewn segment, or a diamond dart inside the piece. |
@@ -355,7 +363,7 @@ the command accepts it. Four commands are not offered, each with its reason (`ed
 | `add_internal_line` | An internal line through points in cm. |
 | `add_buttons` | Buttons or buttonholes, a number of them a given spacing apart. |
 | `set_sleeve` | Sets a sleeve into its armhole as draft_garment's shirt does: the cap sewn to the front and back armholes with ease (a puffed sleeve is gathered), the underarm closed, and the sleeve wrapped round the avatar's arm below the shoulder, clear of the body. Agents never place a sleeve by moving it. On the stock mannequin the armholes close to under 8 mm (`tests/set_sleeve.rs`). |
-| `add_detail` | A patch pocket, a band collar or a placket from a few numbers: cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
+| `add_detail` | A patch pocket, a band collar, a placket or a ruffle from a few numbers (a ruffle: a hem's segments, its depth and fullness, 1.6 times the hem by default; it is gathered on and hangs below the hem, with no placing): cut, sewn and laid on the garment, in one undo step. Add details before simulating: a piece that gets a new stitching line is laid out again, so on a draped garment the detail is refused and nothing changes. A band collar's segments may come in any order; they are followed around the neck through the corners the seams join. |
 | `pin` | Pins cloth around a point of a piece, removes or moves pins. |
 | `grab` | Pulls the cloth at a point by a 3D offset while simulating, then lets go. |
 | `trace_on_body` | The 3D pen: a closed line through points on the body becomes a piece laid there. |

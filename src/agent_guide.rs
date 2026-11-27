@@ -149,10 +149,35 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
          top; a shirt pocket is about 11–13 × 13–15 cm, a jeans back pocket 13–15 × 14–16 cm), \
          band_collar (the neckline's segments, the first where it starts, and height_cm, 2.5–4 cm for a band; it \
          is as long as the neckline), placket (piece, segment and width_cm, 2.5–3.5 cm on a \
-         shirt front). Then add_buttons for buttons and buttonholes (shirt buttons 1–1.2 cm, \
+         shirt front), ruffle (a hem's or a neckline's segments, height_cm and fullness, 1.6 \
+         times the hem by default: gathered on and hanging below them). Then add_buttons for buttons and buttonholes (shirt buttons 1–1.2 cm, \
          7–9 cm apart). Add details right after drafting, before simulating: a piece that \
          gets a new stitching line is laid out again, so on a draped garment the detail is \
          refused (reset the drape with simulation.reset first).",
+    ),
+    (
+        "dress_recipes",
+        "A dress from a photo: adapt the drafted base (halter, high-low hem, ruffle)",
+        "Start from draft_garment dress (a sleeveless A-line front and back: points 0-3 the \
+         neckline, 4 and 9 the shoulder ends, 5 and 8 the underarms, 6 and 7 the hem's ends; \
+         segments neck-left, neck-bottom, neck-right, shoulder-right/left, armhole-right/left, \
+         side-right/left, hem). Simulate and show it early, then adapt it; never delete the \
+         front or back to draw them again by coordinates.\n\
+         Halter or cut-in shoulders: narrow the shoulders toward the neck on both pieces at \
+         once (move_points pieces [front, back], points [4], dx_cm -5; then points [9], dx_cm \
+         5), and scoop the armholes (bend_segment front armhole-right and armhole-left, \
+         bulge_cm -2). A lower back: move_points back points [1, 2] dy_cm 8.\n\
+         High-low hem: add_point on front hem and on back hem (the middle; the new point is \
+         7 and the halves are hem and hem_2), then move_points front [7] dy_cm -20 (shorter \
+         in front) and back [7] dy_cm 8 (longer behind), and round the front with bend_segment \
+         hem and hem_2, bulge_cm -3. The side seams keep their length.\n\
+         Length: set_segment_length on side-right and side-left of both pieces, or \
+         move_points pieces [front, back] points [6, 7] dy_cm.\n\
+         Ruffle or flounce: add_detail kind ruffle, segments the hem's segments of front and \
+         back (any order), height_cm 12-25, fullness 1.5-2: it is gathered onto the hem and \
+         hangs below it, no place_piece. Add it once the hem's shape is done and before \
+         simulating (on a draped dress, command_run simulation.reset first).\n\
+         Then simulate 15 s, check_garment and one picture to compare with the photo.",
     ),
     (
         "grading",
@@ -241,6 +266,10 @@ mod tests {
                             "set_step",
                             "patch_pocket",
                             "band_collar",
+                            "dx_cm",
+                            "dy_cm",
+                            "bulge_cm",
+                            "hem_2",
                         ]
                         .contains(&word);
                     assert!(known, "topic {name} names '{word}', which is no tool");

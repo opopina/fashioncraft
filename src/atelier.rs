@@ -198,6 +198,9 @@ mod workspace;
 #[path = "atelier/workspace_profiles.rs"]
 mod workspace_profiles;
 use authoring_ui::{AuthoringUi, Tool};
+
+/// Where the main toolbar ends this frame, in the egui context's data (an f32).
+const TOOLBAR_BOTTOM: &str = "toolbar.bottom";
 use worker::Work;
 
 /// Export is not atomic across artifacts: an error may leave earlier files.
@@ -1769,7 +1772,7 @@ impl eframe::App for Atelier {
             self.camera_shortcuts(&ctx);
         }
         self.run_native_menu(&ctx, palette_blocked);
-        egui::Panel::top("toolbar").show(ui, |ui| {
+        let toolbar = egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("FASHIONCRAFT")
@@ -1904,6 +1907,9 @@ impl eframe::App for Atelier {
                 });
             });
         });
+        // Where the toolbar ends: windows such as the Assistant open below it.
+        let toolbar_bottom = toolbar.response.rect.bottom();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(TOOLBAR_BOTTOM), toolbar_bottom));
         self.animation_tick(&ctx);
         let mut changed = false;
         if !palette_blocked {

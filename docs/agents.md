@@ -63,12 +63,14 @@ isolated working directory. Run `agy models` to see available model IDs, or leav
 your default. Set `FASHIONCRAFT_ANTIGRAVITY` to pick a specific executable. External MCP access can
 stay off.
 
-**Using it.** **Assistant** in the main toolbar opens and closes it; while it is closed, a fuchsia
+**Using it.** **Assistant** in the main toolbar opens and closes it (its window stays below the toolbar); while it is closed, a fuchsia
 dot on the button means it is working and an amber one that it waits for you. Type a request and
 press Enter; Shift+Enter starts a new line. The header shows who answers, the model (a menu of
 that provider's models), what the conversation has used, and copy, settings and new chat. Each
-answer folds the tools it ran into one line ("5 steps in the project · 3 s") that opens to each
-step with its result and screenshots; a plan the model shows (the `plan` tool) and the check after
+answer folds the tools it ran into one line ("5 steps in the project · 3 min 20 s", the whole
+turn's time, the model's thinking included) that opens to each step with its result and
+screenshots, the details in words (pieces and fabrics by name, colours by name, "6 points" for an
+outline); a plan the model shows (the `plan` tool) and the check after
 simulating (`check_garment`) show as cards. **Back to before this message**, under each of your
 messages, puts the project back as it was when you sent it (Undo brings the work back) and tells
 the model so with your next message. With pieces selected, the message box shows **This piece:

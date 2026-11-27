@@ -335,15 +335,18 @@ pub fn tools() -> Vec<Tool> {
             "move_points",
             "Move outline points of a piece by an offset in cm (x right, y down on the board). \
              Point indexes come from piece_detail. A sewn segment must keep the length of the \
-             segment it is sewn to unless its seam allows ease.",
+             segment it is sewn to unless its seam allows ease: to move the same points of a \
+             front and a back (a shoulder, a hem corner), give pieces [front, back] instead of \
+             piece and both move in one step.",
             object(
                 json!({
                     "piece": piece,
+                    "pieces": {"type": "array", "items": {"type": "string"}, "description": "Pieces moved alike in one step, instead of piece."},
                     "points": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 1},
                     "dx_cm": {"type": "number"},
                     "dy_cm": {"type": "number"}
                 }),
-                &["piece", "points"],
+                &["points"],
             ),
             true,
         ),

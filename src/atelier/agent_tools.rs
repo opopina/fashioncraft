@@ -661,7 +661,14 @@ impl Atelier {
         let name = plan.history_name.unwrap_or_else(|| plan.command.name());
         let clear_before = self.blocker().is_none();
         if !self.edit_named(plan.command, name) {
-            return Err(self.status.clone());
+            let mut error = self.status.clone();
+            if tool == "move_points" && error.contains("unequal lengths") {
+                error.push_str(
+                    ". The segment is sewn to another piece: move the same points of both in \
+                     one call, with pieces [this piece, the other] instead of piece",
+                );
+            }
+            return Err(error);
         }
         self.guard_change(clear_before, true)?;
         Ok(ToolResult::text(plan.done))

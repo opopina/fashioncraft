@@ -123,7 +123,13 @@ went wrong in plain words (no JSON) and the work so far stays: write "continue" 
 key, a model name or a used-up limit is not sent again.
 
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
-steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
+steps. It is kept from wandering instead: every 15 steps without a simulation the model is told
+to put what there is on the body (simulate, check it, show it), to adapt the drafted base rather
+than delete it and draw pieces by coordinates, and to leave out a detail that fights it. Every 30
+steps or 15 minutes of the model's time the chat shows a card with what the job has taken (and
+whether anything is on the body yet), with **Ask for the simpler way** (it stops after the current
+step and then asks to start from the drafted garment, simulate it and add the details after) and
+**Let it go on**. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on
 **Settings › Limits and usage › Review › Pause every N steps** (off by default): it stops after that many steps; the
 card says so, **Continue** goes on with everything so far and **Back to before the pause** puts the

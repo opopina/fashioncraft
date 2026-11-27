@@ -361,6 +361,14 @@ pub enum Event {
     /// How long the provider took to answer one request, in seconds (the model's thinking
     /// and writing, and for a CLI its start).
     Answered { seconds: f64 },
+    /// The job is getting long: `steps` rounds of tools and `minutes` of the model's time in
+    /// this turn, `unsimulated` of those rounds since the garment was last simulated. The
+    /// window offers the person a simpler way; the model gets [`LONG_JOB_NOTE`] too.
+    LongJob {
+        steps: usize,
+        minutes: f64,
+        unsimulated: usize,
+    },
     /// A request failed for a moment (the network, a busy service) and is sent again:
     /// `attempt` of `of` retries, after what went wrong, readable.
     Retrying {
@@ -369,6 +377,20 @@ pub enum Event {
         error: String,
     },
 }
+
+/// Every this many rounds of tools without a simulation, the model is told to put what there
+/// is on the body ([`LONG_JOB_NOTE`]).
+pub const UNSIMULATED_ROUNDS: usize = 15;
+/// Every this many rounds of tools in one turn, or this many minutes of the model's time, the
+/// person is told the job is getting long ([`Event::LongJob`]). There is no limit: they decide.
+pub const LONG_JOB_ROUNDS: usize = 30;
+pub const LONG_JOB_MINUTES: f64 = 15.;
+/// What the model is told when it has worked a while without simulating.
+pub const LONG_JOB_NOTE: &str = "(Note from FashionCraft: {n} steps without simulating. Put what \
+     there is on the body now: simulate, check_garment and show the person; go on from what you \
+     see. Adapt the drafted base (move_points, add_point, bend_segment, set_segment_length, \
+     add_detail) rather than deleting it to draw pieces by coordinates, and when a detail fights \
+     you, leave it out and say so.)";
 
 /// How many times a request that failed for a moment is sent again, and how long to wait
 /// before each.
@@ -711,6 +733,11 @@ impl Conversation {
         let mut failures = 0usize;
         // The round of the last picture a tool returned in this turn.
         let mut last_picture: Option<usize> = None;
+        // How long the job is: rounds since the last simulation, the model's time, and when
+        // the person was last told.
+        let mut unsimulated = 0usize;
+        let mut model_seconds = 0f64;
+        let mut told_at = (0usize, 0f64);
         loop {
             if stop() {
                 events(Event::Notice("Stopped.".into()));
@@ -771,6 +798,7 @@ impl Conversation {
                     Err(e) => return Err(readable_error(&e)),
                 }
             };
+            model_seconds += asked.elapsed().as_secs_f64();
             events(Event::Answered {
                 seconds: asked.elapsed().as_secs_f64(),
             });
@@ -846,6 +874,25 @@ impl Conversation {
                 }
                 results.push((call, result));
             }
+            // A job that goes on without putting anything on the body is told so, every
+            // UNSIMULATED_ROUNDS rounds, in its last result.
+            let simulated = results.iter().any(|(call, result)| {
+                !result.is_error && matches!(call.name.as_str(), "simulate" | "check_garment")
+                    || call.name == "use_tool"
+                        && call
+                            .arguments
+                            .as_ref()
+                            .is_ok_and(|a| a["name"] == "simulate")
+            });
+            unsimulated = if simulated { 0 } else { unsimulated + 1 };
+            if unsimulated > 0
+                && unsimulated.is_multiple_of(UNSIMULATED_ROUNDS)
+                && let Some((_, last)) = results.last_mut()
+            {
+                last.content.push(Content::Text {
+                    text: LONG_JOB_NOTE.replace("{n}", &unsimulated.to_string()),
+                });
+            }
             match self.provider {
                 Provider::Anthropic => self.push_anthropic_results(results),
                 _ => self.push_openai_results(results),
@@ -859,6 +906,18 @@ impl Conversation {
                 return Ok(());
             }
             rounds += 1;
+            // The person hears of a long job, every LONG_JOB_ROUNDS rounds or LONG_JOB_MINUTES
+            // of the model's time, whichever comes first.
+            if rounds >= told_at.0 + LONG_JOB_ROUNDS
+                || model_seconds >= told_at.1 + LONG_JOB_MINUTES * 60.
+            {
+                told_at = (rounds, model_seconds);
+                events(Event::LongJob {
+                    steps: rounds,
+                    minutes: model_seconds / 60.,
+                    unsimulated,
+                });
+            }
             if settings.pause_every > 0 && rounds.is_multiple_of(settings.pause_every) {
                 events(Event::Paused { steps: rounds });
                 return Ok(());
@@ -2202,6 +2261,42 @@ picture the person attached",
             .unwrap()
             .clone();
         assert_eq!(last["role"], "tool");
+    }
+
+    #[test]
+    fn a_long_job_is_told_so_and_the_person_hears_of_it() {
+        let mut transport = Canned::new(job(Provider::OpenAi, LONG_JOB_ROUNDS + 1, "Done."));
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let mut s = settings(Provider::OpenAi);
+        s.model = "test-model".into();
+        let (result, events, _) = run(&mut conversation, &s, &mut transport, "Make a dress");
+        assert!(result.is_ok(), "{result:?}");
+        // The person: once, at LONG_JOB_ROUNDS, nothing simulated all along.
+        let told: Vec<&Event> = events
+            .iter()
+            .filter(|e| matches!(e, Event::LongJob { .. }))
+            .collect();
+        assert_eq!(told.len(), 1, "{told:?}");
+        assert!(matches!(
+            told[0],
+            Event::LongJob {
+                steps: LONG_JOB_ROUNDS,
+                unsimulated: LONG_JOB_ROUNDS,
+                ..
+            }
+        ));
+        // The model: in the results of rounds 15 and 30.
+        let noted = transport.sent.iter().last().unwrap().2["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| {
+                m["content"]
+                    .to_string()
+                    .contains("steps without simulating")
+            })
+            .count();
+        assert_eq!(noted, 2);
     }
 
     #[test]

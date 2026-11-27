@@ -199,6 +199,13 @@ enum Entry {
     Problem(String),
     /// Paused for a review after this many steps; Continue resumes.
     Paused(usize),
+    /// The job is getting long (see [`Event::LongJob`]); `answered` once the person chose.
+    LongJob {
+        steps: usize,
+        minutes: f64,
+        unsimulated: usize,
+        answered: bool,
+    },
     /// A step that asked first (Settings › Permissions), and what the person said: none while
     /// it waits.
     Asked {
@@ -293,6 +300,8 @@ enum Choice {
     Permission(Answer),
     Continue,
     BackBeforePause,
+    /// On a long job: ask for a simpler way (true), or let it go on (false).
+    Simpler(bool),
 }
 
 const CHOICE: &str = "assistant.choice";
@@ -1047,6 +1056,24 @@ impl Atelier {
                 }
                 Update::Event(Event::Notice(text)) => {
                     self.assistant.entries.push(Entry::Notice(text))
+                }
+                Update::Event(Event::LongJob {
+                    steps,
+                    minutes,
+                    unsimulated,
+                }) => {
+                    // An earlier card that was not answered gives way to this one.
+                    for e in &mut self.assistant.entries {
+                        if let Entry::LongJob { answered, .. } = e {
+                            *answered = true;
+                        }
+                    }
+                    self.assistant.entries.push(Entry::LongJob {
+                        steps,
+                        minutes,
+                        unsimulated,
+                        answered: false,
+                    });
                 }
                 Update::Event(Event::Retrying { attempt, of, error }) => {
                     let lang = self.prefs.language;
@@ -2295,6 +2322,9 @@ impl Atelier {
                 }
                 Entry::Notice(t) | Entry::Problem(t) => out.push_str(&format!("({t})\n\n")),
                 Entry::Paused(steps) => out.push_str(&format!("(Paused after {steps} steps)\n\n")),
+                Entry::LongJob { steps, minutes, .. } => out.push_str(&format!(
+                    "(A long job: {steps} steps, {minutes:.0} min)\n\n"
+                )),
                 Entry::Asked {
                     kind,
                     detail,
@@ -2352,6 +2382,11 @@ impl Atelier {
             Update::Event(Event::Retrying { attempt, of, error }) => {
                 json!({"retrying": attempt, "of": of, "error": error})
             }
+            Update::Event(Event::LongJob {
+                steps,
+                minutes,
+                unsimulated,
+            }) => json!({"long_job": steps, "minutes": minutes, "unsimulated": unsimulated}),
             Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
             Update::Event(Event::Answered { seconds }) => {
                 json!({"model_seconds": (seconds * 10.).round() / 10.})
@@ -2890,6 +2925,24 @@ impl Atelier {
                 match choice {
                     Some(Choice::Permission(answer)) => self.assistant_answer_asked(answer),
                     Some(Choice::Continue) => resume = true,
+                    Some(Choice::Simpler(simpler)) => {
+                        for e in &mut self.assistant.entries {
+                            if let Entry::LongJob { answered, .. } = e {
+                                *answered = true;
+                            }
+                        }
+                        if simpler {
+                            // It stops after this step and the request goes then.
+                            if let Some(worker) = &self.assistant.worker {
+                                worker.stop.store(true, Ordering::Relaxed);
+                            }
+                            self.assistant.queued = Some(
+                                tr("Do it the simpler way: start from the drafted garment, \
+                                    simulate it and show it to me; we add the details after.")
+                                    .to_owned(),
+                            );
+                        }
+                    }
                     Some(Choice::BackBeforePause) => {
                         if let Some(&at) = self.assistant.restore_points.keys().next_back() {
                             self.assistant_restore(at);
@@ -3235,6 +3288,18 @@ impl Atelier {
             plan_card(ui, lang, plan, running);
         }
         self.assistant_steps(ui, key, &answer[first..=last], running);
+        // A long job's open card stays in sight, out of the folded steps.
+        for entry in &answer[first..=last] {
+            if matches!(
+                entry,
+                Entry::LongJob {
+                    answered: false,
+                    ..
+                }
+            ) {
+                self.assistant_entry(ui, entry);
+            }
+        }
         check_card(ui, lang, answer);
         for entry in &answer[last + 1..] {
             self.assistant_said(ui, entry);
@@ -3487,6 +3552,9 @@ impl Atelier {
                                 Entry::Model(text) => {
                                     ui.label(egui::RichText::new(text).size(11.5).italics().weak());
                                 }
+                                Entry::LongJob {
+                                    answered: false, ..
+                                } => {}
                                 other => self.assistant_entry(ui, other),
                             }
                         }
@@ -3716,6 +3784,72 @@ impl Atelier {
                                 }
                             });
                         }
+                    });
+            }
+            // A long job: what it has taken, and a simpler way, while it goes on.
+            Entry::LongJob {
+                steps,
+                minutes,
+                unsimulated,
+                answered,
+            } => {
+                let visuals = ui.visuals().clone();
+                let mut text = format!(
+                    "{} {steps} {}, {} {}.",
+                    tr("This job is getting long:"),
+                    tr("steps"),
+                    duration_text(*minutes as f32 * 60.),
+                    tr("of the model's time")
+                );
+                if *unsimulated >= *steps {
+                    text.push_str(&format!(" {}", tr("Nothing is on the body yet.")));
+                } else if *unsimulated > 0 {
+                    text.push_str(&format!(
+                        " {} {unsimulated} {}.",
+                        tr("Not simulated for"),
+                        tr("steps")
+                    ));
+                }
+                if *answered {
+                    ui.vertical_centered(|ui| {
+                        ui.label(egui::RichText::new(text).small().italics().weak());
+                    });
+                    return;
+                }
+                egui::Frame::new()
+                    .fill(visuals.extreme_bg_color)
+                    .stroke(visuals.widgets.noninteractive.bg_stroke)
+                    .corner_radius(6.)
+                    .inner_margin(egui::Margin::same(12))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.spacing_mut().item_spacing.y = 8.;
+                        ui.add(egui::Label::new(egui::RichText::new(&text).strong()).wrap());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(tr(
+                                    "A simpler way is often quicker: start from the drafted \
+                                     garment, simulate it and adjust it, the details after.",
+                                ))
+                                .size(12.)
+                                .weak(),
+                            )
+                            .wrap(),
+                        );
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.;
+                            if card_button(ui, tr("Ask for the simpler way"), true)
+                                .on_hover_text(tr(
+                                    "It stops after this step and then gets that request",
+                                ))
+                                .clicked()
+                            {
+                                choose(ui, Choice::Simpler(true));
+                            }
+                            if card_button(ui, tr("Let it go on"), false).clicked() {
+                                choose(ui, Choice::Simpler(false));
+                            }
+                        });
                     });
             }
             // A step that asks first: a card with the answers while it waits, then one line.

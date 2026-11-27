@@ -496,6 +496,21 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "This job is getting long:" => "Este trabajo se está alargando:",
+        "of the model's time" => "de tiempo del modelo",
+        "Nothing is on the body yet." => "Aún no hay nada simulado sobre el cuerpo.",
+        "Not simulated for" => "Sin simular desde hace",
+        "A simpler way is often quicker: start from the drafted garment, simulate it and adjust it, the details after." => {
+            "Una forma más simple suele ir más rápido: partir de la prenda base, simularla y ajustarla, y los detalles después."
+        }
+        "Ask for the simpler way" => "Pedir la forma más simple",
+        "It stops after this step and then gets that request" => {
+            "Se detiene tras este paso y luego recibe ese pedido"
+        }
+        "Let it go on" => "Dejar que siga",
+        "Do it the simpler way: start from the drafted garment, simulate it and show it to me; we add the details after." => {
+            "Hazlo de la forma más simple: parte de la prenda base, simúlala y enséñamela; los detalles los añadimos después."
+        }
         "to the avatar's measurements" => "a las medidas del avatar",
         "settings" => "ajustes",
         "a T-shirt" => "una camiseta",

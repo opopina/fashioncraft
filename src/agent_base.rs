@@ -37,7 +37,7 @@ pub const VIEWS: [&str; 9] = [
 ];
 
 /// The kinds of detail `add_detail` makes.
-pub const DETAILS: [&str; 3] = ["patch_pocket", "band_collar", "placket"];
+pub const DETAILS: [&str; 4] = ["patch_pocket", "band_collar", "placket", "ruffle"];
 
 pub fn tools() -> Vec<Tool> {
     let piece =
@@ -161,7 +161,10 @@ pub fn tools() -> Vec<Tool> {
              in one undo step (add them before simulating: a piece with a new stitching line \
              is laid out again): patch_pocket (piece, width_cm, height_cm, centre_cm on the \
              piece; stitched on three sides), band_collar (segments: the neckline's segments, \
-             any order, the first where the collar starts; height_cm), placket (piece, segment, width_cm). \
+             any order, the first where the collar starts; height_cm), placket (piece, segment, width_cm), \
+             ruffle (segments: a hem's segments, front and back, the first where it starts; \
+             height_cm deep, fullness 1.6 times the hem by default; gathered, hanging below the \
+             hem: no place_piece). \
              guide('details') has typical sizes.",
             object(
                 json!({
@@ -170,6 +173,7 @@ pub fn tools() -> Vec<Tool> {
                     "segments": {"type": "array", "items": object(json!({"piece": {"type": "string"}, "segment": {"type": "string"}}), &["piece", "segment"])},
                     "width_cm": {"type": "number"}, "height_cm": {"type": "number"},
                     "centre_cm": xy("[x, y] on the piece"),
+                    "fullness": {"type": "number", "minimum": 1, "maximum": 3},
                     "name": {"type": "string"}
                 }),
                 &["kind"],

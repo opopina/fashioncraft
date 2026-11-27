@@ -110,6 +110,12 @@ after that step; the message goes then. **Settings › Permissions** sets each k
 (editing, simulating and pictures, opening attachments, saving, exporting) to **Without asking**,
 **Ask first** or **Never**; looking (summaries, measures, the plan) never asks.
 
+**When the connection fails.** A request that fails for a moment (the network, a busy service,
+or a CLI error that says it can be retried, as Antigravity's `"retryable": true`) is sent again
+twice, after 3 and 10 seconds, and the chat says so. If it still fails, the turn ends with what
+went wrong in plain words (no JSON) and the work so far stays: write "continue" to go on. A wrong
+key, a model name or a used-up limit is not sent again.
+
 **How long a job runs.** The Assistant works until the job is done: there is no limit on its
 steps. Two safety stops end a runaway loop, and the chat says which one: the same tool call failing
 5 times in a row, or 400 rounds of tools in one turn. To look at the work as it goes, turn on

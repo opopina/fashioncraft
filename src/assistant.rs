@@ -361,6 +361,102 @@ pub enum Event {
     /// How long the provider took to answer one request, in seconds (the model's thinking
     /// and writing, and for a CLI its start).
     Answered { seconds: f64 },
+    /// A request failed for a moment (the network, a busy service) and is sent again:
+    /// `attempt` of `of` retries, after what went wrong, readable.
+    Retrying {
+        attempt: usize,
+        of: usize,
+        error: String,
+    },
+}
+
+/// How many times a request that failed for a moment is sent again, and how long to wait
+/// before each.
+pub const NETWORK_RETRIES: usize = 2;
+const RETRY_WAIT_SECONDS: [u64; NETWORK_RETRIES] = [3, 10];
+
+/// What a turn's error starts with when the provider could not be reached after the
+/// retries; the window translates it.
+pub const UNREACHABLE: &str = "Could not reach the model after 3 tries:";
+
+/// Whether a failed request is worth sending again: the connection or the service failed for
+/// a moment (the CLI says so, or the network or a busy server does), not a login, a key, a
+/// limit or the request itself.
+pub fn retryable(error: &str) -> bool {
+    let e = error.to_lowercase().replace(": ", ":");
+    if e.contains("\"retryable\":true") {
+        return true;
+    }
+    if e.contains("\"retryable\":false") || e.contains("request too large") {
+        return false;
+    }
+    const SIGNS: &[&str] = &[
+        "network issue",
+        "network error",
+        "network is unreachable",
+        "timed out",
+        "connection reset",
+        "connection refused",
+        "connection closed",
+        "connection aborted",
+        "broken pipe",
+        "temporarily unavailable",
+        "no such host",
+        "dial tcp",
+        "stream disconnected",
+        "unexpected eof",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+        "http 529",
+        "overloaded",
+        "service unavailable",
+        "bad gateway",
+    ];
+    SIGNS.iter().any(|sign| e.contains(sign))
+}
+
+/// A failed request as a person reads it: without the JSON a CLI appends ("AGY_ERROR: {…}"),
+/// without the same sentence twice, at most about 300 characters.
+pub fn readable_error(error: &str) -> String {
+    let mut text = error.split("AGY_ERROR:").next().unwrap_or(error).to_owned();
+    // JSON objects in the text go: they are for programs.
+    while let Some(start) = text.find('{') {
+        let mut depth = 0usize;
+        let mut end = None;
+        for (k, c) in text[start..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(start + k + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        match end {
+            Some(end) => text.replace_range(start..end, ""),
+            None => text.truncate(start),
+        }
+    }
+    let mut text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    // A CLI's own message repeated in its exit line: keep the first.
+    if let Some(cut) = text.find(" (") {
+        let first = text[..cut].trim_end_matches('.').to_lowercase();
+        if first.len() > 12 && text[cut..].to_lowercase().contains(&first) {
+            text.truncate(cut);
+        }
+    }
+    let text = text.trim_end_matches(['(', ' ', ':']).to_owned();
+    if text.chars().count() > 300 {
+        format!("{}…", text.chars().take(299).collect::<String>())
+    } else {
+        text
+    }
 }
 
 /// What one request used, as the provider reported it.
@@ -628,11 +724,43 @@ impl Conversation {
                 return Ok(());
             }
             let asked = std::time::Instant::now();
-            let calls = match self.provider {
-                Provider::Anthropic => self.anthropic_step(settings, transport, events)?,
-                _ => {
-                    let low = light && rounds < LIGHT_ROUNDS;
-                    self.openai_step(settings, transport, events, low)?
+            // A request that fails for a moment goes again, twice, after a short wait.
+            let mut retries = 0;
+            let calls = loop {
+                let step = match self.provider {
+                    Provider::Anthropic => self.anthropic_step(settings, transport, events),
+                    _ => {
+                        let low = light && rounds < LIGHT_ROUNDS;
+                        self.openai_step(settings, transport, events, low)
+                    }
+                };
+                match step {
+                    Ok(calls) => break calls,
+                    Err(e) if retries < NETWORK_RETRIES && retryable(&e) && !stop() => {
+                        retries += 1;
+                        events(Event::Retrying {
+                            attempt: retries,
+                            of: NETWORK_RETRIES,
+                            error: readable_error(&e),
+                        });
+                        let wait = if cfg!(test) {
+                            std::time::Duration::from_millis(5)
+                        } else {
+                            std::time::Duration::from_secs(RETRY_WAIT_SECONDS[retries - 1])
+                        };
+                        let until = std::time::Instant::now() + wait;
+                        while std::time::Instant::now() < until && !stop() {
+                            std::thread::sleep(std::time::Duration::from_millis(100).min(wait));
+                        }
+                    }
+                    Err(e) if retries > 0 => {
+                        return Err(format!(
+                            "{UNREACHABLE} {}. Check the connection, then write \"continue\" to \
+                             go on from here.",
+                            readable_error(&e).trim_end_matches('.')
+                        ));
+                    }
+                    Err(e) => return Err(readable_error(&e)),
                 }
             };
             events(Event::Answered {
@@ -1179,6 +1307,27 @@ pub fn describe_error(status: u16, body: &Value) -> String {
 #[cfg(test)]
 mod name_tests {
     use super::*;
+
+    #[test]
+    fn network_failures_are_retried_and_read_plainly() {
+        let agy = "There was a network issue connecting to the server, please try again. \
+                   (Antigravity CLI exited with exit status: 3: error: There was a network issue \
+                   connecting to the server, please try again.\nAGY_ERROR: {\"short_error\":\"agent \
+                   executor error\",\"retryable\": true})";
+        assert!(retryable(agy));
+        assert_eq!(
+            readable_error(agy),
+            "There was a network issue connecting to the server, please try again."
+        );
+        assert!(retryable("HTTP 529: Overloaded."));
+        assert!(!retryable(
+            "HTTP 401: invalid x-api-key. Check the API key."
+        ));
+        assert!(!retryable(
+            "Codex exited with exit status: 1: ERROR: stream disconnected: request too large"
+        ));
+        assert!(!retryable("HTTP 429: Too many requests or no credit left"));
+    }
 
     #[test]
     fn small_requests_take_the_small_model() {
@@ -1878,8 +2027,9 @@ picture the person attached",
 
     #[test]
     fn a_failed_request_leaves_a_conversation_that_can_go_on() {
+        // A failure that is not sent again (a busy service is: see the test above).
         let mut transport = Canned::new(vec![
-            Err("HTTP 529: Overloaded.".into()),
+            Err("HTTP 400: The request was not accepted.".into()),
             Ok(json!({"content": [{"type": "text", "text": "Hi"}], "stop_reason": "end_turn"})),
         ]);
         let mut conversation = Conversation::new(Provider::Anthropic);
@@ -2018,6 +2168,55 @@ picture the person attached",
             .unwrap()
             .clone();
         assert_eq!(last["role"], "tool");
+    }
+
+    #[test]
+    fn a_request_that_fails_for_a_moment_goes_again() {
+        let reply = |text: &str| {
+            Ok(
+                json!({"choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}),
+            )
+        };
+        let busy = || Err("HTTP 503: The service is busy.".to_owned());
+        let mut openai = settings(Provider::OpenAi);
+        openai.model = "test-model".into();
+        // Once: it goes again and the turn ends well, with a notice.
+        let mut transport = Canned::new(vec![busy(), reply("Done.")]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, events, _) = run(
+            &mut conversation,
+            &openai,
+            &mut transport,
+            "Hello",
+        );
+        assert!(result.is_ok(), "{result:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Retrying { attempt: 1, .. }))
+        );
+        assert_eq!(transport.sent.len(), 2);
+        // Three times: the turn fails, plainly.
+        let mut transport = Canned::new(vec![busy(), busy(), busy()]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, _, _) = run(
+            &mut conversation,
+            &openai,
+            &mut transport,
+            "Hello",
+        );
+        let error = result.unwrap_err();
+        assert!(error.starts_with(UNREACHABLE), "{error}");
+        // A wrong key is not sent again.
+        let mut transport = Canned::new(vec![Err("HTTP 401: invalid key.".into())]);
+        let mut conversation = Conversation::new(Provider::OpenAi);
+        let (result, _, _) = run(
+            &mut conversation,
+            &openai,
+            &mut transport,
+            "Hello",
+        );
+        assert_eq!(result.unwrap_err(), "HTTP 401: invalid key.");
     }
 
     #[test]

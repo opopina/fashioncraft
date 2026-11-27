@@ -496,6 +496,13 @@ fn spanish(text: &str) -> Option<&'static str> {
         "Create" => "Crear",
         "Back to before this message" => "Volver a antes de este mensaje",
         "This piece" => "Esta pieza",
+        "The connection failed; trying again" => "Falló la conexión; lo intento otra vez",
+        "Could not reach the model after 3 tries:" => {
+            "No se pudo llegar al modelo tras 3 intentos:"
+        }
+        "Check the connection, then write \"continue\" to go on from here." => {
+            "Revisa la conexión y escribe «sigue» para continuar desde aquí."
+        }
         "more in the steps" => "más en los pasos",
         "What shall we do?" => "¿Qué hacemos?",
         "there is no garment yet" => "aún no hay prenda",

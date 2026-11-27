@@ -892,6 +892,13 @@ impl Atelier {
                 Update::Event(Event::Notice(text)) => {
                     self.assistant.entries.push(Entry::Notice(text))
                 }
+                Update::Event(Event::Retrying { attempt, of, error }) => {
+                    let lang = self.prefs.language;
+                    self.assistant.entries.push(Entry::Notice(format!(
+                        "{} ({attempt}/{of}): {error}",
+                        i18n::tr(lang, "The connection failed; trying again")
+                    )));
+                }
                 Update::Event(Event::Paused { steps }) => {
                     self.assistant.entries.push(Entry::Paused(steps))
                 }
@@ -1003,7 +1010,26 @@ impl Atelier {
                 Update::Done(result) => {
                     if let Err(e) = result {
                         self.assistant.failure = Some(e.clone());
-                        self.assistant.entries.push(Entry::Problem(e));
+                        // The words FashionCraft adds, in the window's language.
+                        let lang = self.prefs.language;
+                        let shown = match e.strip_prefix(fashioncraft::assistant::UNREACHABLE) {
+                            Some(rest) => {
+                                let (what, _) = rest
+                                    .split_once(". Check the connection")
+                                    .unwrap_or((rest, ""));
+                                format!(
+                                    "{} {}. {}",
+                                    i18n::tr(lang, fashioncraft::assistant::UNREACHABLE),
+                                    what.trim(),
+                                    i18n::tr(
+                                        lang,
+                                        "Check the connection, then write \"continue\" to go on from here."
+                                    )
+                                )
+                            }
+                            None => e,
+                        };
+                        self.assistant.entries.push(Entry::Problem(shown));
                     }
                     self.assistant.worker = None;
                 }
@@ -2157,6 +2183,9 @@ impl Atelier {
         let line = match update {
             Update::Event(Event::Text(t)) => json!({"assistant": t}),
             Update::Event(Event::Notice(t)) => json!({"notice": t}),
+            Update::Event(Event::Retrying { attempt, of, error }) => {
+                json!({"retrying": attempt, "of": of, "error": error})
+            }
             Update::Event(Event::Paused { steps }) => json!({"paused_after_steps": steps}),
             Update::Event(Event::Answered { seconds }) => {
                 json!({"model_seconds": (seconds * 10.).round() / 10.})
